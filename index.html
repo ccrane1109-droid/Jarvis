@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS</title>
+<meta name="theme-color" content="#0a0e14">
+<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space.">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-mark">J</span>
+      <span class="brand-name">JARVIS</span>
+    </div>
+    <nav class="main-nav" role="tablist" aria-label="Main sections">
+      <button type="button" class="main-nav-btn active" data-target="panel-workout" role="tab" aria-selected="true" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
+      <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
+      <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
+      <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
+    </nav>
+    <button type="button" class="btn btn-secondary" id="dailyBriefingBtn">Daily Briefing</button>
+  </div>
+</header>
+
+<main class="app-main">
+
+  <!-- ===================== WORKOUT ===================== -->
+  <section id="panel-workout" class="tab-panel active" role="tabpanel" aria-labelledby="navBtnWorkout">
+    <div class="panel-header">
+      <h1>Workout</h1>
+      <p class="panel-subtitle">Log your sessions and keep your streak alive.</p>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h2 class="card-title">Log a Workout</h2>
+        <form id="workoutForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="workoutName">Workout name</label>
+            <input type="text" id="workoutName" name="workoutName" placeholder="e.g. Push Day" required maxlength="60">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="workoutCategory">Category</label>
+              <select id="workoutCategory" name="workoutCategory">
+                <option value="Push">Push</option>
+                <option value="Pull">Pull</option>
+                <option value="Legs">Legs</option>
+                <option value="Cardio">Cardio</option>
+                <option value="Full Body">Full Body</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="workoutDuration">Duration (minutes)</label>
+              <input type="number" id="workoutDuration" name="workoutDuration" min="1" step="1" placeholder="45">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="workoutDate">Date</label>
+            <input type="date" id="workoutDate" name="workoutDate">
+          </div>
+          <div class="form-row">
+            <label for="workoutNotes">Notes</label>
+            <textarea id="workoutNotes" name="workoutNotes" rows="2" placeholder="Optional notes about the session"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="workoutSubmitBtn">Log Workout</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Stats</h2>
+        <div class="stat-grid" id="workoutStats">
+          <div class="stat-box"><span class="stat-value" id="workoutStatTotal">0</span><span class="stat-label">Total workouts</span></div>
+          <div class="stat-box"><span class="stat-value" id="workoutStatWeek">0</span><span class="stat-label">This week</span></div>
+          <div class="stat-box"><span class="stat-value" id="workoutStatStreak">0</span><span class="stat-label">Day streak</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">History</h2>
+      <div id="workoutList" class="item-list">
+        <div class="empty-state">No workouts logged yet. Add your first session above.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Calories</h2>
+      <p class="field-hint">Manually logged daily intake vs. your goal. No food database or automatic tracking.</p>
+      <div class="stat-grid" id="calorieStats">
+        <div class="stat-box"><span class="stat-value" id="calorieStatToday">0</span><span class="stat-label">Today</span></div>
+        <div class="stat-box"><span class="stat-value" id="calorieStatGoal">2000</span><span class="stat-label">Goal</span></div>
+        <div class="stat-box"><span class="stat-value" id="calorieStatRemaining">2000</span><span class="stat-label">Remaining</span></div>
+      </div>
+      <form id="calorieGoalForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="calorieGoalInput">Daily goal (calories)</label>
+          <input type="number" id="calorieGoalInput" min="1" step="1" value="2000" required>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-secondary" id="calorieGoalSaveBtn">Save Goal</button>
+        </div>
+      </form>
+      <form id="calorieForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="calorieDate">Date</label>
+            <input type="date" id="calorieDate">
+          </div>
+          <div>
+            <label for="calorieAmount">Calories</label>
+            <input type="number" id="calorieAmount" min="1" step="1" placeholder="e.g. 550" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="calorieNotes">Notes</label>
+          <input type="text" id="calorieNotes" placeholder="e.g. Lunch" maxlength="80">
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="calorieSubmitBtn">Log Calories</button>
+        </div>
+      </form>
+      <div id="calorieList" class="item-list">
+        <div class="empty-state">No calories logged yet.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== HABITS ===================== -->
+  <section id="panel-habits" class="tab-panel" role="tabpanel" aria-labelledby="navBtnHabits">
+    <div class="panel-header">
+      <h1>Habits</h1>
+      <p class="panel-subtitle">Small consistent actions compound over time.</p>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Add a Habit</h2>
+      <form id="habitForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="habitName">Habit name</label>
+            <input type="text" id="habitName" name="habitName" placeholder="e.g. Read 10 pages" required maxlength="60">
+          </div>
+          <div>
+            <label for="habitTargetDays">Target days / week</label>
+            <input type="number" id="habitTargetDays" name="habitTargetDays" min="1" max="7" step="1" value="7">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="habitSubmitBtn">Add Habit</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Today</h2>
+      <div id="habitList" class="item-list">
+        <div class="empty-state">No habits yet. Add one above to start tracking.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== BUSINESS ===================== -->
+  <section id="panel-business" class="tab-panel" role="tabpanel" aria-labelledby="navBtnBusiness">
+    <div class="panel-header">
+      <h1>Business</h1>
+      <p class="panel-subtitle">Track goals and cash flow in one place.</p>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h2 class="card-title">Add a Goal</h2>
+        <form id="goalForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="goalText">Goal</label>
+            <input type="text" id="goalText" name="goalText" placeholder="e.g. Launch new website" required maxlength="100">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="goalTargetDate">Target date</label>
+              <input type="date" id="goalTargetDate" name="goalTargetDate">
+            </div>
+            <div>
+              <label for="goalStatus">Status</label>
+              <select id="goalStatus" name="goalStatus">
+                <option value="Not Started">Not Started</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="goalSubmitBtn">Add Goal</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Add Ledger Entry</h2>
+        <form id="ledgerForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="ledgerType">Type</label>
+              <select id="ledgerType" name="ledgerType">
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </div>
+            <div>
+              <label for="ledgerAmount">Amount ($)</label>
+              <input type="number" id="ledgerAmount" name="ledgerAmount" min="0.01" step="0.01" placeholder="0.00" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="ledgerDesc">Description</label>
+            <input type="text" id="ledgerDesc" name="ledgerDesc" placeholder="e.g. Client invoice" maxlength="100">
+          </div>
+          <div class="form-row">
+            <label for="ledgerDate">Date</label>
+            <input type="date" id="ledgerDate" name="ledgerDate">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="ledgerSubmitBtn">Add Entry</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h2 class="card-title">Finances</h2>
+        <div class="stat-grid" id="businessStats">
+          <div class="stat-box"><span class="stat-value" id="bizStatIncome">$0</span><span class="stat-label">Income</span></div>
+          <div class="stat-box"><span class="stat-value" id="bizStatExpense">$0</span><span class="stat-label">Expenses</span></div>
+          <div class="stat-box"><span class="stat-value" id="bizStatNet">$0</span><span class="stat-label">Net</span></div>
+        </div>
+        <div id="ledgerList" class="item-list">
+          <div class="empty-state">No ledger entries yet.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Goals</h2>
+        <div id="goalList" class="item-list">
+          <div class="empty-state">No goals yet. Add one to get started.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TRADING LAB ===================== -->
+  <section id="panel-trading" class="tab-panel" role="tabpanel" aria-labelledby="navBtnTrading">
+    <div class="panel-header">
+      <h1>Trading Lab</h1>
+      <p class="panel-subtitle">A practice space for learning the markets. No real money, no broker connection, no buy/sell signals.</p>
+    </div>
+
+    <div class="guardrail-banner">
+      <strong>Protect your capital.</strong> One good decision matters more than one quick trade.
+    </div>
+
+    <div class="disclaimer-strip">
+      Trading Lab is for education and paper-trading practice only. It is not financial advice, does not connect to any broker, and never places real trades.
+    </div>
+
+    <nav class="sub-nav" role="tablist" aria-label="Trading Lab sections">
+      <button type="button" class="sub-nav-btn active" data-subtarget="trading-dashboard" role="tab" aria-selected="true" aria-controls="trading-dashboard" id="subNavDashboard">Dashboard</button>
+      <button type="button" class="sub-nav-btn" data-subtarget="trading-paper" role="tab" aria-selected="false" aria-controls="trading-paper" id="subNavPaper">Paper Trading</button>
+      <button type="button" class="sub-nav-btn" data-subtarget="trading-journal" role="tab" aria-selected="false" aria-controls="trading-journal" id="subNavJournal">Journal</button>
+      <button type="button" class="sub-nav-btn" data-subtarget="trading-learning" role="tab" aria-selected="false" aria-controls="trading-learning" id="subNavLearning">Learning</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Dashboard ---------- -->
+    <div id="trading-dashboard" class="sub-panel active" role="tabpanel" aria-labelledby="subNavDashboard">
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Market Clock</h2>
+          <div class="clock-block">
+            <div class="clock-date" id="marketDate">--</div>
+            <div class="clock-time" id="marketClock">--:--:--</div>
+            <div class="clock-tz">Eastern Time (ET)</div>
+            <div class="market-status" id="marketStatus">
+              <span class="status-dot" id="marketStatusDot"></span>
+              <span id="marketStatusText">Loading…</span>
+            </div>
+          </div>
+          <div class="market-hours">
+            <div><span class="dot dot-pre"></span> Pre-market: 4:00 AM – 9:30 AM ET</div>
+            <div><span class="dot dot-open"></span> Market Open: 9:30 AM – 4:00 PM ET</div>
+            <div><span class="dot dot-after"></span> After Hours: 4:00 PM – 8:00 PM ET</div>
+            <div><span class="dot dot-closed"></span> Closed: all other times</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Add to Watchlist</h2>
+          <form id="watchlistForm" class="stacked-form" novalidate>
+            <div class="form-row two-col">
+              <div>
+                <label for="wlSymbol">Symbol</label>
+                <input type="text" id="wlSymbol" name="wlSymbol" placeholder="e.g. MSFT" maxlength="10" required>
+              </div>
+              <div>
+                <label for="wlPrice">Price ($)</label>
+                <input type="number" id="wlPrice" name="wlPrice" min="0.01" step="0.01" placeholder="0.00" required>
+              </div>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="wlChange">Daily change (%)</label>
+                <input type="number" id="wlChange" name="wlChange" step="0.01" placeholder="0.00">
+              </div>
+              <div>
+                <label for="wlNotes">Notes</label>
+                <input type="text" id="wlNotes" name="wlNotes" placeholder="Optional" maxlength="80">
+              </div>
+            </div>
+            <p class="field-hint">Prices are entered manually and may not reflect live market data.</p>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="watchlistSubmitBtn">Add Symbol</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Watchlist</h2>
+        <p class="field-hint">All prices below are manually entered and may not be live. Edit any field and it saves automatically.</p>
+        <div id="watchlistTable" class="item-list">
+          <div class="empty-state">No symbols on your watchlist.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Paper Trading ---------- -->
+    <div id="trading-paper" class="sub-panel" role="tabpanel" aria-labelledby="subNavPaper">
+
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Daily Discipline</h2>
+          <div id="dailyLimitBlock">
+            <div class="stat-box wide"><span class="stat-value" id="dailyTradeCount">0</span><span class="stat-label">Trades logged today (limit <span id="dailyTradeLimitLabel">3</span>)</span></div>
+            <p class="calm-message hidden" id="dailyLimitMessage">You've reached your planned trade limit for today. Further paper trades are locked until tomorrow — or you can adjust the limit in settings. Rest is part of the strategy.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="noTradeDayBtn">Log a No-Trade Day</button>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Weekly Summary</h2>
+          <div id="weeklySummaryBlock" class="stat-grid">
+            <div class="stat-box"><span class="stat-value" id="weekTrades">0</span><span class="stat-label">Trades (7d)</span></div>
+            <div class="stat-box"><span class="stat-value" id="weekPnl">$0.00</span><span class="stat-label">Realized P&amp;L (7d)</span></div>
+            <div class="stat-box"><span class="stat-value" id="weekWinRate">0%</span><span class="stat-label">Win rate (7d)</span></div>
+          </div>
+          <p class="field-hint" id="weekLesson">Most common lesson: —</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Account Overview</h2>
+        <div class="stat-grid" id="paperStats">
+          <div class="stat-box"><span class="stat-value" id="statBalance">$10,000.00</span><span class="stat-label">Account balance</span></div>
+          <div class="stat-box"><span class="stat-value" id="statRealized">$0.00</span><span class="stat-label">Realized P&amp;L</span></div>
+          <div class="stat-box"><span class="stat-value" id="statUnrealized">$0.00</span><span class="stat-label">Unrealized P&amp;L</span></div>
+          <div class="stat-box"><span class="stat-value" id="statWinRate">0%</span><span class="stat-label">Win rate</span></div>
+          <div class="stat-box"><span class="stat-value" id="statTotalTrades">0</span><span class="stat-label">Total trades</span></div>
+          <div class="stat-box"><span class="stat-value" id="statAvgWin">$0.00</span><span class="stat-label">Average win</span></div>
+          <div class="stat-box"><span class="stat-value" id="statAvgLoss">$0.00</span><span class="stat-label">Average loss</span></div>
+          <div class="stat-box"><span class="stat-value" id="statLargestLoss">$0.00</span><span class="stat-label">Largest loss</span></div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="openSettingsBtn">Account Settings</button>
+          <button type="button" class="btn btn-danger" id="resetAccountBtn">Reset Paper Account</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">New Paper Trade</h2>
+        </div>
+        <form id="tradeForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="tradeSymbol">Symbol</label>
+              <input type="text" id="tradeSymbol" name="tradeSymbol" placeholder="e.g. AAPL" maxlength="10" required>
+            </div>
+            <div>
+              <label for="tradeDirection">Direction (practice)</label>
+              <select id="tradeDirection" name="tradeDirection">
+                <option value="buy">Buy / Long (practice)</option>
+                <option value="sell">Sell / Short (practice)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="tradeEntryPrice">Entry price ($)</label>
+              <input type="number" id="tradeEntryPrice" name="tradeEntryPrice" min="0.01" step="0.01" required>
+            </div>
+            <div>
+              <label for="tradeQuantity">Quantity</label>
+              <input type="number" id="tradeQuantity" name="tradeQuantity" min="1" step="1" required>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="tradeStopLoss">Stop loss ($)</label>
+              <input type="number" id="tradeStopLoss" name="tradeStopLoss" min="0.01" step="0.01" required>
+            </div>
+            <div>
+              <label for="tradeTarget">Target ($)</label>
+              <input type="number" id="tradeTarget" name="tradeTarget" min="0.01" step="0.01" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="tradeDateTime">Date / time</label>
+            <input type="datetime-local" id="tradeDateTime" name="tradeDateTime" required>
+          </div>
+          <div class="form-row">
+            <label for="tradeReason">Reason for entry</label>
+            <textarea id="tradeReason" name="tradeReason" rows="2" placeholder="What is your reason, based on your strategy?" required></textarea>
+          </div>
+
+          <div class="checklist-block">
+            <h3 class="checklist-title">Pre-Trade Checklist</h3>
+            <p class="field-hint">Complete every item before you can log this trade.</p>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk1"> I know my entry price.</label>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk2"> I know my stop loss.</label>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk3"> I know my target.</label>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk4"> I am risking only a small planned amount.</label>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk5"> I am not revenge trading or trading because I am bored.</label>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk6"> I have a reason based on my written strategy.</label>
+            <label class="checklist-item"><input type="checkbox" class="checklist-chk" id="chk7"> I accept that I can lose on this trade.</label>
+            <div class="checklist-progress-track">
+              <div class="checklist-progress-fill" id="checklistProgressFill"></div>
+            </div>
+            <div class="checklist-progress-label" id="checklistProgressLabel">0% complete</div>
+          </div>
+
+          <p class="calm-message hidden" id="tradeLimitReachedMessage">Your daily paper trade limit has been reached. This form is locked until tomorrow, or you can raise the limit in Account Settings.</p>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="logTradeBtn" disabled>Log Paper Trade</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Open Positions</h2>
+        <div id="openPositionsList" class="item-list">
+          <div class="empty-state">No open positions.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Closed Positions</h2>
+        <div id="closedPositionsList" class="item-list">
+          <div class="empty-state">No closed positions yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Journal ---------- -->
+    <div id="trading-journal" class="sub-panel" role="tabpanel" aria-labelledby="subNavJournal">
+      <div class="card">
+        <h2 class="card-title" id="journalFormTitle">New Journal Entry</h2>
+        <form id="journalForm" class="stacked-form" novalidate>
+          <input type="hidden" id="journalEditId" value="">
+          <div class="form-row two-col">
+            <div>
+              <label for="journalDate">Date</label>
+              <input type="date" id="journalDate" name="journalDate" required>
+            </div>
+            <div>
+              <label for="journalSymbol">Symbol</label>
+              <input type="text" id="journalSymbol" name="journalSymbol" placeholder="e.g. SPY" maxlength="10">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="journalSetup">Setup name</label>
+              <input type="text" id="journalSetup" name="journalSetup" placeholder="e.g. Breakout" maxlength="60">
+            </div>
+            <div>
+              <label for="journalOutcome">Outcome</label>
+              <select id="journalOutcome" name="journalOutcome">
+                <option value="n/a">N/A</option>
+                <option value="win">Win</option>
+                <option value="loss">Loss</option>
+                <option value="breakeven">Breakeven</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="journalMarketConditions">Market conditions</label>
+            <input type="text" id="journalMarketConditions" name="journalMarketConditions" placeholder="e.g. Choppy, low volume" maxlength="120">
+          </div>
+          <div class="form-row">
+            <label for="journalEntryReason">Entry reason</label>
+            <textarea id="journalEntryReason" name="journalEntryReason" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="journalEmotions">Emotions before trade</label>
+            <input type="text" id="journalEmotions" name="journalEmotions" placeholder="e.g. calm, anxious, FOMO" maxlength="120">
+          </div>
+          <div class="form-row">
+            <label for="journalExitReason">Exit reason</label>
+            <textarea id="journalExitReason" name="journalExitReason" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="journalLesson">Lesson learned</label>
+            <textarea id="journalLesson" name="journalLesson" rows="2"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="journalDiscipline">Discipline rating (1–5)</label>
+            <select id="journalDiscipline" name="journalDiscipline">
+              <option value="1">1 – Poor</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5 – Excellent</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="journalSubmitBtn">Save Journal Entry</button>
+            <button type="button" class="btn btn-secondary hidden" id="journalCancelEditBtn">Cancel Edit</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">AI-Style Review</h2>
+          <button type="button" class="btn btn-secondary" id="aiReviewBtn">Generate Review</button>
+        </div>
+        <p class="field-hint">A rule-based summary of your own journal data. Not financial advice and not generated by an external AI service.</p>
+        <div id="aiReviewOutput" class="ai-review-output">
+          <div class="empty-state">Click "Generate Review" to see insights from your journal.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Journal Entries</h2>
+        <div class="filter-row">
+          <input type="search" id="journalSearch" placeholder="Search journal…" aria-label="Search journal entries">
+          <select id="journalFilterSymbol" aria-label="Filter by symbol">
+            <option value="">All symbols</option>
+          </select>
+          <select id="journalFilterOutcome" aria-label="Filter by win/loss">
+            <option value="">All outcomes</option>
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+            <option value="breakeven">Breakeven</option>
+            <option value="n/a">N/A</option>
+          </select>
+          <select id="journalFilterSetup" aria-label="Filter by setup">
+            <option value="">All setups</option>
+          </select>
+        </div>
+        <div id="journalList" class="item-list">
+          <div class="empty-state">No journal entries yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Learning ---------- -->
+    <div id="trading-learning" class="sub-panel" role="tabpanel" aria-labelledby="subNavLearning">
+      <div class="card">
+        <h2 class="card-title">Core Concepts</h2>
+        <div class="edu-grid">
+          <details class="edu-card">
+            <summary>What is SPY?</summary>
+            <p>SPY is an exchange-traded fund (ETF) that tracks the S&amp;P 500 index, a basket of roughly 500 large U.S. companies. It's often used as a general gauge of U.S. stock market performance.</p>
+          </details>
+          <details class="edu-card">
+            <summary>What is a candlestick?</summary>
+            <p>A candlestick is a chart element showing a stock's open, high, low, and close price over a period. The "body" shows open vs. close, and the "wicks" show the high and low reached during that period.</p>
+          </details>
+          <details class="edu-card">
+            <summary>Risk/reward</summary>
+            <p>Risk/reward compares how much you could lose on a trade versus how much you could gain. A 1:2 risk/reward means you're risking $1 to potentially make $2. It helps evaluate whether a trade idea is worth taking.</p>
+          </details>
+          <details class="edu-card">
+            <summary>Stop loss</summary>
+            <p>A stop loss is a price level you decide in advance where you'll exit a losing trade to limit further loss. Planning it before entering a trade is a core discipline habit.</p>
+          </details>
+          <details class="edu-card">
+            <summary>Position sizing</summary>
+            <p>Position sizing is deciding how many shares/contracts to trade based on how much you're willing to risk, not just how much you want to make. It helps keep any single trade from causing outsized damage.</p>
+          </details>
+          <details class="edu-card">
+            <summary>Why paper trading comes first</summary>
+            <p>Paper trading lets you practice strategy, timing, and discipline using simulated trades, without risking real money. It builds habits and reveals mistakes cheaply before they cost anything real.</p>
+          </details>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Terms to Learn</h2>
+        <p class="field-hint">Click a term to reveal its definition.</p>
+        <div class="edu-grid flashcard-grid">
+          <details class="flashcard"><summary>Volume</summary><p>The number of shares traded during a given period. Higher volume generally means more interest and liquidity.</p></details>
+          <details class="flashcard"><summary>Support</summary><p>A price level where a stock has historically tended to stop falling and bounce back up.</p></details>
+          <details class="flashcard"><summary>Resistance</summary><p>A price level where a stock has historically tended to stop rising and pull back down.</p></details>
+          <details class="flashcard"><summary>Trend</summary><p>The general direction a price is moving over time — up, down, or sideways.</p></details>
+          <details class="flashcard"><summary>Consolidation</summary><p>A period where price moves sideways in a tight range, often before a bigger move in either direction.</p></details>
+          <details class="flashcard"><summary>Volatility</summary><p>How much and how quickly a price moves. High volatility means bigger, faster price swings.</p></details>
+          <details class="flashcard"><summary>Spread</summary><p>The difference between the price buyers are willing to pay (bid) and sellers are asking (ask).</p></details>
+          <details class="flashcard"><summary>Liquidity</summary><p>How easily an asset can be bought or sold without significantly moving its price.</p></details>
+          <details class="flashcard"><summary>Stop loss</summary><p>A predetermined price where you plan to exit a losing trade to limit further loss.</p></details>
+          <details class="flashcard"><summary>Risk/reward</summary><p>A comparison of potential loss versus potential gain on a trade, used to judge if it's worth taking.</p></details>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- ===================== MODALS ===================== -->
+
+<div class="modal-overlay hidden" id="closeTradeModal" role="dialog" aria-modal="true" aria-labelledby="closeTradeModalTitle">
+  <div class="modal-box">
+    <h2 id="closeTradeModalTitle">Close Trade</h2>
+    <form id="closeTradeForm" class="stacked-form" novalidate>
+      <input type="hidden" id="closeTradeId" value="">
+      <div class="form-row">
+        <label for="closeExitPrice">Exit price ($)</label>
+        <input type="number" id="closeExitPrice" min="0.01" step="0.01" required>
+      </div>
+      <div class="form-row">
+        <label for="closeTradeNotes">Trade notes</label>
+        <textarea id="closeTradeNotes" rows="3" placeholder="What went well or wrong? What did you learn?"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Close Trade</button>
+        <button type="button" class="btn btn-secondary" id="closeTradeCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="resetAccountModal" role="dialog" aria-modal="true" aria-labelledby="resetAccountModalTitle">
+  <div class="modal-box">
+    <h2 id="resetAccountModalTitle">Reset Paper Account?</h2>
+    <p>This will permanently delete all paper trades (open and closed) and reset your balance to the starting amount. This cannot be undone.</p>
+    <div class="form-actions">
+      <button type="button" class="btn btn-danger" id="resetAccountConfirmBtn">Yes, Reset Account</button>
+      <button type="button" class="btn btn-secondary" id="resetAccountCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+  <div class="modal-box">
+    <h2 id="settingsModalTitle">Account Settings</h2>
+    <form id="settingsForm" class="stacked-form" novalidate>
+      <div class="form-row">
+        <label for="settingsStartingBalance">Starting paper balance ($)</label>
+        <input type="number" id="settingsStartingBalance" min="1" step="0.01" required>
+      </div>
+      <div class="form-row">
+        <label for="settingsDailyLimit">Max paper trades per day</label>
+        <input type="number" id="settingsDailyLimit" min="1" step="1" required>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+        <button type="button" class="btn btn-secondary" id="settingsCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="noTradeDayModal" role="dialog" aria-modal="true" aria-labelledby="noTradeDayModalTitle">
+  <div class="modal-box">
+    <h2 id="noTradeDayModalTitle">Log a No-Trade Day</h2>
+    <p class="field-hint">Choosing not to trade is a disciplined decision. This will be saved in your journal.</p>
+    <form id="noTradeDayForm" class="stacked-form" novalidate>
+      <div class="form-row">
+        <label for="noTradeDayNote">What helped you stay disciplined today? (optional)</label>
+        <textarea id="noTradeDayNote" rows="3" placeholder="Optional reflection"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save No-Trade Day</button>
+        <button type="button" class="btn btn-secondary" id="noTradeDayCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="briefingModal" role="dialog" aria-modal="true" aria-labelledby="briefingModalTitle">
+  <div class="modal-box">
+    <h2 id="briefingModalTitle">Daily Briefing</h2>
+    <div id="briefingContent"></div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" id="briefingCloseBtn">Got it</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/app.js"></script>
+<script src="js/workout.js"></script>
+<script src="js/habits.js"></script>
+<script src="js/business.js"></script>
+<script src="js/calories.js"></script>
+<script src="js/trading.js"></script>
+</body>
+</html>
