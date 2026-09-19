@@ -138,6 +138,16 @@
     render();
   }
 
+  function getSummary() {
+    const sorted = workouts.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+    return {
+      total: workouts.length,
+      thisWeek: thisWeekCount(),
+      streak: dayStreak(),
+      lastWorkout: sorted.length ? sorted[0] : null
+    };
+  }
+
   function init() {
     load();
     render();
@@ -145,5 +155,5 @@
     document.getElementById("workoutList").addEventListener("click", handleListClick);
   }
 
-  window.JarvisWorkout = { init: init };
+  window.JarvisWorkout = { init: init, getSummary: getSummary };
 })();

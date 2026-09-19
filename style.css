@@ -528,6 +528,20 @@ textarea { resize: vertical; min-height: 44px; }
 
 .flashcard-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
+/* ---------------- Daily Briefing ---------------- */
+
+.text-positive { color: var(--green); }
+.text-negative { color: var(--red); }
+
+.briefing-greeting { font-weight: 600; margin-bottom: 6px; }
+
+.briefing-row {
+  font-size: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.briefing-row:last-child { border-bottom: none; }
+
 /* ---------------- Modals ---------------- */
 
 .modal-overlay {

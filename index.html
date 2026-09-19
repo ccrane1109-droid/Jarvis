@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JARVIS</title>
+<meta name="theme-color" content="#0a0e14">
+<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space.">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,6 +25,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
     </nav>
+    <button type="button" class="btn btn-secondary" id="dailyBriefingBtn">Daily Briefing</button>
   </div>
 </header>
 
@@ -85,6 +91,47 @@
       <h2 class="card-title">History</h2>
       <div id="workoutList" class="item-list">
         <div class="empty-state">No workouts logged yet. Add your first session above.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Calories</h2>
+      <p class="field-hint">Manually logged daily intake vs. your goal. No food database or automatic tracking.</p>
+      <div class="stat-grid" id="calorieStats">
+        <div class="stat-box"><span class="stat-value" id="calorieStatToday">0</span><span class="stat-label">Today</span></div>
+        <div class="stat-box"><span class="stat-value" id="calorieStatGoal">2000</span><span class="stat-label">Goal</span></div>
+        <div class="stat-box"><span class="stat-value" id="calorieStatRemaining">2000</span><span class="stat-label">Remaining</span></div>
+      </div>
+      <form id="calorieGoalForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="calorieGoalInput">Daily goal (calories)</label>
+          <input type="number" id="calorieGoalInput" min="1" step="1" value="2000" required>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-secondary" id="calorieGoalSaveBtn">Save Goal</button>
+        </div>
+      </form>
+      <form id="calorieForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="calorieDate">Date</label>
+            <input type="date" id="calorieDate">
+          </div>
+          <div>
+            <label for="calorieAmount">Calories</label>
+            <input type="number" id="calorieAmount" min="1" step="1" placeholder="e.g. 550" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="calorieNotes">Notes</label>
+          <input type="text" id="calorieNotes" placeholder="e.g. Lunch" maxlength="80">
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="calorieSubmitBtn">Log Calories</button>
+        </div>
+      </form>
+      <div id="calorieList" class="item-list">
+        <div class="empty-state">No calories logged yet.</div>
       </div>
     </div>
   </section>
@@ -651,12 +698,23 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="briefingModal" role="dialog" aria-modal="true" aria-labelledby="briefingModalTitle">
+  <div class="modal-box">
+    <h2 id="briefingModalTitle">Daily Briefing</h2>
+    <div id="briefingContent"></div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" id="briefingCloseBtn">Got it</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/app.js"></script>
 <script src="js/workout.js"></script>
 <script src="js/habits.js"></script>
 <script src="js/business.js"></script>
+<script src="js/calories.js"></script>
 <script src="js/trading.js"></script>
 </body>
 </html>

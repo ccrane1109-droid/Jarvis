@@ -177,6 +177,21 @@
     render();
   }
 
+  function getSummary() {
+    let income = 0, expense = 0;
+    data.ledger.forEach(function (l) {
+      if (l.type === "income") income += l.amount; else expense += l.amount;
+    });
+    const activeGoals = data.goals.filter(function (g) { return g.status !== "Done"; }).length;
+    return {
+      income: income,
+      expense: expense,
+      net: income - expense,
+      activeGoals: activeGoals,
+      totalGoals: data.goals.length
+    };
+  }
+
   function init() {
     load();
     render();
@@ -186,5 +201,5 @@
     document.getElementById("ledgerList").addEventListener("click", handleLedgerListClick);
   }
 
-  window.JarvisBusiness = { init: init };
+  window.JarvisBusiness = { init: init, getSummary: getSummary };
 })();

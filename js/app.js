@@ -146,6 +146,87 @@
     closeModal: closeModal
   };
 
+  /* ---------------- Daily Briefing ---------------- */
+
+  function greetingWord() {
+    const hour = new Date().getHours();
+    if (hour < 5) return "Up late";
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }
+
+  function buildBriefingHTML() {
+    const rows = [];
+
+    if (window.JarvisBusiness && typeof window.JarvisBusiness.getSummary === "function") {
+      const biz = window.JarvisBusiness.getSummary();
+      const netClass = biz.net >= 0 ? "text-positive" : "text-negative";
+      rows.push(
+        '<div class="briefing-row"><strong>Business:</strong> Net <span class="' + netClass + '">' + formatCurrency(biz.net) + '</span>' +
+        ' &middot; ' + biz.activeGoals + ' active goal' + (biz.activeGoals === 1 ? "" : "s") +
+        (biz.totalGoals === 0 ? " (no goals logged yet)" : "") + '</div>'
+      );
+    }
+
+    if (window.JarvisHabits && typeof window.JarvisHabits.getSummary === "function") {
+      const h = window.JarvisHabits.getSummary();
+      const habitsText = h.total === 0
+        ? "no habits added yet"
+        : h.doneToday + "/" + h.total + " done today &middot; best streak " + h.bestStreak + " day" + (h.bestStreak === 1 ? "" : "s");
+      rows.push('<div class="briefing-row"><strong>Habits:</strong> ' + habitsText + '</div>');
+    }
+
+    if (window.JarvisWorkout && typeof window.JarvisWorkout.getSummary === "function") {
+      const w = window.JarvisWorkout.getSummary();
+      const lastText = w.lastWorkout ? ("last: " + escapeHtml(w.lastWorkout.name) + " on " + formatDate(w.lastWorkout.date)) : "no workouts logged yet";
+      rows.push(
+        '<div class="briefing-row"><strong>Workouts:</strong> ' + w.streak + ' day streak &middot; ' + w.thisWeek + ' this week &middot; ' + lastText + '</div>'
+      );
+    }
+
+    if (window.JarvisCalories && typeof window.JarvisCalories.getSummary === "function") {
+      const c = window.JarvisCalories.getSummary();
+      const calClass = c.remaining >= 0 ? "text-positive" : "text-negative";
+      rows.push(
+        '<div class="briefing-row"><strong>Calories:</strong> ' + c.todayTotal + ' / ' + c.goal + ' today &middot; ' +
+        '<span class="' + calClass + '">' + (c.remaining >= 0 ? c.remaining + ' remaining' : Math.abs(c.remaining) + ' over') + '</span></div>'
+      );
+    }
+
+    if (rows.length === 0) {
+      rows.push('<div class="empty-state">No data yet — start logging in each tab and this briefing will summarize your day.</div>');
+    }
+
+    return '<p class="briefing-greeting">' + greetingWord() + '. Here’s where things stand:</p>' + rows.join("");
+  }
+
+  function showBriefing() {
+    const content = document.getElementById("briefingContent");
+    if (content) content.innerHTML = buildBriefingHTML();
+    openModal("briefingModal");
+  }
+
+  function maybeAutoShowBriefing() {
+    const today = todayISODate();
+    let lastShown = null;
+    try { lastShown = localStorage.getItem("jarvisLastBriefingDate"); } catch (e) { lastShown = null; }
+    if (lastShown !== today) {
+      showBriefing();
+      try { localStorage.setItem("jarvisLastBriefingDate", today); } catch (e) { /* ignore */ }
+    }
+  }
+
+  /* ---------------- service worker ---------------- */
+
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    if (window.location.protocol === "file:") return;
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* offline support is a nice-to-have, ignore failures */ });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     const mainNavBtns = Array.prototype.slice.call(document.querySelectorAll(".main-nav-btn"));
     const mainPanels = Array.prototype.slice.call(document.querySelectorAll(".tab-panel"));
@@ -162,6 +243,15 @@
     if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
     if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
     if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
+    if (window.JarvisCalories && typeof window.JarvisCalories.init === "function") window.JarvisCalories.init();
     if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
+
+    const briefingBtn = document.getElementById("dailyBriefingBtn");
+    if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
+    const briefingCloseBtn = document.getElementById("briefingCloseBtn");
+    if (briefingCloseBtn) briefingCloseBtn.addEventListener("click", function () { closeModal("briefingModal"); });
+
+    maybeAutoShowBriefing();
+    registerServiceWorker();
   });
 })();

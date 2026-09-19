@@ -121,6 +121,17 @@
     }
   }
 
+  function getSummary() {
+    const today = window.JarvisCore.todayISODate();
+    const doneToday = habits.filter(function (h) { return (h.completedDates || []).indexOf(today) !== -1; }).length;
+    let bestStreak = 0;
+    habits.forEach(function (h) {
+      const s = computeStreak(h);
+      if (s > bestStreak) bestStreak = s;
+    });
+    return { total: habits.length, doneToday: doneToday, bestStreak: bestStreak };
+  }
+
   function init() {
     load();
     render();
@@ -128,5 +139,5 @@
     document.getElementById("habitList").addEventListener("click", handleListClick);
   }
 
-  window.JarvisHabits = { init: init };
+  window.JarvisHabits = { init: init, getSummary: getSummary };
 })();
