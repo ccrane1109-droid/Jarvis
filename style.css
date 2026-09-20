@@ -604,6 +604,27 @@ textarea { resize: vertical; min-height: 44px; }
   min-width: 320px;
 }
 
+/* ---------------- AI Video ---------------- */
+
+.video-preview {
+  width: 100%;
+  max-width: 480px;
+  border-radius: var(--radius-sm);
+  display: block;
+  margin-top: 10px;
+  background: #000;
+}
+.video-raw-response {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--card-hover);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 12px;
+  max-height: 220px;
+  overflow: auto;
+}
+
 /* ---------------- Daily Briefing ---------------- */
 
 .text-positive { color: var(--green); }

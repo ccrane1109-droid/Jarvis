@@ -5,7 +5,7 @@
    online. All user data lives in localStorage, not in this cache.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v1";
+const CACHE_NAME = "jarvis-cache-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -17,7 +17,8 @@ const APP_SHELL = [
   "./js/habits.js",
   "./js/business.js",
   "./js/calories.js",
-  "./js/trading.js"
+  "./js/trading.js",
+  "./js/video.js"
 ];
 
 self.addEventListener("install", function (event) {

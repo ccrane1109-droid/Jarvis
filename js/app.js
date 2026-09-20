@@ -194,6 +194,14 @@
       );
     }
 
+    if (window.JarvisVideo && typeof window.JarvisVideo.getSummary === "function") {
+      const v = window.JarvisVideo.getSummary();
+      const videoText = v.total === 0
+        ? "no generations yet"
+        : v.week + " this week &middot; " + v.completed + "/" + v.total + " completed";
+      rows.push('<div class="briefing-row"><strong>AI Video:</strong> ' + videoText + '</div>');
+    }
+
     if (rows.length === 0) {
       rows.push('<div class="empty-state">No data yet — start logging in each tab and this briefing will summarize your day.</div>');
     }
@@ -248,11 +256,16 @@
       }
     });
 
+    const videoSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".video-sub-nav-btn"));
+    const videoSubPanels = Array.prototype.slice.call(document.querySelectorAll(".video-sub-panel"));
+    setupTabGroup(videoSubNavBtns, videoSubPanels);
+
     if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
     if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
     if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
     if (window.JarvisCalories && typeof window.JarvisCalories.init === "function") window.JarvisCalories.init();
     if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
+    if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
 
     const briefingBtn = document.getElementById("dailyBriefingBtn");
     if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
