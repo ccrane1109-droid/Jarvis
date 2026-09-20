@@ -247,13 +247,21 @@
 
   /* ---------------- custom exercises ---------------- */
 
+  // Cached in memory so getExercises()/getExerciseById() — called on every
+  // picker render and every history/PR lookup — don't hit localStorage +
+  // JSON.parse on every single call. Invalidated only by save.
+  let customExercisesCache = null;
+
   function loadCustomExercises() {
-    const core = window.JarvisCore;
-    const loaded = core.loadJSON(LS_CUSTOM, []);
-    return Array.isArray(loaded) ? loaded : [];
+    if (customExercisesCache === null) {
+      const loaded = window.JarvisCore.loadJSON(LS_CUSTOM, []);
+      customExercisesCache = Array.isArray(loaded) ? loaded : [];
+    }
+    return customExercisesCache;
   }
 
   function saveCustomExercises(list) {
+    customExercisesCache = list;
     window.JarvisCore.saveJSON(LS_CUSTOM, list);
   }
 
@@ -279,12 +287,18 @@
 
   /* ---------------- favorites ---------------- */
 
+  let favoritesCache = null;
+
   function loadFavoriteIds() {
-    const loaded = window.JarvisCore.loadJSON(LS_FAVORITES, []);
-    return Array.isArray(loaded) ? loaded : [];
+    if (favoritesCache === null) {
+      const loaded = window.JarvisCore.loadJSON(LS_FAVORITES, []);
+      favoritesCache = Array.isArray(loaded) ? loaded : [];
+    }
+    return favoritesCache;
   }
 
   function saveFavoriteIds(ids) {
+    favoritesCache = ids;
     window.JarvisCore.saveJSON(LS_FAVORITES, ids);
   }
 

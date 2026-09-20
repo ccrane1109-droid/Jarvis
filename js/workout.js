@@ -92,23 +92,23 @@
 
   /* ---------------- exercise / routine pickers ---------------- */
 
-  function populateFilterSelect(selectEl, values) {
+  function buildPlainOptionsHtml(values) {
     const core = window.JarvisCore;
-    const current = selectEl.value;
-    const optionsHtml = values.map(function (v) {
+    return values.map(function (v) {
       return '<option value="' + core.escapeHtml(v) + '">' + core.escapeHtml(v) + '</option>';
     }).join("");
-    selectEl.innerHTML = selectEl.options[0].outerHTML + optionsHtml;
+  }
+
+  function populateFilterSelect(selectEl, values) {
+    const current = selectEl.value;
+    selectEl.innerHTML = selectEl.options[0].outerHTML + buildPlainOptionsHtml(values);
     if (values.indexOf(current) !== -1) selectEl.value = current;
   }
 
   // Like populateFilterSelect, but with no leading "All ..." placeholder option.
   function populateSelectPlain(selectEl, values) {
-    const core = window.JarvisCore;
     const current = selectEl.value;
-    selectEl.innerHTML = values.map(function (v) {
-      return '<option value="' + core.escapeHtml(v) + '">' + core.escapeHtml(v) + '</option>';
-    }).join("");
+    selectEl.innerHTML = buildPlainOptionsHtml(values);
     if (values.indexOf(current) !== -1) selectEl.value = current;
   }
 
@@ -139,8 +139,11 @@
       ? '<optgroup label="★ Favorites">' + favorites.map(optionHtml).join("") + "</optgroup>"
       : "";
 
+    // Exclude favorites here so they don't also appear in their normal
+    // muscle-group optgroup — they're already shown above.
+    const nonFavorites = filtered.filter(function (ex) { return favoriteIds.indexOf(ex.id) === -1; });
     const groups = {};
-    filtered.forEach(function (ex) {
+    nonFavorites.forEach(function (ex) {
       if (!groups[ex.muscleGroup]) groups[ex.muscleGroup] = [];
       groups[ex.muscleGroup].push(ex);
     });
@@ -204,9 +207,35 @@
     updateFavoriteStarButton();
   }
 
+  function renderCustomExerciseList() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("customExerciseList");
+    const list = window.JarvisExercises.loadCustomExercises();
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state">No custom exercises yet.</div>';
+      return;
+    }
+    container.innerHTML = list.map(function (ex) {
+      return (
+        '<div class="list-item" data-id="' + core.escapeHtml(ex.id) + '">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + core.escapeHtml(ex.name) + '</span>' +
+              '<span class="list-item-meta">' + core.escapeHtml(ex.muscleGroup) + ' &middot; ' + core.escapeHtml(ex.equipment) + '</span>' +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon danger custom-exercise-delete-btn" data-id="' + core.escapeHtml(ex.id) + '">Delete</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
   function handleShowAddCustomExercise() {
     document.getElementById("addCustomExerciseForm").classList.remove("hidden");
     document.getElementById("customExerciseName").focus();
+    renderCustomExerciseList();
   }
 
   function handleCancelAddCustomExercise() {
@@ -228,8 +257,20 @@
     document.getElementById("exercisePickerSearch").value = "";
     refreshExercisePicker();
     document.getElementById("exercisePickerSelect").value = exercise.id;
-    handleCancelAddCustomExercise();
+    document.getElementById("customExerciseName").value = "";
+    renderCustomExerciseList();
     core.showToast("Added “" + name + "” to your exercise library.");
+  }
+
+  function handleCustomExerciseListClick(e) {
+    const btn = e.target.closest(".custom-exercise-delete-btn");
+    if (!btn) return;
+    const id = btn.getAttribute("data-id");
+    window.JarvisExercises.deleteCustomExercise(id);
+    renderCustomExerciseList();
+    refreshExercisePicker();
+    refreshRoutinePicker();
+    window.JarvisCore.showToast("Custom exercise deleted.");
   }
 
   function populateRoutineSelect() {
@@ -430,15 +471,23 @@
       const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
       if (!se) return;
       const roundedReps = Math.round(reps);
+      const JE = window.JarvisExercises;
       const priorBest = getExercisePrAndE1rm(se.exerciseId);
+      // Also factor in sets already logged earlier in this same unsaved
+      // session, so repeating an identical set doesn't re-trigger the toast.
+      const sessionBestE1rmSoFar = se.sets.reduce(function (max, s) {
+        const e1rm = JE.estimateOneRepMax(s.weight, s.reps);
+        return e1rm > max ? e1rm : max;
+      }, 0);
+      const combinedBestE1rm = Math.max(priorBest.bestE1rm, sessionBestE1rmSoFar);
       se.sets.push({ weight: weight, reps: roundedReps });
       saveDraft();
       renderSessionExerciseList();
       startRestTimer(sessionExId, REST_TIMER_DEFAULT_SECONDS);
-      if (priorBest.bestE1rm > 0) {
-        const newE1rm = window.JarvisExercises.estimateOneRepMax(weight, roundedReps);
-        if (newE1rm > priorBest.bestE1rm) {
-          const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
+      if (combinedBestE1rm > 0) {
+        const newE1rm = JE.estimateOneRepMax(weight, roundedReps);
+        if (newE1rm > combinedBestE1rm) {
+          const ex = JE.getExerciseById(se.exerciseId);
           core.showToast("New PR! " + (ex ? ex.name : "Exercise") + ": " + weight + " × " + roundedReps);
         }
       }
@@ -1488,6 +1537,7 @@
       prEl.textContent = "--";
       countEl.textContent = "0";
       renderLineChart("exerciseProgressChart", [], { emptyMessage: "Log a couple of sessions for this exercise to see a trend line." });
+      renderPrHistoryList(null);
       return;
     }
 
@@ -1698,6 +1748,7 @@
     document.getElementById("showAddCustomExerciseBtn").addEventListener("click", handleShowAddCustomExercise);
     document.getElementById("cancelCustomExerciseBtn").addEventListener("click", handleCancelAddCustomExercise);
     document.getElementById("saveCustomExerciseBtn").addEventListener("click", handleSaveCustomExercise);
+    document.getElementById("customExerciseList").addEventListener("click", handleCustomExerciseListClick);
     document.getElementById("addExerciseToSessionBtn").addEventListener("click", handleAddExerciseToSession);
     document.getElementById("sessionExerciseList").addEventListener("click", handleSessionExerciseListClick);
     document.getElementById("sessionRoutineSelect").addEventListener("change", function () {
