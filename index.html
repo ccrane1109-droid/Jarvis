@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JARVIS</title>
 <meta name="theme-color" content="#0a0e14">
-<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space.">
+<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -24,6 +24,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
+      <button type="button" class="main-nav-btn" data-target="panel-video" role="tab" aria-selected="false" aria-controls="panel-video" id="navBtnVideo">AI Video</button>
     </nav>
     <button type="button" class="btn btn-secondary" id="dailyBriefingBtn">Daily Briefing</button>
   </div>
@@ -819,6 +820,128 @@
 
   </section>
 
+  <!-- ===================== AI VIDEO ===================== -->
+  <section id="panel-video" class="tab-panel" role="tabpanel" aria-labelledby="navBtnVideo">
+    <div class="panel-header">
+      <h1>AI Video</h1>
+      <p class="panel-subtitle">Generate videos from text prompts using an AI video generation API you connect.</p>
+    </div>
+
+    <div class="disclaimer-strip">
+      This tool calls the video generation endpoint <em>you</em> configure, directly from your browser, using your own API key. JARVIS does not include or ship any provider's API — nothing is generated until you connect one.
+    </div>
+
+    <nav class="sub-nav video-sub-nav" role="tablist" aria-label="AI Video sections">
+      <button type="button" class="video-sub-nav-btn active" data-subtarget="video-generate" role="tab" aria-selected="true" aria-controls="video-generate" id="videoSubNavGenerate">Generate</button>
+      <button type="button" class="video-sub-nav-btn" data-subtarget="video-history" role="tab" aria-selected="false" aria-controls="video-history" id="videoSubNavHistory">History</button>
+      <button type="button" class="video-sub-nav-btn" data-subtarget="video-connection" role="tab" aria-selected="false" aria-controls="video-connection" id="videoSubNavConnection">Connection</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Generate ---------- -->
+    <div id="video-generate" class="video-sub-panel active" role="tabpanel" aria-labelledby="videoSubNavGenerate">
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Stats</h2>
+          <div class="stat-grid" id="videoStats">
+            <div class="stat-box"><span class="stat-value" id="videoStatTotal">0</span><span class="stat-label">Total generations</span></div>
+            <div class="stat-box"><span class="stat-value" id="videoStatWeek">0</span><span class="stat-label">This week</span></div>
+            <div class="stat-box"><span class="stat-value" id="videoStatSuccess">0</span><span class="stat-label">Completed</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">New Generation</h2>
+          <form id="videoGenerateForm" class="stacked-form" novalidate>
+            <div class="form-row">
+              <label for="videoPrompt">Prompt</label>
+              <textarea id="videoPrompt" rows="4" placeholder="Describe the video you want, e.g. 'A drone shot flying over a misty mountain forest at sunrise'" required maxlength="2000"></textarea>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="videoAspectRatio">Aspect ratio</label>
+                <select id="videoAspectRatio">
+                  <option value="16:9">16:9 (landscape)</option>
+                  <option value="9:16">9:16 (portrait)</option>
+                  <option value="1:1">1:1 (square)</option>
+                </select>
+              </div>
+              <div>
+                <label for="videoDuration">Duration (seconds)</label>
+                <input type="number" id="videoDuration" min="1" max="60" step="1" value="5">
+              </div>
+            </div>
+            <p class="field-hint">Uses the endpoint configured in the Connection tab. <span id="videoConnectionStatusHint">No connection configured yet.</span></p>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="videoGenerateBtn">Generate Video</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Latest Result</h2>
+        <div id="videoLatestResult">
+          <div class="empty-state">No generations yet. Fill out the form above and connect an API to get started.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: History ---------- -->
+    <div id="video-history" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavHistory">
+      <div class="card">
+        <div class="panel-header" style="margin-bottom:0;">
+          <h2 class="card-title">Generation History</h2>
+          <p class="field-hint">All prompts you've run, stored locally on this device.</p>
+        </div>
+        <div id="videoHistoryList" class="item-list">
+          <div class="empty-state">No generations yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Connection ---------- -->
+    <div id="video-connection" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavConnection">
+      <div class="card">
+        <h2 class="card-title">API Connection</h2>
+        <p class="field-hint">
+          JARVIS doesn't bundle a video generation provider. Point it at any HTTP API that accepts a text prompt and
+          returns a video URL (for example, a self-hosted model server or a provider's REST endpoint) and it will call it
+          directly from your browser. Your key is stored only in this browser's local storage and is sent only to the
+          endpoint you enter below.
+        </p>
+        <form id="videoConnectionForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="videoEndpointUrl">Endpoint URL</label>
+            <input type="url" id="videoEndpointUrl" placeholder="https://your-provider.example.com/v1/videos" maxlength="500">
+          </div>
+          <div class="form-row">
+            <label for="videoApiKey">API key</label>
+            <input type="password" id="videoApiKey" placeholder="Bearer token / API key" maxlength="500" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <label for="videoAuthHeader">Auth header name</label>
+            <input type="text" id="videoAuthHeader" placeholder="Authorization" maxlength="100">
+            <p class="field-hint">The key is sent as "&lt;header&gt;: Bearer &lt;key&gt;". Change the header name if your provider expects something else (e.g. "x-api-key").</p>
+          </div>
+          <div class="form-row">
+            <label for="videoBodyTemplate">Request body template (JSON)</label>
+            <textarea id="videoBodyTemplate" rows="6" placeholder='{"prompt": "{{prompt}}", "aspect_ratio": "{{aspectRatio}}", "duration": {{duration}}}'></textarea>
+            <p class="field-hint">Placeholders <code>{{prompt}}</code>, <code>{{aspectRatio}}</code>, and <code>{{duration}}</code> are filled in from the Generate form before sending.</p>
+          </div>
+          <div class="form-row">
+            <label for="videoResponsePath">Video URL field in response</label>
+            <input type="text" id="videoResponsePath" placeholder="e.g. video_url or data.output.url">
+            <p class="field-hint">Dot-path to the video URL inside the JSON response your API returns, so JARVIS can find it and show a preview.</p>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="videoConnectionSaveBtn">Save Connection</button>
+            <button type="button" class="btn btn-secondary" id="videoConnectionClearBtn">Clear</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <!-- ===================== MODALS ===================== -->
@@ -911,5 +1034,6 @@
 <script src="js/business.js"></script>
 <script src="js/calories.js"></script>
 <script src="js/trading.js"></script>
+<script src="js/video.js"></script>
 </body>
 </html>
