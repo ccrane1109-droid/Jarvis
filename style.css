@@ -564,6 +564,65 @@ textarea { resize: vertical; min-height: 44px; }
 }
 .add-set-row input { padding: 8px 10px; }
 
+.picker-row-with-star {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.picker-row-with-star-select { flex: 1; }
+.favorite-star-btn {
+  flex: none;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.favorite-star-btn.active { color: var(--yellow); border-color: var(--yellow); }
+.favorite-star-btn:hover { background: var(--card-hover); }
+
+.custom-exercise-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--card-border);
+}
+
+.rest-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.rest-timer-value { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); min-width: 42px; }
+.rest-timer.resting .rest-timer-value { color: var(--yellow); }
+.rest-timer-actions { display: flex; gap: 6px; margin-left: auto; }
+
+.stepper-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 4px;
+  align-items: center;
+}
+.stepper-btn {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  width: 30px;
+  height: 34px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.stepper-btn:hover { background: var(--card-hover); }
+
 .strength-score-hero {
   text-align: center;
   padding: 16px 0 20px;

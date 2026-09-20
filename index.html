@@ -42,6 +42,7 @@
     <nav class="sub-nav workout-sub-nav" role="tablist" aria-label="Workout sections">
       <button type="button" class="workout-sub-nav-btn active" data-subtarget="workout-log" role="tab" aria-selected="true" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-routines" role="tab" aria-selected="false" aria-controls="workout-routines" id="workoutSubNavRoutines">Routines</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-strength" role="tab" aria-selected="false" aria-controls="workout-strength" id="workoutSubNavStrength">Strength</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-progress" role="tab" aria-selected="false" aria-controls="workout-progress" id="workoutSubNavProgress">Progress</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-calories" role="tab" aria-selected="false" aria-controls="workout-calories" id="workoutSubNavCalories">Calories</button>
@@ -76,6 +77,10 @@
 
       <div class="card">
         <h2 class="card-title">Add Exercise</h2>
+        <div class="form-row">
+          <label for="exercisePickerSearch">Search</label>
+          <input type="text" id="exercisePickerSearch" placeholder="Search exercises by name">
+        </div>
         <div class="form-row two-col">
           <div>
             <label for="exercisePickerMuscleFilter">Muscle group</label>
@@ -90,12 +95,41 @@
             </select>
           </div>
         </div>
-        <div class="form-row">
-          <label for="exercisePickerSelect">Exercise</label>
-          <select id="exercisePickerSelect"></select>
+        <div class="form-row picker-row-with-star">
+          <div class="picker-row-with-star-select">
+            <label for="exercisePickerSelect">Exercise</label>
+            <select id="exercisePickerSelect"></select>
+          </div>
+          <button type="button" class="favorite-star-btn" id="exercisePickerFavoriteBtn" aria-label="Toggle favorite" title="Toggle favorite">☆</button>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-primary" id="addExerciseToSessionBtn">Add Exercise to Session</button>
+          <button type="button" class="btn btn-secondary" id="showAddCustomExerciseBtn">+ Add Custom Exercise</button>
+        </div>
+
+        <div id="addCustomExerciseForm" class="hidden custom-exercise-form">
+          <div class="form-row">
+            <label for="customExerciseName">Exercise name</label>
+            <input type="text" id="customExerciseName" maxlength="60" placeholder="e.g. Trap Bar Deadlift">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="customExerciseMuscle">Muscle group</label>
+              <select id="customExerciseMuscle"></select>
+            </div>
+            <div>
+              <label for="customExerciseEquipment">Equipment</label>
+              <select id="customExerciseEquipment"></select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="saveCustomExerciseBtn">Add to Library</button>
+            <button type="button" class="btn btn-secondary" id="cancelCustomExerciseBtn">Cancel</button>
+          </div>
+          <h3 class="checklist-title" style="margin-top:14px;">Your Custom Exercises</h3>
+          <div id="customExerciseList" class="item-list">
+            <div class="empty-state">No custom exercises yet.</div>
+          </div>
         </div>
       </div>
 
@@ -134,6 +168,10 @@
         </div>
 
         <h3 class="checklist-title">Add Exercises</h3>
+        <div class="form-row">
+          <label for="routinePickerSearch">Search</label>
+          <input type="text" id="routinePickerSearch" placeholder="Search exercises by name">
+        </div>
         <div class="form-row two-col">
           <div>
             <label for="routinePickerMuscleFilter">Muscle group</label>
@@ -185,6 +223,50 @@
       </div>
     </div>
 
+    <!-- ---------- Sub-panel: Programs ---------- -->
+    <div id="workout-programs" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavPrograms">
+      <div class="card">
+        <h2 class="card-title" id="programFormTitle">Create a Program</h2>
+        <p class="field-hint">A program cycles through routines in order — e.g. Push, Pull, Legs, repeat. Build your routines first, then string them into a cycle here.</p>
+        <input type="hidden" id="programEditId" value="">
+        <div class="form-row">
+          <label for="programNameInput">Program name</label>
+          <input type="text" id="programNameInput" placeholder="e.g. Push/Pull/Legs" maxlength="60">
+        </div>
+
+        <h3 class="checklist-title">Add Days</h3>
+        <div class="form-row two-col">
+          <div>
+            <label for="programDayRoutineSelect">Routine</label>
+            <select id="programDayRoutineSelect"></select>
+          </div>
+          <div>
+            <label for="programDayLabelInput">Day label (optional)</label>
+            <input type="text" id="programDayLabelInput" placeholder="e.g. Day 1: Push" maxlength="60">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="addDayToProgramBtn">Add Day</button>
+        </div>
+
+        <div id="programBuilderList" class="item-list" style="margin-top:14px;">
+          <div class="empty-state">No days added to this program yet.</div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" id="saveProgramBtn">Save Program</button>
+          <button type="button" class="btn btn-secondary hidden" id="programCancelEditBtn">Cancel Edit</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your Programs</h2>
+        <div id="programList" class="item-list">
+          <div class="empty-state">No programs yet. Build one above from your existing routines.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ---------- Sub-panel: Strength ---------- -->
     <div id="workout-strength" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavStrength">
       <div class="card-grid">
@@ -214,6 +296,49 @@
           </form>
           <div id="bodyweightList" class="item-list" style="margin-top:14px;">
             <div class="empty-state">No body weight logged yet.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Body Measurements</h2>
+          <form id="measurementForm" class="stacked-form" novalidate>
+            <div class="form-row">
+              <label for="measurementType">Body part</label>
+              <input type="text" id="measurementType" list="measurementTypeSuggestions" placeholder="e.g. Waist" maxlength="40" required>
+              <datalist id="measurementTypeSuggestions">
+                <option value="Waist"></option>
+                <option value="Chest"></option>
+                <option value="Arms"></option>
+                <option value="Thighs"></option>
+                <option value="Hips"></option>
+                <option value="Neck"></option>
+                <option value="Shoulders"></option>
+                <option value="Calves"></option>
+              </datalist>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="measurementValue">Value</label>
+                <input type="number" id="measurementValue" min="0" step="0.1" placeholder="e.g. 32" required>
+              </div>
+              <div>
+                <label for="measurementUnit">Unit</label>
+                <select id="measurementUnit">
+                  <option value="in">in</option>
+                  <option value="cm">cm</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="measurementDate">Date</label>
+              <input type="date" id="measurementDate">
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="measurementSubmitBtn">Log Measurement</button>
+            </div>
+          </form>
+          <div id="measurementList" class="item-list" style="margin-top:14px;">
+            <div class="empty-state">No measurements logged yet.</div>
           </div>
         </div>
 
@@ -274,6 +399,31 @@
         </div>
         <div id="exerciseProgressChart" class="chart-container">
           <div class="empty-state">Log a couple of sessions for this exercise to see a trend line.</div>
+        </div>
+        <h3 class="checklist-title" style="margin-top:14px;">PR History</h3>
+        <div id="exercisePrHistoryList" class="item-list">
+          <div class="empty-state">No PRs recorded yet for this exercise.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Weekly Training Volume</h2>
+        <p class="field-hint">Total weight &times; reps across all logged sets, summed per week.</p>
+        <div id="volumeChart" class="chart-container">
+          <div class="empty-state">Log a couple of weeks of workouts to see your volume trend.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Measurement Trends</h2>
+        <div class="form-row">
+          <label for="progressMeasurementSelect">Body part</label>
+          <select id="progressMeasurementSelect">
+            <option value="">Log a measurement to see its trend</option>
+          </select>
+        </div>
+        <div id="measurementChart" class="chart-container">
+          <div class="empty-state">Log a couple of measurements for this body part to see a trend line.</div>
         </div>
       </div>
 

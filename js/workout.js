@@ -5,7 +5,9 @@
                               entries have no "schema" field; new structured
                               sessions have schema: 2)
      jarvisRoutines        — saved routines (named exercise lists)
+     jarvisPrograms        — multi-day cycles that reference routines by id
      jarvisBodyweight      — body weight history
+     jarvisMeasurements    — body measurement history (waist, arms, etc.)
      jarvisStrengthSettings — which published standards to compare against
      jarvisWorkoutDraft    — in-progress (unsaved) session, so a refresh
                               mid-log doesn't lose data
@@ -16,13 +18,17 @@
 
   const LS_WORKOUTS = "jarvisWorkouts";
   const LS_ROUTINES = "jarvisRoutines";
+  const LS_PROGRAMS = "jarvisPrograms";
   const LS_BODYWEIGHT = "jarvisBodyweight";
+  const LS_MEASUREMENTS = "jarvisMeasurements";
   const LS_STRENGTH_SETTINGS = "jarvisStrengthSettings";
   const LS_DRAFT = "jarvisWorkoutDraft";
 
   let workouts = [];
   let routines = [];
+  let programs = [];
   let bodyweightEntries = [];
+  let measurements = [];
   let strengthSettings = { compareSex: "male" };
   let draft = null;
 
@@ -36,8 +42,14 @@
     routines = core.loadJSON(LS_ROUTINES, []);
     if (!Array.isArray(routines)) routines = [];
 
+    programs = core.loadJSON(LS_PROGRAMS, []);
+    if (!Array.isArray(programs)) programs = [];
+
     bodyweightEntries = core.loadJSON(LS_BODYWEIGHT, []);
     if (!Array.isArray(bodyweightEntries)) bodyweightEntries = [];
+
+    measurements = core.loadJSON(LS_MEASUREMENTS, []);
+    if (!Array.isArray(measurements)) measurements = [];
 
     let st = core.loadJSON(LS_STRENGTH_SETTINGS, null);
     if (!st || typeof st !== "object" || ["male", "female", "none"].indexOf(st.compareSex) === -1) {
@@ -47,13 +59,15 @@
 
     draft = core.loadJSON(LS_DRAFT, null);
     if (!draft || typeof draft !== "object" || !Array.isArray(draft.exercises)) {
-      draft = { dateTime: core.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [] };
+      draft = { dateTime: core.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "" };
     }
   }
 
   function saveWorkouts() { window.JarvisCore.saveJSON(LS_WORKOUTS, workouts); }
   function saveRoutines() { window.JarvisCore.saveJSON(LS_ROUTINES, routines); }
+  function savePrograms() { window.JarvisCore.saveJSON(LS_PROGRAMS, programs); }
   function saveBodyweight() { window.JarvisCore.saveJSON(LS_BODYWEIGHT, bodyweightEntries); }
+  function saveMeasurements() { window.JarvisCore.saveJSON(LS_MEASUREMENTS, measurements); }
   function saveStrengthSettings() { window.JarvisCore.saveJSON(LS_STRENGTH_SETTINGS, strengthSettings); }
   function saveDraft() { window.JarvisCore.saveJSON(LS_DRAFT, draft); }
 
@@ -78,40 +92,67 @@
 
   /* ---------------- exercise / routine pickers ---------------- */
 
-  function populateFilterSelect(selectEl, values) {
+  function buildPlainOptionsHtml(values) {
     const core = window.JarvisCore;
-    const current = selectEl.value;
-    const optionsHtml = values.map(function (v) {
+    return values.map(function (v) {
       return '<option value="' + core.escapeHtml(v) + '">' + core.escapeHtml(v) + '</option>';
     }).join("");
-    selectEl.innerHTML = selectEl.options[0].outerHTML + optionsHtml;
+  }
+
+  function populateFilterSelect(selectEl, values) {
+    const current = selectEl.value;
+    selectEl.innerHTML = selectEl.options[0].outerHTML + buildPlainOptionsHtml(values);
     if (values.indexOf(current) !== -1) selectEl.value = current;
   }
 
-  function populateExerciseSelect(selectEl, muscle, equipment) {
+  // Like populateFilterSelect, but with no leading "All ..." placeholder option.
+  function populateSelectPlain(selectEl, values) {
+    const current = selectEl.value;
+    selectEl.innerHTML = buildPlainOptionsHtml(values);
+    if (values.indexOf(current) !== -1) selectEl.value = current;
+  }
+
+  function populateExerciseSelect(selectEl, muscle, equipment, search) {
     const core = window.JarvisCore;
-    const all = window.JarvisExercises.getExercises();
+    const JE = window.JarvisExercises;
+    const all = JE.getExercises();
+    const searchLower = (search || "").trim().toLowerCase();
+    const favoriteIds = JE.loadFavoriteIds();
     const filtered = all.filter(function (ex) {
       if (muscle && ex.muscleGroup !== muscle) return false;
       if (equipment && ex.equipment !== equipment) return false;
+      if (searchLower && ex.name.toLowerCase().indexOf(searchLower) === -1) return false;
       return true;
     });
     if (filtered.length === 0) {
       selectEl.innerHTML = '<option value="">No exercises match this filter</option>';
       return;
     }
+
+    function optionHtml(ex) {
+      const star = favoriteIds.indexOf(ex.id) !== -1 ? "★ " : "";
+      return '<option value="' + core.escapeHtml(ex.id) + '">' + star + core.escapeHtml(ex.name) + " (" + core.escapeHtml(ex.equipment) + ")</option>";
+    }
+
+    const favorites = filtered.filter(function (ex) { return favoriteIds.indexOf(ex.id) !== -1; });
+    const favoritesGroup = favorites.length
+      ? '<optgroup label="★ Favorites">' + favorites.map(optionHtml).join("") + "</optgroup>"
+      : "";
+
+    // Exclude favorites here so they don't also appear in their normal
+    // muscle-group optgroup — they're already shown above.
+    const nonFavorites = filtered.filter(function (ex) { return favoriteIds.indexOf(ex.id) === -1; });
     const groups = {};
-    filtered.forEach(function (ex) {
+    nonFavorites.forEach(function (ex) {
       if (!groups[ex.muscleGroup]) groups[ex.muscleGroup] = [];
       groups[ex.muscleGroup].push(ex);
     });
     const groupNames = Object.keys(groups).sort();
-    selectEl.innerHTML = groupNames.map(function (g) {
-      const opts = groups[g].map(function (ex) {
-        return '<option value="' + core.escapeHtml(ex.id) + '">' + core.escapeHtml(ex.name) + " (" + core.escapeHtml(ex.equipment) + ")</option>";
-      }).join("");
-      return '<optgroup label="' + core.escapeHtml(g) + '">' + opts + "</optgroup>";
+    const mainGroups = groupNames.map(function (g) {
+      return '<optgroup label="' + core.escapeHtml(g) + '">' + groups[g].map(optionHtml).join("") + "</optgroup>";
     }).join("");
+
+    selectEl.innerHTML = favoritesGroup + mainGroups;
   }
 
   function initPickers() {
@@ -120,6 +161,8 @@
     populateFilterSelect(document.getElementById("exercisePickerEquipmentFilter"), JE.EQUIPMENT_TYPES);
     populateFilterSelect(document.getElementById("routinePickerMuscleFilter"), JE.MUSCLE_GROUPS);
     populateFilterSelect(document.getElementById("routinePickerEquipmentFilter"), JE.EQUIPMENT_TYPES);
+    populateSelectPlain(document.getElementById("customExerciseMuscle"), JE.MUSCLE_GROUPS);
+    populateSelectPlain(document.getElementById("customExerciseEquipment"), JE.EQUIPMENT_TYPES);
     refreshExercisePicker();
     refreshRoutinePicker();
   }
@@ -128,16 +171,106 @@
     populateExerciseSelect(
       document.getElementById("exercisePickerSelect"),
       document.getElementById("exercisePickerMuscleFilter").value,
-      document.getElementById("exercisePickerEquipmentFilter").value
+      document.getElementById("exercisePickerEquipmentFilter").value,
+      document.getElementById("exercisePickerSearch").value
     );
+    updateFavoriteStarButton();
   }
 
   function refreshRoutinePicker() {
     populateExerciseSelect(
       document.getElementById("routinePickerSelect"),
       document.getElementById("routinePickerMuscleFilter").value,
-      document.getElementById("routinePickerEquipmentFilter").value
+      document.getElementById("routinePickerEquipmentFilter").value,
+      document.getElementById("routinePickerSearch").value
     );
+  }
+
+  function updateFavoriteStarButton() {
+    const btn = document.getElementById("exercisePickerFavoriteBtn");
+    const exerciseId = document.getElementById("exercisePickerSelect").value;
+    const isFav = exerciseId && window.JarvisExercises.isFavorite(exerciseId);
+    btn.textContent = isFav ? "★" : "☆";
+    btn.classList.toggle("active", !!isFav);
+  }
+
+  function handleToggleFavorite() {
+    const exerciseId = document.getElementById("exercisePickerSelect").value;
+    if (!exerciseId) return;
+    window.JarvisExercises.toggleFavorite(exerciseId);
+    const previousSelection = exerciseId;
+    refreshExercisePicker();
+    const select = document.getElementById("exercisePickerSelect");
+    if (Array.prototype.some.call(select.options, function (o) { return o.value === previousSelection; })) {
+      select.value = previousSelection;
+    }
+    updateFavoriteStarButton();
+  }
+
+  function renderCustomExerciseList() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("customExerciseList");
+    const list = window.JarvisExercises.loadCustomExercises();
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state">No custom exercises yet.</div>';
+      return;
+    }
+    container.innerHTML = list.map(function (ex) {
+      return (
+        '<div class="list-item" data-id="' + core.escapeHtml(ex.id) + '">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + core.escapeHtml(ex.name) + '</span>' +
+              '<span class="list-item-meta">' + core.escapeHtml(ex.muscleGroup) + ' &middot; ' + core.escapeHtml(ex.equipment) + '</span>' +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon danger custom-exercise-delete-btn" data-id="' + core.escapeHtml(ex.id) + '">Delete</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleShowAddCustomExercise() {
+    document.getElementById("addCustomExerciseForm").classList.remove("hidden");
+    document.getElementById("customExerciseName").focus();
+    renderCustomExerciseList();
+  }
+
+  function handleCancelAddCustomExercise() {
+    document.getElementById("addCustomExerciseForm").classList.add("hidden");
+    document.getElementById("customExerciseName").value = "";
+  }
+
+  function handleSaveCustomExercise() {
+    const core = window.JarvisCore;
+    const name = document.getElementById("customExerciseName").value.trim();
+    const muscleGroup = document.getElementById("customExerciseMuscle").value;
+    const equipment = document.getElementById("customExerciseEquipment").value;
+    if (!name) { core.showToast("Give the exercise a name."); return; }
+    const exercise = window.JarvisExercises.addCustomExercise({ name: name, muscleGroup: muscleGroup, equipment: equipment });
+    refreshExercisePicker();
+    refreshRoutinePicker();
+    document.getElementById("exercisePickerMuscleFilter").value = "";
+    document.getElementById("exercisePickerEquipmentFilter").value = "";
+    document.getElementById("exercisePickerSearch").value = "";
+    refreshExercisePicker();
+    document.getElementById("exercisePickerSelect").value = exercise.id;
+    document.getElementById("customExerciseName").value = "";
+    renderCustomExerciseList();
+    core.showToast("Added “" + name + "” to your exercise library.");
+  }
+
+  function handleCustomExerciseListClick(e) {
+    const btn = e.target.closest(".custom-exercise-delete-btn");
+    if (!btn) return;
+    const id = btn.getAttribute("data-id");
+    window.JarvisExercises.deleteCustomExercise(id);
+    renderCustomExerciseList();
+    refreshExercisePicker();
+    refreshRoutinePicker();
+    window.JarvisCore.showToast("Custom exercise deleted.");
   }
 
   function populateRoutineSelect() {
@@ -152,6 +285,84 @@
   function switchToWorkoutSubTab(targetId) {
     const btn = document.querySelector('.workout-sub-nav-btn[data-subtarget="' + targetId + '"]');
     if (btn) btn.click();
+  }
+
+  /* ---------------- rest timer (ephemeral, not persisted) ---------------- */
+
+  const REST_TIMER_DEFAULT_SECONDS = 90;
+  let restTimers = {}; // sessionExId -> { remaining: seconds, intervalId }
+
+  function formatTimerSeconds(total) {
+    const m = Math.floor(total / 60), s = total % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  function restTimerHtml(sessionExId) {
+    const timer = restTimers[sessionExId];
+    const isResting = !!(timer && timer.remaining > 0);
+    const display = isResting ? formatTimerSeconds(timer.remaining) : "--:--";
+    return (
+      '<div class="rest-timer' + (isResting ? " resting" : "") + '" data-session-ex-id="' + sessionExId + '">' +
+        "<span>Rest</span><span class=\"rest-timer-value\">" + display + "</span>" +
+        '<div class="rest-timer-actions">' +
+          '<button type="button" class="btn-icon rest-timer-add30-btn" data-session-ex-id="' + sessionExId + '">+30s</button>' +
+          '<button type="button" class="btn-icon rest-timer-skip-btn" data-session-ex-id="' + sessionExId + '">Skip</button>' +
+        "</div>" +
+      "</div>"
+    );
+  }
+
+  function findRestTimerEl(sessionExId) {
+    return Array.prototype.find.call(document.querySelectorAll(".rest-timer"), function (el) {
+      return el.getAttribute("data-session-ex-id") === sessionExId;
+    }) || null;
+  }
+
+  function updateRestTimerDom(sessionExId, justFinished) {
+    const el = findRestTimerEl(sessionExId);
+    if (!el) return;
+    const valueEl = el.querySelector(".rest-timer-value");
+    const t = restTimers[sessionExId];
+    if (t && t.remaining > 0) {
+      valueEl.textContent = formatTimerSeconds(t.remaining);
+      el.classList.add("resting");
+    } else {
+      valueEl.textContent = justFinished ? "Done" : "--:--";
+      el.classList.remove("resting");
+    }
+  }
+
+  function stopRestTimer(sessionExId) {
+    const t = restTimers[sessionExId];
+    if (t && t.intervalId) clearInterval(t.intervalId);
+    delete restTimers[sessionExId];
+  }
+
+  function stopAllRestTimers() {
+    Object.keys(restTimers).forEach(stopRestTimer);
+  }
+
+  function startRestTimer(sessionExId, seconds) {
+    stopRestTimer(sessionExId);
+    restTimers[sessionExId] = { remaining: seconds, intervalId: null };
+    updateRestTimerDom(sessionExId);
+    restTimers[sessionExId].intervalId = setInterval(function () {
+      const t = restTimers[sessionExId];
+      if (!t) return;
+      t.remaining -= 1;
+      if (t.remaining <= 0) {
+        stopRestTimer(sessionExId);
+        updateRestTimerDom(sessionExId, true);
+        return;
+      }
+      updateRestTimerDom(sessionExId);
+    }, 1000);
+  }
+
+  function handleRestTimerAdd30(sessionExId) {
+    const t = restTimers[sessionExId];
+    if (t) { t.remaining += 30; updateRestTimerDom(sessionExId); }
+    else startRestTimer(sessionExId, 30);
   }
 
   /* ---------------- draft session (Log tab) ---------------- */
@@ -173,13 +384,17 @@
       const setsHtml = se.sets.length === 0
         ? '<div class="field-hint">No sets yet.</div>'
         : se.sets.map(function (s, i) {
-            return '<div class="set-row"><span>Set ' + (i + 1) + ': ' + core.escapeHtml(s.weight) + ' &times; ' + core.escapeHtml(s.reps) + '</span>' +
+            const warmupTag = s.warmup ? ' <span class="badge badge-neutral">warm-up</span>' : '';
+            return '<div class="set-row"><span>Set ' + (i + 1) + ': ' + core.escapeHtml(s.weight) + ' &times; ' + core.escapeHtml(s.reps) + warmupTag + '</span>' +
               '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button></div>';
           }).join("");
       const pr = getExercisePrAndE1rm(se.exerciseId);
       const prHint = pr.bestSet
         ? '<span class="list-item-meta">PR: ' + core.escapeHtml(pr.bestSet.weight) + ' &times; ' + core.escapeHtml(pr.bestSet.reps) + ' &middot; Est. 1RM: ' + Math.round(pr.bestE1rm) + '</span>'
         : '<span class="list-item-meta">No previous sets logged for this exercise yet.</span>';
+      const lastSet = se.sets.length ? se.sets[se.sets.length - 1] : null;
+      const prefillWeight = lastSet ? lastSet.weight : "";
+      const prefillReps = lastSet ? lastSet.reps : "";
       return (
         '<div class="list-item session-exercise-block" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
           '<div class="list-item-row">' +
@@ -192,17 +407,29 @@
             '</div>' +
           '</div>' +
           '<div class="set-rows">' + setsHtml + '</div>' +
+          restTimerHtml(se.sessionExId) +
           '<div class="add-set-row" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
-            '<input type="number" class="add-set-weight-input" min="0" step="0.5" placeholder="Weight" aria-label="Weight for ' + core.escapeHtml(exName) + '">' +
-            '<input type="number" class="add-set-reps-input" min="1" step="1" placeholder="Reps" aria-label="Reps for ' + core.escapeHtml(exName) + '">' +
+            '<div class="stepper-row">' +
+              '<button type="button" class="stepper-btn add-set-weight-minus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Decrease weight">&minus;</button>' +
+              '<input type="number" class="add-set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(prefillWeight) + '" aria-label="Weight for ' + core.escapeHtml(exName) + '">' +
+              '<button type="button" class="stepper-btn add-set-weight-plus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Increase weight">+</button>' +
+            '</div>' +
+            '<div class="stepper-row">' +
+              '<button type="button" class="stepper-btn add-set-reps-minus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Decrease reps">&minus;</button>' +
+              '<input type="number" class="add-set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(prefillReps) + '" aria-label="Reps for ' + core.escapeHtml(exName) + '">' +
+              '<button type="button" class="stepper-btn add-set-reps-plus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Increase reps">+</button>' +
+            '</div>' +
             '<button type="button" class="btn btn-secondary add-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">Add Set</button>' +
+          '</div>' +
+          '<div class="form-actions" style="margin-top:8px;">' +
+            '<button type="button" class="btn-icon suggest-warmup-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">Suggest Warm-Up Sets</button>' +
           '</div>' +
         '</div>'
       );
     }).join("");
   }
 
-  function loadRoutineIntoDraft(routineId) {
+  function loadRoutineIntoDraft(routineId, programContext) {
     const routine = routines.find(function (r) { return r.id === routineId; });
     if (!routine) return;
     const core = window.JarvisCore;
@@ -213,6 +440,8 @@
       }
     });
     draft.routineId = routineId;
+    draft.programId = programContext ? programContext.programId : "";
+    draft.programDayId = programContext ? programContext.programDayId : "";
     saveDraft();
     renderSessionExerciseList();
   }
@@ -241,9 +470,85 @@
       const sessionExId = addSetBtn.getAttribute("data-session-ex-id");
       const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
       if (!se) return;
-      se.sets.push({ weight: weight, reps: Math.round(reps) });
+      const roundedReps = Math.round(reps);
+      const JE = window.JarvisExercises;
+      const priorBest = getExercisePrAndE1rm(se.exerciseId);
+      // Also factor in sets already logged earlier in this same unsaved
+      // session, so repeating an identical set doesn't re-trigger the toast.
+      const sessionBestE1rmSoFar = se.sets.reduce(function (max, s) {
+        const e1rm = JE.estimateOneRepMax(s.weight, s.reps);
+        return e1rm > max ? e1rm : max;
+      }, 0);
+      const combinedBestE1rm = Math.max(priorBest.bestE1rm, sessionBestE1rmSoFar);
+      se.sets.push({ weight: weight, reps: roundedReps });
       saveDraft();
       renderSessionExerciseList();
+      startRestTimer(sessionExId, REST_TIMER_DEFAULT_SECONDS);
+      if (combinedBestE1rm > 0) {
+        const newE1rm = JE.estimateOneRepMax(weight, roundedReps);
+        if (newE1rm > combinedBestE1rm) {
+          const ex = JE.getExerciseById(se.exerciseId);
+          core.showToast("New PR! " + (ex ? ex.name : "Exercise") + ": " + weight + " × " + roundedReps);
+        }
+      }
+      return;
+    }
+
+    const weightMinusBtn = e.target.closest(".add-set-weight-minus");
+    const weightPlusBtn = e.target.closest(".add-set-weight-plus");
+    if (weightMinusBtn || weightPlusBtn) {
+      const row = (weightMinusBtn || weightPlusBtn).closest(".add-set-row");
+      const input = row.querySelector(".add-set-weight-input");
+      const current = Number(input.value) || 0;
+      const next = current + (weightMinusBtn ? -5 : 5);
+      input.value = next < 0 ? 0 : next;
+      return;
+    }
+
+    const repsMinusBtn = e.target.closest(".add-set-reps-minus");
+    const repsPlusBtn = e.target.closest(".add-set-reps-plus");
+    if (repsMinusBtn || repsPlusBtn) {
+      const row = (repsMinusBtn || repsPlusBtn).closest(".add-set-row");
+      const input = row.querySelector(".add-set-reps-input");
+      const current = Number(input.value) || 0;
+      const next = current + (repsMinusBtn ? -1 : 1);
+      input.value = next < 1 ? 1 : next;
+      return;
+    }
+
+    const warmupBtn = e.target.closest(".suggest-warmup-btn");
+    if (warmupBtn) {
+      const sessionExId = warmupBtn.getAttribute("data-session-ex-id");
+      const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
+      if (!se) return;
+      const pr = getExercisePrAndE1rm(se.exerciseId);
+      if (!pr.bestSet) {
+        core.showToast("Log a working set for this exercise first — warm-ups are suggested from your best set.");
+        return;
+      }
+      const target = pr.bestSet.weight;
+      const ramp = [{ pct: 0.4, reps: 10 }, { pct: 0.6, reps: 6 }, { pct: 0.8, reps: 3 }];
+      ramp.forEach(function (r) {
+        const weight = Math.round((target * r.pct) / 5) * 5;
+        se.sets.push({ weight: weight, reps: r.reps, warmup: true });
+      });
+      saveDraft();
+      renderSessionExerciseList();
+      core.showToast("Added 3 warm-up sets ramping to " + target + ".");
+      return;
+    }
+
+    const restAdd30Btn = e.target.closest(".rest-timer-add30-btn");
+    if (restAdd30Btn) {
+      handleRestTimerAdd30(restAdd30Btn.getAttribute("data-session-ex-id"));
+      return;
+    }
+
+    const restSkipBtn = e.target.closest(".rest-timer-skip-btn");
+    if (restSkipBtn) {
+      const sessionExId = restSkipBtn.getAttribute("data-session-ex-id");
+      stopRestTimer(sessionExId);
+      updateRestTimerDom(sessionExId);
       return;
     }
 
@@ -262,6 +567,7 @@
     const removeExBtn = e.target.closest(".remove-session-exercise-btn");
     if (removeExBtn) {
       const sessionExId = removeExBtn.getAttribute("data-session-ex-id");
+      stopRestTimer(sessionExId);
       draft.exercises = draft.exercises.filter(function (x) { return x.sessionExId !== sessionExId; });
       saveDraft();
       renderSessionExerciseList();
@@ -269,12 +575,23 @@
   }
 
   function resetDraft() {
-    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [] };
+    stopAllRestTimers();
+    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "" };
     saveDraft();
     document.getElementById("sessionRoutineSelect").value = "";
     document.getElementById("sessionDateTime").value = draft.dateTime;
     document.getElementById("sessionNotes").value = "";
     renderSessionExerciseList();
+  }
+
+  function advanceProgramIfApplicable() {
+    if (!draft.programId) return;
+    const program = programs.find(function (p) { return p.id === draft.programId; });
+    if (!program || program.days.length === 0) return;
+    const idx = program.days.findIndex(function (d) { return d.id === draft.programDayId; });
+    if (idx === -1) return;
+    program.currentIndex = (idx + 1) % program.days.length;
+    savePrograms();
   }
 
   function handleSaveWorkout() {
@@ -291,12 +608,15 @@
       dateTime: dateTime,
       date: dateTime.slice(0, 10),
       routineId: draft.routineId || null,
+      programId: draft.programId || null,
+      programDayId: draft.programDayId || null,
       notes: document.getElementById("sessionNotes").value.trim(),
       exercises: withSets.map(function (se) { return { exerciseId: se.exerciseId, sets: se.sets.slice() }; }),
       createdAt: Date.now()
     };
     workouts.push(session);
     saveWorkouts();
+    advanceProgramIfApplicable();
     resetDraft();
     renderAll();
     core.showToast("Workout saved.");
@@ -416,7 +736,14 @@
     container.innerHTML = sorted.map(function (w) {
       if (w.schema === 2) {
         const routine = w.routineId ? routines.find(function (r) { return r.id === w.routineId; }) : null;
-        const title = routine ? routine.name : "Freestyle Workout";
+        let title = routine ? routine.name : "Freestyle Workout";
+        if (w.programId) {
+          const program = programs.find(function (p) { return p.id === w.programId; });
+          if (program) {
+            const day = program.days.find(function (d) { return d.id === w.programDayId; });
+            title = program.name + (day ? " — " + day.label : "");
+          }
+        }
         const musclesTrained = getMuscleGroupsForExerciseIds(w.exercises.map(function (se) { return se.exerciseId; }));
         const exerciseLines = w.exercises.map(function (se) {
           const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
@@ -565,6 +892,8 @@
     exitRoutineEditMode();
     renderRoutineList();
     populateRoutineSelect();
+    populateProgramDayRoutineSelect();
+    renderProgramList();
   }
 
   function renderRoutineList() {
@@ -623,6 +952,204 @@
       saveRoutines();
       renderRoutineList();
       populateRoutineSelect();
+      populateProgramDayRoutineSelect();
+      renderProgramList();
+    }
+  }
+
+  /* ---------------- programs ---------------- */
+
+  let programBuilder = { editId: null, days: [] };
+
+  function populateProgramDayRoutineSelect() {
+    const core = window.JarvisCore;
+    const sel = document.getElementById("programDayRoutineSelect");
+    if (routines.length === 0) {
+      sel.innerHTML = '<option value="">Create a routine first</option>';
+      return;
+    }
+    const current = sel.value;
+    sel.innerHTML = routines.map(function (r) { return '<option value="' + core.escapeHtml(r.id) + '">' + core.escapeHtml(r.name) + "</option>"; }).join("");
+    if (routines.some(function (r) { return r.id === current; })) sel.value = current;
+  }
+
+  function renderProgramBuilderList() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("programBuilderList");
+    if (programBuilder.days.length === 0) {
+      container.innerHTML = '<div class="empty-state">No days added to this program yet.</div>';
+      return;
+    }
+    container.innerHTML = programBuilder.days.map(function (d, i) {
+      const routine = routines.find(function (r) { return r.id === d.routineId; });
+      const routineName = routine ? routine.name : "Unknown routine";
+      return (
+        '<div class="list-item">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">Day ' + (i + 1) + ': ' + core.escapeHtml(d.label) + '</span>' +
+              '<span class="list-item-meta">' + core.escapeHtml(routineName) + '</span>' +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon program-builder-up-btn" data-index="' + i + '"' + (i === 0 ? " disabled" : "") + '>&uarr;</button>' +
+              '<button type="button" class="btn-icon program-builder-down-btn" data-index="' + i + '"' + (i === programBuilder.days.length - 1 ? " disabled" : "") + '>&darr;</button>' +
+              '<button type="button" class="btn-icon danger program-builder-remove-btn" data-index="' + i + '">Remove</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleAddDayToProgram() {
+    const core = window.JarvisCore;
+    const routineId = document.getElementById("programDayRoutineSelect").value;
+    if (!routineId) { core.showToast("Create a routine first, then add it as a day here."); return; }
+    const routine = routines.find(function (r) { return r.id === routineId; });
+    const labelInput = document.getElementById("programDayLabelInput");
+    const label = labelInput.value.trim() || (routine ? routine.name : "Day");
+    programBuilder.days.push({ id: core.uid("progday"), label: label, routineId: routineId });
+    labelInput.value = "";
+    renderProgramBuilderList();
+  }
+
+  function handleProgramBuilderListClick(e) {
+    const upBtn = e.target.closest(".program-builder-up-btn");
+    const downBtn = e.target.closest(".program-builder-down-btn");
+    const removeBtn = e.target.closest(".program-builder-remove-btn");
+    if (upBtn || downBtn) {
+      const index = Number((upBtn || downBtn).getAttribute("data-index"));
+      const swapWith = upBtn ? index - 1 : index + 1;
+      if (swapWith >= 0 && swapWith < programBuilder.days.length) {
+        const tmp = programBuilder.days[index];
+        programBuilder.days[index] = programBuilder.days[swapWith];
+        programBuilder.days[swapWith] = tmp;
+        renderProgramBuilderList();
+      }
+      return;
+    }
+    if (removeBtn) {
+      const index = Number(removeBtn.getAttribute("data-index"));
+      programBuilder.days.splice(index, 1);
+      renderProgramBuilderList();
+    }
+  }
+
+  function exitProgramEditMode() {
+    programBuilder = { editId: null, days: [] };
+    document.getElementById("programEditId").value = "";
+    document.getElementById("programNameInput").value = "";
+    document.getElementById("programFormTitle").textContent = "Create a Program";
+    document.getElementById("saveProgramBtn").textContent = "Save Program";
+    document.getElementById("programCancelEditBtn").classList.add("hidden");
+    renderProgramBuilderList();
+  }
+
+  function enterProgramEditMode(program) {
+    programBuilder = { editId: program.id, days: program.days.map(function (d) { return Object.assign({}, d); }) };
+    document.getElementById("programEditId").value = program.id;
+    document.getElementById("programNameInput").value = program.name;
+    document.getElementById("programFormTitle").textContent = "Edit Program";
+    document.getElementById("saveProgramBtn").textContent = "Update Program";
+    document.getElementById("programCancelEditBtn").classList.remove("hidden");
+    renderProgramBuilderList();
+    document.getElementById("programFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleSaveProgram() {
+    const core = window.JarvisCore;
+    const name = document.getElementById("programNameInput").value.trim();
+    if (!name) { core.showToast("Give this program a name."); return; }
+    if (programBuilder.days.length === 0) { core.showToast("Add at least one day."); return; }
+
+    if (programBuilder.editId) {
+      const existing = programs.find(function (p) { return p.id === programBuilder.editId; });
+      if (existing) {
+        existing.name = name;
+        existing.days = programBuilder.days.slice();
+        if (existing.currentIndex >= existing.days.length) existing.currentIndex = 0;
+      }
+      core.showToast("Program updated.");
+    } else {
+      programs.push({ id: core.uid("program"), name: name, days: programBuilder.days.slice(), currentIndex: 0, createdAt: Date.now() });
+      core.showToast("Program saved.");
+    }
+    savePrograms();
+    exitProgramEditMode();
+    renderProgramList();
+  }
+
+  function renderProgramList() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("programList");
+    if (programs.length === 0) {
+      container.innerHTML = '<div class="empty-state">No programs yet. Build one above from your existing routines.</div>';
+      return;
+    }
+    container.innerHTML = programs.map(function (p) {
+      const dayIndex = p.currentIndex % p.days.length;
+      const nextDay = p.days[dayIndex];
+      const nextRoutine = nextDay ? routines.find(function (r) { return r.id === nextDay.routineId; }) : null;
+      const nextText = nextDay
+        ? "Next: " + core.escapeHtml(nextDay.label) + " (" + core.escapeHtml(nextRoutine ? nextRoutine.name : "routine deleted") + ") &middot; day " + (dayIndex + 1) + " of " + p.days.length
+        : "This program has no days.";
+      return (
+        '<div class="list-item" data-id="' + core.escapeHtml(p.id) + '">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + core.escapeHtml(p.name) + ' <span class="badge badge-neutral">' + p.days.length + ' day' + (p.days.length === 1 ? "" : "s") + '</span></span>' +
+              '<span class="list-item-meta">' + nextText + '</span>' +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon program-start-btn" data-id="' + core.escapeHtml(p.id) + '">Start Today’s Workout</button>' +
+              '<button type="button" class="btn-icon program-skip-btn" data-id="' + core.escapeHtml(p.id) + '">Skip Day</button>' +
+              '<button type="button" class="btn-icon program-edit-btn" data-id="' + core.escapeHtml(p.id) + '">Edit</button>' +
+              '<button type="button" class="btn-icon danger program-delete-btn" data-id="' + core.escapeHtml(p.id) + '">Delete</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleProgramListClick(e) {
+    const startBtn = e.target.closest(".program-start-btn");
+    if (startBtn) {
+      const id = startBtn.getAttribute("data-id");
+      const program = programs.find(function (p) { return p.id === id; });
+      if (!program || program.days.length === 0) return;
+      const day = program.days[program.currentIndex % program.days.length];
+      const routine = routines.find(function (r) { return r.id === day.routineId; });
+      if (!routine) { window.JarvisCore.showToast("That day's routine no longer exists — edit the program to fix it."); return; }
+      document.getElementById("sessionRoutineSelect").value = day.routineId;
+      loadRoutineIntoDraft(day.routineId, { programId: program.id, programDayId: day.id });
+      switchToWorkoutSubTab("workout-log");
+      return;
+    }
+    const skipBtn = e.target.closest(".program-skip-btn");
+    if (skipBtn) {
+      const id = skipBtn.getAttribute("data-id");
+      const program = programs.find(function (p) { return p.id === id; });
+      if (!program || program.days.length === 0) return;
+      program.currentIndex = (program.currentIndex + 1) % program.days.length;
+      savePrograms();
+      renderProgramList();
+      window.JarvisCore.showToast("Skipped to the next day.");
+      return;
+    }
+    const editBtn = e.target.closest(".program-edit-btn");
+    if (editBtn) {
+      const id = editBtn.getAttribute("data-id");
+      const program = programs.find(function (p) { return p.id === id; });
+      if (program) enterProgramEditMode(program);
+      return;
+    }
+    const delBtn = e.target.closest(".program-delete-btn");
+    if (delBtn) {
+      const id = delBtn.getAttribute("data-id");
+      programs = programs.filter(function (p) { return p.id !== id; });
+      savePrograms();
+      renderProgramList();
     }
   }
 
@@ -702,6 +1229,96 @@
     renderBodyweightList();
     renderStrengthSection();
     renderProgressTab();
+  }
+
+  /* ---------------- body measurements ---------------- */
+
+  function renderMeasurementList() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("measurementList");
+    if (measurements.length === 0) {
+      container.innerHTML = '<div class="empty-state">No measurements logged yet.</div>';
+      return;
+    }
+    const sorted = measurements.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+    container.innerHTML = sorted.map(function (m) {
+      return (
+        '<div class="list-item" data-id="' + core.escapeHtml(m.id) + '">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + core.escapeHtml(m.type) + ' <span class="badge badge-neutral">' + core.escapeHtml(m.value) + ' ' + core.escapeHtml(m.unit) + '</span></span>' +
+              '<span class="list-item-meta">' + core.formatDate(m.date) + '</span>' +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon danger measurement-delete-btn" data-id="' + core.escapeHtml(m.id) + '">Delete</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleMeasurementSubmit(e) {
+    e.preventDefault();
+    const core = window.JarvisCore;
+    const type = document.getElementById("measurementType").value.trim();
+    const value = Number(document.getElementById("measurementValue").value);
+    const unit = document.getElementById("measurementUnit").value;
+    const date = document.getElementById("measurementDate").value || core.todayISODate();
+    if (!type) { core.showToast("Enter a body part."); return; }
+    if (!core.isPositiveNumber(value)) { core.showToast("Value must be a positive number."); return; }
+    measurements.push({ id: core.uid("meas"), type: type, value: value, unit: unit, date: date, createdAt: Date.now() });
+    saveMeasurements();
+    renderMeasurementList();
+    renderProgressTab();
+    document.getElementById("measurementForm").reset();
+    document.getElementById("measurementDate").value = "";
+    document.getElementById("measurementUnit").value = unit;
+    core.showToast("Measurement logged.");
+  }
+
+  function handleMeasurementListClick(e) {
+    const btn = e.target.closest(".measurement-delete-btn");
+    if (!btn) return;
+    const id = btn.getAttribute("data-id");
+    measurements = measurements.filter(function (x) { return x.id !== id; });
+    saveMeasurements();
+    renderMeasurementList();
+    renderProgressTab();
+  }
+
+  function populateProgressMeasurementSelect() {
+    const core = window.JarvisCore;
+    const sel = document.getElementById("progressMeasurementSelect");
+    const current = sel.value;
+    const types = Array.from(new Set(measurements.map(function (m) { return m.type; }))).sort();
+    if (types.length === 0) {
+      sel.innerHTML = '<option value="">Log a measurement to see its trend</option>';
+      return;
+    }
+    sel.innerHTML = types.map(function (t) { return '<option value="' + core.escapeHtml(t) + '">' + core.escapeHtml(t) + '</option>'; }).join("");
+    if (types.indexOf(current) !== -1) sel.value = current;
+  }
+
+  function renderMeasurementChart() {
+    const core = window.JarvisCore;
+    const type = document.getElementById("progressMeasurementSelect").value;
+    if (!type) {
+      renderLineChart("measurementChart", [], { emptyMessage: "Log a couple of measurements for this body part to see a trend line." });
+      return;
+    }
+    // Measurements are shown in whatever unit they were logged in — no
+    // cross-unit conversion, unlike body weight's lb normalization.
+    const rawPoints = measurements
+      .filter(function (m) { return m.type === type; })
+      .sort(function (a, b) { return new Date(a.date) - new Date(b.date); })
+      .map(function (m) { return { t: new Date(m.date).getTime(), v: m.value, label: core.formatDate(m.date) }; });
+    const unit = measurements.filter(function (m) { return m.type === type; })[0].unit;
+    renderLineChart("measurementChart", rawPoints, {
+      emptyMessage: "Log a couple of measurements for this body part to see a trend line.",
+      yFormat: function (v) { return v.toFixed(1) + " " + unit; },
+      ariaLabel: type + " measurement trend"
+    });
   }
 
   /* ---------------- strength score ---------------- */
@@ -920,6 +1537,7 @@
       prEl.textContent = "--";
       countEl.textContent = "0";
       renderLineChart("exerciseProgressChart", [], { emptyMessage: "Log a couple of sessions for this exercise to see a trend line." });
+      renderPrHistoryList(null);
       return;
     }
 
@@ -951,6 +1569,95 @@
       yFormat: function (v) { return Math.round(v) + " lb"; },
       ariaLabel: "Estimated one rep max trend for " + (ex ? ex.name : "exercise")
     });
+
+    renderPrHistoryList(exerciseId);
+  }
+
+  // Chronological list of estimated-1RM PRs for an exercise: every time a
+  // logged set beat the best e1rm seen up to that point. Most recent first.
+  function getPrHistory(exerciseId) {
+    const JE = window.JarvisExercises;
+    const sorted = workouts
+      .filter(function (w) { return w.schema === 2; })
+      .slice()
+      .sort(function (a, b) { return new Date(a.dateTime || a.date) - new Date(b.dateTime || b.date); });
+    let bestE1rm = 0;
+    const history = [];
+    sorted.forEach(function (w) {
+      const se = w.exercises.find(function (x) { return x.exerciseId === exerciseId; });
+      if (!se) return;
+      se.sets.forEach(function (s) {
+        const e1rm = JE.estimateOneRepMax(s.weight, s.reps);
+        if (e1rm > bestE1rm) {
+          bestE1rm = e1rm;
+          history.push({ date: w.date, weight: s.weight, reps: s.reps, e1rm: e1rm });
+        }
+      });
+    });
+    return history.reverse();
+  }
+
+  function renderPrHistoryList(exerciseId) {
+    const core = window.JarvisCore;
+    const container = document.getElementById("exercisePrHistoryList");
+    if (!exerciseId) {
+      container.innerHTML = '<div class="empty-state">No PRs recorded yet for this exercise.</div>';
+      return;
+    }
+    const history = getPrHistory(exerciseId);
+    if (history.length === 0) {
+      container.innerHTML = '<div class="empty-state">No PRs recorded yet for this exercise.</div>';
+      return;
+    }
+    container.innerHTML = history.map(function (h) {
+      return (
+        '<div class="list-item">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + core.escapeHtml(h.weight) + ' &times; ' + core.escapeHtml(h.reps) + ' <span class="badge badge-green">Est. 1RM ' + Math.round(h.e1rm) + '</span></span>' +
+              '<span class="list-item-meta">' + core.formatDate(h.date) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function renderVolumeChart() {
+    const core = window.JarvisCore;
+
+    function weekStartIso(dateStr) {
+      const d = new Date(dateStr);
+      const day = d.getDay();
+      const start = new Date(d);
+      start.setDate(d.getDate() - day);
+      start.setHours(0, 0, 0, 0);
+      const tzOffset = start.getTimezoneOffset() * 60000;
+      return new Date(start.getTime() - tzOffset).toISOString().slice(0, 10);
+    }
+
+    const volumeByWeek = {};
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      const weekStart = weekStartIso(w.date);
+      let sessionVolume = 0;
+      w.exercises.forEach(function (se) {
+        se.sets.forEach(function (s) { sessionVolume += s.weight * s.reps; });
+      });
+      volumeByWeek[weekStart] = (volumeByWeek[weekStart] || 0) + sessionVolume;
+    });
+
+    const points = Object.keys(volumeByWeek)
+      .sort(function (a, b) { return new Date(a) - new Date(b); })
+      .map(function (weekStart) {
+        return { t: new Date(weekStart).getTime(), v: volumeByWeek[weekStart], label: "Week of " + core.formatDate(weekStart) };
+      });
+
+    renderLineChart("volumeChart", points, {
+      emptyMessage: "Log a couple of weeks of workouts to see your volume trend.",
+      yFormat: function (v) { return Math.round(v).toLocaleString() + " lb"; },
+      ariaLabel: "Weekly training volume trend"
+    });
   }
 
   function renderStrengthScoreChart() {
@@ -979,6 +1686,9 @@
     renderExercisePrList();
     populateProgressExerciseSelect();
     renderExerciseProgressChart();
+    renderVolumeChart();
+    populateProgressMeasurementSelect();
+    renderMeasurementChart();
     renderStrengthScoreChart();
   }
 
@@ -989,7 +1699,10 @@
     renderWorkoutList();
     renderRoutineList();
     populateRoutineSelect();
+    populateProgramDayRoutineSelect();
+    renderProgramList();
     renderBodyweightList();
+    renderMeasurementList();
     renderStrengthSection();
     renderProgressTab();
   }
@@ -1029,6 +1742,13 @@
 
     document.getElementById("exercisePickerMuscleFilter").addEventListener("change", refreshExercisePicker);
     document.getElementById("exercisePickerEquipmentFilter").addEventListener("change", refreshExercisePicker);
+    document.getElementById("exercisePickerSearch").addEventListener("input", refreshExercisePicker);
+    document.getElementById("exercisePickerSelect").addEventListener("change", updateFavoriteStarButton);
+    document.getElementById("exercisePickerFavoriteBtn").addEventListener("click", handleToggleFavorite);
+    document.getElementById("showAddCustomExerciseBtn").addEventListener("click", handleShowAddCustomExercise);
+    document.getElementById("cancelCustomExerciseBtn").addEventListener("click", handleCancelAddCustomExercise);
+    document.getElementById("saveCustomExerciseBtn").addEventListener("click", handleSaveCustomExercise);
+    document.getElementById("customExerciseList").addEventListener("click", handleCustomExerciseListClick);
     document.getElementById("addExerciseToSessionBtn").addEventListener("click", handleAddExerciseToSession);
     document.getElementById("sessionExerciseList").addEventListener("click", handleSessionExerciseListClick);
     document.getElementById("sessionRoutineSelect").addEventListener("change", function () {
@@ -1043,17 +1763,27 @@
 
     document.getElementById("routinePickerMuscleFilter").addEventListener("change", refreshRoutinePicker);
     document.getElementById("routinePickerEquipmentFilter").addEventListener("change", refreshRoutinePicker);
+    document.getElementById("routinePickerSearch").addEventListener("input", refreshRoutinePicker);
     document.getElementById("addExerciseToRoutineBtn").addEventListener("click", handleAddExerciseToRoutine);
     document.getElementById("routineBuilderList").addEventListener("click", handleRoutineBuilderListClick);
     document.getElementById("saveRoutineBtn").addEventListener("click", handleSaveRoutine);
     document.getElementById("routineCancelEditBtn").addEventListener("click", exitRoutineEditMode);
     document.getElementById("routineList").addEventListener("click", handleRoutineListClick);
 
+    document.getElementById("addDayToProgramBtn").addEventListener("click", handleAddDayToProgram);
+    document.getElementById("programBuilderList").addEventListener("click", handleProgramBuilderListClick);
+    document.getElementById("saveProgramBtn").addEventListener("click", handleSaveProgram);
+    document.getElementById("programCancelEditBtn").addEventListener("click", exitProgramEditMode);
+    document.getElementById("programList").addEventListener("click", handleProgramListClick);
+
     document.getElementById("bodyweightForm").addEventListener("submit", handleBodyweightSubmit);
     document.getElementById("bodyweightList").addEventListener("click", handleBodyweightListClick);
+    document.getElementById("measurementForm").addEventListener("submit", handleMeasurementSubmit);
+    document.getElementById("measurementList").addEventListener("click", handleMeasurementListClick);
     document.getElementById("strengthSettingsForm").addEventListener("submit", handleStrengthSettingsSubmit);
 
     document.getElementById("progressExerciseSelect").addEventListener("change", renderExerciseProgressChart);
+    document.getElementById("progressMeasurementSelect").addEventListener("change", renderMeasurementChart);
 
     renderSessionExerciseList();
     renderAll();
