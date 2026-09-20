@@ -35,103 +35,287 @@
   <section id="panel-workout" class="tab-panel active" role="tabpanel" aria-labelledby="navBtnWorkout">
     <div class="panel-header">
       <h1>Workout</h1>
-      <p class="panel-subtitle">Log your sessions and keep your streak alive.</p>
+      <p class="panel-subtitle">Log sessions, build routines, and track real strength progress.</p>
     </div>
 
-    <div class="card-grid">
-      <div class="card">
-        <h2 class="card-title">Log a Workout</h2>
-        <form id="workoutForm" class="stacked-form" novalidate>
+    <nav class="sub-nav workout-sub-nav" role="tablist" aria-label="Workout sections">
+      <button type="button" class="workout-sub-nav-btn active" data-subtarget="workout-log" role="tab" aria-selected="true" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-routines" role="tab" aria-selected="false" aria-controls="workout-routines" id="workoutSubNavRoutines">Routines</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-strength" role="tab" aria-selected="false" aria-controls="workout-strength" id="workoutSubNavStrength">Strength</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-progress" role="tab" aria-selected="false" aria-controls="workout-progress" id="workoutSubNavProgress">Progress</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-calories" role="tab" aria-selected="false" aria-controls="workout-calories" id="workoutSubNavCalories">Calories</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Log ---------- -->
+    <div id="workout-log" class="workout-sub-panel active" role="tabpanel" aria-labelledby="workoutSubNavLog">
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Stats</h2>
+          <div class="stat-grid" id="workoutStats">
+            <div class="stat-box"><span class="stat-value" id="workoutStatTotal">0</span><span class="stat-label">Total workouts</span></div>
+            <div class="stat-box"><span class="stat-value" id="workoutStatWeek">0</span><span class="stat-label">This week</span></div>
+            <div class="stat-box"><span class="stat-value" id="workoutStatStreak">0</span><span class="stat-label">Day streak</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Session Setup</h2>
           <div class="form-row">
-            <label for="workoutName">Workout name</label>
-            <input type="text" id="workoutName" name="workoutName" placeholder="e.g. Push Day" required maxlength="60">
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="workoutCategory">Category</label>
-              <select id="workoutCategory" name="workoutCategory">
-                <option value="Push">Push</option>
-                <option value="Pull">Pull</option>
-                <option value="Legs">Legs</option>
-                <option value="Cardio">Cardio</option>
-                <option value="Full Body">Full Body</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label for="workoutDuration">Duration (minutes)</label>
-              <input type="number" id="workoutDuration" name="workoutDuration" min="1" step="1" placeholder="45">
-            </div>
+            <label for="sessionRoutineSelect">Routine (optional)</label>
+            <select id="sessionRoutineSelect">
+              <option value="">Freestyle (no routine)</option>
+            </select>
           </div>
           <div class="form-row">
-            <label for="workoutDate">Date</label>
-            <input type="date" id="workoutDate" name="workoutDate">
+            <label for="sessionDateTime">Date / time</label>
+            <input type="datetime-local" id="sessionDateTime">
           </div>
-          <div class="form-row">
-            <label for="workoutNotes">Notes</label>
-            <textarea id="workoutNotes" name="workoutNotes" rows="2" placeholder="Optional notes about the session"></textarea>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="workoutSubmitBtn">Log Workout</button>
-          </div>
-        </form>
+        </div>
       </div>
 
       <div class="card">
-        <h2 class="card-title">Stats</h2>
-        <div class="stat-grid" id="workoutStats">
-          <div class="stat-box"><span class="stat-value" id="workoutStatTotal">0</span><span class="stat-label">Total workouts</span></div>
-          <div class="stat-box"><span class="stat-value" id="workoutStatWeek">0</span><span class="stat-label">This week</span></div>
-          <div class="stat-box"><span class="stat-value" id="workoutStatStreak">0</span><span class="stat-label">Day streak</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2 class="card-title">History</h2>
-      <div id="workoutList" class="item-list">
-        <div class="empty-state">No workouts logged yet. Add your first session above.</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2 class="card-title">Calories</h2>
-      <p class="field-hint">Manually logged daily intake vs. your goal. No food database or automatic tracking.</p>
-      <div class="stat-grid" id="calorieStats">
-        <div class="stat-box"><span class="stat-value" id="calorieStatToday">0</span><span class="stat-label">Today</span></div>
-        <div class="stat-box"><span class="stat-value" id="calorieStatGoal">2000</span><span class="stat-label">Goal</span></div>
-        <div class="stat-box"><span class="stat-value" id="calorieStatRemaining">2000</span><span class="stat-label">Remaining</span></div>
-      </div>
-      <form id="calorieGoalForm" class="stacked-form" novalidate>
-        <div class="form-row">
-          <label for="calorieGoalInput">Daily goal (calories)</label>
-          <input type="number" id="calorieGoalInput" min="1" step="1" value="2000" required>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-secondary" id="calorieGoalSaveBtn">Save Goal</button>
-        </div>
-      </form>
-      <form id="calorieForm" class="stacked-form" novalidate>
+        <h2 class="card-title">Add Exercise</h2>
         <div class="form-row two-col">
           <div>
-            <label for="calorieDate">Date</label>
-            <input type="date" id="calorieDate">
+            <label for="exercisePickerMuscleFilter">Muscle group</label>
+            <select id="exercisePickerMuscleFilter">
+              <option value="">All muscle groups</option>
+            </select>
           </div>
           <div>
-            <label for="calorieAmount">Calories</label>
-            <input type="number" id="calorieAmount" min="1" step="1" placeholder="e.g. 550" required>
+            <label for="exercisePickerEquipmentFilter">Equipment</label>
+            <select id="exercisePickerEquipmentFilter">
+              <option value="">All equipment</option>
+            </select>
           </div>
         </div>
         <div class="form-row">
-          <label for="calorieNotes">Notes</label>
-          <input type="text" id="calorieNotes" placeholder="e.g. Lunch" maxlength="80">
+          <label for="exercisePickerSelect">Exercise</label>
+          <select id="exercisePickerSelect"></select>
         </div>
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" id="calorieSubmitBtn">Log Calories</button>
+          <button type="button" class="btn btn-primary" id="addExerciseToSessionBtn">Add Exercise to Session</button>
         </div>
-      </form>
-      <div id="calorieList" class="item-list">
-        <div class="empty-state">No calories logged yet.</div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Current Session</h2>
+        <div id="sessionExerciseList" class="item-list">
+          <div class="empty-state">No exercises added yet. Add one above to start logging sets.</div>
+        </div>
+        <div class="form-row" style="margin-top:14px;">
+          <label for="sessionNotes">Session notes</label>
+          <textarea id="sessionNotes" rows="2" placeholder="Optional notes about this workout"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" id="saveWorkoutBtn">Save Workout</button>
+          <button type="button" class="btn btn-secondary" id="discardDraftBtn">Discard Draft</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">History</h2>
+        <div id="workoutList" class="item-list">
+          <div class="empty-state">No workouts logged yet. Add your first session above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Routines ---------- -->
+    <div id="workout-routines" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavRoutines">
+      <div class="card">
+        <h2 class="card-title" id="routineFormTitle">Create a Routine</h2>
+        <input type="hidden" id="routineEditId" value="">
+        <div class="form-row">
+          <label for="routineNameInput">Routine name</label>
+          <input type="text" id="routineNameInput" placeholder="e.g. Push Day" maxlength="60">
+        </div>
+
+        <h3 class="checklist-title">Add Exercises</h3>
+        <div class="form-row two-col">
+          <div>
+            <label for="routinePickerMuscleFilter">Muscle group</label>
+            <select id="routinePickerMuscleFilter">
+              <option value="">All muscle groups</option>
+            </select>
+          </div>
+          <div>
+            <label for="routinePickerEquipmentFilter">Equipment</label>
+            <select id="routinePickerEquipmentFilter">
+              <option value="">All equipment</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="routinePickerSelect">Exercise</label>
+          <select id="routinePickerSelect"></select>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="routineTargetSets">Target sets</label>
+            <input type="number" id="routineTargetSets" min="1" step="1" value="3">
+          </div>
+          <div>
+            <label for="routineTargetReps">Target reps</label>
+            <input type="number" id="routineTargetReps" min="1" step="1" value="10">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="addExerciseToRoutineBtn">Add to Routine</button>
+        </div>
+
+        <div id="routineBuilderList" class="item-list" style="margin-top:14px;">
+          <div class="empty-state">No exercises added to this routine yet.</div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" id="saveRoutineBtn">Save Routine</button>
+          <button type="button" class="btn btn-secondary hidden" id="routineCancelEditBtn">Cancel Edit</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your Routines</h2>
+        <div id="routineList" class="item-list">
+          <div class="empty-state">No routines yet. Build one above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Strength ---------- -->
+    <div id="workout-strength" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavStrength">
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Body Weight</h2>
+          <form id="bodyweightForm" class="stacked-form" novalidate>
+            <div class="form-row two-col">
+              <div>
+                <label for="bodyweightInput">Weight</label>
+                <input type="number" id="bodyweightInput" min="1" step="0.1" placeholder="e.g. 180" required>
+              </div>
+              <div>
+                <label for="bodyweightUnit">Unit</label>
+                <select id="bodyweightUnit">
+                  <option value="lb">lb</option>
+                  <option value="kg">kg</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="bodyweightDate">Date</label>
+              <input type="date" id="bodyweightDate">
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="bodyweightSubmitBtn">Log Body Weight</button>
+            </div>
+          </form>
+          <div id="bodyweightList" class="item-list" style="margin-top:14px;">
+            <div class="empty-state">No body weight logged yet.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Strength Settings</h2>
+          <p class="field-hint">Used only to compare your lifts against general published bodyweight-ratio benchmarks. Skip it any time for personal progress only.</p>
+          <form id="strengthSettingsForm" class="stacked-form" novalidate>
+            <div class="form-row">
+              <label for="strengthCompareSelect">Compare against</label>
+              <select id="strengthCompareSelect">
+                <option value="male">Male standards</option>
+                <option value="female">Female standards</option>
+                <option value="none">Don't compare</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-secondary" id="strengthSettingsSaveBtn">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Strength Score</h2>
+        <p class="field-hint">Based on approximate, commonly referenced bodyweight-ratio strength standards for five major lifts. This is general context for motivation, not a precise or scientific measurement — treat it as a rough guide, not a verdict.</p>
+        <div class="strength-score-hero">
+          <div class="strength-score-value" id="overallStrengthScore">--</div>
+          <div class="strength-score-level" id="overallStrengthLevel">Log a benchmark lift and body weight to see your score</div>
+        </div>
+        <div id="strengthBreakdownList" class="item-list">
+          <div class="empty-state">No benchmark lifts logged yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Progress ---------- -->
+    <div id="workout-progress" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavProgress">
+      <div class="card">
+        <h2 class="card-title">Exercise Progress</h2>
+        <div class="form-row">
+          <label for="progressExerciseSelect">Exercise</label>
+          <select id="progressExerciseSelect">
+            <option value="">Log some sets to see progress</option>
+          </select>
+        </div>
+        <div class="stat-grid" id="progressStats">
+          <div class="stat-box"><span class="stat-value" id="progressCurrentE1rm">--</span><span class="stat-label">Current est. 1RM</span></div>
+          <div class="stat-box"><span class="stat-value" id="progressAllTimePr">--</span><span class="stat-label">All-time PR</span></div>
+          <div class="stat-box"><span class="stat-value" id="progressSessionCount">0</span><span class="stat-label">Sessions logged</span></div>
+        </div>
+        <div id="exerciseProgressChart" class="chart-container">
+          <div class="empty-state">Log a couple of sessions for this exercise to see a trend line.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Overall Strength Score Trend</h2>
+        <p class="field-hint">Recomputed from your logged benchmark lifts and body weight history over time.</p>
+        <div id="strengthScoreChart" class="chart-container">
+          <div class="empty-state">Log benchmark lifts (Squat, Bench, Deadlift, Overhead Press, Pull-Up) and body weight to see this trend.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Calories ---------- -->
+    <div id="workout-calories" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavCalories">
+      <div class="card">
+        <h2 class="card-title">Calories</h2>
+        <p class="field-hint">Manually logged daily intake vs. your goal. No food database or automatic tracking.</p>
+        <div class="stat-grid" id="calorieStats">
+          <div class="stat-box"><span class="stat-value" id="calorieStatToday">0</span><span class="stat-label">Today</span></div>
+          <div class="stat-box"><span class="stat-value" id="calorieStatGoal">2000</span><span class="stat-label">Goal</span></div>
+          <div class="stat-box"><span class="stat-value" id="calorieStatRemaining">2000</span><span class="stat-label">Remaining</span></div>
+        </div>
+        <form id="calorieGoalForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="calorieGoalInput">Daily goal (calories)</label>
+            <input type="number" id="calorieGoalInput" min="1" step="1" value="2000" required>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary" id="calorieGoalSaveBtn">Save Goal</button>
+          </div>
+        </form>
+        <form id="calorieForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="calorieDate">Date</label>
+              <input type="date" id="calorieDate">
+            </div>
+            <div>
+              <label for="calorieAmount">Calories</label>
+              <input type="number" id="calorieAmount" min="1" step="1" placeholder="e.g. 550" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="calorieNotes">Notes</label>
+            <input type="text" id="calorieNotes" placeholder="e.g. Lunch" maxlength="80">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="calorieSubmitBtn">Log Calories</button>
+          </div>
+        </form>
+        <div id="calorieList" class="item-list">
+          <div class="empty-state">No calories logged yet.</div>
+        </div>
       </div>
     </div>
   </section>
@@ -711,6 +895,7 @@
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/app.js"></script>
+<script src="js/exercises.js"></script>
 <script src="js/workout.js"></script>
 <script src="js/habits.js"></script>
 <script src="js/business.js"></script>

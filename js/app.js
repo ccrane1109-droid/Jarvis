@@ -240,6 +240,14 @@
       }
     });
 
+    const workoutSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".workout-sub-nav-btn"));
+    const workoutSubPanels = Array.prototype.slice.call(document.querySelectorAll(".workout-sub-panel"));
+    setupTabGroup(workoutSubNavBtns, workoutSubPanels, function (targetId) {
+      if (window.JarvisWorkout && typeof window.JarvisWorkout.onSubTabChange === "function") {
+        window.JarvisWorkout.onSubTabChange(targetId);
+      }
+    });
+
     if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
     if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
     if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
