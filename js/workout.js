@@ -62,6 +62,20 @@
     return isFinite(n) && n >= 0;
   }
 
+  function getMuscleGroupsForExerciseIds(exerciseIds) {
+    const set = new Set();
+    exerciseIds.forEach(function (id) {
+      const ex = window.JarvisExercises.getExerciseById(id);
+      if (ex) set.add(ex.muscleGroup);
+    });
+    return Array.from(set).sort();
+  }
+
+  function muscleGroupBadgesHtml(muscleGroups) {
+    const core = window.JarvisCore;
+    return muscleGroups.map(function (m) { return '<span class="badge badge-neutral">' + core.escapeHtml(m) + '</span>'; }).join("");
+  }
+
   /* ---------------- exercise / routine pickers ---------------- */
 
   function populateFilterSelect(selectEl, values) {
@@ -145,6 +159,9 @@
   function renderSessionExerciseList() {
     const core = window.JarvisCore;
     const container = document.getElementById("sessionExerciseList");
+    const muscleGroupsEl = document.getElementById("sessionMuscleGroups");
+    const musclesTrained = getMuscleGroupsForExerciseIds(draft.exercises.map(function (se) { return se.exerciseId; }));
+    muscleGroupsEl.innerHTML = muscleGroupBadgesHtml(musclesTrained);
     if (draft.exercises.length === 0) {
       container.innerHTML = '<div class="empty-state">No exercises added yet. Add one above to start logging sets.</div>';
       return;
@@ -345,6 +362,7 @@
       if (w.schema === 2) {
         const routine = w.routineId ? routines.find(function (r) { return r.id === w.routineId; }) : null;
         const title = routine ? routine.name : "Freestyle Workout";
+        const musclesTrained = getMuscleGroupsForExerciseIds(w.exercises.map(function (se) { return se.exerciseId; }));
         const exerciseLines = w.exercises.map(function (se) {
           const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
           const exName = ex ? ex.name : "Unknown exercise";
@@ -359,6 +377,7 @@
               '<div class="list-item-main">' +
                 '<span class="list-item-title">' + core.escapeHtml(title) + '</span>' +
                 '<span class="list-item-meta">' + core.formatDateTime(w.dateTime || w.date) + '</span>' +
+                '<div class="badge-row">' + muscleGroupBadgesHtml(musclesTrained) + '</div>' +
                 exerciseLines +
                 (w.notes ? '<span class="list-item-meta">Notes: ' + core.escapeHtml(w.notes) + '</span>' : '') +
               '</div>' +
@@ -403,6 +422,9 @@
   function renderRoutineBuilderList() {
     const core = window.JarvisCore;
     const container = document.getElementById("routineBuilderList");
+    const muscleGroupsEl = document.getElementById("routineBuilderMuscleGroups");
+    const musclesTrained = getMuscleGroupsForExerciseIds(routineBuilder.exercises.map(function (re) { return re.exerciseId; }));
+    muscleGroupsEl.innerHTML = muscleGroupBadgesHtml(musclesTrained);
     if (routineBuilder.exercises.length === 0) {
       container.innerHTML = '<div class="empty-state">No exercises added to this routine yet.</div>';
       return;
@@ -503,11 +525,13 @@
         const exName = ex ? ex.name : "Unknown exercise";
         return '<span class="list-item-meta">' + core.escapeHtml(exName) + ": " + core.escapeHtml(re.targetSets) + " &times; " + core.escapeHtml(re.targetReps) + '</span>';
       }).join("");
+      const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
       return (
         '<div class="list-item" data-id="' + core.escapeHtml(r.id) + '">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
               '<span class="list-item-title">' + core.escapeHtml(r.name) + ' <span class="badge badge-neutral">' + r.exercises.length + ' exercise' + (r.exercises.length === 1 ? "" : "s") + '</span></span>' +
+              '<div class="badge-row">' + muscleGroupBadgesHtml(musclesTrained) + '</div>' +
               exLines +
             '</div>' +
             '<div class="list-item-actions">' +

@@ -530,6 +530,14 @@ textarea { resize: vertical; min-height: 44px; }
 
 /* ---------------- Workout: sets, routines, strength ---------------- */
 
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.badge-row:empty { display: none; }
+
 .set-rows {
   display: flex;
   flex-direction: column;
