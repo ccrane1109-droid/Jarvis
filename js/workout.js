@@ -176,11 +176,16 @@
             return '<div class="set-row"><span>Set ' + (i + 1) + ': ' + core.escapeHtml(s.weight) + ' &times; ' + core.escapeHtml(s.reps) + '</span>' +
               '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button></div>';
           }).join("");
+      const pr = getExercisePrAndE1rm(se.exerciseId);
+      const prHint = pr.bestSet
+        ? '<span class="list-item-meta">PR: ' + core.escapeHtml(pr.bestSet.weight) + ' &times; ' + core.escapeHtml(pr.bestSet.reps) + ' &middot; Est. 1RM: ' + Math.round(pr.bestE1rm) + '</span>'
+        : '<span class="list-item-meta">No previous sets logged for this exercise yet.</span>';
       return (
         '<div class="list-item session-exercise-block" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
               '<span class="list-item-title">' + core.escapeHtml(exName) + ' <span class="badge badge-neutral">' + core.escapeHtml(muscle) + '</span></span>' +
+              prHint +
             '</div>' +
             '<div class="list-item-actions">' +
               '<button type="button" class="btn-icon danger remove-session-exercise-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">Remove Exercise</button>' +
@@ -346,6 +351,56 @@
       if (s.weight === best.weight && s.reps > best.reps) return s;
       return best;
     }, null);
+  }
+
+  // All-time best set (PR) and best estimated 1RM for a given exercise, across every logged session.
+  function getExercisePrAndE1rm(exerciseId) {
+    const JE = window.JarvisExercises;
+    let bestSet = null;
+    let bestE1rm = 0;
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      const se = w.exercises.find(function (x) { return x.exerciseId === exerciseId; });
+      if (!se) return;
+      se.sets.forEach(function (s) {
+        if (!bestSet || s.weight > bestSet.weight || (s.weight === bestSet.weight && s.reps > bestSet.reps)) bestSet = s;
+        const e1rm = JE.estimateOneRepMax(s.weight, s.reps);
+        if (e1rm > bestE1rm) bestE1rm = e1rm;
+      });
+    });
+    return { bestSet: bestSet, bestE1rm: bestE1rm };
+  }
+
+  function renderExercisePrList() {
+    const core = window.JarvisCore;
+    const JE = window.JarvisExercises;
+    const container = document.getElementById("exercisePrList");
+    const loggedIds = new Set();
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      w.exercises.forEach(function (se) { if (se.sets.length > 0) loggedIds.add(se.exerciseId); });
+    });
+    if (loggedIds.size === 0) {
+      container.innerHTML = '<div class="empty-state">Log some sets to see your PRs and estimated 1-rep max here.</div>';
+      return;
+    }
+    const exercises = Array.from(loggedIds).map(function (id) { return JE.getExerciseById(id); }).filter(Boolean);
+    exercises.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    container.innerHTML = exercises.map(function (ex) {
+      const pr = getExercisePrAndE1rm(ex.id);
+      const prText = pr.bestSet ? (core.escapeHtml(pr.bestSet.weight) + " &times; " + core.escapeHtml(pr.bestSet.reps)) : "--";
+      const e1rmText = pr.bestE1rm > 0 ? Math.round(pr.bestE1rm) : "--";
+      return (
+        '<div class="list-item">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + core.escapeHtml(ex.name) + ' <span class="badge badge-neutral">' + core.escapeHtml(ex.muscleGroup) + '</span></span>' +
+              '<span class="list-item-meta">PR: ' + prText + ' &middot; Est. 1RM: ' + e1rmText + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
   }
 
   function renderWorkoutList() {
@@ -921,6 +976,7 @@
   }
 
   function renderProgressTab() {
+    renderExercisePrList();
     populateProgressExerciseSelect();
     renderExerciseProgressChart();
     renderStrengthScoreChart();
