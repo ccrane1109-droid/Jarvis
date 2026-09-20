@@ -624,6 +624,28 @@ textarea { resize: vertical; min-height: 44px; }
   max-height: 220px;
   overflow: auto;
 }
+.advanced-options {
+  margin-top: 4px;
+}
+.advanced-options summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+.advanced-options summary::-webkit-details-marker { display: none; }
+.advanced-options summary::before {
+  content: "▸ ";
+  font-size: 10px;
+}
+.advanced-options[open] summary::before { content: "▾ "; }
+.inspiration-preview-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+}
 
 /* ---------------- Daily Briefing ---------------- */
 

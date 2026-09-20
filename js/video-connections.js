@@ -40,9 +40,10 @@
     {
       key: "clipVideo",
       label: "Video clip generation",
-      placeholderHint: "Placeholders: {{prompt}}, {{aspectRatio}}, {{duration}}. Example — verify against your provider's current docs.",
+      placeholderHint: "Placeholders: {{prompt}}, {{aspectRatio}}, {{duration}}, {{referenceVideo}}. Example — verify against your provider's current docs.",
       resultHint: "Dot-path to the generated video's URL in the response, e.g. video_url",
-      defaultTemplate: '{\n  "prompt": "{{prompt}}",\n  "aspect_ratio": "{{aspectRatio}}",\n  "duration": {{duration}}\n}'
+      defaultTemplate: '{\n  "prompt": "{{prompt}}",\n  "aspect_ratio": "{{aspectRatio}}",\n  "duration": {{duration}}\n}',
+      referenceVideoHint: "{{referenceVideo}} is base64 of an optional \"inspiration\" video attached on the Clip Generator screen — an empty string if none was attached. Only wire it into your template if your provider accepts a reference/style video (check its docs for the field name)."
     }
   ];
 
@@ -120,6 +121,13 @@
     document.getElementById("vcResponsePath").value = existing ? existing.responsePath : "";
     document.getElementById("vcPlaceholderHint").textContent = info.placeholderHint;
     document.getElementById("vcResponseHint").textContent = info.resultHint;
+    const referenceVideoHint = document.getElementById("vcReferenceVideoHint");
+    if (info.referenceVideoHint) {
+      referenceVideoHint.textContent = info.referenceVideoHint;
+      referenceVideoHint.classList.remove("hidden");
+    } else {
+      referenceVideoHint.classList.add("hidden");
+    }
     document.getElementById("vcDeleteBtn").style.display = existing ? "" : "none";
     window.JarvisCore.openModal("videoConnectionModal");
   }

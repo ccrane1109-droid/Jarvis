@@ -14,6 +14,8 @@
   const LS_KEY = "jarvisVideo";
   const MAX_HISTORY = 100;
   let data = { generations: [] };
+  let inspirationFile = null;
+  let inspirationPreviewUrl = null;
 
   function load() {
     const loaded = window.JarvisCore.loadJSON(LS_KEY, { generations: [] });
@@ -44,11 +46,16 @@
     const select = document.getElementById("videoClipConnectionSelect");
     if (!select) return;
     const previous = select.value;
+    const connections = window.JarvisVideoConnections.getByKind("clipVideo");
     select.innerHTML = window.JarvisVideoConnections.renderDropdownOptions("clipVideo", previous);
+    // Only one connection to choose from — pick it automatically and hide the
+    // dropdown so the primary flow stays "prompt in, generate" with nothing
+    // else to configure by default.
+    const row = document.getElementById("videoConnectionRow");
+    if (row) row.classList.toggle("hidden", connections.length <= 1);
     const hint = document.getElementById("videoConnectionStatusHint");
     if (hint) {
-      const hasAny = window.JarvisVideoConnections.getByKind("clipVideo").length > 0;
-      hint.textContent = hasAny ? "" : "No video clip connection configured — add one in the Connections tab.";
+      hint.textContent = connections.length === 0 ? "No video clip connection configured — add one in the Connections tab." : "";
     }
   }
 
@@ -118,6 +125,39 @@
     renderHistoryList();
   }
 
+  /* ---------------- inspiration video ---------------- */
+
+  function readFileAsBase64(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const result = reader.result;
+        const commaIndex = result.indexOf(",");
+        resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1));
+      };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleInspirationChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    inspirationFile = file;
+    if (inspirationPreviewUrl) URL.revokeObjectURL(inspirationPreviewUrl);
+    inspirationPreviewUrl = URL.createObjectURL(file);
+    document.getElementById("videoInspirationPreview").src = inspirationPreviewUrl;
+    document.getElementById("videoInspirationPreviewWrap").classList.remove("hidden");
+  }
+
+  function handleInspirationClear() {
+    inspirationFile = null;
+    if (inspirationPreviewUrl) { URL.revokeObjectURL(inspirationPreviewUrl); inspirationPreviewUrl = null; }
+    document.getElementById("videoInspirationInput").value = "";
+    document.getElementById("videoInspirationPreview").src = "";
+    document.getElementById("videoInspirationPreviewWrap").classList.add("hidden");
+  }
+
   /* ---------------- generate form ---------------- */
 
   function handleGenerateSubmit(e) {
@@ -127,12 +167,13 @@
     const prompt = document.getElementById("videoPrompt").value.trim();
     const aspectRatio = document.getElementById("videoAspectRatio").value;
     const duration = Number(document.getElementById("videoDuration").value);
+    const connections = window.JarvisVideoConnections.getByKind("clipVideo");
     const connectionId = document.getElementById("videoClipConnectionSelect").value;
-    const connection = window.JarvisVideoConnections.getById(connectionId);
+    const connection = window.JarvisVideoConnections.getById(connectionId) || connections[0] || null;
 
     if (!prompt) { core.showToast("Please enter a prompt."); return; }
     if (!core.isPositiveNumber(duration)) { core.showToast("Duration must be a positive number."); return; }
-    if (!connection) { core.showToast("Add and select a video clip connection in the Connections tab first."); return; }
+    if (!connection) { core.showToast("Add a video clip connection in the Connections tab first."); return; }
 
     const record = {
       id: core.uid("video"),
@@ -153,8 +194,16 @@
     generateBtn.disabled = true;
     core.showToast("Sending request…");
 
-    const body = api.fillJsonTemplate(connection.bodyTemplate, { prompt: prompt, aspectRatio: aspectRatio, duration: duration });
-    api.postRequest(connection, body, false).then(function (result) {
+    const referenceVideoPromise = inspirationFile ? readFileAsBase64(inspirationFile) : Promise.resolve("");
+    referenceVideoPromise.then(function (referenceVideo) {
+      const body = api.fillJsonTemplate(connection.bodyTemplate, {
+        prompt: prompt,
+        aspectRatio: aspectRatio,
+        duration: duration,
+        referenceVideo: referenceVideo
+      });
+      return api.postRequest(connection, body, false);
+    }).then(function (result) {
       if (!result.ok) {
         record.status = "error";
         record.errorMessage = result.errorMessage || "Request failed.";
@@ -194,6 +243,8 @@
     render();
     document.getElementById("videoGenerateForm").addEventListener("submit", handleGenerateSubmit);
     document.getElementById("videoHistoryList").addEventListener("click", handleHistoryListClick);
+    document.getElementById("videoInspirationInput").addEventListener("change", handleInspirationChange);
+    document.getElementById("videoInspirationClearBtn").addEventListener("click", handleInspirationClear);
     document.addEventListener("jarvis-video-connections-changed", renderConnectionSelect);
   }
 
