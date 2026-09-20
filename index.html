@@ -824,21 +824,58 @@
   <section id="panel-video" class="tab-panel" role="tabpanel" aria-labelledby="navBtnVideo">
     <div class="panel-header">
       <h1>AI Video</h1>
-      <p class="panel-subtitle">Generate videos from text prompts using an AI video generation API you connect.</p>
+      <p class="panel-subtitle">Turn a topic into a full narrated, captioned video in Studio, or generate a quick AI video clip.</p>
     </div>
 
     <div class="disclaimer-strip">
-      This tool calls the video generation endpoint <em>you</em> configure, directly from your browser, using your own API key. JARVIS does not include or ship any provider's API — nothing is generated until you connect one.
+      Every generation step here calls an endpoint <em>you</em> configure with your own API key, directly from your browser. JARVIS does not include or ship any AI provider — nothing is generated until you connect one in the Connections tab. Video rendering itself happens on-device using an embedded copy of FFmpeg (ffmpeg.wasm); the first render on a device downloads its ~30MB engine, which your browser then caches.
     </div>
 
     <nav class="sub-nav video-sub-nav" role="tablist" aria-label="AI Video sections">
-      <button type="button" class="video-sub-nav-btn active" data-subtarget="video-generate" role="tab" aria-selected="true" aria-controls="video-generate" id="videoSubNavGenerate">Generate</button>
-      <button type="button" class="video-sub-nav-btn" data-subtarget="video-history" role="tab" aria-selected="false" aria-controls="video-history" id="videoSubNavHistory">History</button>
-      <button type="button" class="video-sub-nav-btn" data-subtarget="video-connection" role="tab" aria-selected="false" aria-controls="video-connection" id="videoSubNavConnection">Connection</button>
+      <button type="button" class="video-sub-nav-btn active" data-subtarget="video-studio" role="tab" aria-selected="true" aria-controls="video-studio" id="videoSubNavStudio">Studio</button>
+      <button type="button" class="video-sub-nav-btn" data-subtarget="video-generate" role="tab" aria-selected="false" aria-controls="video-generate" id="videoSubNavGenerate">Clip Generator</button>
+      <button type="button" class="video-sub-nav-btn" data-subtarget="video-connections" role="tab" aria-selected="false" aria-controls="video-connections" id="videoSubNavConnections">Connections</button>
     </nav>
 
+    <!-- ---------- Sub-panel: Studio ---------- -->
+    <div id="video-studio" class="video-sub-panel active" role="tabpanel" aria-labelledby="videoSubNavStudio">
+      <div id="studioProjectList">
+        <div class="card">
+          <div class="panel-header" style="margin-bottom:0;">
+            <h2 class="card-title">Projects</h2>
+            <p class="field-hint">A project turns a topic into a narrated, captioned video: Script → Voiceover → Visuals → Captions → Music → Export.</p>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="studioNewProjectBtn">New Project</button>
+          </div>
+          <div id="studioProjectItems" class="item-list">
+            <div class="empty-state">No projects yet. Create one to get started.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="studioProjectEditor" class="hidden">
+        <button type="button" class="btn btn-secondary" id="studioBackBtn" style="margin-bottom:16px;">&larr; All projects</button>
+        <div class="panel-header">
+          <h2 id="studioEditorTitle" class="card-title" style="font-size:22px;">Project</h2>
+          <p class="field-hint" id="studioEditorTopic"></p>
+        </div>
+
+        <div class="card" id="studioScriptCard"></div>
+        <div class="card" id="studioVoiceoverCard"></div>
+        <div class="card" id="studioVisualsCard"></div>
+        <div class="card" id="studioCaptionsCard"></div>
+        <div class="card" id="studioMusicCard"></div>
+        <div class="card" id="studioExportCard"></div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-icon danger" id="studioDeleteProjectBtn">Delete this project</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ---------- Sub-panel: Generate ---------- -->
-    <div id="video-generate" class="video-sub-panel active" role="tabpanel" aria-labelledby="videoSubNavGenerate">
+    <div id="video-generate" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavGenerate">
       <div class="card-grid">
         <div class="card">
           <h2 class="card-title">Stats</h2>
@@ -870,7 +907,11 @@
                 <input type="number" id="videoDuration" min="1" max="60" step="1" value="5">
               </div>
             </div>
-            <p class="field-hint">Uses the endpoint configured in the Connection tab. <span id="videoConnectionStatusHint">No connection configured yet.</span></p>
+            <div class="form-row">
+              <label for="videoClipConnectionSelect">Connection</label>
+              <select id="videoClipConnectionSelect"></select>
+            </div>
+            <p class="field-hint" id="videoConnectionStatusHint"></p>
             <div class="form-actions">
               <button type="submit" class="btn btn-primary" id="videoGenerateBtn">Generate Video</button>
             </div>
@@ -884,10 +925,7 @@
           <div class="empty-state">No generations yet. Fill out the form above and connect an API to get started.</div>
         </div>
       </div>
-    </div>
 
-    <!-- ---------- Sub-panel: History ---------- -->
-    <div id="video-history" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavHistory">
       <div class="card">
         <div class="panel-header" style="margin-bottom:0;">
           <h2 class="card-title">Generation History</h2>
@@ -899,52 +937,96 @@
       </div>
     </div>
 
-    <!-- ---------- Sub-panel: Connection ---------- -->
-    <div id="video-connection" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavConnection">
+    <!-- ---------- Sub-panel: Connections ---------- -->
+    <div id="video-connections" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavConnections">
       <div class="card">
-        <h2 class="card-title">API Connection</h2>
+        <h2 class="card-title">Bring your own AI provider</h2>
         <p class="field-hint">
-          JARVIS doesn't bundle a video generation provider. Point it at any HTTP API that accepts a text prompt and
-          returns a video URL (for example, a self-hosted model server or a provider's REST endpoint) and it will call it
-          directly from your browser. Your key is stored only in this browser's local storage and is sent only to the
-          endpoint you enter below.
+          JARVIS doesn't bundle any AI provider. Connect your own script, voiceover, image, or video-generation API
+          below — endpoint, key, and request shape are all yours to set. Keys are stored only in this browser's local
+          storage and are sent only to the endpoint you configure.
         </p>
-        <form id="videoConnectionForm" class="stacked-form" novalidate>
-          <div class="form-row">
-            <label for="videoEndpointUrl">Endpoint URL</label>
-            <input type="url" id="videoEndpointUrl" placeholder="https://your-provider.example.com/v1/videos" maxlength="500">
-          </div>
-          <div class="form-row">
-            <label for="videoApiKey">API key</label>
-            <input type="password" id="videoApiKey" placeholder="Bearer token / API key" maxlength="500" autocomplete="off">
-          </div>
-          <div class="form-row">
-            <label for="videoAuthHeader">Auth header name</label>
-            <input type="text" id="videoAuthHeader" placeholder="Authorization" maxlength="100">
-            <p class="field-hint">The key is sent as "&lt;header&gt;: Bearer &lt;key&gt;". Change the header name if your provider expects something else (e.g. "x-api-key").</p>
-          </div>
-          <div class="form-row">
-            <label for="videoBodyTemplate">Request body template (JSON)</label>
-            <textarea id="videoBodyTemplate" rows="6" placeholder='{"prompt": "{{prompt}}", "aspect_ratio": "{{aspectRatio}}", "duration": {{duration}}}'></textarea>
-            <p class="field-hint">Placeholders <code>{{prompt}}</code>, <code>{{aspectRatio}}</code>, and <code>{{duration}}</code> are filled in from the Generate form before sending.</p>
-          </div>
-          <div class="form-row">
-            <label for="videoResponsePath">Video URL field in response</label>
-            <input type="text" id="videoResponsePath" placeholder="e.g. video_url or data.output.url">
-            <p class="field-hint">Dot-path to the video URL inside the JSON response your API returns, so JARVIS can find it and show a preview.</p>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="videoConnectionSaveBtn">Save Connection</button>
-            <button type="button" class="btn btn-secondary" id="videoConnectionClearBtn">Clear</button>
-          </div>
-        </form>
       </div>
+      <div id="videoConnectionsGroups"></div>
     </div>
   </section>
 
 </main>
 
 <!-- ===================== MODALS ===================== -->
+
+<div class="modal-overlay hidden" id="studioNewProjectModal" role="dialog" aria-modal="true" aria-labelledby="studioNewProjectModalTitle">
+  <div class="modal-box">
+    <h2 id="studioNewProjectModalTitle">New video project</h2>
+    <form id="studioNewProjectForm" class="stacked-form" novalidate>
+      <div class="form-row">
+        <label for="studioNewProjectTitle">Project title</label>
+        <input type="text" id="studioNewProjectTitle" maxlength="120">
+      </div>
+      <div class="form-row">
+        <label for="studioNewProjectTopic">Video topic / idea</label>
+        <textarea id="studioNewProjectTopic" rows="3" placeholder="e.g. 5 productivity habits for remote workers"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Create</button>
+        <button type="button" class="btn btn-secondary" id="studioNewProjectCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="videoConnectionModal" role="dialog" aria-modal="true" aria-labelledby="videoConnectionModalTitle">
+  <div class="modal-box">
+    <h2 id="videoConnectionModalTitle">Connection</h2>
+    <form id="videoConnectionForm" class="stacked-form" novalidate>
+      <input type="hidden" id="vcId">
+      <input type="hidden" id="vcKind">
+      <div class="form-row">
+        <label for="vcName">Connection name</label>
+        <input type="text" id="vcName" maxlength="120">
+      </div>
+      <div class="form-row">
+        <label for="vcEndpoint">Endpoint URL</label>
+        <input type="url" id="vcEndpoint" placeholder="https://your-provider.example.com/v1/..." maxlength="500">
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label for="vcAuthHeader">Auth header name</label>
+          <input type="text" id="vcAuthHeader" placeholder="Authorization" maxlength="100">
+        </div>
+        <div>
+          <label for="vcApiKey">API key</label>
+          <input type="password" id="vcApiKey" maxlength="500" autocomplete="off">
+        </div>
+      </div>
+      <p class="field-hint">Sent as "&lt;header&gt;: Bearer &lt;key&gt;". Change the header name if your provider expects something else (e.g. "x-api-key").</p>
+      <div class="form-row">
+        <label for="vcBodyTemplate">Request body template (JSON)</label>
+        <textarea id="vcBodyTemplate" rows="6" style="font-family:monospace;font-size:13px;"></textarea>
+      </div>
+      <p class="field-hint" id="vcPlaceholderHint"></p>
+      <div class="form-row two-col">
+        <div>
+          <label for="vcResponseKind">Response type</label>
+          <select id="vcResponseKind">
+            <option value="json">JSON field</option>
+            <option value="binary">Raw file bytes</option>
+          </select>
+        </div>
+        <div>
+          <label for="vcResponsePath">Result field (dot-path)</label>
+          <input type="text" id="vcResponsePath">
+        </div>
+      </div>
+      <p class="field-hint" id="vcResponseHint"></p>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Connection</button>
+        <button type="button" class="btn btn-secondary" id="vcCancelBtn">Cancel</button>
+        <button type="button" class="btn-icon danger" id="vcDeleteBtn">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="modal-overlay hidden" id="closeTradeModal" role="dialog" aria-modal="true" aria-labelledby="closeTradeModalTitle">
   <div class="modal-box">
@@ -1034,6 +1116,10 @@
 <script src="js/business.js"></script>
 <script src="js/calories.js"></script>
 <script src="js/trading.js"></script>
+<script src="js/blobstore.js"></script>
+<script src="js/video-api-client.js"></script>
+<script src="js/video-connections.js"></script>
 <script src="js/video.js"></script>
+<script src="js/video-studio.js"></script>
 </body>
 </html>

@@ -265,7 +265,9 @@
     if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
     if (window.JarvisCalories && typeof window.JarvisCalories.init === "function") window.JarvisCalories.init();
     if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
+    if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();
     if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
+    if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
 
     const briefingBtn = document.getElementById("dailyBriefingBtn");
     if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
