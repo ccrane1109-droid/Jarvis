@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JARVIS</title>
 <meta name="theme-color" content="#0a0e14">
-<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space.">
+<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -24,6 +24,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
+      <button type="button" class="main-nav-btn" data-target="panel-video" role="tab" aria-selected="false" aria-controls="panel-video" id="navBtnVideo">AI Video</button>
     </nav>
     <button type="button" class="btn btn-secondary" id="dailyBriefingBtn">Daily Briefing</button>
   </div>
@@ -819,9 +820,213 @@
 
   </section>
 
+  <!-- ===================== AI VIDEO ===================== -->
+  <section id="panel-video" class="tab-panel" role="tabpanel" aria-labelledby="navBtnVideo">
+    <div class="panel-header">
+      <h1>AI Video</h1>
+      <p class="panel-subtitle">Turn a topic into a full narrated, captioned video in Studio, or generate a quick AI video clip.</p>
+    </div>
+
+    <div class="disclaimer-strip">
+      Every generation step here calls an endpoint <em>you</em> configure with your own API key, directly from your browser. JARVIS does not include or ship any AI provider — nothing is generated until you connect one in the Connections tab. Video rendering itself happens on-device using an embedded copy of FFmpeg (ffmpeg.wasm); the first render on a device downloads its ~30MB engine, which your browser then caches.
+    </div>
+
+    <nav class="sub-nav video-sub-nav" role="tablist" aria-label="AI Video sections">
+      <button type="button" class="video-sub-nav-btn active" data-subtarget="video-studio" role="tab" aria-selected="true" aria-controls="video-studio" id="videoSubNavStudio">Studio</button>
+      <button type="button" class="video-sub-nav-btn" data-subtarget="video-generate" role="tab" aria-selected="false" aria-controls="video-generate" id="videoSubNavGenerate">Clip Generator</button>
+      <button type="button" class="video-sub-nav-btn" data-subtarget="video-connections" role="tab" aria-selected="false" aria-controls="video-connections" id="videoSubNavConnections">Connections</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Studio ---------- -->
+    <div id="video-studio" class="video-sub-panel active" role="tabpanel" aria-labelledby="videoSubNavStudio">
+      <div id="studioProjectList">
+        <div class="card">
+          <div class="panel-header" style="margin-bottom:0;">
+            <h2 class="card-title">Projects</h2>
+            <p class="field-hint">A project turns a topic into a narrated, captioned video: Script → Voiceover → Visuals → Captions → Music → Export.</p>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="studioNewProjectBtn">New Project</button>
+          </div>
+          <div id="studioProjectItems" class="item-list">
+            <div class="empty-state">No projects yet. Create one to get started.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="studioProjectEditor" class="hidden">
+        <button type="button" class="btn btn-secondary" id="studioBackBtn" style="margin-bottom:16px;">&larr; All projects</button>
+        <div class="panel-header">
+          <h2 id="studioEditorTitle" class="card-title" style="font-size:22px;">Project</h2>
+          <p class="field-hint" id="studioEditorTopic"></p>
+        </div>
+
+        <div class="card" id="studioScriptCard"></div>
+        <div class="card" id="studioVoiceoverCard"></div>
+        <div class="card" id="studioVisualsCard"></div>
+        <div class="card" id="studioCaptionsCard"></div>
+        <div class="card" id="studioMusicCard"></div>
+        <div class="card" id="studioExportCard"></div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-icon danger" id="studioDeleteProjectBtn">Delete this project</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Generate ---------- -->
+    <div id="video-generate" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavGenerate">
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Stats</h2>
+          <div class="stat-grid" id="videoStats">
+            <div class="stat-box"><span class="stat-value" id="videoStatTotal">0</span><span class="stat-label">Total generations</span></div>
+            <div class="stat-box"><span class="stat-value" id="videoStatWeek">0</span><span class="stat-label">This week</span></div>
+            <div class="stat-box"><span class="stat-value" id="videoStatSuccess">0</span><span class="stat-label">Completed</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">New Generation</h2>
+          <form id="videoGenerateForm" class="stacked-form" novalidate>
+            <div class="form-row">
+              <label for="videoPrompt">Prompt</label>
+              <textarea id="videoPrompt" rows="4" placeholder="Describe the video you want, e.g. 'A drone shot flying over a misty mountain forest at sunrise'" required maxlength="2000"></textarea>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="videoAspectRatio">Aspect ratio</label>
+                <select id="videoAspectRatio">
+                  <option value="16:9">16:9 (landscape)</option>
+                  <option value="9:16">9:16 (portrait)</option>
+                  <option value="1:1">1:1 (square)</option>
+                </select>
+              </div>
+              <div>
+                <label for="videoDuration">Duration (seconds)</label>
+                <input type="number" id="videoDuration" min="1" max="60" step="1" value="5">
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="videoClipConnectionSelect">Connection</label>
+              <select id="videoClipConnectionSelect"></select>
+            </div>
+            <p class="field-hint" id="videoConnectionStatusHint"></p>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="videoGenerateBtn">Generate Video</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Latest Result</h2>
+        <div id="videoLatestResult">
+          <div class="empty-state">No generations yet. Fill out the form above and connect an API to get started.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="panel-header" style="margin-bottom:0;">
+          <h2 class="card-title">Generation History</h2>
+          <p class="field-hint">All prompts you've run, stored locally on this device.</p>
+        </div>
+        <div id="videoHistoryList" class="item-list">
+          <div class="empty-state">No generations yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Connections ---------- -->
+    <div id="video-connections" class="video-sub-panel" role="tabpanel" aria-labelledby="videoSubNavConnections">
+      <div class="card">
+        <h2 class="card-title">Bring your own AI provider</h2>
+        <p class="field-hint">
+          JARVIS doesn't bundle any AI provider. Connect your own script, voiceover, image, or video-generation API
+          below — endpoint, key, and request shape are all yours to set. Keys are stored only in this browser's local
+          storage and are sent only to the endpoint you configure.
+        </p>
+      </div>
+      <div id="videoConnectionsGroups"></div>
+    </div>
+  </section>
+
 </main>
 
 <!-- ===================== MODALS ===================== -->
+
+<div class="modal-overlay hidden" id="studioNewProjectModal" role="dialog" aria-modal="true" aria-labelledby="studioNewProjectModalTitle">
+  <div class="modal-box">
+    <h2 id="studioNewProjectModalTitle">New video project</h2>
+    <form id="studioNewProjectForm" class="stacked-form" novalidate>
+      <div class="form-row">
+        <label for="studioNewProjectTitle">Project title</label>
+        <input type="text" id="studioNewProjectTitle" maxlength="120">
+      </div>
+      <div class="form-row">
+        <label for="studioNewProjectTopic">Video topic / idea</label>
+        <textarea id="studioNewProjectTopic" rows="3" placeholder="e.g. 5 productivity habits for remote workers"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Create</button>
+        <button type="button" class="btn btn-secondary" id="studioNewProjectCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="videoConnectionModal" role="dialog" aria-modal="true" aria-labelledby="videoConnectionModalTitle">
+  <div class="modal-box">
+    <h2 id="videoConnectionModalTitle">Connection</h2>
+    <form id="videoConnectionForm" class="stacked-form" novalidate>
+      <input type="hidden" id="vcId">
+      <input type="hidden" id="vcKind">
+      <div class="form-row">
+        <label for="vcName">Connection name</label>
+        <input type="text" id="vcName" maxlength="120">
+      </div>
+      <div class="form-row">
+        <label for="vcEndpoint">Endpoint URL</label>
+        <input type="url" id="vcEndpoint" placeholder="https://your-provider.example.com/v1/..." maxlength="500">
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label for="vcAuthHeader">Auth header name</label>
+          <input type="text" id="vcAuthHeader" placeholder="Authorization" maxlength="100">
+        </div>
+        <div>
+          <label for="vcApiKey">API key</label>
+          <input type="password" id="vcApiKey" maxlength="500" autocomplete="off">
+        </div>
+      </div>
+      <p class="field-hint">Sent as "&lt;header&gt;: Bearer &lt;key&gt;". Change the header name if your provider expects something else (e.g. "x-api-key").</p>
+      <div class="form-row">
+        <label for="vcBodyTemplate">Request body template (JSON)</label>
+        <textarea id="vcBodyTemplate" rows="6" style="font-family:monospace;font-size:13px;"></textarea>
+      </div>
+      <p class="field-hint" id="vcPlaceholderHint"></p>
+      <div class="form-row two-col">
+        <div>
+          <label for="vcResponseKind">Response type</label>
+          <select id="vcResponseKind">
+            <option value="json">JSON field</option>
+            <option value="binary">Raw file bytes</option>
+          </select>
+        </div>
+        <div>
+          <label for="vcResponsePath">Result field (dot-path)</label>
+          <input type="text" id="vcResponsePath">
+        </div>
+      </div>
+      <p class="field-hint" id="vcResponseHint"></p>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Connection</button>
+        <button type="button" class="btn btn-secondary" id="vcCancelBtn">Cancel</button>
+        <button type="button" class="btn-icon danger" id="vcDeleteBtn">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="modal-overlay hidden" id="closeTradeModal" role="dialog" aria-modal="true" aria-labelledby="closeTradeModalTitle">
   <div class="modal-box">
@@ -911,5 +1116,10 @@
 <script src="js/business.js"></script>
 <script src="js/calories.js"></script>
 <script src="js/trading.js"></script>
+<script src="js/blobstore.js"></script>
+<script src="js/video-api-client.js"></script>
+<script src="js/video-connections.js"></script>
+<script src="js/video.js"></script>
+<script src="js/video-studio.js"></script>
 </body>
 </html>
