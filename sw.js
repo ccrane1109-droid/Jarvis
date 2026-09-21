@@ -5,7 +5,7 @@
    online. All user data lives in localStorage, not in this cache.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v3";
+const CACHE_NAME = "jarvis-cache-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "./manifest.json",
   "./icon.svg",
   "./js/app.js",
+  "./js/exercises.js",
   "./js/workout.js",
   "./js/habits.js",
   "./js/business.js",
@@ -45,8 +46,11 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") return;
+  // cache: "no-store" bypasses the browser's own HTTP cache, not just this
+  // service worker's cache — without it, a stale disk-cached response could
+  // satisfy this fetch and the "network-first" promise above would be broken.
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then(function (response) {
         const copy = response.clone();
         caches.open(CACHE_NAME).then(function (cache) { cache.put(event.request, copy); });
