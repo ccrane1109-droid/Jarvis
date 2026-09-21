@@ -56,8 +56,11 @@
   function postRequest(connection, jsonBody, expectBinary) {
     const headers = { "Content-Type": "application/json" };
     if (connection.apiKey && connection.apiKey.trim()) {
+      // Not every provider uses "Bearer <key>" (e.g. some send the raw key
+      // in a custom header like x-api-key) — authStyle defaults to "bearer"
+      // so existing saved connections keep working unchanged.
       headers[connection.authHeader && connection.authHeader.trim() ? connection.authHeader.trim() : "Authorization"] =
-        "Bearer " + connection.apiKey;
+        connection.authStyle === "raw" ? connection.apiKey : "Bearer " + connection.apiKey;
     }
     return fetch(connection.endpointUrl, { method: "POST", headers: headers, body: jsonBody })
       .then(function (res) {
