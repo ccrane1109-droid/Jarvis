@@ -201,7 +201,9 @@
 
     // Forearms
     { id: "wrist-curl", name: "Wrist Curl", muscleGroup: "Forearms", equipment: "Free Weight" },
+    { id: "cable-wrist-curl", name: "Cable Wrist Curl", muscleGroup: "Forearms", equipment: "Cable" },
     { id: "reverse-wrist-curl", name: "Reverse Wrist Curl", muscleGroup: "Forearms", equipment: "Free Weight" },
+    { id: "cable-reverse-wrist-curl", name: "Cable Reverse Wrist Curl", muscleGroup: "Forearms", equipment: "Cable" },
     { id: "behind-back-wrist-curl", name: "Behind-the-Back Wrist Curl", muscleGroup: "Forearms", equipment: "Free Weight" },
     { id: "plate-pinch", name: "Plate Pinch Hold", muscleGroup: "Forearms", equipment: "Free Weight" },
     { id: "farmers-carry", name: "Farmer's Carry", muscleGroup: "Forearms", equipment: "Free Weight" },
