@@ -100,7 +100,10 @@
     { id: "cable-curl", name: "Cable Curl", muscleGroup: "Biceps", equipment: "Cable" },
     { id: "cable-rope-curl", name: "Cable Rope Hammer Curl", muscleGroup: "Biceps", equipment: "Cable" },
     { id: "reverse-curl", name: "Reverse Curl", muscleGroup: "Biceps", equipment: "Free Weight" },
+    { id: "preacher-curl-barbell", name: "Preacher Curl (Barbell/EZ-Bar)", muscleGroup: "Biceps", equipment: "Free Weight" },
+    { id: "preacher-curl-dumbbell", name: "Dumbbell Preacher Curl", muscleGroup: "Biceps", equipment: "Free Weight" },
     { id: "preacher-curl-machine", name: "Preacher Curl Machine", muscleGroup: "Biceps", equipment: "Machine" },
+    { id: "bayesian-curl", name: "Bayesian Curl", muscleGroup: "Biceps", equipment: "Cable" },
     { id: "concentration-curl", name: "Concentration Curl", muscleGroup: "Biceps", equipment: "Free Weight" },
 
     // Triceps
@@ -115,6 +118,7 @@
     { id: "tricep-kickback", name: "Triceps Kickback", muscleGroup: "Triceps", equipment: "Free Weight" },
     { id: "dip-triceps", name: "Bodyweight Triceps Dip", muscleGroup: "Triceps", equipment: "Bodyweight" },
     { id: "bench-dip", name: "Bench Dip", muscleGroup: "Triceps", equipment: "Bodyweight" },
+    { id: "diamond-push-up", name: "Diamond Push-Up", muscleGroup: "Triceps", equipment: "Bodyweight" },
 
     // Quadriceps
     { id: "back-squat-barbell", name: "Barbell Back Squat", muscleGroup: "Quadriceps", equipment: "Free Weight", benchmarkKey: "squat" },
@@ -176,6 +180,7 @@
     { id: "decline-sit-up", name: "Decline Sit-Up", muscleGroup: "Abs / Core", equipment: "Bodyweight" },
     { id: "bicycle-crunch", name: "Bicycle Crunch", muscleGroup: "Abs / Core", equipment: "Bodyweight" },
     { id: "v-up", name: "V-Up", muscleGroup: "Abs / Core", equipment: "Bodyweight" },
+    { id: "dead-bug", name: "Dead Bug", muscleGroup: "Abs / Core", equipment: "Bodyweight" },
 
     // Forearms
     { id: "wrist-curl", name: "Wrist Curl", muscleGroup: "Forearms", equipment: "Free Weight" },
