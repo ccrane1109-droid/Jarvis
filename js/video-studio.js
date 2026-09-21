@@ -1026,12 +1026,45 @@
 
   /* ---------------- editor shell ---------------- */
 
+  // Six cards are always on screen at once, which reads as "do everything
+  // everywhere" rather than a sequence. This pill row gives a single glance
+  // at what's done, what's next, and lets a tap jump straight to that card.
+  function renderStepTracker(project) {
+    const container = document.getElementById("studioStepTracker");
+    if (!container) return;
+    const hasScenes = project.scenes.length > 0;
+    const steps = [
+      { key: "studioScriptCard", label: "1. Script", done: hasScenes },
+      { key: "studioVoiceoverCard", label: "2. Voiceover", done: hasScenes && project.scenes.every(function (s) { return !!s.voiceoverBlobId; }) },
+      { key: "studioVisualsCard", label: "3. Visuals", done: hasScenes && project.scenes.every(function (s) { return !!s.visualBlobId; }) },
+      { key: "studioCaptionsCard", label: "4. Captions", done: hasScenes && project.scenes.every(function (s) { return !!(s.captions && s.captions.length); }) },
+      { key: "studioMusicCard", label: "Music (optional)", done: !!project.musicBlobId, optional: true },
+      { key: "studioExportCard", label: "5. Export", done: !!project.exportedBlobId }
+    ];
+    const requiredSteps = steps.filter(function (s) { return !s.optional; });
+    const currentKey = (requiredSteps.filter(function (s) { return !s.done; })[0] || {}).key;
+    container.innerHTML = steps.map(function (s) {
+      const cls = s.done ? "badge-green" : s.key === currentKey ? "badge-yellow" : "badge-neutral";
+      const suffix = s.done ? " ✓" : s.key === currentKey ? " — next" : "";
+      return '<button type="button" class="badge ' + cls + ' studio-step-pill" data-target="' + s.key + '" style="cursor:pointer;border:none;">' +
+        window.JarvisCore.escapeHtml(s.label + suffix) + '</button>';
+    }).join("");
+  }
+
+  function handleStepTrackerClick(e) {
+    const pill = e.target.closest(".studio-step-pill");
+    if (!pill) return;
+    const target = document.getElementById(pill.getAttribute("data-target"));
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function renderEditor() {
     const project = getProject(activeProjectId);
     if (!project) { showListView(); return; }
     revokeTrackedObjectUrls();
     document.getElementById("studioEditorTitle").textContent = project.title;
     document.getElementById("studioEditorTopic").textContent = project.topic || "No topic set";
+    renderStepTracker(project);
     renderScriptCard(project);
     renderVoiceoverCard(project);
     renderVisualsCard(project);
@@ -1055,6 +1088,7 @@
       window.JarvisCore.closeModal("studioNewProjectModal");
     });
     document.getElementById("studioBackBtn").addEventListener("click", showListView);
+    document.getElementById("studioStepTracker").addEventListener("click", handleStepTrackerClick);
     document.getElementById("studioDeleteProjectBtn").addEventListener("click", function () {
       data.projects = data.projects.filter(function (p) { return p.id !== activeProjectId; });
       save();

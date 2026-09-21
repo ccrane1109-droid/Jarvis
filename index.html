@@ -1011,6 +1011,8 @@
           <p class="field-hint" id="studioEditorTopic"></p>
         </div>
 
+        <div class="badge-row" id="studioStepTracker" style="margin-bottom:14px;"></div>
+
         <div class="card" id="studioScriptCard"></div>
         <div class="card" id="studioVoiceoverCard"></div>
         <div class="card" id="studioVisualsCard"></div>
@@ -1104,9 +1106,20 @@
       <div class="card">
         <h2 class="card-title">Bring your own AI provider</h2>
         <p class="field-hint">
-          JARVIS doesn't bundle any AI provider. Connect your own script, voiceover, image, or video-generation API
-          below — endpoint, key, and request shape are all yours to set. Keys are stored only in this browser's local
-          storage and are sent only to the endpoint you configure.
+          JARVIS doesn't bundle or resell any AI provider — you sign up for your own and connect it here. You don't
+          need all four kinds below to get started; add just the ones for what you're trying to do (e.g. only
+          "Voiceover" if you already have a script you're happy with).
+        </p>
+        <p class="field-hint">
+          <strong>1.</strong> Sign up with a provider that offers the kind of API you need (see "What to look for" on
+          each card below). <strong>2.</strong> From their dashboard, copy the API endpoint URL and your API key.
+          <strong>3.</strong> Tap "Add connection" on that card, paste them in, and adjust the request body template
+          to match the exact field names shown in that provider's own API documentation — the template below is only
+          a generic starting shape, not a real request for any specific provider.
+        </p>
+        <p class="field-hint">
+          Keys are stored only in this browser's local storage and are sent only to the endpoint you configure —
+          never through any JARVIS server, since there isn't one.
         </p>
       </div>
       <div id="videoConnectionsGroups"></div>
@@ -1161,7 +1174,14 @@
           <input type="password" id="vcApiKey" maxlength="500" autocomplete="off">
         </div>
       </div>
-      <p class="field-hint">Sent as "&lt;header&gt;: Bearer &lt;key&gt;". Change the header name if your provider expects something else (e.g. "x-api-key").</p>
+      <div class="form-row">
+        <label for="vcAuthStyle">How the key is sent</label>
+        <select id="vcAuthStyle">
+          <option value="bearer">"&lt;header&gt;: Bearer &lt;key&gt;" (most common)</option>
+          <option value="raw">"&lt;header&gt;: &lt;key&gt;" (no "Bearer" prefix)</option>
+        </select>
+      </div>
+      <p class="field-hint">Not sure which one? Check your provider's API docs for an example request — if the header value in their example is just the key with no word in front of it, pick the second option. Change the header name too if it's not "Authorization" (e.g. "x-api-key").</p>
       <div class="form-row">
         <label for="vcBodyTemplate">Request body template (JSON)</label>
         <textarea id="vcBodyTemplate" rows="6" style="font-family:monospace;font-size:13px;"></textarea>
