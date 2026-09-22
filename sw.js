@@ -5,13 +5,17 @@
    online. All user data lives in localStorage, not in this cache.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v4";
+const CACHE_NAME = "jarvis-cache-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./style.css",
   "./manifest.json",
   "./icon.svg",
+  "./js/vendor/qrcode/qrcode.js",
+  "./js/vendor/qrcode/qrcode_UTF8.js",
+  "./js/firebase-config.js",
+  "./js/auth.js",
   "./js/app.js",
   "./js/exercises.js",
   "./js/workout.js",

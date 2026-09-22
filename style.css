@@ -733,6 +733,12 @@ textarea { resize: vertical; min-height: 44px; }
   padding: 20px;
 }
 
+/* Must always sit above every other modal (including the auto-shown Daily
+   Briefing), since it's the access gate for the whole app. */
+#authGate {
+  z-index: 200;
+}
+
 .modal-box {
   background: var(--card);
   border: 1px solid var(--card-border);
