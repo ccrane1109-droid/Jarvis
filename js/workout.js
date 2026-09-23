@@ -393,8 +393,9 @@
         ? '<span class="list-item-meta">PR: ' + core.escapeHtml(pr.bestSet.weight) + ' &times; ' + core.escapeHtml(pr.bestSet.reps) + ' &middot; Est. 1RM: ' + Math.round(pr.bestE1rm) + '</span>'
         : '<span class="list-item-meta">No previous sets logged for this exercise yet.</span>';
       const lastSet = se.sets.length ? se.sets[se.sets.length - 1] : null;
+      const routineTargetReps = routineTargetRepsForSet(se.exerciseId, se.sets.length);
       const prefillWeight = lastSet ? lastSet.weight : "";
-      const prefillReps = lastSet ? lastSet.reps : "";
+      const prefillReps = routineTargetReps !== null ? routineTargetReps : (lastSet ? lastSet.reps : "");
       return (
         '<div class="list-item session-exercise-block" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
           '<div class="list-item-row">' +
@@ -427,6 +428,21 @@
         '</div>'
       );
     }).join("");
+  }
+
+  // The reps target for the NEXT set (0-indexed) of an exercise, from
+  // whichever routine this session's draft was loaded from — re.repsPerSet
+  // per-index first, then re.targetReps as the fallback, or null if this
+  // exercise wasn't loaded from a routine (or has no set at that index).
+  function routineTargetRepsForSet(exerciseId, setIndex) {
+    if (!draft.routineId) return null;
+    const routine = routines.find(function (r) { return r.id === draft.routineId; });
+    if (!routine) return null;
+    const re = routine.exercises.find(function (e) { return e.exerciseId === exerciseId; });
+    if (!re) return null;
+    if (re.repsPerSet && re.repsPerSet[setIndex] !== undefined) return re.repsPerSet[setIndex];
+    if (re.targetReps) return re.targetReps;
+    return null;
   }
 
   function loadRoutineIntoDraft(routineId, programContext) {
@@ -801,6 +817,16 @@
 
   let routineBuilder = { editId: null, exercises: [] };
 
+  // re.repsPerSet, when present, overrides re.targetReps for individual
+  // sets (e.g. a descending pyramid: 12, 10, 8) — re.targetReps stays as
+  // the fallback for any set index it doesn't cover.
+  function formatRoutineExerciseTarget(re) {
+    if (re.repsPerSet && re.repsPerSet.length) {
+      return re.targetSets + " sets: " + re.repsPerSet.join(", ") + " reps";
+    }
+    return re.targetSets + " sets × " + re.targetReps + " reps";
+  }
+
   function renderRoutineBuilderList() {
     const core = window.JarvisCore;
     const container = document.getElementById("routineBuilderList");
@@ -819,7 +845,7 @@
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
               '<span class="list-item-title">' + core.escapeHtml(exName) + '</span>' +
-              '<span class="list-item-meta">' + core.escapeHtml(re.targetSets) + ' sets &times; ' + core.escapeHtml(re.targetReps) + ' reps</span>' +
+              '<span class="list-item-meta">' + core.escapeHtml(formatRoutineExerciseTarget(re)) + '</span>' +
             '</div>' +
             '<div class="list-item-actions">' +
               '<button type="button" class="btn-icon danger routine-builder-remove-btn" data-index="' + i + '">Remove</button>' +
@@ -835,10 +861,31 @@
     const exerciseId = document.getElementById("routinePickerSelect").value;
     const targetSets = Number(document.getElementById("routineTargetSets").value);
     const targetReps = Number(document.getElementById("routineTargetReps").value);
+    const repsPerSetRaw = document.getElementById("routineRepsPerSet").value.trim();
     if (!exerciseId) { core.showToast("Choose an exercise first."); return; }
     if (!core.isPositiveNumber(targetSets)) { core.showToast("Target sets must be a positive number."); return; }
     if (!core.isPositiveNumber(targetReps)) { core.showToast("Target reps must be a positive number."); return; }
-    routineBuilder.exercises.push({ exerciseId: exerciseId, targetSets: Math.round(targetSets), targetReps: Math.round(targetReps) });
+
+    const roundedSets = Math.round(targetSets);
+    const roundedReps = Math.round(targetReps);
+    const entry = { exerciseId: exerciseId, targetSets: roundedSets, targetReps: roundedReps };
+
+    if (repsPerSetRaw) {
+      const tokens = repsPerSetRaw.split(",").map(function (p) { return p.trim(); }).filter(Boolean);
+      const numbers = tokens.map(Number);
+      if (numbers.length === 0 || numbers.some(function (n) { return !core.isPositiveNumber(n); })) {
+        core.showToast("Reps per set must be positive numbers separated by commas, e.g. 12, 10, 8.");
+        return;
+      }
+      const repsPerSet = [];
+      for (let i = 0; i < roundedSets; i++) {
+        repsPerSet.push(i < numbers.length ? Math.round(numbers[i]) : roundedReps);
+      }
+      entry.repsPerSet = repsPerSet;
+    }
+
+    routineBuilder.exercises.push(entry);
+    document.getElementById("routineRepsPerSet").value = "";
     renderRoutineBuilderList();
   }
 
@@ -907,7 +954,7 @@
       const exLines = r.exercises.map(function (re) {
         const ex = window.JarvisExercises.getExerciseById(re.exerciseId);
         const exName = ex ? ex.name : "Unknown exercise";
-        return '<span class="list-item-meta">' + core.escapeHtml(exName) + ": " + core.escapeHtml(re.targetSets) + " &times; " + core.escapeHtml(re.targetReps) + '</span>';
+        return '<span class="list-item-meta">' + core.escapeHtml(exName) + ": " + core.escapeHtml(formatRoutineExerciseTarget(re)) + '</span>';
       }).join("");
       const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
       return (
