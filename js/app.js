@@ -260,21 +260,40 @@
     const videoSubPanels = Array.prototype.slice.call(document.querySelectorAll(".video-sub-panel"));
     setupTabGroup(videoSubNavBtns, videoSubPanels);
 
-    if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
-    if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
-    if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
-    if (window.JarvisCalories && typeof window.JarvisCalories.init === "function") window.JarvisCalories.init();
-    if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
-    if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();
-    if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
-    if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
-
     const briefingBtn = document.getElementById("dailyBriefingBtn");
     if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
     const briefingCloseBtn = document.getElementById("briefingCloseBtn");
     if (briefingCloseBtn) briefingCloseBtn.addEventListener("click", function () { closeModal("briefingModal"); });
-
-    maybeAutoShowBriefing();
     registerServiceWorker();
+
+    // Feature modules read their data (from localStorage, possibly just
+    // refreshed by auth.js's Firestore sync) as soon as they init, so they
+    // must not start until auth.js says it's safe to — otherwise a synced
+    // account's data could arrive a moment after these modules already
+    // rendered an empty/stale first paint. auth.js fires this once it's
+    // resolved to one of: not configured, network unreachable (fails
+    // open), logged out, or logged in and synced.
+    let started = false;
+    function startFeatureModules() {
+      if (started) return;
+      started = true;
+      if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
+      if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
+      if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
+      if (window.JarvisCalories && typeof window.JarvisCalories.init === "function") window.JarvisCalories.init();
+      if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
+      if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();
+      if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
+      if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
+      maybeAutoShowBriefing();
+    }
+
+    document.addEventListener("jarvis-ready-to-start", startFeatureModules, { once: true });
+    // Safety net: if auth.js itself never loads/runs at all (e.g. its
+    // script tag fails outright, not just the Firebase CDN fetch it
+    // already handles), don't leave the app dead — start anyway after a
+    // few seconds so a broken login layer can never brick the rest of
+    // JARVIS.
+    window.setTimeout(startFeatureModules, 8000);
   });
 })();

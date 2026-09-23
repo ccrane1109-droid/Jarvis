@@ -1,12 +1,51 @@
 /* ==========================================================================
-   JARVIS — sign-in gate with optional TOTP 2-step verification
+   JARVIS — sign-in gate + Firestore-backed cross-device sync
 
-   Phase 1 of "real accounts": gates the whole app behind Firebase
-   Authentication (email/password + optional TOTP second factor). Every
-   feature's data still lives in this device's localStorage exactly as
-   before — this does not yet sync data between devices or separate data
-   per account. That's a bigger follow-up (a Firestore-backed persistence
-   layer) once this login layer itself is confirmed working.
+   Phase 2 of "real accounts": on top of the phase-1 login gate (Firebase
+   Authentication, email/password + optional TOTP second factor), this adds
+   an actual per-account cloud data store (Firestore), so the same data
+   shows up whether you're on your phone or your laptop, instead of each
+   device having its own separate localStorage copy.
+
+   How the sync works (deliberately simple, not a full merge/CRDT system —
+   fine for one person using their own account from a couple of devices,
+   not built for concurrent multi-device editing):
+   - Each user's data lives in one Firestore document, users/{uid}, as a
+     map of localStorage-key -> value (see SYNCED_KEYS below for exactly
+     which keys — notably NOT jarvisVideoConnections, since that holds raw
+     AI provider API keys and defaults to staying device-local rather than
+     also living in the cloud without being asked).
+   - On login: if the cloud document already has a key, the cloud value
+     overwrites this device's local copy (cloud wins). Any key that exists
+     locally but not yet in the cloud (a brand-new account, or a newer app
+     version's key) gets pushed up instead, so nothing already on the
+     device is silently lost.
+   - After that initial reconciliation, every future JarvisCore.saveJSON()
+     call also pushes that one key up to Firestore in the background —
+     this is installed by monkey-patching JarvisCore.saveJSON once, so
+     none of the ten feature modules (workout.js, habits.js, etc.) needed
+     to change at all; they all already go through that one shared
+     function.
+   - Two devices editing the SAME key while both offline, then both
+     reconnecting, is not conflict-resolved beyond "whichever write
+     reaches Firestore last wins" for that key as a whole — acceptable for
+     a personal app, just not a guarantee of never losing an edit in that
+     specific scenario.
+
+   Requires a Firestore database to actually exist in the Firebase project
+   (Databases & Storage -> Firestore Database -> Create database) and
+   security rules limiting each user's document to that user:
+     rules_version = '2';
+     service cloud.firestore {
+       match /databases/{database}/documents {
+         match /users/{userId} {
+           allow read, write: if request.auth != null && request.auth.uid == userId;
+         }
+       }
+     }
+   Without those rules, Firestore's default in production mode denies all
+   reads/writes, so sync will fail closed (caught and toasted, never
+   silently lost — local saves always succeed regardless).
 
    Loaded as a <script type="module"> so it can import the Firebase
    modular SDK straight from Google's CDN by URL — no bundler, consistent
@@ -27,6 +66,19 @@
 
   const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  const FIREBASE_FIRESTORE_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // Every localStorage key Jarvis uses, EXCEPT jarvisVideoConnections
+  // (holds raw AI provider API keys — stays device-local by default) and
+  // jarvisLastBriefingDate (a purely local UI preference, not real data).
+  const SYNCED_KEYS = [
+    "jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight",
+    "jarvisMeasurements", "jarvisStrengthSettings", "jarvisWorkoutDraft",
+    "jarvisHabits", "jarvisBusiness", "jarvisCalories",
+    "jarvisTradingWatchlist", "jarvisPaperTrades", "jarvisTradingJournal", "jarvisTradingSettings",
+    "jarvisVideo", "jarvisVideoStudio",
+    "jarvisCustomExercises", "jarvisFavoriteExercises"
+  ];
 
   const config = window.JARVIS_FIREBASE_CONFIG || {};
   const isConfigured = !!(config.apiKey && config.apiKey !== "REPLACE_ME");
@@ -34,8 +86,11 @@
   // Firebase functions, filled in once the SDK module has actually loaded.
   let fb = null;
   let auth = null;
+  let db = null;
   let mfaResolver = null; // set while a login is paused waiting on a TOTP code
   let pendingTotpSecret = null; // set while enrollment is waiting on a TOTP code
+  let bootStarted = false; // guards against re-running feature-module init on a later login/logout (see proceedToApp)
+  let lastUid = undefined; // undefined = no auth state observed yet; null = observed "logged out"
 
   function $(id) { return document.getElementById(id); }
 
@@ -191,6 +246,91 @@
     }
   }
 
+  /* ---------------- Firestore sync ---------------- */
+
+  function writeLocalOnly(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
+  }
+
+  function readLocalSnapshot() {
+    const snapshot = {};
+    SYNCED_KEYS.forEach(function (key) {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return;
+      try { snapshot[key] = JSON.parse(raw); } catch (e) { /* skip unparsable */ }
+    });
+    return snapshot;
+  }
+
+  // Runs once right after login: reconciles this device's local data with
+  // the account's cloud copy (cloud wins per-key if present, otherwise the
+  // local value is pushed up) so nothing already on the device is lost the
+  // first time an existing local-only user logs into their new account.
+  function syncFromCloud(uid) {
+    const ref = fb.doc(db, "users", uid);
+    return fb.getDoc(ref).then(function (snap) {
+      const cloudStore = (snap.exists() && snap.data().store) || null;
+      const localSnapshot = readLocalSnapshot();
+
+      if (!cloudStore) {
+        if (Object.keys(localSnapshot).length === 0) return null;
+        return fb.setDoc(ref, { store: localSnapshot }, { merge: true });
+      }
+
+      Object.keys(cloudStore).forEach(function (key) {
+        if (SYNCED_KEYS.indexOf(key) !== -1) writeLocalOnly(key, cloudStore[key]);
+      });
+
+      const missingFromCloud = {};
+      Object.keys(localSnapshot).forEach(function (key) {
+        if (!(key in cloudStore)) missingFromCloud[key] = localSnapshot[key];
+      });
+      if (Object.keys(missingFromCloud).length > 0) {
+        return fb.setDoc(ref, { store: missingFromCloud }, { merge: true });
+      }
+      return null;
+    }).catch(function (err) {
+      toast("Couldn't sync your data from the cloud (" + friendlyAuthError(err) + "). Continuing with what's on this device.");
+    });
+  }
+
+  // Monkey-patches JarvisCore.saveJSON exactly once so every future save
+  // from any feature module also pushes that key to Firestore in the
+  // background. The local synchronous write always happens first and
+  // always succeeds regardless of network state; the cloud push is
+  // best-effort and never blocks or throws back into the caller.
+  let saveJSONPatched = false;
+  function installSyncedSaveJSON() {
+    if (saveJSONPatched) return;
+    saveJSONPatched = true;
+    const core = window.JarvisCore;
+    const originalSaveJSON = core.saveJSON;
+    core.saveJSON = function (key, value) {
+      const result = originalSaveJSON(key, value);
+      if (SYNCED_KEYS.indexOf(key) !== -1 && auth && auth.currentUser) {
+        const ref = fb.doc(db, "users", auth.currentUser.uid);
+        const patch = {};
+        patch[key] = value;
+        fb.setDoc(ref, { store: patch }, { merge: true }).catch(function () { /* best-effort; local save already succeeded */ });
+      }
+      return result;
+    };
+  }
+
+  // The app only ever boots its feature modules once per page load. If
+  // auth state changes again afterward (a login from the "please log in"
+  // screen, or a logout mid-session), a full reload is simpler and safer
+  // than trying to make every already-initialized module re-read data it
+  // already loaded into memory.
+  function proceedToApp() {
+    if (bootStarted) {
+      window.location.reload();
+      return;
+    }
+    bootStarted = true;
+    document.dispatchEvent(new CustomEvent("jarvis-ready-to-start"));
+  }
+
   /* ---------------- header account controls ---------------- */
 
   function updateHeaderForUser(user) {
@@ -219,7 +359,7 @@
 
   async function init() {
     const continueBtn = $("authContinueWithoutLoginBtn");
-    if (continueBtn) continueBtn.addEventListener("click", closeGate);
+    if (continueBtn) continueBtn.addEventListener("click", function () { closeGate(); proceedToApp(); });
 
     if (!isConfigured) {
       showSetupNotice(
@@ -235,11 +375,12 @@
     // forever, over something that has nothing to do with the user's own
     // data or their Firebase setup.
     try {
-      const [appModule, authModule] = await Promise.all([
+      const [appModule, authModule, firestoreModule] = await Promise.all([
         import(FIREBASE_APP_URL),
-        import(FIREBASE_AUTH_URL)
+        import(FIREBASE_AUTH_URL),
+        import(FIREBASE_FIRESTORE_URL)
       ]);
-      fb = Object.assign({}, appModule, authModule);
+      fb = Object.assign({}, appModule, authModule, firestoreModule);
     } catch (err) {
       showSetupNotice("Couldn't reach the sign-in service (network issue loading Firebase). You can keep using JARVIS normally for now — your local data is unaffected.");
       return;
@@ -247,6 +388,8 @@
 
     const app = fb.initializeApp(config);
     auth = fb.getAuth(app);
+    db = fb.getFirestore(app);
+    installSyncedSaveJSON();
 
     wireForm("authLoginForm", handleLoginSubmit);
     wireForm("authSignupForm", handleSignupSubmit);
@@ -278,20 +421,34 @@
     }
 
     fb.onAuthStateChanged(auth, function (user) {
+      const uid = user ? user.uid : null;
+      if (bootStarted && uid === lastUid) {
+        // Same identity as what already booted (e.g. Firebase re-confirming
+        // a restored session) — not a real transition, don't reload.
+        updateHeaderForUser(user);
+        return;
+      }
+      lastUid = uid;
       updateHeaderForUser(user);
       if (!user) {
         $("authLoginForm").reset();
         showOnly("authLoginForm");
         openGate();
+        proceedToApp();
         return;
       }
-      const hasTotp = fb.multiFactor(user).enrolledFactors.length > 0;
-      if (!hasTotp && !pendingTotpSecret) {
-        showOnly("authTotpEnrollPrompt");
-        openGate();
-      } else {
-        closeGate();
-      }
+      showOnly("authLoading");
+      $("authLoading").querySelector("p").textContent = "Syncing your data…";
+      syncFromCloud(user.uid).then(function () {
+        const hasTotp = fb.multiFactor(user).enrolledFactors.length > 0;
+        if (!hasTotp && !pendingTotpSecret) {
+          showOnly("authTotpEnrollPrompt");
+          openGate();
+        } else {
+          closeGate();
+        }
+        proceedToApp();
+      });
     });
   }
 
