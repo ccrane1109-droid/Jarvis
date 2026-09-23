@@ -12,10 +12,10 @@
    ========================================================================== */
 
 window.JARVIS_FIREBASE_CONFIG = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.appspot.com",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME"
+  apiKey: "AIzaSyBFOPmqb63VZZfsaXVHV4UT9Tt6tx6Ao6c",
+  authDomain: "jarvis-f01e7.firebaseapp.com",
+  projectId: "jarvis-f01e7",
+  storageBucket: "jarvis-f01e7.firebasestorage.app",
+  messagingSenderId: "297374160663",
+  appId: "1:297374160663:web:25789801c0ff5cfbc24952"
 };
