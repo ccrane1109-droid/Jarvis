@@ -385,7 +385,8 @@
         ? '<div class="field-hint">No sets yet.</div>'
         : se.sets.map(function (s, i) {
             const warmupTag = s.warmup ? ' <span class="badge badge-neutral">warm-up</span>' : '';
-            return '<div class="set-row"><span>Set ' + (i + 1) + ': ' + core.escapeHtml(s.weight) + ' &times; ' + core.escapeHtml(s.reps) + warmupTag + '</span>' +
+            const dropsetTag = s.dropset ? ' <span class="badge badge-neutral">drop set</span>' : '';
+            return '<div class="set-row"><span>Set ' + (i + 1) + ': ' + core.escapeHtml(s.weight) + ' &times; ' + core.escapeHtml(s.reps) + warmupTag + dropsetTag + '</span>' +
               '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button></div>';
           }).join("");
       const pr = getExercisePrAndE1rm(se.exerciseId);
@@ -393,14 +394,16 @@
         ? '<span class="list-item-meta">PR: ' + core.escapeHtml(pr.bestSet.weight) + ' &times; ' + core.escapeHtml(pr.bestSet.reps) + ' &middot; Est. 1RM: ' + Math.round(pr.bestE1rm) + '</span>'
         : '<span class="list-item-meta">No previous sets logged for this exercise yet.</span>';
       const lastSet = se.sets.length ? se.sets[se.sets.length - 1] : null;
-      const routineTargetReps = routineTargetRepsForSet(se.exerciseId, se.sets.length);
+      const routineTarget = routineTargetForSet(se.exerciseId, se.sets.length);
       const prefillWeight = lastSet ? lastSet.weight : "";
-      const prefillReps = routineTargetReps !== null ? routineTargetReps : (lastSet ? lastSet.reps : "");
+      const prefillReps = routineTarget ? routineTarget.reps : (lastSet ? lastSet.reps : "");
+      const prefillType = routineTarget ? routineTarget.type : "normal";
+      const supersetBadge = se.supersetGroup ? ' <span class="badge badge-yellow">Superset</span>' : '';
       return (
         '<div class="list-item session-exercise-block" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
-              '<span class="list-item-title">' + core.escapeHtml(exName) + ' <span class="badge badge-neutral">' + core.escapeHtml(muscle) + '</span></span>' +
+              '<span class="list-item-title">' + core.escapeHtml(exName) + ' <span class="badge badge-neutral">' + core.escapeHtml(muscle) + '</span>' + supersetBadge + '</span>' +
               prHint +
             '</div>' +
             '<div class="list-item-actions">' +
@@ -420,6 +423,7 @@
               '<input type="number" class="add-set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(prefillReps) + '" aria-label="Reps for ' + core.escapeHtml(exName) + '">' +
               '<button type="button" class="stepper-btn add-set-reps-plus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Increase reps">+</button>' +
             '</div>' +
+            '<select class="add-set-type-select" aria-label="Set type for ' + core.escapeHtml(exName) + '">' + setTypeOptionsHtml(prefillType) + '</select>' +
             '<button type="button" class="btn btn-secondary add-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">Add Set</button>' +
           '</div>' +
           '<div class="form-actions" style="margin-top:8px;">' +
@@ -430,19 +434,18 @@
     }).join("");
   }
 
-  // The reps target for the NEXT set (0-indexed) of an exercise, from
-  // whichever routine this session's draft was loaded from — re.repsPerSet
-  // per-index first, then re.targetReps as the fallback, or null if this
-  // exercise wasn't loaded from a routine (or has no set at that index).
-  function routineTargetRepsForSet(exerciseId, setIndex) {
+  // The set plan for the NEXT set (0-indexed) of an exercise, from
+  // whichever routine this session's draft was loaded from — or null if
+  // this exercise wasn't loaded from a routine (or has no set planned at
+  // that index). Returns { reps, type }.
+  function routineTargetForSet(exerciseId, setIndex) {
     if (!draft.routineId) return null;
     const routine = routines.find(function (r) { return r.id === draft.routineId; });
     if (!routine) return null;
     const re = routine.exercises.find(function (e) { return e.exerciseId === exerciseId; });
     if (!re) return null;
-    if (re.repsPerSet && re.repsPerSet[setIndex] !== undefined) return re.repsPerSet[setIndex];
-    if (re.targetReps) return re.targetReps;
-    return null;
+    const plannedSets = getPlannedSets(re);
+    return plannedSets[setIndex] || null;
   }
 
   function loadRoutineIntoDraft(routineId, programContext) {
@@ -452,7 +455,7 @@
     const existingIds = draft.exercises.map(function (se) { return se.exerciseId; });
     routine.exercises.forEach(function (re) {
       if (existingIds.indexOf(re.exerciseId) === -1) {
-        draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: re.exerciseId, sets: [] });
+        draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: re.exerciseId, sets: [], supersetGroup: re.supersetGroup || null });
       }
     });
     draft.routineId = routineId;
@@ -479,8 +482,10 @@
       const row = addSetBtn.closest(".add-set-row");
       const weightInput = row.querySelector(".add-set-weight-input");
       const repsInput = row.querySelector(".add-set-reps-input");
+      const typeSelect = row.querySelector(".add-set-type-select");
       const weight = Number(weightInput.value);
       const reps = Number(repsInput.value);
+      const setType = typeSelect ? typeSelect.value : "normal";
       if (!isNonNegativeNumber(weight)) { core.showToast("Weight can't be negative."); return; }
       if (!core.isPositiveNumber(reps)) { core.showToast("Reps must be a positive number."); return; }
       const sessionExId = addSetBtn.getAttribute("data-session-ex-id");
@@ -496,7 +501,7 @@
         return e1rm > max ? e1rm : max;
       }, 0);
       const combinedBestE1rm = Math.max(priorBest.bestE1rm, sessionBestE1rmSoFar);
-      se.sets.push({ weight: weight, reps: roundedReps });
+      se.sets.push({ weight: weight, reps: roundedReps, warmup: setType === "warmup", dropset: setType === "dropset" });
       saveDraft();
       renderSessionExerciseList();
       startRestTimer(sessionExId, REST_TIMER_DEFAULT_SECONDS);
@@ -816,15 +821,134 @@
   /* ---------------- routines ---------------- */
 
   let routineBuilder = { editId: null, exercises: [] };
+  let routineBuilderSelected = []; // indices into routineBuilder.exercises, checked for "group as superset"
 
-  // re.repsPerSet, when present, overrides re.targetReps for individual
-  // sets (e.g. a descending pyramid: 12, 10, 8) — re.targetReps stays as
-  // the fallback for any set index it doesn't cover.
-  function formatRoutineExerciseTarget(re) {
-    if (re.repsPerSet && re.repsPerSet.length) {
-      return re.targetSets + " sets: " + re.repsPerSet.join(", ") + " reps";
+  // Set-editor state for whichever exercise is currently being configured
+  // (either a brand-new one about to be added, or an existing routine-
+  // builder entry being edited in place).
+  let setEditorRows = [];
+  let setEditorEditIndex = null; // null = adding new; otherwise index into routineBuilder.exercises
+
+  const SET_TYPES = [
+    { value: "normal", label: "Normal" },
+    { value: "warmup", label: "Warm-up" },
+    { value: "dropset", label: "Drop Set" }
+  ];
+
+  function setTypeLabel(type) {
+    const found = SET_TYPES.filter(function (t) { return t.value === type; })[0];
+    return found ? found.label : "Normal";
+  }
+
+  function setTypeOptionsHtml(selected) {
+    return SET_TYPES.map(function (t) {
+      return '<option value="' + t.value + '"' + (t.value === (selected || "normal") ? " selected" : "") + '>' + t.label + '</option>';
+    }).join("");
+  }
+
+  // Reads a routine-exercise entry in whichever schema it's stored in.
+  // Older saved routines used targetSets/targetReps/repsPerSet (all-normal
+  // sets, no per-set type) — this reads either shape as a plain array of
+  // { reps, type } so the rest of the app only ever deals with one shape.
+  // Saving always writes the new plannedSets shape.
+  function getPlannedSets(re) {
+    if (re.plannedSets) return re.plannedSets;
+    const sets = [];
+    const count = re.targetSets || 1;
+    for (let i = 0; i < count; i++) {
+      const reps = (re.repsPerSet && re.repsPerSet[i] !== undefined) ? re.repsPerSet[i] : (re.targetReps || 10);
+      sets.push({ reps: reps, type: "normal" });
     }
-    return re.targetSets + " sets × " + re.targetReps + " reps";
+    return sets;
+  }
+
+  function formatPlannedSetsSummary(re) {
+    const sets = getPlannedSets(re);
+    const parts = sets.map(function (s) {
+      return s.type && s.type !== "normal" ? s.reps + " (" + setTypeLabel(s.type).toLowerCase() + ")" : String(s.reps);
+    });
+    return sets.length + " set" + (sets.length === 1 ? "" : "s") + ": " + parts.join(", ") + " reps";
+  }
+
+  /* ---- set editor (shared by "add a new exercise" and "edit an existing one") ---- */
+
+  function renderSetEditorRows() {
+    const container = document.getElementById("routineSetEditorRows");
+    if (!container) return;
+    container.innerHTML = setEditorRows.map(function (row, i) {
+      return (
+        '<div class="form-row two-col routine-set-editor-row" data-index="' + i + '">' +
+          '<div>' +
+            '<label>Set ' + (i + 1) + ' reps</label>' +
+            '<input type="number" class="routine-set-reps-input" min="1" step="1" value="' + row.reps + '" data-index="' + i + '">' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;align-items:flex-end;">' +
+            '<div style="flex:1;">' +
+              '<label>Type</label>' +
+              '<select class="routine-set-type-select" data-index="' + i + '">' + setTypeOptionsHtml(row.type) + '</select>' +
+            '</div>' +
+            '<button type="button" class="btn-icon danger routine-set-remove-btn" data-index="' + i + '" aria-label="Remove set">&times;</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function resetSetEditor() {
+    setEditorRows = [{ reps: 10, type: "normal" }, { reps: 10, type: "normal" }, { reps: 10, type: "normal" }];
+    setEditorEditIndex = null;
+    document.getElementById("addExerciseToRoutineBtn").textContent = "Add to Routine";
+    document.getElementById("routineCancelEditExerciseBtn").classList.add("hidden");
+    renderSetEditorRows();
+  }
+
+  function loadSetEditorFromEntry(index) {
+    setEditorRows = getPlannedSets(routineBuilder.exercises[index]).map(function (s) { return Object.assign({}, s); });
+    setEditorEditIndex = index;
+    document.getElementById("addExerciseToRoutineBtn").textContent = "Update Exercise";
+    document.getElementById("routineCancelEditExerciseBtn").classList.remove("hidden");
+    renderSetEditorRows();
+    document.getElementById("routineSetEditorRows").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function handleSetEditorRowsClick(e) {
+    const removeBtn = e.target.closest(".routine-set-remove-btn");
+    if (!removeBtn) return;
+    const index = Number(removeBtn.getAttribute("data-index"));
+    setEditorRows.splice(index, 1);
+    renderSetEditorRows();
+  }
+
+  function handleSetEditorRowsChange(e) {
+    const index = Number(e.target.getAttribute("data-index"));
+    if (isNaN(index)) return;
+    if (e.target.classList.contains("routine-set-reps-input")) {
+      setEditorRows[index].reps = Number(e.target.value);
+    } else if (e.target.classList.contains("routine-set-type-select")) {
+      setEditorRows[index].type = e.target.value;
+    }
+  }
+
+  function handleAddSetRow() {
+    const last = setEditorRows[setEditorRows.length - 1];
+    setEditorRows.push({ reps: last ? last.reps : 10, type: "normal" });
+    renderSetEditorRows();
+  }
+
+  /* ---- builder list (exercises already added to the routine being built) ---- */
+
+  function superscriptGroupLabels() {
+    // Assigns a stable, human-friendly letter (A, B, C...) to each distinct
+    // supersetGroup id, in the order it first appears.
+    const labels = {};
+    let next = 0;
+    routineBuilder.exercises.forEach(function (re) {
+      if (re.supersetGroup && !(re.supersetGroup in labels)) {
+        labels[re.supersetGroup] = String.fromCharCode(65 + next);
+        next++;
+      }
+    });
+    return labels;
   }
 
   function renderRoutineBuilderList() {
@@ -833,6 +957,9 @@
     const muscleGroupsEl = document.getElementById("routineBuilderMuscleGroups");
     const musclesTrained = getMuscleGroupsForExerciseIds(routineBuilder.exercises.map(function (re) { return re.exerciseId; }));
     muscleGroupsEl.innerHTML = muscleGroupBadgesHtml(musclesTrained);
+    const groupLabels = superscriptGroupLabels();
+    const groupBtn = document.getElementById("routineGroupSupersetBtn");
+    if (groupBtn) groupBtn.disabled = routineBuilderSelected.length < 2;
     if (routineBuilder.exercises.length === 0) {
       container.innerHTML = '<div class="empty-state">No exercises added to this routine yet.</div>';
       return;
@@ -840,14 +967,21 @@
     container.innerHTML = routineBuilder.exercises.map(function (re, i) {
       const ex = window.JarvisExercises.getExerciseById(re.exerciseId);
       const exName = ex ? ex.name : "Unknown exercise";
+      const groupBadge = re.supersetGroup
+        ? '<span class="badge badge-yellow">Superset ' + core.escapeHtml(groupLabels[re.supersetGroup]) + '</span> ' +
+          '<button type="button" class="btn-icon routine-builder-ungroup-btn" data-index="' + i + '">Ungroup</button>'
+        : "";
+      const checked = routineBuilderSelected.indexOf(i) !== -1 ? " checked" : "";
       return (
         '<div class="list-item">' +
           '<div class="list-item-row">' +
+            '<input type="checkbox" class="routine-builder-select" data-index="' + i + '"' + checked + ' aria-label="Select ' + core.escapeHtml(exName) + ' for grouping" style="margin-right:10px;">' +
             '<div class="list-item-main">' +
-              '<span class="list-item-title">' + core.escapeHtml(exName) + '</span>' +
-              '<span class="list-item-meta">' + core.escapeHtml(formatRoutineExerciseTarget(re)) + '</span>' +
+              '<span class="list-item-title">' + core.escapeHtml(exName) + ' ' + groupBadge + '</span>' +
+              '<span class="list-item-meta">' + core.escapeHtml(formatPlannedSetsSummary(re)) + '</span>' +
             '</div>' +
             '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon routine-builder-edit-btn" data-index="' + i + '">Edit</button>' +
               '<button type="button" class="btn-icon danger routine-builder-remove-btn" data-index="' + i + '">Remove</button>' +
             '</div>' +
           '</div>' +
@@ -858,62 +992,91 @@
 
   function handleAddExerciseToRoutine() {
     const core = window.JarvisCore;
-    const exerciseId = document.getElementById("routinePickerSelect").value;
-    const targetSets = Number(document.getElementById("routineTargetSets").value);
-    const targetReps = Number(document.getElementById("routineTargetReps").value);
-    const repsPerSetRaw = document.getElementById("routineRepsPerSet").value.trim();
-    if (!exerciseId) { core.showToast("Choose an exercise first."); return; }
-    if (!core.isPositiveNumber(targetSets)) { core.showToast("Target sets must be a positive number."); return; }
-    if (!core.isPositiveNumber(targetReps)) { core.showToast("Target reps must be a positive number."); return; }
-
-    const roundedSets = Math.round(targetSets);
-    const roundedReps = Math.round(targetReps);
-    const entry = { exerciseId: exerciseId, targetSets: roundedSets, targetReps: roundedReps };
-
-    if (repsPerSetRaw) {
-      const tokens = repsPerSetRaw.split(",").map(function (p) { return p.trim(); }).filter(Boolean);
-      const numbers = tokens.map(Number);
-      if (numbers.length === 0 || numbers.some(function (n) { return !core.isPositiveNumber(n); })) {
-        core.showToast("Reps per set must be positive numbers separated by commas, e.g. 12, 10, 8.");
-        return;
-      }
-      const repsPerSet = [];
-      for (let i = 0; i < roundedSets; i++) {
-        repsPerSet.push(i < numbers.length ? Math.round(numbers[i]) : roundedReps);
-      }
-      entry.repsPerSet = repsPerSet;
+    if (setEditorRows.length === 0) { core.showToast("Add at least one set."); return; }
+    if (setEditorRows.some(function (s) { return !core.isPositiveNumber(s.reps); })) {
+      core.showToast("Every set needs a positive number of reps.");
+      return;
     }
+    const plannedSets = setEditorRows.map(function (s) { return { reps: Math.round(s.reps), type: s.type || "normal" }; });
 
-    routineBuilder.exercises.push(entry);
-    document.getElementById("routineRepsPerSet").value = "";
+    if (setEditorEditIndex !== null) {
+      routineBuilder.exercises[setEditorEditIndex].plannedSets = plannedSets;
+    } else {
+      const exerciseId = document.getElementById("routinePickerSelect").value;
+      if (!exerciseId) { core.showToast("Choose an exercise first."); return; }
+      routineBuilder.exercises.push({ exerciseId: exerciseId, supersetGroup: null, plannedSets: plannedSets });
+    }
+    resetSetEditor();
     renderRoutineBuilderList();
   }
 
   function handleRoutineBuilderListClick(e) {
-    const btn = e.target.closest(".routine-builder-remove-btn");
-    if (!btn) return;
-    const index = Number(btn.getAttribute("data-index"));
-    routineBuilder.exercises.splice(index, 1);
+    const selectCheckbox = e.target.closest(".routine-builder-select");
+    if (selectCheckbox) {
+      const index = Number(selectCheckbox.getAttribute("data-index"));
+      const pos = routineBuilderSelected.indexOf(index);
+      if (selectCheckbox.checked && pos === -1) routineBuilderSelected.push(index);
+      if (!selectCheckbox.checked && pos !== -1) routineBuilderSelected.splice(pos, 1);
+      document.getElementById("routineGroupSupersetBtn").disabled = routineBuilderSelected.length < 2;
+      return;
+    }
+    const editBtn = e.target.closest(".routine-builder-edit-btn");
+    if (editBtn) { loadSetEditorFromEntry(Number(editBtn.getAttribute("data-index"))); return; }
+    const ungroupBtn = e.target.closest(".routine-builder-ungroup-btn");
+    if (ungroupBtn) {
+      const index = Number(ungroupBtn.getAttribute("data-index"));
+      const groupId = routineBuilder.exercises[index].supersetGroup;
+      routineBuilder.exercises.forEach(function (re) { if (re.supersetGroup === groupId) re.supersetGroup = null; });
+      renderRoutineBuilderList();
+      return;
+    }
+    const removeBtn = e.target.closest(".routine-builder-remove-btn");
+    if (removeBtn) {
+      const index = Number(removeBtn.getAttribute("data-index"));
+      routineBuilder.exercises.splice(index, 1);
+      routineBuilderSelected = [];
+      if (setEditorEditIndex === index) resetSetEditor();
+      renderRoutineBuilderList();
+    }
+  }
+
+  function handleGroupSuperset() {
+    if (routineBuilderSelected.length < 2) return;
+    const core = window.JarvisCore;
+    const groupId = core.uid("sg");
+    routineBuilderSelected.forEach(function (index) {
+      if (routineBuilder.exercises[index]) routineBuilder.exercises[index].supersetGroup = groupId;
+    });
+    routineBuilderSelected = [];
     renderRoutineBuilderList();
   }
 
   function exitRoutineEditMode() {
     routineBuilder = { editId: null, exercises: [] };
+    routineBuilderSelected = [];
     document.getElementById("routineEditId").value = "";
     document.getElementById("routineNameInput").value = "";
     document.getElementById("routineFormTitle").textContent = "Create a Routine";
     document.getElementById("saveRoutineBtn").textContent = "Save Routine";
     document.getElementById("routineCancelEditBtn").classList.add("hidden");
+    resetSetEditor();
     renderRoutineBuilderList();
   }
 
   function enterRoutineEditMode(routine) {
-    routineBuilder = { editId: routine.id, exercises: routine.exercises.map(function (e) { return Object.assign({}, e); }) };
+    routineBuilder = {
+      editId: routine.id,
+      exercises: routine.exercises.map(function (e) {
+        return { exerciseId: e.exerciseId, supersetGroup: e.supersetGroup || null, plannedSets: getPlannedSets(e).map(function (s) { return Object.assign({}, s); }) };
+      })
+    };
+    routineBuilderSelected = [];
     document.getElementById("routineEditId").value = routine.id;
     document.getElementById("routineNameInput").value = routine.name;
     document.getElementById("routineFormTitle").textContent = "Edit Routine";
     document.getElementById("saveRoutineBtn").textContent = "Update Routine";
     document.getElementById("routineCancelEditBtn").classList.remove("hidden");
+    resetSetEditor();
     renderRoutineBuilderList();
     document.getElementById("routineFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -951,10 +1114,16 @@
       return;
     }
     container.innerHTML = routines.map(function (r) {
+      const groupLabels = {};
+      let nextLabel = 0;
+      r.exercises.forEach(function (re) {
+        if (re.supersetGroup && !(re.supersetGroup in groupLabels)) { groupLabels[re.supersetGroup] = String.fromCharCode(65 + nextLabel); nextLabel++; }
+      });
       const exLines = r.exercises.map(function (re) {
         const ex = window.JarvisExercises.getExerciseById(re.exerciseId);
         const exName = ex ? ex.name : "Unknown exercise";
-        return '<span class="list-item-meta">' + core.escapeHtml(exName) + ": " + core.escapeHtml(formatRoutineExerciseTarget(re)) + '</span>';
+        const groupTag = re.supersetGroup ? ' <span class="badge badge-yellow">Superset ' + core.escapeHtml(groupLabels[re.supersetGroup]) + '</span>' : "";
+        return '<span class="list-item-meta">' + core.escapeHtml(exName) + groupTag + ": " + core.escapeHtml(formatPlannedSetsSummary(re)) + '</span>';
       }).join("");
       const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
       return (
@@ -1811,10 +1980,16 @@
     document.getElementById("routinePickerMuscleFilter").addEventListener("change", refreshRoutinePicker);
     document.getElementById("routinePickerEquipmentFilter").addEventListener("change", refreshRoutinePicker);
     document.getElementById("routinePickerSearch").addEventListener("input", refreshRoutinePicker);
+    document.getElementById("routineAddSetRowBtn").addEventListener("click", handleAddSetRow);
+    document.getElementById("routineSetEditorRows").addEventListener("click", handleSetEditorRowsClick);
+    document.getElementById("routineSetEditorRows").addEventListener("change", handleSetEditorRowsChange);
     document.getElementById("addExerciseToRoutineBtn").addEventListener("click", handleAddExerciseToRoutine);
+    document.getElementById("routineCancelEditExerciseBtn").addEventListener("click", resetSetEditor);
     document.getElementById("routineBuilderList").addEventListener("click", handleRoutineBuilderListClick);
+    document.getElementById("routineGroupSupersetBtn").addEventListener("click", handleGroupSuperset);
     document.getElementById("saveRoutineBtn").addEventListener("click", handleSaveRoutine);
     document.getElementById("routineCancelEditBtn").addEventListener("click", exitRoutineEditMode);
+    resetSetEditor();
     document.getElementById("routineList").addEventListener("click", handleRoutineListClick);
 
     document.getElementById("addDayToProgramBtn").addEventListener("click", handleAddDayToProgram);
