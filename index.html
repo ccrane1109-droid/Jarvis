@@ -297,6 +297,11 @@
             <input type="number" id="routineTargetReps" min="1" step="1" value="10">
           </div>
         </div>
+        <div class="form-row">
+          <label for="routineRepsPerSet">Reps per set (optional)</label>
+          <input type="text" id="routineRepsPerSet" placeholder="e.g. 12, 10, 8 for a different rep count each set">
+          <p class="field-hint">Leave blank to use the same target reps for every set. If you give fewer numbers than target sets, the remaining sets use the target reps above.</p>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" id="addExerciseToRoutineBtn">Add to Routine</button>
         </div>

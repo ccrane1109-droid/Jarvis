@@ -42,6 +42,7 @@
     { id: "dumbbell-fly", name: "Dumbbell Fly", muscleGroup: "Chest", equipment: "Free Weight" },
     { id: "incline-cable-fly", name: "Incline Cable Fly", muscleGroup: "Chest", equipment: "Cable" },
     { id: "low-cable-fly", name: "Low-to-High Cable Fly", muscleGroup: "Chest", equipment: "Cable" },
+    { id: "high-cable-fly", name: "High-to-Low Cable Fly", muscleGroup: "Chest", equipment: "Cable" },
     { id: "smith-machine-bench-press", name: "Smith Machine Bench Press", muscleGroup: "Chest", equipment: "Machine" },
     { id: "smith-machine-incline-bench-press", name: "Smith Machine Incline Bench Press", muscleGroup: "Chest", equipment: "Machine" },
     { id: "chest-press-machine", name: "Chest Press Machine", muscleGroup: "Chest", equipment: "Machine" },
