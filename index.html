@@ -287,28 +287,22 @@
           <label for="routinePickerSelect">Exercise</label>
           <select id="routinePickerSelect"></select>
         </div>
-        <div class="form-row two-col">
-          <div>
-            <label for="routineTargetSets">Target sets</label>
-            <input type="number" id="routineTargetSets" min="1" step="1" value="3">
-          </div>
-          <div>
-            <label for="routineTargetReps">Target reps</label>
-            <input type="number" id="routineTargetReps" min="1" step="1" value="10">
-          </div>
-        </div>
-        <div class="form-row">
-          <label for="routineRepsPerSet">Reps per set (optional)</label>
-          <input type="text" id="routineRepsPerSet" placeholder="e.g. 12, 10, 8 for a different rep count each set">
-          <p class="field-hint">Leave blank to use the same target reps for every set. If you give fewer numbers than target sets, the remaining sets use the target reps above.</p>
+        <h3 class="checklist-title">Sets for this exercise</h3>
+        <div id="routineSetEditorRows"></div>
+        <div class="form-actions">
+          <button type="button" class="btn-icon" id="routineAddSetRowBtn">+ Add Set</button>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" id="addExerciseToRoutineBtn">Add to Routine</button>
+          <button type="button" class="btn btn-secondary hidden" id="routineCancelEditExerciseBtn">Cancel</button>
         </div>
 
         <div class="badge-row" id="routineBuilderMuscleGroups"></div>
         <div id="routineBuilderList" class="item-list" style="margin-top:14px;">
           <div class="empty-state">No exercises added to this routine yet.</div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-icon" id="routineGroupSupersetBtn" disabled>Group Checked as Superset</button>
         </div>
 
         <div class="form-actions">
