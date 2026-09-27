@@ -386,8 +386,19 @@
         : se.sets.map(function (s, i) {
             const warmupTag = s.warmup ? ' <span class="badge badge-neutral">warm-up</span>' : '';
             const dropsetTag = s.dropset ? ' <span class="badge badge-neutral">drop set</span>' : '';
-            return '<div class="set-row"><span>Set ' + (i + 1) + ': ' + core.escapeHtml(s.weight) + ' &times; ' + core.escapeHtml(s.reps) + warmupTag + dropsetTag + '</span>' +
-              '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button></div>';
+            const weightVal = s.weight === "" || s.weight === null || s.weight === undefined ? "" : s.weight;
+            return (
+              '<div class="set-row set-row-editable">' +
+                '<span class="set-row-label">Set ' + (i + 1) + '</span>' +
+                '<input type="number" class="set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(weightVal) + '" ' +
+                  'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Weight for set ' + (i + 1) + '">' +
+                '<span>&times;</span>' +
+                '<input type="number" class="set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(s.reps) + '" ' +
+                  'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Reps for set ' + (i + 1) + '">' +
+                warmupTag + dropsetTag +
+                '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button>' +
+              '</div>'
+            );
           }).join("");
       const pr = getExercisePrAndE1rm(se.exerciseId);
       const prHint = pr.bestSet
@@ -448,6 +459,47 @@
     return plannedSets[setIndex] || null;
   }
 
+  // The most recently logged session's sets for an exercise (across all
+  // history, any routine), used to suggest a starting weight per set index
+  // when a routine's plan is auto-loaded — reps/type come from the plan, but
+  // the plan doesn't know what weight you lift.
+  function mostRecentLoggedSets(exerciseId) {
+    let latest = null;
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      const se = w.exercises.find(function (x) { return x.exerciseId === exerciseId; });
+      if (!se) return;
+      if (!latest || w.dateTime > latest.dateTime) latest = { dateTime: w.dateTime, sets: se.sets };
+    });
+    return latest ? latest.sets : null;
+  }
+
+  // Auto-builds the session's set list for an exercise straight from the
+  // active routine's plan (reps + type per set), so logging a routine
+  // doesn't require pressing "Add Set" once per planned set. Weight is
+  // pre-filled from the same set index the last time this exercise was
+  // logged, if there's history for it, and left blank otherwise — a blank
+  // weight means "not yet done" and is dropped when the workout is saved.
+  // Returns [] when this exercise isn't part of the active routine (or no
+  // routine is loaded), leaving freeform-added exercises exactly as before.
+  // routineId defaults to the draft's current one; loadRoutineIntoDraft
+  // passes it explicitly since it hasn't written it to the draft yet at the
+  // point it needs this.
+  function buildSetsFromRoutinePlan(exerciseId, routineId) {
+    const rid = routineId || draft.routineId;
+    if (!rid) return [];
+    const routine = routines.find(function (r) { return r.id === rid; });
+    if (!routine) return [];
+    const re = routine.exercises.find(function (e) { return e.exerciseId === exerciseId; });
+    if (!re) return [];
+    const plannedSets = getPlannedSets(re);
+    const priorSets = mostRecentLoggedSets(exerciseId);
+    return plannedSets.map(function (p, i) {
+      const priorWeight = priorSets && priorSets[i] ? priorSets[i].weight : "";
+      return { weight: priorWeight, reps: p.reps, warmup: p.type === "warmup", dropset: p.type === "dropset" };
+    });
+  }
+
   function loadRoutineIntoDraft(routineId, programContext) {
     const routine = routines.find(function (r) { return r.id === routineId; });
     if (!routine) return;
@@ -455,7 +507,10 @@
     const existingIds = draft.exercises.map(function (se) { return se.exerciseId; });
     routine.exercises.forEach(function (re) {
       if (existingIds.indexOf(re.exerciseId) === -1) {
-        draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: re.exerciseId, sets: [], supersetGroup: re.supersetGroup || null });
+        draft.exercises.push({
+          sessionExId: core.uid("sesx"), exerciseId: re.exerciseId,
+          sets: buildSetsFromRoutinePlan(re.exerciseId, routineId), supersetGroup: re.supersetGroup || null
+        });
       }
     });
     draft.routineId = routineId;
@@ -469,7 +524,7 @@
     const core = window.JarvisCore;
     const exerciseId = document.getElementById("exercisePickerSelect").value;
     if (!exerciseId) { core.showToast("Choose an exercise first."); return; }
-    draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: exerciseId, sets: [] });
+    draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: exerciseId, sets: buildSetsFromRoutinePlan(exerciseId) });
     saveDraft();
     renderSessionExerciseList();
   }
@@ -595,6 +650,28 @@
     }
   }
 
+  // Editing an auto-populated (or manually added) set's weight/reps inline.
+  // Deliberately doesn't re-render the list on every change (would blow away
+  // focus mid-typing) — it just persists the draft on blur/enter, same as
+  // any other plain input field elsewhere in the app.
+  function handleSessionExerciseListChange(e) {
+    const weightInput = e.target.closest(".set-weight-input");
+    const repsInput = e.target.closest(".set-reps-input");
+    if (!weightInput && !repsInput) return;
+    const input = weightInput || repsInput;
+    const sessionExId = input.getAttribute("data-session-ex-id");
+    const setIndex = Number(input.getAttribute("data-set-index"));
+    const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
+    if (!se || !se.sets[setIndex]) return;
+    const raw = input.value.trim();
+    if (weightInput) {
+      se.sets[setIndex].weight = raw === "" ? "" : Number(raw);
+    } else {
+      se.sets[setIndex].reps = raw === "" ? "" : Math.round(Number(raw));
+    }
+    saveDraft();
+  }
+
   function resetDraft() {
     stopAllRestTimers();
     draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "" };
@@ -615,11 +692,22 @@
     savePrograms();
   }
 
+  // A set counts as actually performed once it has a real weight and reps.
+  // Sets auto-populated from a routine plan start with a blank weight (and
+  // possibly a blank reps if the user cleared it) — those are "not done yet"
+  // and get quietly dropped here rather than saved as a fake 0 x reps set.
+  function isCompletedSet(s) {
+    return isNonNegativeNumber(Number(s.weight)) && s.weight !== "" &&
+      window.JarvisCore.isPositiveNumber(Number(s.reps)) && s.reps !== "";
+  }
+
   function handleSaveWorkout() {
     const core = window.JarvisCore;
-    const withSets = draft.exercises.filter(function (se) { return se.sets.length > 0; });
+    const withSets = draft.exercises
+      .map(function (se) { return { se: se, completedSets: se.sets.filter(isCompletedSet) }; })
+      .filter(function (x) { return x.completedSets.length > 0; });
     if (withSets.length === 0) {
-      core.showToast("Add at least one set before saving.");
+      core.showToast("Add at least one set (with a weight and reps filled in) before saving.");
       return;
     }
     const dateTime = document.getElementById("sessionDateTime").value || core.nowLocalDateTimeInputValue();
@@ -632,7 +720,14 @@
       programId: draft.programId || null,
       programDayId: draft.programDayId || null,
       notes: document.getElementById("sessionNotes").value.trim(),
-      exercises: withSets.map(function (se) { return { exerciseId: se.exerciseId, sets: se.sets.slice() }; }),
+      exercises: withSets.map(function (x) {
+        return {
+          exerciseId: x.se.exerciseId,
+          sets: x.completedSets.map(function (s) {
+            return { weight: Number(s.weight), reps: Math.round(Number(s.reps)), warmup: !!s.warmup, dropset: !!s.dropset };
+          })
+        };
+      }),
       createdAt: Date.now()
     };
     workouts.push(session);
@@ -1967,6 +2062,7 @@
     document.getElementById("customExerciseList").addEventListener("click", handleCustomExerciseListClick);
     document.getElementById("addExerciseToSessionBtn").addEventListener("click", handleAddExerciseToSession);
     document.getElementById("sessionExerciseList").addEventListener("click", handleSessionExerciseListClick);
+    document.getElementById("sessionExerciseList").addEventListener("change", handleSessionExerciseListChange);
     document.getElementById("sessionRoutineSelect").addEventListener("change", function () {
       if (this.value) loadRoutineIntoDraft(this.value);
       else { draft.routineId = ""; saveDraft(); }
