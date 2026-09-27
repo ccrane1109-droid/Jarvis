@@ -105,6 +105,28 @@
     return names.every(function (n) { return map[n] && map[n].score >= MIN_KEYPOINT_SCORE; });
   }
 
+  // Pulls out one fixed side's named joints from every video frame's keypoint
+  // list — used for range-of-motion / stability checks across a whole rep,
+  // not just the single best frame. A frame is skipped (not included in the
+  // result) if any of the requested joints on that side aren't confident in
+  // it. Fixing the side up front (rather than re-running pickSide per frame)
+  // avoids flip-flopping between left/right across frames.
+  function jointSeries(allFrames, side, jointNames) {
+    const out = [];
+    allFrames.forEach(function (frameKeypoints) {
+      const map = keypointMap(frameKeypoints);
+      const joints = {};
+      let ok = true;
+      jointNames.forEach(function (n) {
+        const kp = map[side + "_" + n];
+        if (!kp || kp.score < MIN_KEYPOINT_SCORE) ok = false;
+        joints[n] = kp;
+      });
+      if (ok) out.push(joints);
+    });
+    return out;
+  }
+
   function finding(status, label, detail) {
     return { status: status, label: label, detail: detail }; // status: "good" | "info" | "warn"
   }
@@ -276,7 +298,163 @@
     return results;
   }
 
-  const ANALYZERS = { squat: analyzeSquat, deadlift: analyzeDeadlift, pushup: analyzePushup, benchpress: analyzeBenchPress };
+  function analyzeLatPulldown(keypoints) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    // Only the torso (shoulder-hip) is needed for the main check, so ask for
+    // just those two joints — legs are often tucked under machine pads and
+    // shouldn't block the analysis.
+    const side = pickSide(map, ["shoulder", "hip"]);
+
+    if (!side) {
+      results.push(finding("warn", "Couldn't get a clear side-on reading", "Try a side-on shot with your torso and hips clearly visible."));
+      return results;
+    }
+
+    const torsoLean = angleFromVertical(side.hip, side.shoulder);
+    if (torsoLean !== null) {
+      if (torsoLean > 35) {
+        results.push(finding("warn", "Leaning back quite a bit", "A big backward lean often means momentum is doing some of the work instead of your lats. Try sitting a little more upright and pulling with your elbows rather than rocking back."));
+      } else if (torsoLean > 15) {
+        results.push(finding("info", "Leaning back somewhat", "A slight backward lean to clear your chin is normal — just worth double-checking it's not turning into a bigger rock."));
+      } else {
+        results.push(finding("good", "Staying fairly upright", "Torso looks close to vertical in this frame."));
+      }
+    }
+
+    const elbow = map[side.side + "_elbow"];
+    const wrist = map[side.side + "_wrist"];
+    if (elbow && wrist && elbow.score >= MIN_KEYPOINT_SCORE && wrist.score >= MIN_KEYPOINT_SCORE) {
+      const elbowAngle = angleAt(side.shoulder, elbow, wrist);
+      if (elbowAngle !== null) {
+        results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Just context for where in the pull this frame is."));
+      }
+    }
+
+    return results;
+  }
+
+  function analyzeOverheadTricepExtension(keypoints) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+
+    if (!armSide) {
+      results.push(finding("warn", "Couldn't get a clear reading on either arm", "Try a side-on shot with your shoulder, elbow, and wrist all visible overhead."));
+      return results;
+    }
+
+    const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+    if (elbowAngle !== null) {
+      results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Measured at the elbow (180° = arm straight overhead)."));
+    }
+
+    const upperArmLean = angleFromVertical(armSide.shoulder, armSide.elbow);
+    if (upperArmLean !== null) {
+      if (upperArmLean > 30) {
+        results.push(finding("warn", "Elbow may be drifting away from vertical", "A common cue is to keep your upper arm pointing straight up — roughly above your shoulder — through the whole movement, rather than letting it drift forward or out to the side."));
+      } else if (upperArmLean > 15) {
+        results.push(finding("info", "Slight drift from vertical", "Your upper arm looks a bit off vertical here — worth keeping an eye on."));
+      } else {
+        results.push(finding("good", "Upper arm staying close to vertical", "Elbow looks like it's staying roughly above your shoulder in this frame."));
+      }
+    }
+
+    return results;
+  }
+
+  function analyzePreacherCurl(keypoints, allFrames) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+
+    if (!armSide) {
+      results.push(finding("warn", "Couldn't get a clear reading on your arm", "Try a side-on shot with your working arm and the pad clearly visible."));
+      return results;
+    }
+
+    const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+    if (elbowAngle !== null) {
+      results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Measured at the elbow (180° = fully extended)."));
+    }
+
+    // A single frame can't show whether a rep went through its full range —
+    // that needs the whole clip, so this only runs when a video was given.
+    if (allFrames && allFrames.length > 1) {
+      const series = jointSeries(allFrames, armSide.side, ["shoulder", "elbow", "wrist"]);
+      const angles = series
+        .map(function (j) { return angleAt(j.shoulder, j.elbow, j.wrist); })
+        .filter(function (a) { return a !== null; });
+      if (angles.length >= 2) {
+        const min = Math.min.apply(null, angles), max = Math.max.apply(null, angles);
+        const rom = max - min;
+        if (rom < 70) {
+          results.push(finding("warn", "Range of motion looks limited", "Elbow angle only moved from about " + Math.round(min) + "° to " + Math.round(max) + "° across the clip. A common cue for preacher curls is to fully extend at the bottom and fully squeeze at the top — worth checking whether you're stopping short."));
+        } else {
+          results.push(finding("good", "Looks like a solid range of motion", "Elbow angle moved from about " + Math.round(min) + "° to " + Math.round(max) + "° across the clip."));
+        }
+      } else {
+        results.push(finding("info", "Couldn't track enough of the rep to check range of motion", "Try a clip with your whole arm visible for the entire movement."));
+      }
+    } else {
+      results.push(finding("info", "Take a video (not just a photo) to check your range of motion", "A single photo can't show whether you're going through the full range of the rep."));
+    }
+
+    return results;
+  }
+
+  function analyzeRow(keypoints, allFrames) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+
+    if (!armSide) {
+      results.push(finding("warn", "Couldn't get a clear reading on either arm", "Try a side-on shot with your pulling arm, shoulder, and hip all visible."));
+      return results;
+    }
+
+    const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+    if (elbowAngle !== null) {
+      results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Measured at the elbow (180° = arm straight, as at the start of the pull)."));
+    }
+
+    const hip = map[armSide.side + "_hip"];
+    const hipConfident = hip && hip.score >= MIN_KEYPOINT_SCORE;
+    if (hipConfident) {
+      const torsoLean = angleFromVertical(hip, armSide.shoulder);
+      if (torsoLean !== null) {
+        results.push(finding("info", "Torso angle: " + Math.round(torsoLean) + "° from vertical", "Context only — bent-over rows naturally start closer to horizontal than a seated cable row."));
+      }
+    }
+
+    // Body swing/momentum only shows up across a rep, not in one frame.
+    if (allFrames && allFrames.length > 1 && hipConfident) {
+      const series = jointSeries(allFrames, armSide.side, ["shoulder", "hip"]);
+      const leans = series
+        .map(function (j) { return angleFromVertical(j.hip, j.shoulder); })
+        .filter(function (a) { return a !== null; });
+      if (leans.length >= 2) {
+        const swing = Math.max.apply(null, leans) - Math.min.apply(null, leans);
+        if (swing > 20) {
+          results.push(finding("warn", "Torso looks like it's swinging quite a bit", "Your torso angle changed by about " + Math.round(swing) + "° through the rep — that can mean body momentum is helping move the weight instead of your back and arms. Try keeping your torso still and only moving the arms."));
+        } else {
+          results.push(finding("good", "Torso looks fairly stable through the rep", "Only about " + Math.round(swing) + "° of change in torso angle across the clip — doesn't look like much swinging."));
+        }
+      } else {
+        results.push(finding("info", "Couldn't track your torso through enough of the clip to check for swinging", "Try a clip with your torso and hips visible for the whole movement."));
+      }
+    } else if (!allFrames) {
+      results.push(finding("info", "Take a video (not just a photo) to check for body swing through the rep", "A single photo can't show whether your torso is rocking during the movement."));
+    }
+
+    return results;
+  }
+
+  const ANALYZERS = {
+    squat: analyzeSquat, deadlift: analyzeDeadlift, pushup: analyzePushup, benchpress: analyzeBenchPress,
+    latpulldown: analyzeLatPulldown, tricepextension: analyzeOverheadTricepExtension,
+    preachercurl: analyzePreacherCurl, row: analyzeRow
+  };
 
   /* ---------------- video: picking the moment to analyze ----------------
      Pure functions, deliberately separated from the actual video-decoding
@@ -306,11 +484,17 @@
       const elbowAngle = angleAt(side.shoulder, elbow, wrist);
       return elbowAngle === null ? null : -elbowAngle;
     }
-    if (exercise === "benchpress") {
+    if (exercise === "benchpress" || exercise === "tricepextension" || exercise === "preachercurl" || exercise === "row") {
       const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
       if (!armSide) return null;
       const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
       return elbowAngle === null ? null : -elbowAngle;
+    }
+    if (exercise === "latpulldown") {
+      const side = pickSide(map, ["shoulder", "hip"]);
+      if (!side) return null;
+      const lean = angleFromVertical(side.hip, side.shoulder);
+      return lean === null ? null : lean;
     }
     const side = pickSide(map);
     return side ? 0 : null;
@@ -325,7 +509,8 @@
       if (score !== null) scored.push({ time: s.time, keypoints: s.keypoints, score: score });
     });
     if (scored.length === 0) return null;
-    if (exercise === "squat" || exercise === "pushup" || exercise === "benchpress") {
+    const pickHighestScore = ["squat", "pushup", "benchpress", "latpulldown", "tricepextension", "preachercurl", "row"];
+    if (pickHighestScore.indexOf(exercise) !== -1) {
       return scored.reduce(function (best, s) { return s.score > best.score ? s : best; });
     }
     return scored[0];
@@ -457,7 +642,11 @@
         finalCanvas.width = video.videoWidth;
         finalCanvas.height = video.videoHeight;
         finalCanvas.getContext("2d").drawImage(video, 0, 0);
-        return { time: chosen.time, keypoints: chosen.keypoints, canvas: finalCanvas, totalSamples: times.length, confidentSamples: samples.length };
+        return {
+          time: chosen.time, keypoints: chosen.keypoints, canvas: finalCanvas,
+          totalSamples: times.length, confidentSamples: samples.length,
+          allKeypoints: samples.map(function (s) { return s.keypoints; })
+        };
       });
     });
   }
@@ -526,14 +715,15 @@
           return {
             keypoints: result.keypoints,
             source: result.canvas,
-            note: "Used the frame at " + result.time.toFixed(1) + "s (found a clear reading in " + result.confidentSamples + " of " + result.totalSamples + " sampled frames)."
+            note: "Used the frame at " + result.time.toFixed(1) + "s (found a clear reading in " + result.confidentSamples + " of " + result.totalSamples + " sampled frames).",
+            allFrames: result.allKeypoints
           };
         });
       }
       setStatus("Analyzing…");
       return d.estimatePoses(currentImage).then(function (poses) {
         if (!poses || !poses[0] || !poses[0].keypoints) return null;
-        return { keypoints: poses[0].keypoints, source: currentImage, note: null };
+        return { keypoints: poses[0].keypoints, source: currentImage, note: null, allFrames: null };
       });
     }).then(function (analysis) {
       btn.disabled = false;
@@ -548,7 +738,7 @@
       drawSkeleton($("formCheckCanvas"), analysis.source, analysis.keypoints);
 
       const analyzer = ANALYZERS[exercise];
-      const results = analyzer ? analyzer(analysis.keypoints) : [];
+      const results = analyzer ? analyzer(analysis.keypoints, analysis.allFrames) : [];
       renderResults(results);
       const baseStatus = results.length ? "" : "Detected a person, but couldn't get confident readings for this check — try a clearer angle.";
       setStatus([analysis.note, baseStatus].filter(Boolean).join(" "));
@@ -578,6 +768,8 @@
       angleAt: angleAt, angleFromVertical: angleFromVertical, dist: dist,
       analyzeSquat: analyzeSquat, analyzeDeadlift: analyzeDeadlift,
       analyzePushup: analyzePushup, analyzeBenchPress: analyzeBenchPress,
+      analyzeLatPulldown: analyzeLatPulldown, analyzeOverheadTricepExtension: analyzeOverheadTricepExtension,
+      analyzePreacherCurl: analyzePreacherCurl, analyzeRow: analyzeRow,
       pickSide: pickSide, keypointMap: keypointMap,
       scoreFrameForExercise: scoreFrameForExercise, pickBestFrame: pickBestFrame
     }
