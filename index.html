@@ -582,10 +582,12 @@
       <div class="card">
         <h2 class="card-title">Form Check (Beta)</h2>
         <p class="field-hint">
-          Takes a photo and uses on-device body tracking (no server, nothing uploaded anywhere) to estimate joint
-          positions and flag a few common form cues. This is a rough automated estimate from a single frozen moment,
-          not a substitute for a coach — it can't see your tempo, control, or full range of motion, and each check
-          below only works well from the camera angle it names. Starting with Squat and Deadlift; more to come.
+          Takes a photo or a short video and uses on-device body tracking (no server, nothing uploaded anywhere) to
+          estimate joint positions and flag a few common form cues. A video is checked frame by frame and the moment
+          that matters (e.g. the bottom of the squat) is picked out automatically — that's more useful than a photo
+          since it isn't just one frozen instant, but it still can't judge things like bar control between reps.
+          Neither is a substitute for a coach, and each check below only works well from the camera angle it names.
+          Starting with Squat and Deadlift; more to come.
         </p>
         <div class="form-row">
           <label for="formCheckExerciseSelect">Exercise</label>
@@ -595,9 +597,9 @@
           </select>
         </div>
         <div class="form-row">
-          <label for="formCheckPhotoInput">Photo</label>
-          <input type="file" id="formCheckPhotoInput" accept="image/*" capture="environment">
-          <p class="field-hint">Use a full-body photo with good lighting, taken from the side, at the point in the lift you want checked (e.g. bottom of the squat).</p>
+          <label for="formCheckPhotoInput">Photo or video</label>
+          <input type="file" id="formCheckPhotoInput" accept="image/*,video/*" capture="environment">
+          <p class="field-hint">Good lighting, full body in frame, taken from the side. For video, trim to just one rep if you can — a short clip (a few seconds) processes faster than a long one, and only the first 8 seconds are checked either way.</p>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-primary" id="formCheckAnalyzeBtn" disabled>Analyze Form</button>
