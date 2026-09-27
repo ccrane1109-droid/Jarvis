@@ -285,6 +285,7 @@
       if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();
       if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
       if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
+      if (window.JarvisFormCheck && typeof window.JarvisFormCheck.init === "function") window.JarvisFormCheck.init();
       maybeAutoShowBriefing();
     }
 

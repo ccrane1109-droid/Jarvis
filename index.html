@@ -143,6 +143,7 @@
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-strength" role="tab" aria-selected="false" aria-controls="workout-strength" id="workoutSubNavStrength">Strength</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-progress" role="tab" aria-selected="false" aria-controls="workout-progress" id="workoutSubNavProgress">Progress</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-calories" role="tab" aria-selected="false" aria-controls="workout-calories" id="workoutSubNavCalories">Calories</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
     </nav>
 
     <!-- ---------- Sub-panel: Log ---------- -->
@@ -573,6 +574,39 @@
         <div id="calorieList" class="item-list">
           <div class="empty-state">No calories logged yet.</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Form Check ---------- -->
+    <div id="workout-form-check" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavFormCheck">
+      <div class="card">
+        <h2 class="card-title">Form Check (Beta)</h2>
+        <p class="field-hint">
+          Takes a photo and uses on-device body tracking (no server, nothing uploaded anywhere) to estimate joint
+          positions and flag a few common form cues. This is a rough automated estimate from a single frozen moment,
+          not a substitute for a coach — it can't see your tempo, control, or full range of motion, and each check
+          below only works well from the camera angle it names. Starting with Squat and Deadlift; more to come.
+        </p>
+        <div class="form-row">
+          <label for="formCheckExerciseSelect">Exercise</label>
+          <select id="formCheckExerciseSelect">
+            <option value="squat">Squat (side view works best)</option>
+            <option value="deadlift">Deadlift (side view works best)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="formCheckPhotoInput">Photo</label>
+          <input type="file" id="formCheckPhotoInput" accept="image/*" capture="environment">
+          <p class="field-hint">Use a full-body photo with good lighting, taken from the side, at the point in the lift you want checked (e.g. bottom of the squat).</p>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" id="formCheckAnalyzeBtn" disabled>Analyze Form</button>
+        </div>
+        <p class="field-hint" id="formCheckStatus"></p>
+        <div id="formCheckCanvasWrap" class="hidden" style="margin-top:12px;">
+          <canvas id="formCheckCanvas" style="max-width:100%;border-radius:8px;"></canvas>
+        </div>
+        <div id="formCheckResults" style="margin-top:14px;"></div>
       </div>
     </div>
   </section>
@@ -1404,5 +1438,6 @@
 <script src="js/video-connections.js"></script>
 <script src="js/video.js"></script>
 <script src="js/video-studio.js"></script>
+<script src="js/form-check.js"></script>
 </body>
 </html>
