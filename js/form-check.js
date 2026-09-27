@@ -75,12 +75,14 @@
   }
 
   // Picks whichever side (left/right) is more clearly visible, by average
-  // confidence across shoulder/hip/knee/ankle — appropriate for a side-view
+  // confidence across the given joint names — appropriate for a side-view
   // photo where the far side is partly hidden. Returns null if neither side
-  // is confident enough to analyze.
-  function pickSide(map) {
+  // is confident enough to analyze. jointNames defaults to the lower-body
+  // set used by Squat/Deadlift; pass a different set (e.g. arm joints) for
+  // an upper-body check.
+  function pickSide(map, jointNames) {
+    const names = jointNames || ["shoulder", "hip", "knee", "ankle"];
     function sideScore(prefix) {
-      const names = ["shoulder", "hip", "knee", "ankle"];
       let sum = 0, count = 0;
       names.forEach(function (n) {
         const kp = map[prefix + "_" + n];
@@ -93,13 +95,9 @@
     const best = leftScore >= rightScore ? "left" : "right";
     const bestScore = Math.max(leftScore, rightScore);
     if (bestScore < MIN_KEYPOINT_SCORE) return null;
-    return {
-      side: best,
-      shoulder: map[best + "_shoulder"],
-      hip: map[best + "_hip"],
-      knee: map[best + "_knee"],
-      ankle: map[best + "_ankle"]
-    };
+    const result = { side: best };
+    names.forEach(function (n) { result[n] = map[best + "_" + n]; });
+    return result;
   }
 
   function bothSidesConfident(map) {
@@ -196,7 +194,89 @@
     return results;
   }
 
-  const ANALYZERS = { squat: analyzeSquat, deadlift: analyzeDeadlift };
+  function analyzePushup(keypoints) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const side = pickSide(map);
+
+    if (!side) {
+      results.push(finding("warn", "Couldn't get a clear side-on reading", "Try a full-body photo or video from directly to the side, with good lighting and nothing blocking your shoulder/hip/ankle line."));
+      return results;
+    }
+
+    // A good push-up keeps shoulder-hip-ankle roughly a straight line. Compare
+    // the hip's actual height to where it would sit if it were exactly ON
+    // that line, normalized by body length so it doesn't depend on photo
+    // scale or distance.
+    const bodyLength = dist(side.shoulder, side.ankle);
+    const dx = side.ankle.x - side.shoulder.x;
+    let deviation = 0;
+    if (bodyLength > 0 && dx !== 0) {
+      const t = (side.hip.x - side.shoulder.x) / dx;
+      const expectedHipY = side.shoulder.y + t * (side.ankle.y - side.shoulder.y);
+      deviation = (side.hip.y - expectedHipY) / bodyLength; // >0 = hip sagging down, <0 = hip piked up
+    }
+    if (deviation > 0.08) {
+      results.push(finding("warn", "Hips look like they're sagging", "Your hips look lower than a straight line from shoulder to ankle — a common cue is to squeeze your glutes and brace your core to keep the line straight."));
+    } else if (deviation < -0.08) {
+      results.push(finding("warn", "Hips look piked up", "Your hips look higher than a straight shoulder-to-ankle line — try lowering them to keep your body in one straight line."));
+    } else {
+      results.push(finding("good", "Body forms a fairly straight line", "Shoulder, hip, and ankle look close to a straight line in this frame."));
+    }
+
+    const elbow = map[side.side + "_elbow"];
+    const wrist = map[side.side + "_wrist"];
+    if (elbow && wrist && elbow.score >= MIN_KEYPOINT_SCORE && wrist.score >= MIN_KEYPOINT_SCORE) {
+      const elbowAngle = angleAt(side.shoulder, elbow, wrist);
+      if (elbowAngle !== null) {
+        results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Measured at the elbow (180° = arms straight, as at the top of the rep). Just context — this only makes sense compared against other frames if you're checking a video."));
+      }
+    }
+
+    return results;
+  }
+
+  function analyzeBenchPress(keypoints) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    // Elbow flare is a frontal-plane thing — best judged from a shot roughly
+    // from the feet looking up the body, not a pure side profile, so this
+    // uses whichever arm is more clearly visible rather than a leg-based side.
+    const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+
+    if (!armSide) {
+      results.push(finding("warn", "Couldn't get a clear reading on either arm", "Try a shot from roughly the feet looking up the body, with both shoulders and elbows visible and well lit."));
+      return results;
+    }
+
+    const hip = map[armSide.side + "_hip"];
+    if (hip && hip.score >= MIN_KEYPOINT_SCORE) {
+      const flareAngle = angleAt(hip, armSide.shoulder, armSide.elbow);
+      if (flareAngle !== null) {
+        if (flareAngle > 75) {
+          results.push(finding("warn", "Elbow looks quite flared", "Your upper arm looks close to straight out from your torso (near 90°). Many lifters aim for something more like 45–75° to ease shoulder strain — this varies by grip width and individual shoulders, so treat it as a prompt to double-check, not a rule."));
+        } else if (flareAngle < 30) {
+          results.push(finding("info", "Elbow looks quite tucked", "Your upper arm looks close to your torso. Fine for some pressing styles (e.g. close-grip work) — just noting it in case a wider path was intended."));
+        } else {
+          results.push(finding("good", "Elbow flare looks like a moderate angle", "Roughly in the range many lifters aim for, though the right amount does vary by individual and grip width."));
+        }
+      }
+    } else {
+      results.push(finding("info", "Couldn't measure elbow flare precisely", "Need a confident reading on the hip on the same side to compare the elbow angle against — try a clearer full-torso shot."));
+    }
+
+    const wrist = map[armSide.side + "_wrist"];
+    if (wrist && wrist.score >= MIN_KEYPOINT_SCORE) {
+      const elbowBend = angleAt(armSide.shoulder, armSide.elbow, wrist);
+      if (elbowBend !== null) {
+        results.push(finding("info", "Elbow bend: " + Math.round(elbowBend) + "°", "Measured at the elbow (180° = arms straight/lockout). Just context for where in the rep this frame is."));
+      }
+    }
+
+    return results;
+  }
+
+  const ANALYZERS = { squat: analyzeSquat, deadlift: analyzeDeadlift, pushup: analyzePushup, benchpress: analyzeBenchPress };
 
   /* ---------------- video: picking the moment to analyze ----------------
      Pure functions, deliberately separated from the actual video-decoding
@@ -205,18 +285,35 @@
      without needing a real video file or the ML model. */
 
   // Higher = a better candidate frame for that exercise; null = not usable
-  // (no confident side view). Squat: prefer the deepest point of the rep.
-  // Deadlift only has one meaningful moment to check (the setup), so every
-  // confident frame scores the same and pickBestFrame just takes the first.
+  // (no confident reading). Squat: prefer the deepest point of the rep.
+  // Push-up/bench press: prefer the most-bent-elbow frame (the bottom of the
+  // rep), scored as -elbowAngle so a smaller angle (more bent) wins. Deadlift
+  // only has one meaningful moment to check (the setup), so every confident
+  // frame scores the same and pickBestFrame just takes the first.
   function scoreFrameForExercise(keypoints, exercise) {
     const map = keypointMap(keypoints);
-    const side = pickSide(map);
-    if (!side) return null;
     if (exercise === "squat") {
+      const side = pickSide(map);
+      if (!side) return null;
       const thighLength = dist(side.hip, side.knee);
       return thighLength > 0 ? (side.hip.y - side.knee.y) / thighLength : null;
     }
-    return 0;
+    if (exercise === "pushup") {
+      const side = pickSide(map);
+      if (!side) return null;
+      const elbow = map[side.side + "_elbow"], wrist = map[side.side + "_wrist"];
+      if (!elbow || !wrist || elbow.score < MIN_KEYPOINT_SCORE || wrist.score < MIN_KEYPOINT_SCORE) return null;
+      const elbowAngle = angleAt(side.shoulder, elbow, wrist);
+      return elbowAngle === null ? null : -elbowAngle;
+    }
+    if (exercise === "benchpress") {
+      const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+      if (!armSide) return null;
+      const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+      return elbowAngle === null ? null : -elbowAngle;
+    }
+    const side = pickSide(map);
+    return side ? 0 : null;
   }
 
   // samples: [{ time, keypoints }] in chronological order. Returns the
@@ -228,7 +325,7 @@
       if (score !== null) scored.push({ time: s.time, keypoints: s.keypoints, score: score });
     });
     if (scored.length === 0) return null;
-    if (exercise === "squat") {
+    if (exercise === "squat" || exercise === "pushup" || exercise === "benchpress") {
       return scored.reduce(function (best, s) { return s.score > best.score ? s : best; });
     }
     return scored[0];
@@ -479,7 +576,9 @@
     // exposed for testing only — geometry is pure and independent of the ML model
     _internal: {
       angleAt: angleAt, angleFromVertical: angleFromVertical, dist: dist,
-      analyzeSquat: analyzeSquat, analyzeDeadlift: analyzeDeadlift, pickSide: pickSide, keypointMap: keypointMap,
+      analyzeSquat: analyzeSquat, analyzeDeadlift: analyzeDeadlift,
+      analyzePushup: analyzePushup, analyzeBenchPress: analyzeBenchPress,
+      pickSide: pickSide, keypointMap: keypointMap,
       scoreFrameForExercise: scoreFrameForExercise, pickBestFrame: pickBestFrame
     }
   };
