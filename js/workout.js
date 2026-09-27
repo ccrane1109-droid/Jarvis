@@ -59,8 +59,9 @@
 
     draft = core.loadJSON(LS_DRAFT, null);
     if (!draft || typeof draft !== "object" || !Array.isArray(draft.exercises)) {
-      draft = { dateTime: core.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "" };
+      draft = { dateTime: core.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0 };
     }
+    if (typeof draft.activeIndex !== "number") draft.activeIndex = 0;
   }
 
   function saveWorkouts() { window.JarvisCore.saveJSON(LS_WORKOUTS, workouts); }
@@ -87,7 +88,10 @@
 
   function muscleGroupBadgesHtml(muscleGroups) {
     const core = window.JarvisCore;
-    return muscleGroups.map(function (m) { return '<span class="badge badge-neutral">' + core.escapeHtml(m) + '</span>'; }).join("");
+    const JE = window.JarvisExercises;
+    return muscleGroups.map(function (m) {
+      return '<span class="badge badge-neutral">' + JE.iconForMuscleGroup(m) + ' ' + core.escapeHtml(m) + '</span>';
+    }).join("");
   }
 
   /* ---------------- exercise / routine pickers ---------------- */
@@ -175,6 +179,94 @@
       document.getElementById("exercisePickerSearch").value
     );
     updateFavoriteStarButton();
+    renderMuscleChips();
+    renderExercisePickerCards();
+  }
+
+  // Catalog-style card grid for picking an exercise, sitting alongside the
+  // hidden <select id="exercisePickerSelect"> which stays the actual source
+  // of truth (favorites, "Add Exercise" all read its .value) — a card click
+  // just sets that select's value and dispatches change, same as if the
+  // user had picked it from a dropdown.
+  function renderMuscleChips() {
+    const core = window.JarvisCore;
+    const JE = window.JarvisExercises;
+    const container = document.getElementById("exercisePickerMuscleChips");
+    if (!container) return;
+    const current = document.getElementById("exercisePickerMuscleFilter").value;
+    const chips = [{ value: "", label: "All" }].concat(JE.MUSCLE_GROUPS.map(function (m) { return { value: m, label: m }; }));
+    container.innerHTML = chips.map(function (c) {
+      const activeCls = c.value === current ? " active" : "";
+      const icon = c.value ? JE.iconForMuscleGroup(c.value) : "🏋️";
+      return '<button type="button" class="muscle-chip' + activeCls + '" data-value="' + core.escapeHtml(c.value) + '">' + icon + ' ' + core.escapeHtml(c.label) + '</button>';
+    }).join("");
+  }
+
+  function handleMuscleChipsClick(e) {
+    const chip = e.target.closest(".muscle-chip");
+    if (!chip) return;
+    document.getElementById("exercisePickerMuscleFilter").value = chip.getAttribute("data-value");
+    refreshExercisePicker();
+  }
+
+  function renderExercisePickerCards() {
+    const core = window.JarvisCore;
+    const JE = window.JarvisExercises;
+    const container = document.getElementById("exercisePickerCards");
+    if (!container) return;
+    const muscle = document.getElementById("exercisePickerMuscleFilter").value;
+    const equipment = document.getElementById("exercisePickerEquipmentFilter").value;
+    const search = document.getElementById("exercisePickerSearch").value;
+    const selectedId = document.getElementById("exercisePickerSelect").value;
+    const favoriteIds = JE.loadFavoriteIds();
+    const searchLower = (search || "").trim().toLowerCase();
+    const filtered = JE.getExercises().filter(function (ex) {
+      if (muscle && ex.muscleGroup !== muscle) return false;
+      if (equipment && ex.equipment !== equipment) return false;
+      if (searchLower && ex.name.toLowerCase().indexOf(searchLower) === -1) return false;
+      return true;
+    });
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state">No exercises match this filter.</div>';
+      return;
+    }
+    container.innerHTML = filtered.map(function (ex) {
+      const isFav = favoriteIds.indexOf(ex.id) !== -1;
+      const selectedCls = ex.id === selectedId ? " selected" : "";
+      return (
+        '<div class="exercise-card' + selectedCls + '" data-id="' + core.escapeHtml(ex.id) + '">' +
+          '<button type="button" class="exercise-card-fav-btn' + (isFav ? " active" : "") + '" data-id="' + core.escapeHtml(ex.id) + '" aria-label="Toggle favorite">' + (isFav ? "★" : "☆") + '</button>' +
+          '<span class="exercise-card-icon">' + JE.iconForMuscleGroup(ex.muscleGroup) + '</span>' +
+          '<span class="exercise-card-name">' + core.escapeHtml(ex.name) + '</span>' +
+          '<span class="exercise-card-meta">' + core.escapeHtml(ex.equipment) + '</span>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleExercisePickerCardsClick(e) {
+    const favBtn = e.target.closest(".exercise-card-fav-btn");
+    if (favBtn) {
+      const id = favBtn.getAttribute("data-id");
+      window.JarvisExercises.toggleFavorite(id);
+      renderExercisePickerCards();
+      if (document.getElementById("exercisePickerSelect").value === id) updateFavoriteStarButton();
+      return;
+    }
+    const card = e.target.closest(".exercise-card");
+    if (card) {
+      const select = document.getElementById("exercisePickerSelect");
+      select.value = card.getAttribute("data-id");
+      select.dispatchEvent(new Event("change"));
+      renderExercisePickerCards();
+    }
+  }
+
+  function handleAddExerciseToggle() {
+    const body = document.getElementById("addExerciseBody");
+    const btn = document.getElementById("addExerciseToggleBtn");
+    const nowHidden = body.classList.toggle("hidden");
+    btn.textContent = nowHidden ? "+ Browse Exercises" : "Hide";
   }
 
   function refreshRoutinePicker() {
@@ -367,18 +459,13 @@
 
   /* ---------------- draft session (Log tab) ---------------- */
 
-  function renderSessionExerciseList() {
+  // Renders one exercise's full logging card (name, sets, rest timer, add-set
+  // row) — used by renderSessionExerciseList() to show just the ACTIVE
+  // exercise, Liftoff-style, one at a time instead of a long scrolling list
+  // of every exercise in the session at once.
+  function renderExerciseCard(se) {
     const core = window.JarvisCore;
-    const container = document.getElementById("sessionExerciseList");
-    const muscleGroupsEl = document.getElementById("sessionMuscleGroups");
-    const musclesTrained = getMuscleGroupsForExerciseIds(draft.exercises.map(function (se) { return se.exerciseId; }));
-    muscleGroupsEl.innerHTML = muscleGroupBadgesHtml(musclesTrained);
-    if (draft.exercises.length === 0) {
-      container.innerHTML = '<div class="empty-state">No exercises added yet. Add one above to start logging sets.</div>';
-      return;
-    }
-    container.innerHTML = draft.exercises.map(function (se) {
-      const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
+    const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
       const exName = ex ? ex.name : "Unknown exercise";
       const muscle = ex ? ex.muscleGroup : "";
       const setsHtml = se.sets.length === 0
@@ -442,7 +529,72 @@
           '</div>' +
         '</div>'
       );
+  }
+
+  // Shows the session ONE exercise at a time (the active one, tracked by
+  // draft.activeIndex) with a pill nav across the top and Prev/Next controls,
+  // instead of one long scrolling list of every exercise's sets at once.
+  function renderSessionExerciseList() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("sessionExerciseList");
+    const pillNav = document.getElementById("sessionExercisePillNav");
+    const navRow = document.getElementById("sessionNavRow");
+    const muscleGroupsEl = document.getElementById("sessionMuscleGroups");
+    const musclesTrained = getMuscleGroupsForExerciseIds(draft.exercises.map(function (se) { return se.exerciseId; }));
+    muscleGroupsEl.innerHTML = muscleGroupBadgesHtml(musclesTrained);
+
+    if (draft.exercises.length === 0) {
+      pillNav.innerHTML = "";
+      navRow.classList.add("hidden");
+      container.innerHTML = '<div class="empty-state">No exercises added yet. Add one above to start logging sets.</div>';
+      return;
+    }
+
+    if (draft.activeIndex < 0) draft.activeIndex = 0;
+    if (draft.activeIndex > draft.exercises.length - 1) draft.activeIndex = draft.exercises.length - 1;
+
+    pillNav.innerHTML = draft.exercises.map(function (se, i) {
+      const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
+      const icon = ex ? window.JarvisExercises.iconForMuscleGroup(ex.muscleGroup) : "🏋️";
+      const name = ex ? ex.name : "Unknown exercise";
+      const hasCompletedSet = se.sets.some(isCompletedSet);
+      const activeCls = i === draft.activeIndex ? " active" : "";
+      const doneCls = hasCompletedSet ? " done" : "";
+      return (
+        '<button type="button" class="exercise-pill' + activeCls + doneCls + '" data-index="' + i + '">' +
+          '<span class="exercise-pill-icon">' + icon + '</span>' +
+          '<span class="exercise-pill-name">' + core.escapeHtml(name) + '</span>' +
+          (hasCompletedSet ? '<span class="exercise-pill-check">&#10003;</span>' : '') +
+        '</button>'
+      );
     }).join("");
+
+    if (draft.exercises.length > 1) {
+      navRow.classList.remove("hidden");
+      document.getElementById("sessionNavPosition").textContent = "Exercise " + (draft.activeIndex + 1) + " of " + draft.exercises.length;
+      document.getElementById("sessionPrevExerciseBtn").disabled = draft.activeIndex === 0;
+      document.getElementById("sessionNextExerciseBtn").disabled = draft.activeIndex === draft.exercises.length - 1;
+    } else {
+      navRow.classList.add("hidden");
+    }
+
+    container.innerHTML = renderExerciseCard(draft.exercises[draft.activeIndex]);
+  }
+
+  function handleSessionPillNavClick(e) {
+    const pill = e.target.closest(".exercise-pill");
+    if (!pill) return;
+    draft.activeIndex = Number(pill.getAttribute("data-index"));
+    saveDraft();
+    renderSessionExerciseList();
+  }
+
+  function handleSessionPrevExercise() {
+    if (draft.activeIndex > 0) { draft.activeIndex--; saveDraft(); renderSessionExerciseList(); }
+  }
+
+  function handleSessionNextExercise() {
+    if (draft.activeIndex < draft.exercises.length - 1) { draft.activeIndex++; saveDraft(); renderSessionExerciseList(); }
   }
 
   // The set plan for the NEXT set (0-indexed) of an exercise, from
@@ -516,6 +668,7 @@
     draft.routineId = routineId;
     draft.programId = programContext ? programContext.programId : "";
     draft.programDayId = programContext ? programContext.programDayId : "";
+    draft.activeIndex = 0;
     saveDraft();
     renderSessionExerciseList();
   }
@@ -525,6 +678,7 @@
     const exerciseId = document.getElementById("exercisePickerSelect").value;
     if (!exerciseId) { core.showToast("Choose an exercise first."); return; }
     draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: exerciseId, sets: buildSetsFromRoutinePlan(exerciseId) });
+    draft.activeIndex = draft.exercises.length - 1;
     saveDraft();
     renderSessionExerciseList();
   }
@@ -670,11 +824,33 @@
       se.sets[setIndex].reps = raw === "" ? "" : Math.round(Number(raw));
     }
     saveDraft();
+    updatePillDoneState(se);
+  }
+
+  // Patches just the one pill's "done" checkmark in place rather than a full
+  // renderSessionExerciseList() — a full re-render would blow away whatever
+  // input the user is mid-editing.
+  function updatePillDoneState(se) {
+    const index = draft.exercises.indexOf(se);
+    if (index === -1) return;
+    const pill = document.querySelector('.exercise-pill[data-index="' + index + '"]');
+    if (!pill) return;
+    const hasCompletedSet = se.sets.some(isCompletedSet);
+    pill.classList.toggle("done", hasCompletedSet);
+    const existingCheck = pill.querySelector(".exercise-pill-check");
+    if (hasCompletedSet && !existingCheck) {
+      const span = document.createElement("span");
+      span.className = "exercise-pill-check";
+      span.innerHTML = "&#10003;";
+      pill.appendChild(span);
+    } else if (!hasCompletedSet && existingCheck) {
+      existingCheck.remove();
+    }
   }
 
   function resetDraft() {
     stopAllRestTimers();
-    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "" };
+    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0 };
     saveDraft();
     document.getElementById("sessionRoutineSelect").value = "";
     document.getElementById("sessionDateTime").value = draft.dateTime;
@@ -778,6 +954,76 @@
     document.getElementById("workoutStatTotal").textContent = workouts.length;
     document.getElementById("workoutStatWeek").textContent = thisWeekCount();
     document.getElementById("workoutStatStreak").textContent = dayStreak();
+  }
+
+  // The Home tab: a hero with streak/stats, a "Continue Workout" card when a
+  // draft is already in progress, today's program day(s) if any, and a
+  // Quick Start grid of every routine — tapping one jumps straight into the
+  // focused Log view, same as the Routines tab's "Log This" button.
+  function renderWorkoutHome() {
+    const core = window.JarvisCore;
+    const JE = window.JarvisExercises;
+    document.getElementById("homeStatStreak").textContent = dayStreak();
+    document.getElementById("homeStatTotal").textContent = workouts.length;
+    document.getElementById("homeStatWeek").textContent = thisWeekCount();
+
+    const continueCard = document.getElementById("homeContinueCard");
+    if (draft.exercises.length > 0) {
+      continueCard.classList.remove("hidden");
+      document.getElementById("homeContinueText").textContent =
+        draft.exercises.length + " exercise" + (draft.exercises.length === 1 ? "" : "s") + " in progress.";
+    } else {
+      continueCard.classList.add("hidden");
+    }
+
+    function quickStartCardHtml(cls, id, icon, title, meta) {
+      return (
+        '<button type="button" class="quick-start-card ' + cls + '" data-id="' + core.escapeHtml(id) + '">' +
+          '<span class="quick-start-icon">' + icon + '</span>' +
+          '<span class="quick-start-title">' + core.escapeHtml(title) + '</span>' +
+          '<span class="quick-start-meta">' + meta + '</span>' +
+        '</button>'
+      );
+    }
+
+    const todayCard = document.getElementById("homeTodayCard");
+    const activePrograms = programs.filter(function (p) { return p.days.length > 0; });
+    if (activePrograms.length > 0) {
+      todayCard.classList.remove("hidden");
+      document.getElementById("homeTodayList").innerHTML = activePrograms.map(function (p) {
+        const day = p.days[p.currentIndex % p.days.length];
+        const routine = routines.find(function (r) { return r.id === day.routineId; });
+        const musclesTrained = routine ? getMuscleGroupsForExerciseIds(routine.exercises.map(function (re) { return re.exerciseId; })) : [];
+        const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
+        const meta = core.escapeHtml(day.label) + (routine ? " &middot; " + core.escapeHtml(routine.name) : " &middot; routine deleted");
+        return quickStartCardHtml("home-today-start-btn", p.id, icon, p.name, meta);
+      }).join("");
+    } else {
+      todayCard.classList.add("hidden");
+    }
+
+    const grid = document.getElementById("homeQuickStartGrid");
+    if (routines.length === 0) {
+      grid.innerHTML = '<div class="empty-state">No routines yet — build one in the Routines tab to see it here.</div>';
+    } else {
+      grid.innerHTML = routines.map(function (r) {
+        const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
+        const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
+        const meta = r.exercises.length + " exercise" + (r.exercises.length === 1 ? "" : "s");
+        return quickStartCardHtml("home-routine-start-btn", r.id, icon, r.name, meta);
+      }).join("");
+    }
+  }
+
+  function handleHomeClick(e) {
+    if (e.target.closest("#homeContinueBtn") || e.target.closest("#homeFreestyleBtn")) {
+      switchToWorkoutSubTab("workout-log");
+      return;
+    }
+    const routineBtn = e.target.closest(".home-routine-start-btn");
+    if (routineBtn) { startRoutineNow(routineBtn.getAttribute("data-id")); return; }
+    const todayBtn = e.target.closest(".home-today-start-btn");
+    if (todayBtn) { startProgramToday(todayBtn.getAttribute("data-id")); return; }
   }
 
   function bestSetOf(sets) {
@@ -1240,13 +1486,29 @@
     }).join("");
   }
 
+  // Shared by the Routines tab's "Log This" button and the Home tab's
+  // Quick Start cards — both just want to load a routine and jump into it.
+  function startRoutineNow(id) {
+    document.getElementById("sessionRoutineSelect").value = id;
+    loadRoutineIntoDraft(id);
+    switchToWorkoutSubTab("workout-log");
+  }
+
+  function startProgramToday(id) {
+    const program = programs.find(function (p) { return p.id === id; });
+    if (!program || program.days.length === 0) return;
+    const day = program.days[program.currentIndex % program.days.length];
+    const routine = routines.find(function (r) { return r.id === day.routineId; });
+    if (!routine) { window.JarvisCore.showToast("That day's routine no longer exists — edit the program to fix it."); return; }
+    document.getElementById("sessionRoutineSelect").value = day.routineId;
+    loadRoutineIntoDraft(day.routineId, { programId: program.id, programDayId: day.id });
+    switchToWorkoutSubTab("workout-log");
+  }
+
   function handleRoutineListClick(e) {
     const startBtn = e.target.closest(".routine-start-btn");
     if (startBtn) {
-      const id = startBtn.getAttribute("data-id");
-      document.getElementById("sessionRoutineSelect").value = id;
-      loadRoutineIntoDraft(id);
-      switchToWorkoutSubTab("workout-log");
+      startRoutineNow(startBtn.getAttribute("data-id"));
       return;
     }
     const editBtn = e.target.closest(".routine-edit-btn");
@@ -1426,15 +1688,7 @@
   function handleProgramListClick(e) {
     const startBtn = e.target.closest(".program-start-btn");
     if (startBtn) {
-      const id = startBtn.getAttribute("data-id");
-      const program = programs.find(function (p) { return p.id === id; });
-      if (!program || program.days.length === 0) return;
-      const day = program.days[program.currentIndex % program.days.length];
-      const routine = routines.find(function (r) { return r.id === day.routineId; });
-      if (!routine) { window.JarvisCore.showToast("That day's routine no longer exists — edit the program to fix it."); return; }
-      document.getElementById("sessionRoutineSelect").value = day.routineId;
-      loadRoutineIntoDraft(day.routineId, { programId: program.id, programDayId: day.id });
-      switchToWorkoutSubTab("workout-log");
+      startProgramToday(startBtn.getAttribute("data-id"));
       return;
     }
     const skipBtn = e.target.closest(".program-skip-btn");
@@ -2007,6 +2261,7 @@
 
   function renderAll() {
     renderStats();
+    renderWorkoutHome();
     renderWorkoutList();
     renderRoutineList();
     populateRoutineSelect();
@@ -2042,6 +2297,7 @@
 
   function onSubTabChange(targetId) {
     if (targetId === "workout-progress") renderProgressTab();
+    if (targetId === "workout-home") renderWorkoutHome();
   }
 
   function init() {
@@ -2056,11 +2312,17 @@
     document.getElementById("exercisePickerSearch").addEventListener("input", refreshExercisePicker);
     document.getElementById("exercisePickerSelect").addEventListener("change", updateFavoriteStarButton);
     document.getElementById("exercisePickerFavoriteBtn").addEventListener("click", handleToggleFavorite);
+    document.getElementById("exercisePickerMuscleChips").addEventListener("click", handleMuscleChipsClick);
+    document.getElementById("exercisePickerCards").addEventListener("click", handleExercisePickerCardsClick);
+    document.getElementById("addExerciseToggleBtn").addEventListener("click", handleAddExerciseToggle);
     document.getElementById("showAddCustomExerciseBtn").addEventListener("click", handleShowAddCustomExercise);
     document.getElementById("cancelCustomExerciseBtn").addEventListener("click", handleCancelAddCustomExercise);
     document.getElementById("saveCustomExerciseBtn").addEventListener("click", handleSaveCustomExercise);
     document.getElementById("customExerciseList").addEventListener("click", handleCustomExerciseListClick);
     document.getElementById("addExerciseToSessionBtn").addEventListener("click", handleAddExerciseToSession);
+    document.getElementById("sessionExercisePillNav").addEventListener("click", handleSessionPillNavClick);
+    document.getElementById("sessionPrevExerciseBtn").addEventListener("click", handleSessionPrevExercise);
+    document.getElementById("sessionNextExerciseBtn").addEventListener("click", handleSessionNextExercise);
     document.getElementById("sessionExerciseList").addEventListener("click", handleSessionExerciseListClick);
     document.getElementById("sessionExerciseList").addEventListener("change", handleSessionExerciseListChange);
     document.getElementById("sessionRoutineSelect").addEventListener("change", function () {
@@ -2072,6 +2334,7 @@
     document.getElementById("saveWorkoutBtn").addEventListener("click", handleSaveWorkout);
     document.getElementById("discardDraftBtn").addEventListener("click", handleDiscardDraft);
     document.getElementById("workoutList").addEventListener("click", handleWorkoutListClick);
+    document.getElementById("workout-home").addEventListener("click", handleHomeClick);
 
     document.getElementById("routinePickerMuscleFilter").addEventListener("change", refreshRoutinePicker);
     document.getElementById("routinePickerEquipmentFilter").addEventListener("change", refreshRoutinePicker);

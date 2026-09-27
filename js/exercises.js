@@ -30,6 +30,15 @@
 
   const EQUIPMENT_TYPES = ["Free Weight", "Machine", "Cable", "Bodyweight", "Cardio Equipment"];
 
+  // One emoji per muscle group, for a scannable catalog feel in the picker
+  // cards and badges — purely decorative, no meaning beyond quick recognition.
+  const MUSCLE_ICONS = {
+    "Chest": "💪", "Back": "🔙", "Shoulders": "🏔️", "Biceps": "💪", "Triceps": "🦾",
+    "Quadriceps": "🦵", "Hamstrings": "🦵", "Glutes": "🍑", "Calves": "🦵",
+    "Abs / Core": "🎯", "Forearms": "✊", "Traps": "🔺", "Full Body": "🏋️", "Cardio": "🏃"
+  };
+  function iconForMuscleGroup(muscleGroup) { return MUSCLE_ICONS[muscleGroup] || "🏋️"; }
+
   // benchmarkKey links an exercise to STRENGTH_STANDARDS below.
   const EXERCISES = [
     // Chest
@@ -391,6 +400,7 @@
     MUSCLE_GROUPS: MUSCLE_GROUPS,
     EQUIPMENT_TYPES: EQUIPMENT_TYPES,
     LEVEL_LABELS: LEVEL_LABELS,
+    iconForMuscleGroup: iconForMuscleGroup,
     getExercises: getExercises,
     getExerciseById: getExerciseById,
     getBenchmarkExercises: getBenchmarkExercises,

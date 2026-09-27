@@ -137,7 +137,8 @@
     </div>
 
     <nav class="sub-nav workout-sub-nav" role="tablist" aria-label="Workout sections">
-      <button type="button" class="workout-sub-nav-btn active" data-subtarget="workout-log" role="tab" aria-selected="true" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
+      <button type="button" class="workout-sub-nav-btn active" data-subtarget="workout-home" role="tab" aria-selected="true" aria-controls="workout-home" id="workoutSubNavHome">Home</button>
+      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-log" role="tab" aria-selected="false" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-routines" role="tab" aria-selected="false" aria-controls="workout-routines" id="workoutSubNavRoutines">Routines</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-strength" role="tab" aria-selected="false" aria-controls="workout-strength" id="workoutSubNavStrength">Strength</button>
@@ -146,8 +147,44 @@
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
     </nav>
 
+    <!-- ---------- Sub-panel: Home ---------- -->
+    <div id="workout-home" class="workout-sub-panel active" role="tabpanel" aria-labelledby="workoutSubNavHome">
+      <div class="home-hero card">
+        <div class="home-hero-streak">
+          <span class="home-hero-flame">🔥</span>
+          <span class="home-hero-streak-value" id="homeStatStreak">0</span>
+          <span class="home-hero-streak-label">day streak</span>
+        </div>
+        <div class="home-hero-substats">
+          <div class="home-hero-substat"><span class="stat-value" id="homeStatTotal">0</span><span class="stat-label">Total workouts</span></div>
+          <div class="home-hero-substat"><span class="stat-value" id="homeStatWeek">0</span><span class="stat-label">This week</span></div>
+        </div>
+      </div>
+
+      <div id="homeContinueCard" class="card hidden">
+        <h2 class="card-title">Continue Workout</h2>
+        <p class="field-hint" id="homeContinueText"></p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary btn-lg" id="homeContinueBtn">Resume</button>
+        </div>
+      </div>
+
+      <div id="homeTodayCard" class="hidden">
+        <h2 class="section-heading">Today</h2>
+        <div id="homeTodayList" class="quick-start-grid"></div>
+      </div>
+
+      <div class="section-heading-row">
+        <h2 class="section-heading">Quick Start</h2>
+        <button type="button" class="btn btn-secondary" id="homeFreestyleBtn">+ Freestyle Workout</button>
+      </div>
+      <div id="homeQuickStartGrid" class="quick-start-grid">
+        <div class="empty-state">No routines yet — build one in the Routines tab to see it here.</div>
+      </div>
+    </div>
+
     <!-- ---------- Sub-panel: Log ---------- -->
-    <div id="workout-log" class="workout-sub-panel active" role="tabpanel" aria-labelledby="workoutSubNavLog">
+    <div id="workout-log" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavLog">
       <div class="card-grid">
         <div class="card">
           <h2 class="card-title">Stats</h2>
@@ -174,35 +211,35 @@
       </div>
 
       <div class="card">
-        <h2 class="card-title">Add Exercise</h2>
-        <div class="form-row">
-          <label for="exercisePickerSearch">Search</label>
-          <input type="text" id="exercisePickerSearch" placeholder="Search exercises by name">
+        <div class="card-title-row">
+          <h2 class="card-title">Add Exercise</h2>
+          <button type="button" class="btn btn-secondary" id="addExerciseToggleBtn">+ Browse Exercises</button>
         </div>
-        <div class="form-row two-col">
-          <div>
-            <label for="exercisePickerMuscleFilter">Muscle group</label>
-            <select id="exercisePickerMuscleFilter">
-              <option value="">All muscle groups</option>
-            </select>
+
+        <div id="addExerciseBody" class="hidden">
+          <div class="form-row">
+            <label for="exercisePickerSearch">Search</label>
+            <input type="text" id="exercisePickerSearch" placeholder="Search exercises by name">
           </div>
-          <div>
+          <div class="muscle-chip-row" id="exercisePickerMuscleChips"></div>
+          <div class="form-row" style="max-width:220px;">
             <label for="exercisePickerEquipmentFilter">Equipment</label>
             <select id="exercisePickerEquipmentFilter">
               <option value="">All equipment</option>
             </select>
           </div>
-        </div>
-        <div class="form-row picker-row-with-star">
-          <div class="picker-row-with-star-select">
-            <label for="exercisePickerSelect">Exercise</label>
-            <select id="exercisePickerSelect"></select>
+          <select id="exercisePickerMuscleFilter" class="hidden">
+            <option value="">All muscle groups</option>
+          </select>
+          <select id="exercisePickerSelect" class="hidden"></select>
+          <button type="button" class="favorite-star-btn hidden" id="exercisePickerFavoriteBtn" aria-label="Toggle favorite" title="Toggle favorite">☆</button>
+
+          <div id="exercisePickerCards" class="exercise-card-grid"></div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="addExerciseToSessionBtn">Add Selected Exercise</button>
+            <button type="button" class="btn btn-secondary" id="showAddCustomExerciseBtn">+ Add Custom Exercise</button>
           </div>
-          <button type="button" class="favorite-star-btn" id="exercisePickerFavoriteBtn" aria-label="Toggle favorite" title="Toggle favorite">☆</button>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary" id="addExerciseToSessionBtn">Add Exercise to Session</button>
-          <button type="button" class="btn btn-secondary" id="showAddCustomExerciseBtn">+ Add Custom Exercise</button>
         </div>
 
         <div id="addCustomExerciseForm" class="hidden custom-exercise-form">
@@ -234,6 +271,12 @@
       <div class="card">
         <h2 class="card-title">Current Session</h2>
         <div class="badge-row" id="sessionMuscleGroups"></div>
+        <div class="exercise-pill-nav" id="sessionExercisePillNav"></div>
+        <div class="session-nav-row hidden" id="sessionNavRow">
+          <button type="button" class="btn-icon" id="sessionPrevExerciseBtn" aria-label="Previous exercise">&larr; Prev</button>
+          <span class="session-nav-position" id="sessionNavPosition"></span>
+          <button type="button" class="btn-icon" id="sessionNextExerciseBtn" aria-label="Next exercise">Next &rarr;</button>
+        </div>
         <div id="sessionExerciseList" class="item-list">
           <div class="empty-state">No exercises added yet. Add one above to start logging sets.</div>
         </div>
@@ -242,7 +285,7 @@
           <textarea id="sessionNotes" rows="2" placeholder="Optional notes about this workout"></textarea>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn btn-primary" id="saveWorkoutBtn">Save Workout</button>
+          <button type="button" class="btn btn-primary btn-lg" id="saveWorkoutBtn">Finish Workout</button>
           <button type="button" class="btn btn-secondary" id="discardDraftBtn">Discard Draft</button>
         </div>
       </div>
