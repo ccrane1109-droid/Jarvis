@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JARVIS</title>
 <meta name="theme-color" content="#0a0e14">
-<meta name="description" content="JARVIS — a personal dashboard for workouts, habits, business, and calories, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
+<meta name="description" content="JARVIS — a personal dashboard for workouts, nutrition, habits, business, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -115,6 +115,7 @@
     </div>
     <nav class="main-nav" role="tablist" aria-label="Main sections">
       <button type="button" class="main-nav-btn active" data-target="panel-workout" role="tab" aria-selected="true" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
+      <button type="button" class="main-nav-btn" data-target="panel-nutrition" role="tab" aria-selected="false" aria-controls="panel-nutrition" id="navBtnNutrition">Nutrition</button>
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
@@ -143,7 +144,6 @@
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-strength" role="tab" aria-selected="false" aria-controls="workout-strength" id="workoutSubNavStrength">Strength</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-progress" role="tab" aria-selected="false" aria-controls="workout-progress" id="workoutSubNavProgress">Progress</button>
-      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-calories" role="tab" aria-selected="false" aria-controls="workout-calories" id="workoutSubNavCalories">Calories</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
     </nav>
 
@@ -607,50 +607,6 @@
       </div>
     </div>
 
-    <!-- ---------- Sub-panel: Calories ---------- -->
-    <div id="workout-calories" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavCalories">
-      <div class="card">
-        <h2 class="card-title">Calories</h2>
-        <p class="field-hint">Manually logged daily intake vs. your goal. No food database or automatic tracking.</p>
-        <div class="stat-grid" id="calorieStats">
-          <div class="stat-box"><span class="stat-value" id="calorieStatToday">0</span><span class="stat-label">Today</span></div>
-          <div class="stat-box"><span class="stat-value" id="calorieStatGoal">2000</span><span class="stat-label">Goal</span></div>
-          <div class="stat-box"><span class="stat-value" id="calorieStatRemaining">2000</span><span class="stat-label">Remaining</span></div>
-        </div>
-        <form id="calorieGoalForm" class="stacked-form" novalidate>
-          <div class="form-row">
-            <label for="calorieGoalInput">Daily goal (calories)</label>
-            <input type="number" id="calorieGoalInput" min="1" step="1" value="2000" required>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-secondary" id="calorieGoalSaveBtn">Save Goal</button>
-          </div>
-        </form>
-        <form id="calorieForm" class="stacked-form" novalidate>
-          <div class="form-row two-col">
-            <div>
-              <label for="calorieDate">Date</label>
-              <input type="date" id="calorieDate">
-            </div>
-            <div>
-              <label for="calorieAmount">Calories</label>
-              <input type="number" id="calorieAmount" min="1" step="1" placeholder="e.g. 550" required>
-            </div>
-          </div>
-          <div class="form-row">
-            <label for="calorieNotes">Notes</label>
-            <input type="text" id="calorieNotes" placeholder="e.g. Lunch" maxlength="80">
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="calorieSubmitBtn">Log Calories</button>
-          </div>
-        </form>
-        <div id="calorieList" class="item-list">
-          <div class="empty-state">No calories logged yet.</div>
-        </div>
-      </div>
-    </div>
-
     <!-- ---------- Sub-panel: Form Check ---------- -->
     <div id="workout-form-check" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavFormCheck">
       <div class="card">
@@ -690,6 +646,359 @@
           <canvas id="formCheckCanvas" style="max-width:100%;border-radius:8px;"></canvas>
         </div>
         <div id="formCheckResults" style="margin-top:14px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== NUTRITION ===================== -->
+  <section id="panel-nutrition" class="tab-panel" role="tabpanel" aria-labelledby="navBtnNutrition">
+    <div class="panel-header">
+      <h1>Nutrition</h1>
+      <p class="panel-subtitle">Log food, track macros, and see how your eating lines up with your goals. Manually logged only — nothing here is invented or looked up automatically.</p>
+    </div>
+
+    <nav class="sub-nav nutrition-sub-nav" role="tablist" aria-label="Nutrition sections">
+      <button type="button" class="nutrition-sub-nav-btn active" data-subtarget="nutrition-dashboard" role="tab" aria-selected="true" aria-controls="nutrition-dashboard" id="nutritionSubNavDashboard">Dashboard</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-goals" role="tab" aria-selected="false" aria-controls="nutrition-goals" id="nutritionSubNavGoals">Cutting / Bulking</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-food" role="tab" aria-selected="false" aria-controls="nutrition-food" id="nutritionSubNavFood">Food Log</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-saved" role="tab" aria-selected="false" aria-controls="nutrition-saved" id="nutritionSubNavSaved">Saved Foods</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-recipes" role="tab" aria-selected="false" aria-controls="nutrition-recipes" id="nutritionSubNavRecipes">Recipes</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-nutrients" role="tab" aria-selected="false" aria-controls="nutrition-nutrients" id="nutritionSubNavNutrients">Nutrients</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-history" role="tab" aria-selected="false" aria-controls="nutrition-history" id="nutritionSubNavHistory">History</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Dashboard ---------- -->
+    <div id="nutrition-dashboard" class="nutrition-sub-panel active" role="tabpanel" aria-labelledby="nutritionSubNavDashboard">
+      <div class="card-grid">
+        <div class="card">
+          <h2 class="card-title">Today</h2>
+          <div class="stat-grid">
+            <div class="stat-box"><span class="stat-value" id="nutritionModeLabel">Cutting</span><span class="stat-label">Current goal</span></div>
+            <div class="stat-box"><span class="stat-value" id="nutritionCalorieTarget">Not set</span><span class="stat-label">Calorie target</span></div>
+            <div class="stat-box"><span class="stat-value" id="nutritionCalorieConsumed">0</span><span class="stat-label">Consumed today</span></div>
+            <div class="stat-box"><span class="stat-value" id="nutritionCalorieRemaining">—</span><span class="stat-label">Remaining</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 class="card-title">Nutrition Score</h2>
+          <div class="strength-score-hero">
+            <div class="strength-score-value" id="nutritionScoreValue">0</div>
+            <div class="strength-score-level">out of 100 — a heuristic from what you've logged, not medical advice or a judgment of you</div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <h3 class="checklist-title">Good</h3>
+              <ul class="plain-list" id="nutritionScoreGood"></ul>
+            </div>
+            <div>
+              <h3 class="checklist-title">Could Improve</h3>
+              <ul class="plain-list" id="nutritionScoreImprove"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Macros &amp; Fiber</h2>
+        <div id="nutritionMacroBars"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Water</h2>
+        <div id="nutritionWaterBar"></div>
+        <div class="form-actions" style="margin-top:10px;align-items:center;">
+          <button type="button" class="btn-icon" id="nutritionWaterRemoveBtn" aria-label="Remove a cup of water">&minus; Cup</button>
+          <span class="field-hint" id="nutritionWaterCount" style="margin:0 4px;">0</span>
+          <button type="button" class="btn-icon" id="nutritionWaterAddBtn" aria-label="Add a cup of water">+ Cup</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Cutting / Bulking Goals ---------- -->
+    <div id="nutrition-goals" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavGoals">
+      <div class="card">
+        <h2 class="card-title">Goal Mode</h2>
+        <p class="field-hint">Switch between Cutting and Bulking — each keeps its own saved targets, so switching back and forth never loses your numbers. This is a tracking and organization tool, not a recommendation engine — it never suggests a calorie number for you.</p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="goalsModeCuttingBtn">Cutting</button>
+          <button type="button" class="btn btn-secondary" id="goalsModeBulkingBtn">Bulking</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Targets</h2>
+        <form id="goalsForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="goalsCalories">Daily calories</label>
+              <input type="number" id="goalsCalories" min="0" step="1" placeholder="e.g. 2200">
+            </div>
+            <div>
+              <label for="goalsWater">Water (cups)</label>
+              <input type="number" id="goalsWater" min="0" step="1" placeholder="e.g. 8">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="goalsProtein">Protein (g)</label>
+              <input type="number" id="goalsProtein" min="0" step="1" placeholder="e.g. 160">
+            </div>
+            <div>
+              <label for="goalsCarbs">Carbohydrates (g)</label>
+              <input type="number" id="goalsCarbs" min="0" step="1" placeholder="e.g. 220">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="goalsFat">Fat (g)</label>
+              <input type="number" id="goalsFat" min="0" step="1" placeholder="e.g. 70">
+            </div>
+            <div>
+              <label for="goalsFiber">Fiber (g)</label>
+              <input type="number" id="goalsFiber" min="0" step="1" placeholder="e.g. 30">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="goalsSaveBtn">Save Targets</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Today's Progress Toward These Targets</h2>
+        <div id="goalsProgressBars"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Food Log ---------- -->
+    <div id="nutrition-food" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavFood">
+      <div class="card">
+        <h2 class="card-title" id="foodFormTitle">Add Food</h2>
+        <form id="foodForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="foodFormMealSelect">Meal</label>
+              <select id="foodFormMealSelect">
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snacks">Snacks</option>
+              </select>
+            </div>
+            <div>
+              <label for="foodServing">Serving amount</label>
+              <input type="text" id="foodServing" placeholder="e.g. 1 cup">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="foodName">Food name</label>
+            <input type="text" id="foodName" maxlength="80" placeholder="e.g. Grilled chicken breast">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="foodCalories">Calories</label>
+              <input type="number" id="foodCalories" min="0" step="1" placeholder="e.g. 250">
+            </div>
+            <div>
+              <label for="foodProtein">Protein (g)</label>
+              <input type="number" id="foodProtein" min="0" step="0.1" placeholder="e.g. 40">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="foodCarbs">Carbohydrates (g)</label>
+              <input type="number" id="foodCarbs" min="0" step="0.1" placeholder="e.g. 0">
+            </div>
+            <div>
+              <label for="foodFat">Fat (g)</label>
+              <input type="number" id="foodFat" min="0" step="0.1" placeholder="e.g. 6">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="foodFiber">Fiber (g)</label>
+            <input type="number" id="foodFiber" min="0" step="0.1" placeholder="e.g. 0">
+          </div>
+          <div class="checklist-item">
+            <input type="checkbox" id="foodIsFruitVeg">
+            <label for="foodIsFruitVeg">This counts as a fruit or vegetable serving</label>
+          </div>
+
+          <h3 class="checklist-title">More nutrients (optional)</h3>
+          <p class="field-hint">Leave any of these blank if you don't know them — they're only counted when entered, never guessed.</p>
+          <div class="form-row two-col">
+            <div>
+              <label for="foodSodium">Sodium (mg)</label>
+              <input type="number" id="foodSodium" min="0" step="1">
+            </div>
+            <div>
+              <label for="foodCalcium">Calcium (mg)</label>
+              <input type="number" id="foodCalcium" min="0" step="1">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="foodIron">Iron (mg)</label>
+              <input type="number" id="foodIron" min="0" step="0.1">
+            </div>
+            <div>
+              <label for="foodPotassium">Potassium (mg)</label>
+              <input type="number" id="foodPotassium" min="0" step="1">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="foodVitaminC">Vitamin C (mg)</label>
+              <input type="number" id="foodVitaminC" min="0" step="0.1">
+            </div>
+            <div>
+              <label for="foodVitaminD">Vitamin D (mcg)</label>
+              <input type="number" id="foodVitaminD" min="0" step="0.1">
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="foodFormSubmitBtn">Add to Log</button>
+            <button type="button" class="btn btn-secondary hidden" id="foodFormCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Today's Food</h2>
+          <span class="field-hint" id="foodLogTotals"></span>
+        </div>
+        <h3 class="checklist-title">Breakfast</h3>
+        <div id="foodMeal_breakfast" class="item-list"></div>
+        <h3 class="checklist-title">Lunch</h3>
+        <div id="foodMeal_lunch" class="item-list"></div>
+        <h3 class="checklist-title">Dinner</h3>
+        <div id="foodMeal_dinner" class="item-list"></div>
+        <h3 class="checklist-title">Snacks</h3>
+        <div id="foodMeal_snacks" class="item-list"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Saved Foods ---------- -->
+    <div id="nutrition-saved" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavSaved">
+      <div class="card">
+        <h2 class="card-title" id="savedFoodFormTitle">Add Saved Food</h2>
+        <p class="field-hint">For foods you eat often — save them once, then add them to any day in one click.</p>
+        <form id="savedFoodForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="savedFoodName">Food name</label>
+              <input type="text" id="savedFoodName" maxlength="80">
+            </div>
+            <div>
+              <label for="savedFoodServing">Serving amount</label>
+              <input type="text" id="savedFoodServing" placeholder="e.g. 1 scoop">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="savedFoodCalories">Calories</label>
+              <input type="number" id="savedFoodCalories" min="0" step="1">
+            </div>
+            <div>
+              <label for="savedFoodProtein">Protein (g)</label>
+              <input type="number" id="savedFoodProtein" min="0" step="0.1">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="savedFoodCarbs">Carbohydrates (g)</label>
+              <input type="number" id="savedFoodCarbs" min="0" step="0.1">
+            </div>
+            <div>
+              <label for="savedFoodFat">Fat (g)</label>
+              <input type="number" id="savedFoodFat" min="0" step="0.1">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="savedFoodFiber">Fiber (g)</label>
+            <input type="number" id="savedFoodFiber" min="0" step="0.1">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="savedFoodSubmitBtn">Save Food</button>
+            <button type="button" class="btn btn-secondary hidden" id="savedFoodCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your Saved Foods</h2>
+        <div id="savedFoodsList" class="item-list">
+          <div class="empty-state">No saved foods yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Recipes ---------- -->
+    <div id="nutrition-recipes" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavRecipes">
+      <div class="card">
+        <h2 class="card-title" id="recipeFormTitle">Create a Recipe</h2>
+        <form id="recipeForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="recipeName">Recipe name</label>
+              <input type="text" id="recipeName" maxlength="80">
+            </div>
+            <div>
+              <label for="recipeServings">Number of servings</label>
+              <input type="number" id="recipeServings" min="1" step="1" value="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="recipeInstructions">Instructions</label>
+            <textarea id="recipeInstructions" rows="3" placeholder="Optional step-by-step instructions"></textarea>
+          </div>
+          <h3 class="checklist-title">Ingredients</h3>
+          <p class="field-hint">Enter each ingredient's total nutrition (for the whole amount used, not per serving) — per-serving macros are calculated automatically by dividing by servings above.</p>
+          <div id="recipeIngredientRows"></div>
+          <div class="form-actions">
+            <button type="button" class="btn-icon" id="recipeAddIngredientBtn">+ Add Ingredient</button>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="recipeSubmitBtn">Save Recipe</button>
+            <button type="button" class="btn btn-secondary hidden" id="recipeCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your Recipes</h2>
+        <div id="recipesList" class="item-list">
+          <div class="empty-state">No recipes yet. Build one above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Nutrients ---------- -->
+    <div id="nutrition-nutrients" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavNutrients">
+      <div class="card">
+        <h2 class="card-title">Today's Nutrients</h2>
+        <p class="field-hint">
+          Only shows a nutrient once you've entered it on at least one food today — nothing here is estimated or
+          looked up. Reference amounts are commonly-cited general adult values for rough context only, not
+          personalized medical advice.
+        </p>
+        <div id="nutrientsList" class="item-list"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: History ---------- -->
+    <div id="nutrition-history" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavHistory">
+      <div class="card">
+        <h2 class="card-title">7-Day Averages</h2>
+        <div id="historyAverages"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Past Days</h2>
+        <div id="historyDateList" class="badge-row"></div>
+      </div>
+      <div class="card" id="historyDetailCard">
+        <div id="historyDetail"><div class="empty-state">Pick a day above to see its details.</div></div>
       </div>
     </div>
   </section>
@@ -1512,9 +1821,9 @@
 <script src="js/app.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/workout.js"></script>
+<script src="js/nutrition.js"></script>
 <script src="js/habits.js"></script>
 <script src="js/business.js"></script>
-<script src="js/calories.js"></script>
 <script src="js/trading.js"></script>
 <script src="js/blobstore.js"></script>
 <script src="js/video-api-client.js"></script>

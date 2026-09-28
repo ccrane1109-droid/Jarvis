@@ -5,7 +5,7 @@
    online. All user data lives in localStorage, not in this cache.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v6";
+const CACHE_NAME = "jarvis-cache-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -20,9 +20,9 @@ const APP_SHELL = [
   "./js/exercises.js",
   "./js/workout.js",
   "./js/form-check.js",
+  "./js/nutrition.js",
   "./js/habits.js",
   "./js/business.js",
-  "./js/calories.js",
   "./js/trading.js",
   "./js/blobstore.js",
   "./js/video-api-client.js",
