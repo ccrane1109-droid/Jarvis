@@ -32,6 +32,63 @@
   let strengthSettings = { compareSex: "male" };
   let draft = null;
 
+  // Transient (not persisted) state for the "Generate a Routine" wizard —
+  // reset fresh each page load, same as the routine/program builders.
+  const WEEKDAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const WEEKDAY_SHORT = ["M", "T", "W", "T", "F", "S", "S"];
+  const GENERATOR_GOALS = [
+    { id: "muscle", label: "Build Muscle", icon: "💪" },
+    { id: "strength", label: "Build Strength", icon: "🏋️" },
+    { id: "lean", label: "Get Lean", icon: "🔥" }
+  ];
+  const GENERATOR_GOAL_SCHEMES = {
+    muscle: { primary: { sets: 4, reps: 8 }, accessory: { sets: 3, reps: 11 } },
+    strength: { primary: { sets: 5, reps: 4 }, accessory: { sets: 3, reps: 7 } },
+    lean: { primary: { sets: 3, reps: 13 }, accessory: { sets: 3, reps: 15 } }
+  };
+  // Each day template's groups list which muscle groups get an exercise, in
+  // order — the first is that day's "main lift" (heavier scheme), the rest
+  // are accessories. A group listed twice just means "give this day 2
+  // different exercises for that muscle."
+  const GENERATOR_SPLITS = {
+    2: [
+      { label: "Full Body A", groups: ["Chest", "Back", "Quadriceps", "Shoulders", "Hamstrings"] },
+      { label: "Full Body B", groups: ["Back", "Chest", "Hamstrings", "Biceps", "Triceps"] }
+    ],
+    3: [
+      { label: "Full Body A", groups: ["Chest", "Back", "Quadriceps", "Shoulders", "Abs / Core"] },
+      { label: "Full Body B", groups: ["Back", "Chest", "Hamstrings", "Biceps", "Abs / Core"] },
+      { label: "Full Body C", groups: ["Quadriceps", "Shoulders", "Back", "Triceps", "Abs / Core"] }
+    ],
+    4: [
+      { label: "Upper A", groups: ["Chest", "Back", "Shoulders", "Biceps", "Triceps"] },
+      { label: "Lower A", groups: ["Quadriceps", "Hamstrings", "Glutes", "Calves"] },
+      { label: "Upper B", groups: ["Back", "Chest", "Shoulders", "Triceps", "Biceps"] },
+      { label: "Lower B", groups: ["Hamstrings", "Quadriceps", "Glutes", "Calves"] }
+    ],
+    5: [
+      { label: "Push", groups: ["Chest", "Shoulders", "Chest", "Triceps"] },
+      { label: "Pull", groups: ["Back", "Back", "Biceps", "Traps"] },
+      { label: "Legs", groups: ["Quadriceps", "Hamstrings", "Glutes", "Calves"] },
+      { label: "Upper", groups: ["Chest", "Back", "Shoulders", "Biceps", "Triceps"] },
+      { label: "Lower", groups: ["Quadriceps", "Hamstrings", "Glutes"] }
+    ],
+    6: [
+      { label: "Push A", groups: ["Chest", "Shoulders", "Chest", "Triceps"] },
+      { label: "Pull A", groups: ["Back", "Back", "Biceps", "Traps"] },
+      { label: "Legs A", groups: ["Quadriceps", "Hamstrings", "Glutes", "Calves"] },
+      { label: "Push B", groups: ["Shoulders", "Chest", "Chest", "Triceps"] },
+      { label: "Pull B", groups: ["Back", "Biceps", "Back", "Forearms"] },
+      { label: "Legs B", groups: ["Hamstrings", "Quadriceps", "Glutes", "Calves"] }
+    ]
+  };
+  let routineGenerator = {
+    goal: "muscle",
+    daysPerWeek: 3,
+    trainingDays: [], // Monday-first indices (0=Mon..6=Sun) into WEEKDAY_LABELS
+    equipment: {} // { "Free Weight": true, ... } — filled in from JarvisExercises.EQUIPMENT_TYPES on init, all true by default
+  };
+
   /* ---------------- persistence ---------------- */
 
   function load() {
@@ -1455,6 +1512,175 @@
     renderProgramList();
   }
 
+  /* ---------------- "Generate a Routine" wizard ---------------- */
+
+  function initRoutineGenerator() {
+    window.JarvisExercises.EQUIPMENT_TYPES.forEach(function (eq) { routineGenerator.equipment[eq] = true; });
+  }
+
+  function handleGeneratorToggle() {
+    const body = document.getElementById("generatorBody");
+    const btn = document.getElementById("generatorToggleBtn");
+    const nowHidden = body.classList.toggle("hidden");
+    btn.textContent = nowHidden ? "+ Build For Me" : "Hide";
+    if (!nowHidden) renderRoutineGenerator();
+  }
+
+  function renderRoutineGenerator() {
+    const core = window.JarvisCore;
+
+    document.getElementById("generatorGoalGrid").innerHTML = GENERATOR_GOALS.map(function (g) {
+      const selectedCls = g.id === routineGenerator.goal ? " selected" : "";
+      return (
+        '<div class="goal-card' + selectedCls + '" data-id="' + g.id + '">' +
+          '<span class="goal-card-icon">' + g.icon + '</span>' +
+          '<span class="goal-card-label">' + core.escapeHtml(g.label) + '</span>' +
+        '</div>'
+      );
+    }).join("");
+
+    document.getElementById("generatorDaysPerWeekRow").innerHTML = [2, 3, 4, 5, 6].map(function (n) {
+      const selectedCls = n === routineGenerator.daysPerWeek ? " active" : "";
+      return '<button type="button" class="muscle-chip' + selectedCls + '" data-days="' + n + '">' + n + '</button>';
+    }).join("");
+
+    document.getElementById("generatorTrainingDaysHint").textContent =
+      "Pick " + routineGenerator.daysPerWeek + " to match Days Per Week (" + routineGenerator.trainingDays.length + " picked). Jarvis spaces the split across them in order.";
+
+    document.getElementById("generatorTrainingDaysRow").innerHTML = WEEKDAY_SHORT.map(function (label, i) {
+      const selectedCls = routineGenerator.trainingDays.indexOf(i) !== -1 ? " selected" : "";
+      return '<button type="button" class="day-picker-btn' + selectedCls + '" data-day="' + i + '" aria-label="' + WEEKDAY_LABELS[i] + '" title="' + WEEKDAY_LABELS[i] + '">' + label + '</button>';
+    }).join("");
+
+    document.getElementById("generatorEquipmentList").innerHTML = window.JarvisExercises.EQUIPMENT_TYPES.map(function (eq) {
+      const checkedCls = routineGenerator.equipment[eq] ? " checked" : "";
+      return (
+        '<div class="equipment-row' + checkedCls + '" data-equipment="' + core.escapeHtml(eq) + '">' +
+          '<span class="equipment-row-label">' + core.escapeHtml(eq) + '</span>' +
+          '<span class="equipment-check">&#10003;</span>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleGeneratorGoalClick(e) {
+    const card = e.target.closest(".goal-card");
+    if (!card) return;
+    routineGenerator.goal = card.getAttribute("data-id");
+    renderRoutineGenerator();
+  }
+
+  function handleGeneratorDaysPerWeekClick(e) {
+    const btn = e.target.closest(".muscle-chip");
+    if (!btn) return;
+    routineGenerator.daysPerWeek = Number(btn.getAttribute("data-days"));
+    // Keep already-picked training days if they still fit; the hint/count
+    // will guide the user to adjust rather than silently clearing picks.
+    renderRoutineGenerator();
+  }
+
+  function handleGeneratorTrainingDayClick(e) {
+    const btn = e.target.closest(".day-picker-btn");
+    if (!btn) return;
+    const day = Number(btn.getAttribute("data-day"));
+    const idx = routineGenerator.trainingDays.indexOf(day);
+    if (idx !== -1) {
+      routineGenerator.trainingDays.splice(idx, 1);
+    } else {
+      routineGenerator.trainingDays.push(day);
+    }
+    renderRoutineGenerator();
+  }
+
+  function handleGeneratorEquipmentClick(e) {
+    const row = e.target.closest(".equipment-row");
+    if (!row) return;
+    const eq = row.getAttribute("data-equipment");
+    routineGenerator.equipment[eq] = !routineGenerator.equipment[eq];
+    renderRoutineGenerator();
+  }
+
+  // Picks one exercise for a muscle group, respecting the allowed-equipment
+  // list with a graceful fallback (ignore the equipment filter entirely)
+  // when nothing in that group matches it, so a routine never ends up with
+  // a missing slot just because of an unusual equipment combination.
+  // Bodyweight exercises are always eligible since they need no equipment.
+  // usedIds keeps the same day from repeating an exercise it already picked;
+  // seed varies the pick across calls so different days/slots get variety
+  // instead of always grabbing the first match.
+  function pickExerciseForGroup(muscleGroup, allowedEquipment, usedIds, seed) {
+    const all = window.JarvisExercises.getExercises().filter(function (ex) { return ex.muscleGroup === muscleGroup; });
+    if (all.length === 0) return null;
+    let candidates = all.filter(function (ex) { return allowedEquipment.indexOf(ex.equipment) !== -1 || ex.equipment === "Bodyweight"; });
+    if (candidates.length === 0) candidates = all;
+    const unused = candidates.filter(function (ex) { return usedIds.indexOf(ex.id) === -1; });
+    const pool = unused.length > 0 ? unused : candidates;
+    return pool[seed % pool.length];
+  }
+
+  function uniqueName(existingNames, base) {
+    if (existingNames.indexOf(base) === -1) return base;
+    let n = 2;
+    while (existingNames.indexOf(base + " " + n) !== -1) n++;
+    return base + " " + n;
+  }
+
+  function handleGenerateRoutine() {
+    const core = window.JarvisCore;
+    const daysPerWeek = routineGenerator.daysPerWeek;
+    const trainingDays = routineGenerator.trainingDays.slice().sort(function (a, b) { return a - b; });
+    const allowedEquipment = Object.keys(routineGenerator.equipment).filter(function (eq) { return routineGenerator.equipment[eq]; });
+
+    if (trainingDays.length !== daysPerWeek) {
+      core.showToast("Pick exactly " + daysPerWeek + " training day" + (daysPerWeek === 1 ? "" : "s") + " to match Days Per Week.");
+      return;
+    }
+    if (allowedEquipment.length === 0) {
+      core.showToast("Select at least one equipment type.");
+      return;
+    }
+
+    const template = GENERATOR_SPLITS[daysPerWeek];
+    const scheme = GENERATOR_GOAL_SCHEMES[routineGenerator.goal];
+    let seed = 0;
+    const newRoutineIds = [];
+
+    template.forEach(function (dayTemplate) {
+      const usedIds = [];
+      const exercises = [];
+      dayTemplate.groups.forEach(function (group) {
+        const ex = pickExerciseForGroup(group, allowedEquipment, usedIds, seed++);
+        if (!ex) return;
+        usedIds.push(ex.id);
+        const plan = exercises.length === 0 ? scheme.primary : scheme.accessory;
+        const plannedSets = [];
+        for (let i = 0; i < plan.sets; i++) plannedSets.push({ reps: plan.reps, type: "normal" });
+        exercises.push({ exerciseId: ex.id, supersetGroup: null, plannedSets: plannedSets });
+      });
+      const name = uniqueName(routines.map(function (r) { return r.name; }), dayTemplate.label + " (Generated)");
+      const routine = { id: core.uid("routine"), name: name, exercises: exercises, createdAt: Date.now() };
+      routines.push(routine);
+      newRoutineIds.push(routine.id);
+    });
+    saveRoutines();
+
+    const programDays = trainingDays.map(function (dayIdx, i) {
+      return { id: core.uid("pday"), label: WEEKDAY_LABELS[dayIdx], routineId: newRoutineIds[i] };
+    });
+    const programName = uniqueName(programs.map(function (p) { return p.name; }), "Generated " + daysPerWeek + "-Day Plan");
+    programs.push({ id: core.uid("program"), name: programName, days: programDays, currentIndex: 0, createdAt: Date.now() });
+    savePrograms();
+
+    renderRoutineList();
+    renderProgramList();
+    populateRoutineSelect();
+    populateProgramDayRoutineSelect();
+    renderWorkoutHome();
+    core.showToast("Created " + template.length + " routines and “" + programName + "” — find it in Programs, or start today's from Home.");
+    routineGenerator.trainingDays = [];
+    renderRoutineGenerator();
+  }
+
   function renderRoutineList() {
     const core = window.JarvisCore;
     const container = document.getElementById("routineList");
@@ -2358,6 +2584,13 @@
     document.getElementById("routineCancelEditBtn").addEventListener("click", exitRoutineEditMode);
     resetSetEditor();
     document.getElementById("routineList").addEventListener("click", handleRoutineListClick);
+    initRoutineGenerator();
+    document.getElementById("generatorToggleBtn").addEventListener("click", handleGeneratorToggle);
+    document.getElementById("generatorGoalGrid").addEventListener("click", handleGeneratorGoalClick);
+    document.getElementById("generatorDaysPerWeekRow").addEventListener("click", handleGeneratorDaysPerWeekClick);
+    document.getElementById("generatorTrainingDaysRow").addEventListener("click", handleGeneratorTrainingDayClick);
+    document.getElementById("generatorEquipmentList").addEventListener("click", handleGeneratorEquipmentClick);
+    document.getElementById("generateRoutineBtn").addEventListener("click", handleGenerateRoutine);
 
     document.getElementById("addDayToProgramBtn").addEventListener("click", handleAddDayToProgram);
     document.getElementById("programBuilderList").addEventListener("click", handleProgramBuilderListClick);

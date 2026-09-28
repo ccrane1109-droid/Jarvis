@@ -301,6 +301,37 @@
     <!-- ---------- Sub-panel: Routines ---------- -->
     <div id="workout-routines" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavRoutines">
       <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Generate a Routine</h2>
+          <button type="button" class="btn btn-secondary" id="generatorToggleBtn">+ Build For Me</button>
+        </div>
+        <div id="generatorBody" class="hidden">
+          <p class="field-hint">
+            Answers a few questions and builds a full split — several routines plus a program that cycles through
+            them — from your own exercise library. Training days just label which weekday each session is meant
+            for; Jarvis doesn't send reminders, so it's on you to actually open the app and log on those days.
+          </p>
+
+          <h3 class="checklist-title">Goal</h3>
+          <div class="goal-card-grid" id="generatorGoalGrid"></div>
+
+          <h3 class="checklist-title">Days Per Week</h3>
+          <div class="muscle-chip-row" id="generatorDaysPerWeekRow"></div>
+
+          <h3 class="checklist-title">Training Days</h3>
+          <p class="field-hint" id="generatorTrainingDaysHint"></p>
+          <div class="day-picker-row" id="generatorTrainingDaysRow"></div>
+
+          <h3 class="checklist-title">Your Gym</h3>
+          <div id="generatorEquipmentList" class="item-list"></div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-lg" id="generateRoutineBtn">Generate My Routine</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2 class="card-title" id="routineFormTitle">Create a Routine</h2>
         <input type="hidden" id="routineEditId" value="">
         <div class="form-row">
