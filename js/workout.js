@@ -656,13 +656,21 @@
     const routine = routines.find(function (r) { return r.id === routineId; });
     if (!routine) return;
     const core = window.JarvisCore;
-    const existingIds = draft.exercises.map(function (se) { return se.exerciseId; });
     routine.exercises.forEach(function (re) {
-      if (existingIds.indexOf(re.exerciseId) === -1) {
+      const existing = draft.exercises.find(function (se) { return se.exerciseId === re.exerciseId; });
+      if (!existing) {
         draft.exercises.push({
           sessionExId: core.uid("sesx"), exerciseId: re.exerciseId,
           sets: buildSetsFromRoutinePlan(re.exerciseId, routineId), supersetGroup: re.supersetGroup || null
         });
+      } else if (existing.sets.length === 0) {
+        // Already in the draft (e.g. added before this routine's plan
+        // existed, or left with zero sets some other way) — still worth
+        // auto-filling from the plan rather than leaving it empty. Never
+        // touches an exercise that already has sets, so nothing typed in
+        // gets clobbered.
+        existing.sets = buildSetsFromRoutinePlan(re.exerciseId, routineId);
+        if (!existing.supersetGroup) existing.supersetGroup = re.supersetGroup || null;
       }
     });
     draft.routineId = routineId;
