@@ -33,8 +33,9 @@
   const POSE_DETECTION_URL = "js/vendor/tfjs/pose-detection.min.js";
   const MIN_KEYPOINT_SCORE = 0.3;
 
-  const VIDEO_SAMPLE_INTERVAL_SEC = 0.15;
+  const VIDEO_SAMPLE_INTERVAL_SEC = 0.15; // only used by the seek-based fallback path
   const VIDEO_MAX_DURATION_SEC = 8;
+  const VIDEO_PLAYBACK_RATE = 2; // the fast (non-seeking) path plays through the clip instead of seeking frame by frame
 
   let detector = null;
   let detectorPromise = null;
@@ -603,13 +604,84 @@
     });
   }
 
-  // Samples the video at a fixed interval (capped to VIDEO_MAX_DURATION_SEC,
-  // so a long clip doesn't take forever), runs pose detection on each
-  // sampled frame, then hands the collected { time, keypoints } list to the
-  // pure pickBestFrame() above. Only re-renders the ONE winning frame at
-  // full resolution afterward, rather than holding every sampled frame's
-  // pixels in memory at once.
-  function sampleVideoFrames(video, exercise, det, onStatus) {
+  // Renders the single winning frame at full resolution once the best
+  // moment has been picked — shared by both sampling strategies below.
+  function finalizeChosenFrame(video, samples, exercise, totalSamples) {
+    const chosen = pickBestFrame(samples, exercise);
+    if (!chosen) return Promise.resolve(null);
+    return seekVideoTo(video, chosen.time).then(function () {
+      const finalCanvas = document.createElement("canvas");
+      finalCanvas.width = video.videoWidth;
+      finalCanvas.height = video.videoHeight;
+      finalCanvas.getContext("2d").drawImage(video, 0, 0);
+      return {
+        time: chosen.time, keypoints: chosen.keypoints, canvas: finalCanvas,
+        totalSamples: totalSamples, confidentSamples: samples.length,
+        allKeypoints: samples.map(function (s) { return s.keypoints; })
+      };
+    });
+  }
+
+  // FAST PATH: plays the clip through (at VIDEO_PLAYBACK_RATE) and grabs
+  // whatever frame the browser is actually about to display via
+  // requestVideoFrameCallback, instead of separately seeking to ~50 fixed
+  // timestamps. Repeated seeking is the slow part — each one forces the
+  // decoder back to a keyframe and forward again — so letting the video
+  // decode forward naturally, the way it's built to, is dramatically
+  // faster (seconds instead of the 20-30+ seconds the old seek-per-sample
+  // approach could take on a real clip, especially on a phone).
+  // Needs requestVideoFrameCallback (Chrome/Edge/Android browsers, Safari
+  // 15.4+) — sampleVideoFrames() below falls back to seeking without it.
+  function sampleVideoFramesByPlayback(video, exercise, det, onStatus) {
+    return new Promise(function (resolve, reject) {
+      const duration = Math.min(video.duration || 0, VIDEO_MAX_DURATION_SEC);
+      const scratch = document.createElement("canvas");
+      scratch.width = video.videoWidth;
+      scratch.height = video.videoHeight;
+      const scratchCtx = scratch.getContext("2d");
+      const samples = [];
+      let frameCount = 0;
+      let done = false;
+      let busy = false;
+
+      function finish() {
+        if (done) return;
+        done = true;
+        video.pause();
+        video.playbackRate = 1;
+        finalizeChosenFrame(video, samples, exercise, frameCount).then(resolve, reject);
+      }
+
+      function onFrame(now, metadata) {
+        if (done) return;
+        if (metadata.mediaTime > duration || video.ended) { finish(); return; }
+        if (busy) { video.requestVideoFrameCallback(onFrame); return; } // still processing the previous frame — skip ahead rather than queue up
+        busy = true;
+        frameCount++;
+        onStatus("Scanning your clip… (frame " + frameCount + ")");
+        scratchCtx.drawImage(video, 0, 0, scratch.width, scratch.height);
+        det.estimatePoses(scratch).then(function (poses) {
+          if (poses && poses[0] && poses[0].keypoints) {
+            samples.push({ time: metadata.mediaTime, keypoints: poses[0].keypoints });
+          }
+        }).catch(function () { /* skip this frame, keep going */ }).then(function () {
+          busy = false;
+          if (!done) video.requestVideoFrameCallback(onFrame);
+        });
+      }
+
+      video.addEventListener("ended", finish, { once: true });
+      video.playbackRate = VIDEO_PLAYBACK_RATE;
+      video.currentTime = 0;
+      video.play().then(function () {
+        video.requestVideoFrameCallback(onFrame);
+      }).catch(reject);
+    });
+  }
+
+  // FALLBACK PATH for browsers without requestVideoFrameCallback: the
+  // original fixed-interval seek approach — slower, but works everywhere.
+  function sampleVideoFramesBySeeking(video, exercise, det, onStatus) {
     const duration = Math.min(video.duration || 0, VIDEO_MAX_DURATION_SEC);
     const times = [];
     for (let t = 0; t <= duration; t += VIDEO_SAMPLE_INTERVAL_SEC) times.push(t);
@@ -635,20 +707,20 @@
     }
 
     return processIndex(0).then(function () {
-      const chosen = pickBestFrame(samples, exercise);
-      if (!chosen) return null;
-      return seekVideoTo(video, chosen.time).then(function () {
-        const finalCanvas = document.createElement("canvas");
-        finalCanvas.width = video.videoWidth;
-        finalCanvas.height = video.videoHeight;
-        finalCanvas.getContext("2d").drawImage(video, 0, 0);
-        return {
-          time: chosen.time, keypoints: chosen.keypoints, canvas: finalCanvas,
-          totalSamples: times.length, confidentSamples: samples.length,
-          allKeypoints: samples.map(function (s) { return s.keypoints; })
-        };
-      });
+      return finalizeChosenFrame(video, samples, exercise, times.length);
     });
+  }
+
+  function sampleVideoFrames(video, exercise, det, onStatus) {
+    if (typeof video.requestVideoFrameCallback === "function") {
+      return sampleVideoFramesByPlayback(video, exercise, det, onStatus)
+        .catch(function () {
+          video.pause();
+          video.playbackRate = 1;
+          return sampleVideoFramesBySeeking(video, exercise, det, onStatus);
+        });
+    }
+    return sampleVideoFramesBySeeking(video, exercise, det, onStatus);
   }
 
   /* ---------------- UI wiring ---------------- */
@@ -771,7 +843,9 @@
       analyzeLatPulldown: analyzeLatPulldown, analyzeOverheadTricepExtension: analyzeOverheadTricepExtension,
       analyzePreacherCurl: analyzePreacherCurl, analyzeRow: analyzeRow,
       pickSide: pickSide, keypointMap: keypointMap,
-      scoreFrameForExercise: scoreFrameForExercise, pickBestFrame: pickBestFrame
+      scoreFrameForExercise: scoreFrameForExercise, pickBestFrame: pickBestFrame,
+      sampleVideoFrames: sampleVideoFrames, sampleVideoFramesByPlayback: sampleVideoFramesByPlayback,
+      sampleVideoFramesBySeeking: sampleVideoFramesBySeeking
     }
   };
 })();
