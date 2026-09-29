@@ -185,13 +185,17 @@
       );
     }
 
-    if (window.JarvisCalories && typeof window.JarvisCalories.getSummary === "function") {
-      const c = window.JarvisCalories.getSummary();
-      const calClass = c.remaining >= 0 ? "text-positive" : "text-negative";
-      rows.push(
-        '<div class="briefing-row"><strong>Calories:</strong> ' + c.todayTotal + ' / ' + c.goal + ' today &middot; ' +
-        '<span class="' + calClass + '">' + (c.remaining >= 0 ? c.remaining + ' remaining' : Math.abs(c.remaining) + ' over') + '</span></div>'
-      );
+    if (window.JarvisNutrition && typeof window.JarvisNutrition.getSummary === "function") {
+      const n = window.JarvisNutrition.getSummary();
+      if (n.goal > 0) {
+        const calClass = n.remaining >= 0 ? "text-positive" : "text-negative";
+        rows.push(
+          '<div class="briefing-row"><strong>Nutrition:</strong> ' + n.todayTotal + ' / ' + n.goal + ' cal today (' + n.mode + ') &middot; ' +
+          '<span class="' + calClass + '">' + (n.remaining >= 0 ? n.remaining + ' remaining' : Math.abs(n.remaining) + ' over') + '</span> &middot; score ' + n.score + '/100</div>'
+        );
+      } else {
+        rows.push('<div class="briefing-row"><strong>Nutrition:</strong> ' + n.todayTotal + ' cal logged today &middot; score ' + n.score + '/100</div>');
+      }
     }
 
     if (window.JarvisVideo && typeof window.JarvisVideo.getSummary === "function") {
@@ -260,6 +264,14 @@
     const videoSubPanels = Array.prototype.slice.call(document.querySelectorAll(".video-sub-panel"));
     setupTabGroup(videoSubNavBtns, videoSubPanels);
 
+    const nutritionSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".nutrition-sub-nav-btn"));
+    const nutritionSubPanels = Array.prototype.slice.call(document.querySelectorAll(".nutrition-sub-panel"));
+    setupTabGroup(nutritionSubNavBtns, nutritionSubPanels, function (targetId) {
+      if (window.JarvisNutrition && typeof window.JarvisNutrition.onSubTabChange === "function") {
+        window.JarvisNutrition.onSubTabChange(targetId);
+      }
+    });
+
     const briefingBtn = document.getElementById("dailyBriefingBtn");
     if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
     const briefingCloseBtn = document.getElementById("briefingCloseBtn");
@@ -278,9 +290,9 @@
       if (started) return;
       started = true;
       if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
+      if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
       if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
-      if (window.JarvisCalories && typeof window.JarvisCalories.init === "function") window.JarvisCalories.init();
       if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
       if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();
       if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();

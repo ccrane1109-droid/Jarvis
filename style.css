@@ -371,7 +371,7 @@ textarea { resize: vertical; min-height: 44px; }
   padding-bottom: 2px;
 }
 
-.sub-nav-btn, .workout-sub-nav-btn {
+.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -382,11 +382,11 @@ textarea { resize: vertical; min-height: 44px; }
   font-weight: 500;
   white-space: nowrap;
 }
-.sub-nav-btn:hover, .workout-sub-nav-btn:hover { color: var(--text); }
-.sub-nav-btn.active, .workout-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover { color: var(--text); }
+.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-.sub-panel, .workout-sub-panel { display: none; }
-.sub-panel.active, .workout-sub-panel.active { display: block; }
+.sub-panel, .workout-sub-panel, .nutrition-sub-panel { display: none; }
+.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active { display: block; }
 
 .clock-block { text-align: center; padding: 10px 0 16px; }
 .clock-date { color: var(--text-dim); font-size: 13px; }
@@ -1006,6 +1006,43 @@ textarea { resize: vertical; min-height: 44px; }
 }
 .equipment-row.checked .equipment-check {
   background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------------- Nutrition ---------------- */
+
+.nutri-bar-row { margin-bottom: 14px; }
+.nutri-bar-row:last-child { margin-bottom: 0; }
+.nutri-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.nutri-bar-label span:first-child { color: var(--text); font-weight: 500; }
+.nutri-bar-value { color: var(--text-dim); }
+.nutri-bar-track {
+  height: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.nutri-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.2s;
+}
+.nutri-bar-fill.over { background: var(--yellow); }
+
+.plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.plain-list li { padding-left: 16px; position: relative; color: var(--text-dim); }
+.plain-list li::before { content: "\2022"; position: absolute; left: 0; color: var(--accent); }
+
+#goalsModeCuttingBtn.active, #goalsModeBulkingBtn.active {
+  background: var(--accent-dim);
   border-color: var(--accent);
   color: #fff;
 }
