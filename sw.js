@@ -3,32 +3,42 @@
    Network-first with cache fallback, so the app still opens offline once
    it's been loaded at least once, but never serves stale content while
    online. All user data lives in localStorage, not in this cache.
+
+   CACHE_NAME and the ?v=N query string on every local <link>/<script> tag
+   in index.html should be bumped together on every deploy that changes CSS
+   or JS. Belt and suspenders: CACHE_NAME rotates this worker's own Cache
+   API storage, and the ?v=N query string changes the actual URL being
+   requested, which busts the *browser's* HTTP cache (and any CDN edge
+   cache in front of GitHub Pages) independently of this service worker or
+   its cache:"no-store" fetch below — that combination is what actually
+   fixed a real bug where a stale cached style.css shipped alongside a
+   fresh index.html, leaving brand-new CSS classes completely unstyled.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v7";
+const CACHE_NAME = "jarvis-cache-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css",
+  "./style.css?v=8",
   "./manifest.json",
   "./icon.svg",
   "./js/vendor/qrcode/qrcode.js",
   "./js/vendor/qrcode/qrcode_UTF8.js",
-  "./js/firebase-config.js",
-  "./js/auth.js",
-  "./js/app.js",
-  "./js/exercises.js",
-  "./js/workout.js",
-  "./js/form-check.js",
-  "./js/nutrition.js",
-  "./js/habits.js",
-  "./js/business.js",
-  "./js/trading.js",
-  "./js/blobstore.js",
-  "./js/video-api-client.js",
-  "./js/video-connections.js",
-  "./js/video.js",
-  "./js/video-studio.js"
+  "./js/firebase-config.js?v=8",
+  "./js/auth.js?v=8",
+  "./js/app.js?v=8",
+  "./js/exercises.js?v=8",
+  "./js/workout.js?v=8",
+  "./js/form-check.js?v=8",
+  "./js/nutrition.js?v=8",
+  "./js/habits.js?v=8",
+  "./js/business.js?v=8",
+  "./js/trading.js?v=8",
+  "./js/blobstore.js?v=8",
+  "./js/video-api-client.js?v=8",
+  "./js/video-connections.js?v=8",
+  "./js/video.js?v=8",
+  "./js/video-studio.js?v=8"
 ];
 
 self.addEventListener("install", function (event) {
