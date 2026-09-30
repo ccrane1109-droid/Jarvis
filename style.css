@@ -371,7 +371,7 @@ textarea { resize: vertical; min-height: 44px; }
   padding-bottom: 2px;
 }
 
-.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn {
+.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -382,11 +382,11 @@ textarea { resize: vertical; min-height: 44px; }
   font-weight: 500;
   white-space: nowrap;
 }
-.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover { color: var(--text); }
-.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover, .habits-sub-nav-btn:hover { color: var(--text); }
+.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active, .habits-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-.sub-panel, .workout-sub-panel, .nutrition-sub-panel { display: none; }
-.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active { display: block; }
+.sub-panel, .workout-sub-panel, .nutrition-sub-panel, .habits-sub-panel { display: none; }
+.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active, .habits-sub-panel.active { display: block; }
 
 .clock-block { text-align: center; padding: 10px 0 16px; }
 .clock-date { color: var(--text-dim); font-size: 13px; }
@@ -1456,6 +1456,111 @@ textarea { resize: vertical; min-height: 44px; }
 .calc-hero-unit { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
 .calc-macro-grid { margin-bottom: 14px; }
 
+/* ---------------- Habits / Productivity ---------------- */
+
+.today-overview-body {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.today-progress-ring { width: 96px; height: 96px; flex-shrink: 0; }
+.today-progress-ring .calorie-ring-inner { width: 76px; height: 76px; }
+.today-overview-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.day-selector-row { display: flex; align-items: center; gap: 8px; }
+.day-pill-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  padding-bottom: 2px;
+}
+.day-pill {
+  flex: 1 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.day-pill-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+.day-pill-num { font-size: 15px; font-weight: 700; color: var(--text); }
+.day-pill.selected { border-color: var(--accent); background: var(--accent-dim); }
+.day-pill.selected .day-pill-num, .day-pill.selected .day-pill-label { color: #fff; }
+.day-pill.is-today:not(.selected) { border-color: var(--text-faint); }
+.day-pill-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 1px; visibility: hidden; }
+.day-pill.has-tasks .day-pill-dot { visibility: visible; }
+
+.week-nav-row { display: flex; align-items: center; gap: 8px; }
+.habit-history-grid-wrap { overflow-x: auto; }
+.habit-history-grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+.habit-history-grid th, .habit-history-grid td { padding: 6px 4px; text-align: center; }
+.habit-history-grid th { color: var(--text-dim); font-weight: 500; font-size: 11px; }
+.habit-history-row-name {
+  text-align: left !important;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  padding-right: 10px !important;
+}
+.habit-history-dot {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--card-border);
+  color: var(--text-faint);
+  font-size: 12px;
+  margin: 0 auto;
+}
+.habit-history-dot.done { background: var(--accent-dim); border-color: var(--accent); color: var(--accent-hover); }
+
+.habit-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.habit-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.habit-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.habit-card-name { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; }
+.habit-card-body { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-dim); }
+.habit-card-today-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.habit-card-count { display: flex; align-items: center; gap: 10px; }
+.habit-card-count-value { font-size: 18px; font-weight: 700; color: var(--text); min-width: 40px; text-align: center; }
+
+/* Task rows and Goal cards intentionally reuse .food-item-*, .list-item-*,
+   and .nutri-bar-* rules above (defined for Nutrition) rather than
+   duplicating near-identical styles — see js/habits.js render functions. */
+.task-row { align-items: center; }
+.task-row-done .task-text { text-decoration: line-through; color: var(--text-faint); }
+.task-check-btn { flex-shrink: 0; }
+
 /* ---------------- Header safe-area ---------------- */
 
 .app-header { padding-top: env(safe-area-inset-top); }
@@ -1488,4 +1593,7 @@ textarea { resize: vertical; min-height: 44px; }
   .calorie-ring { width: 140px; height: 140px; }
   .calorie-ring-inner { width: 112px; height: 112px; }
   .sheet-box { max-width: 100%; padding-left: 14px; padding-right: 14px; }
+  .today-overview-body { flex-direction: column; align-items: stretch; }
+  .today-progress-ring { align-self: center; }
+  .habit-card-grid { grid-template-columns: 1fr 1fr; }
 }
