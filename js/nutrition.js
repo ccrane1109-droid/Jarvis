@@ -1,8 +1,14 @@
 /* ==========================================================================
    JARVIS — Nutrition tracker
-   A separate main section from Workout. Manually logged only — no food
-   database, no barcode scanning, no automatic lookups. Every number in here
-   came from what the user typed in.
+   A separate main section from Workout. No built-in food database, barcode
+   scanning, or automatic lookups. Every number in here either came from what
+   the user typed in, or from a one-click AI estimate the user asked for and
+   can see and edit afterward (Food Log, Saved Foods, and Recipe ingredients
+   each offer an "Estimate with AI" / "Calculate Nutrition with AI" button
+   that sends a name + serving to the user's own configured "nutrition" AI
+   connection — see js/video-connections.js — and fills in the same editable
+   fields manual entry would). Nothing is ever silently invented: AI fields
+   are clearly labeled and the feature is fully opt-in per entry.
 
    localStorage keys:
      jarvisNutritionGoals      — { mode: "cutting"|"bulking",
@@ -448,6 +454,7 @@
       const el = $(id); if (el) el.value = "";
     });
     $("foodIsFruitVeg").checked = false;
+    setAiStatus("foodAiStatus", "");
     renderFoodForm();
   }
 
@@ -579,6 +586,7 @@
     ["savedFoodName", "savedFoodServing", "savedFoodCalories", "savedFoodProtein", "savedFoodCarbs", "savedFoodFat", "savedFoodFiber"].forEach(function (id) {
       const el = $(id); if (el) el.value = "";
     });
+    setAiStatus("savedFoodAiStatus", "");
     renderSavedFoodForm();
   }
 
@@ -738,11 +746,19 @@
     renderIngredientRows();
   }
 
-  function setRecipeAiStatus(text, isError) {
-    const el = $("recipeAiStatus");
+  function setAiStatus(elId, text, isError) {
+    const el = $(elId);
     if (!el) return;
     el.textContent = text || "";
     el.classList.toggle("text-negative", !!isError);
+  }
+
+  function setRecipeAiStatus(text, isError) {
+    setAiStatus("recipeAiStatus", text, isError);
+  }
+
+  function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 
   // Strips a ```json fenced block, if present, since models frequently wrap
@@ -754,74 +770,78 @@
     return JSON.parse(cleaned);
   }
 
-  // Sends every ingredient's name + quantity to the user's own configured
-  // "nutrition" AI connection (Bring-Your-Own — see AI Video > Connections)
-  // and asks it to estimate calories/protein/carbs/fat/fiber for each one,
-  // instead of the user looking each one up and doing the math by hand.
-  // These are AI estimates, not verified nutrition facts — every filled-in
-  // field stays a normal, editable number the user can correct.
-  function handleCalculateNutritionWithAI() {
-    const core = window.JarvisCore;
+  // Shared by Recipes, Food Log, and Saved Foods: sends one or more
+  // {name, quantity} items to the user's own configured "nutrition" AI
+  // connection (Bring-Your-Own — see AI Video > Connections) and asks it to
+  // estimate calories/protein/carbs/fat/fiber (and optionally micronutrients)
+  // for each one, in the same order, instead of the user looking each one up
+  // and doing the math by hand. Resolves to {ok:true, estimates:[...]} or
+  // {ok:false, error:"..."} — never rejects, so callers don't need a .catch.
+  function requestNutritionEstimates(items) {
     if (!window.JarvisVideoConnections || !window.JarvisVideoApi) {
-      setRecipeAiStatus("AI connections aren't available right now.", true);
-      return;
-    }
-    const named = recipeBuilder.ingredients.filter(function (ing) { return ing.name.trim(); });
-    if (named.length === 0) {
-      core.showToast("Add at least one ingredient name first.");
-      return;
+      return Promise.resolve({ ok: false, error: "AI connections aren't available right now." });
     }
     const connection = window.JarvisVideoConnections.getByKind("nutrition")[0];
     if (!connection || !connection.endpointUrl) {
-      setRecipeAiStatus("No AI connection set up yet for nutrient calculation.", true);
-      return;
+      return Promise.resolve({ ok: false, error: "No AI connection set up yet for nutrient calculation." });
     }
 
-    const ingredientsText = named.map(function (ing) {
-      return "- " + ing.name.trim() + (ing.quantity && ing.quantity.trim() ? " — " + ing.quantity.trim() : " — quantity not specified, assume a typical serving");
+    const ingredientsText = items.map(function (item) {
+      return "- " + item.name.trim() + (item.quantity && item.quantity.trim() ? " — " + item.quantity.trim() : " — quantity not specified, assume a typical serving");
     }).join("\n");
-
-    setRecipeAiStatus("Asking AI to estimate nutrition for " + named.length + " ingredient" + (named.length === 1 ? "" : "s") + "…");
-    const btn = $("recipeAiCalculateBtn");
-    if (btn) btn.disabled = true;
 
     let jsonBody;
     try {
       jsonBody = window.JarvisVideoApi.fillJsonTemplate(connection.bodyTemplate, { ingredientsText: ingredientsText });
     } catch (err) {
-      setRecipeAiStatus("Couldn't build the request from this connection's template.", true);
-      if (btn) btn.disabled = false;
-      return;
+      return Promise.resolve({ ok: false, error: "Couldn't build the request from this connection's template." });
     }
 
-    window.JarvisVideoApi.postRequest(connection, jsonBody, false).then(function (result) {
-      if (btn) btn.disabled = false;
+    return window.JarvisVideoApi.postRequest(connection, jsonBody, false).then(function (result) {
       if (!result.ok) {
-        setRecipeAiStatus("Request failed: " + (result.errorMessage || "unknown error"), true);
-        return;
+        return { ok: false, error: "Request failed: " + (result.errorMessage || "unknown error") };
       }
       let responseJson;
       try { responseJson = JSON.parse(result.bodyText); } catch (e) {
-        setRecipeAiStatus("The connection's response wasn't valid JSON.", true);
-        return;
+        return { ok: false, error: "The connection's response wasn't valid JSON." };
       }
       const extracted = window.JarvisVideoApi.resolveJsonPath(responseJson, connection.responsePath);
       if (extracted === undefined) {
-        setRecipeAiStatus("Couldn't find the model's reply at that response path — check the connection's \"Result field\" setting.", true);
-        return;
+        return { ok: false, error: "Couldn't find the model's reply at that response path — check the connection's \"Result field\" setting." };
       }
       let estimates;
       try {
         estimates = typeof extracted === "string" ? parseJsonLoosely(extracted) : extracted;
       } catch (e) {
-        setRecipeAiStatus("The model's reply wasn't a parseable JSON array — see the connection's placeholder hint for the exact shape it needs to reply with.", true);
-        return;
+        return { ok: false, error: "The model's reply wasn't a parseable JSON array — see the connection's placeholder hint for the exact shape it needs to reply with." };
       }
       if (!Array.isArray(estimates)) {
-        setRecipeAiStatus("The model's reply wasn't a JSON array of ingredients.", true);
+        return { ok: false, error: "The model's reply wasn't a JSON array." };
+      }
+      return { ok: true, estimates: estimates };
+    }).catch(function (err) {
+      return { ok: false, error: "Something went wrong: " + (err && err.message ? err.message : String(err)) };
+    });
+  }
+
+  function handleCalculateNutritionWithAI() {
+    const core = window.JarvisCore;
+    const named = recipeBuilder.ingredients.filter(function (ing) { return ing.name.trim(); });
+    if (named.length === 0) {
+      core.showToast("Add at least one ingredient name first.");
+      return;
+    }
+    setRecipeAiStatus("Asking AI to estimate nutrition for " + named.length + " ingredient" + (named.length === 1 ? "" : "s") + "…");
+    const btn = $("recipeAiCalculateBtn");
+    if (btn) btn.disabled = true;
+
+    requestNutritionEstimates(named).then(function (result) {
+      if (btn) btn.disabled = false;
+      if (!result.ok) {
+        setRecipeAiStatus(result.error, true);
         return;
       }
-
+      const estimates = result.estimates;
       let filled = 0;
       named.forEach(function (ing, i) {
         const est = estimates[i];
@@ -842,9 +862,70 @@
       } else {
         setRecipeAiStatus("Filled in " + filled + " ingredient" + (filled === 1 ? "" : "s") + " with AI estimates — these are estimates, not verified nutrition facts, so double-check anything that matters.");
       }
-    }).catch(function (err) {
+    });
+  }
+
+  // Estimates a single food's nutrition (macros, and for the Food Log,
+  // micronutrients too) from its name + serving amount, via the same shared
+  // "nutrition" AI connection — filling in fields that stay normal, editable
+  // numbers the user can still correct by hand.
+  function handleEstimateFoodWithAI() {
+    const core = window.JarvisCore;
+    const name = $("foodName").value.trim();
+    if (!name) {
+      core.showToast("Enter a food name first.");
+      return;
+    }
+    const quantity = $("foodServing").value.trim();
+    setAiStatus("foodAiStatus", "Asking AI to estimate nutrition for " + name + "…");
+    const btn = $("foodAiEstimateBtn");
+    if (btn) btn.disabled = true;
+
+    requestNutritionEstimates([{ name: name, quantity: quantity }]).then(function (result) {
       if (btn) btn.disabled = false;
-      setRecipeAiStatus("Something went wrong: " + (err && err.message ? err.message : String(err)), true);
+      if (!result.ok) {
+        setAiStatus("foodAiStatus", result.error, true);
+        return;
+      }
+      const est = result.estimates[0];
+      if (!est || typeof est !== "object") {
+        setAiStatus("foodAiStatus", "The model replied, but didn't return an estimate for this food.", true);
+        return;
+      }
+      MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
+        if (isNonNegativeNumber(est[f])) $("food" + capitalize(f)).value = est[f];
+      });
+      setAiStatus("foodAiStatus", "Filled in an AI estimate for " + name + " — this is an estimate, not a verified nutrition fact, so double-check anything that matters.");
+    });
+  }
+
+  function handleEstimateSavedFoodWithAI() {
+    const core = window.JarvisCore;
+    const name = $("savedFoodName").value.trim();
+    if (!name) {
+      core.showToast("Enter a food name first.");
+      return;
+    }
+    const quantity = $("savedFoodServing").value.trim();
+    setAiStatus("savedFoodAiStatus", "Asking AI to estimate nutrition for " + name + "…");
+    const btn = $("savedFoodAiEstimateBtn");
+    if (btn) btn.disabled = true;
+
+    requestNutritionEstimates([{ name: name, quantity: quantity }]).then(function (result) {
+      if (btn) btn.disabled = false;
+      if (!result.ok) {
+        setAiStatus("savedFoodAiStatus", result.error, true);
+        return;
+      }
+      const est = result.estimates[0];
+      if (!est || typeof est !== "object") {
+        setAiStatus("savedFoodAiStatus", "The model replied, but didn't return an estimate for this food.", true);
+        return;
+      }
+      MACRO_FIELDS.forEach(function (f) {
+        if (isNonNegativeNumber(est[f])) $("savedFood" + capitalize(f)).value = est[f];
+      });
+      setAiStatus("savedFoodAiStatus", "Filled in an AI estimate for " + name + " — this is an estimate, not a verified nutrition fact, so double-check anything that matters.");
     });
   }
 
@@ -1137,6 +1218,8 @@
 
     $("foodForm").addEventListener("submit", handleFoodFormSubmit);
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
+    $("foodAiEstimateBtn").addEventListener("click", handleEstimateFoodWithAI);
+    $("foodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
     MEALS.forEach(function (meal) {
       const el = $("foodMeal_" + meal);
       if (el) el.addEventListener("click", handleFoodLogClick);
@@ -1144,6 +1227,8 @@
 
     $("savedFoodForm").addEventListener("submit", handleSavedFoodFormSubmit);
     $("savedFoodCancelBtn").addEventListener("click", resetSavedFoodForm);
+    $("savedFoodAiEstimateBtn").addEventListener("click", handleEstimateSavedFoodWithAI);
+    $("savedFoodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
 
     $("recipeForm").addEventListener("submit", handleRecipeFormSubmit);

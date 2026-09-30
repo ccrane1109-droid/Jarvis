@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -794,6 +794,14 @@
             <label for="foodName">Food name</label>
             <input type="text" id="foodName" maxlength="80" placeholder="e.g. Grilled chicken breast">
           </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="foodAiEstimateBtn">Estimate with AI</button>
+          </div>
+          <p class="field-hint" id="foodAiStatus"></p>
+          <p class="field-hint">
+            AI estimates are not verified nutrition facts — always spot-check anything that matters.
+            <button type="button" class="btn-icon" id="foodGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
+          </p>
           <div class="form-row two-col">
             <div>
               <label for="foodCalories">Calories</label>
@@ -895,6 +903,14 @@
               <input type="text" id="savedFoodServing" placeholder="e.g. 1 scoop">
             </div>
           </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="savedFoodAiEstimateBtn">Estimate with AI</button>
+          </div>
+          <p class="field-hint" id="savedFoodAiStatus"></p>
+          <p class="field-hint">
+            AI estimates are not verified nutrition facts — always spot-check anything that matters.
+            <button type="button" class="btn-icon" id="savedFoodGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
+          </p>
           <div class="form-row two-col">
             <div>
               <label for="savedFoodCalories">Calories</label>
@@ -1826,20 +1842,20 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=9"></script>
-<script type="module" src="js/auth.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
-<script src="js/exercises.js?v=9"></script>
-<script src="js/workout.js?v=9"></script>
-<script src="js/nutrition.js?v=9"></script>
-<script src="js/habits.js?v=9"></script>
-<script src="js/business.js?v=9"></script>
-<script src="js/trading.js?v=9"></script>
-<script src="js/blobstore.js?v=9"></script>
-<script src="js/video-api-client.js?v=9"></script>
-<script src="js/video-connections.js?v=9"></script>
-<script src="js/video.js?v=9"></script>
-<script src="js/video-studio.js?v=9"></script>
-<script src="js/form-check.js?v=9"></script>
+<script src="js/firebase-config.js?v=10"></script>
+<script type="module" src="js/auth.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
+<script src="js/exercises.js?v=10"></script>
+<script src="js/workout.js?v=10"></script>
+<script src="js/nutrition.js?v=10"></script>
+<script src="js/habits.js?v=10"></script>
+<script src="js/business.js?v=10"></script>
+<script src="js/trading.js?v=10"></script>
+<script src="js/blobstore.js?v=10"></script>
+<script src="js/video-api-client.js?v=10"></script>
+<script src="js/video-connections.js?v=10"></script>
+<script src="js/video.js?v=10"></script>
+<script src="js/video-studio.js?v=10"></script>
+<script src="js/form-check.js?v=10"></script>
 </body>
 </html>
