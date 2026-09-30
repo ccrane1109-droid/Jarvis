@@ -280,6 +280,14 @@
       }
     });
 
+    const businessSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".business-sub-nav-btn"));
+    const businessSubPanels = Array.prototype.slice.call(document.querySelectorAll(".business-sub-panel"));
+    setupTabGroup(businessSubNavBtns, businessSubPanels, function (targetId) {
+      if (window.JarvisBusiness && typeof window.JarvisBusiness.onSubTabChange === "function") {
+        window.JarvisBusiness.onSubTabChange(targetId);
+      }
+    });
+
     const briefingBtn = document.getElementById("dailyBriefingBtn");
     if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
     const briefingCloseBtn = document.getElementById("briefingCloseBtn");
