@@ -278,6 +278,31 @@
     if (briefingCloseBtn) briefingCloseBtn.addEventListener("click", function () { closeModal("briefingModal"); });
     registerServiceWorker();
 
+    // Profile/account menu — keeps the header compact by tucking email,
+    // 2-step verification, Daily Briefing, and Log Out behind one button.
+    const profileMenuBtn = document.getElementById("profileMenuBtn");
+    const profileMenu = document.getElementById("profileMenu");
+    if (profileMenuBtn && profileMenu) {
+      profileMenuBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const wasOpen = !profileMenu.classList.contains("hidden");
+        profileMenu.classList.toggle("hidden", wasOpen);
+        profileMenuBtn.setAttribute("aria-expanded", String(!wasOpen));
+      });
+      document.addEventListener("click", function (e) {
+        if (!profileMenu.classList.contains("hidden") && !profileMenu.contains(e.target) && e.target !== profileMenuBtn) {
+          profileMenu.classList.add("hidden");
+          profileMenuBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+      profileMenu.addEventListener("click", function (e) {
+        if (e.target.closest("button")) {
+          profileMenu.classList.add("hidden");
+          profileMenuBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
+
     // Feature modules read their data (from localStorage, possibly just
     // refreshed by auth.js's Firestore sync) as soon as they init, so they
     // must not start until auth.js says it's safe to — otherwise a synced

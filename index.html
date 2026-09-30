@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>JARVIS</title>
 <meta name="theme-color" content="#0a0e14">
 <meta name="description" content="JARVIS — a personal dashboard for workouts, nutrition, habits, business, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -121,10 +121,17 @@
       <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
       <button type="button" class="main-nav-btn" data-target="panel-video" role="tab" aria-selected="false" aria-controls="panel-video" id="navBtnVideo">AI Video</button>
     </nav>
-    <span class="field-hint" id="authAccountEmail" style="margin-right:8px;"></span>
-    <button type="button" class="btn btn-secondary hidden" id="authSetup2faBtn">Set Up 2-Step Verification</button>
-    <button type="button" class="btn btn-secondary hidden" id="authLogoutBtn">Log Out</button>
-    <button type="button" class="btn btn-secondary" id="dailyBriefingBtn">Daily Briefing</button>
+    <div class="profile-menu-wrap">
+      <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
+        <span aria-hidden="true">&#9881;</span>
+      </button>
+      <div class="profile-menu hidden" id="profileMenu" role="menu">
+        <div class="profile-menu-email" id="authAccountEmail"></div>
+        <button type="button" class="profile-menu-item hidden" id="authSetup2faBtn" role="menuitem">Set Up 2-Step Verification</button>
+        <button type="button" class="profile-menu-item" id="dailyBriefingBtn" role="menuitem">Daily Briefing</button>
+        <button type="button" class="profile-menu-item hidden" id="authLogoutBtn" role="menuitem">Log Out</button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -654,14 +661,13 @@
   <section id="panel-nutrition" class="tab-panel" role="tabpanel" aria-labelledby="navBtnNutrition">
     <div class="panel-header">
       <h1>Nutrition</h1>
-      <p class="panel-subtitle">Log food, track macros, and see how your eating lines up with your goals. Manually logged only — nothing here is invented or looked up automatically.</p>
+      <p class="panel-subtitle">Log food, track macros, and see how your eating lines up with your goals. Manually logged only — nothing here is invented or looked up automatically, except AI estimates you explicitly ask for.</p>
     </div>
 
     <nav class="sub-nav nutrition-sub-nav" role="tablist" aria-label="Nutrition sections">
       <button type="button" class="nutrition-sub-nav-btn active" data-subtarget="nutrition-dashboard" role="tab" aria-selected="true" aria-controls="nutrition-dashboard" id="nutritionSubNavDashboard">Dashboard</button>
-      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-goals" role="tab" aria-selected="false" aria-controls="nutrition-goals" id="nutritionSubNavGoals">Cutting / Bulking</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-food" role="tab" aria-selected="false" aria-controls="nutrition-food" id="nutritionSubNavFood">Food Log</button>
-      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-saved" role="tab" aria-selected="false" aria-controls="nutrition-saved" id="nutritionSubNavSaved">Saved Foods</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-saved" role="tab" aria-selected="false" aria-controls="nutrition-saved" id="nutritionSubNavSaved">Saved</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-recipes" role="tab" aria-selected="false" aria-controls="nutrition-recipes" id="nutritionSubNavRecipes">Recipes</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-nutrients" role="tab" aria-selected="false" aria-controls="nutrition-nutrients" id="nutritionSubNavNutrients">Nutrients</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-history" role="tab" aria-selected="false" aria-controls="nutrition-history" id="nutritionSubNavHistory">History</button>
@@ -669,221 +675,138 @@
 
     <!-- ---------- Sub-panel: Dashboard ---------- -->
     <div id="nutrition-dashboard" class="nutrition-sub-panel active" role="tabpanel" aria-labelledby="nutritionSubNavDashboard">
-      <div class="card-grid">
-        <div class="card">
+      <div class="card calorie-hero-card">
+        <div class="card-title-row">
           <h2 class="card-title">Today</h2>
-          <div class="stat-grid">
-            <div class="stat-box"><span class="stat-value" id="nutritionModeLabel">Cutting</span><span class="stat-label">Current goal</span></div>
-            <div class="stat-box"><span class="stat-value" id="nutritionCalorieTarget">Not set</span><span class="stat-label">Calorie target</span></div>
-            <div class="stat-box"><span class="stat-value" id="nutritionCalorieConsumed">0</span><span class="stat-label">Consumed today</span></div>
-            <div class="stat-box"><span class="stat-value" id="nutritionCalorieRemaining">—</span><span class="stat-label">Remaining</span></div>
-          </div>
+          <span class="badge badge-neutral" id="nutritionModeLabel">Cutting</span>
         </div>
-        <div class="card">
-          <h2 class="card-title">Nutrition Score</h2>
-          <div class="strength-score-hero">
-            <div class="strength-score-value" id="nutritionScoreValue">0</div>
-            <div class="strength-score-level">out of 100 — a heuristic from what you've logged, not medical advice or a judgment of you</div>
+        <div class="calorie-hero-body">
+          <div class="calorie-ring" id="calorieRing">
+            <div class="calorie-ring-inner">
+              <span class="calorie-ring-line1"><span id="nutritionCalorieConsumed">0</span> / <span id="nutritionCalorieTarget">Not set</span></span>
+              <span class="calorie-ring-line2">kcal</span>
+            </div>
           </div>
-          <div class="form-row two-col">
-            <div>
-              <h3 class="checklist-title">Good</h3>
-              <ul class="plain-list" id="nutritionScoreGood"></ul>
-            </div>
-            <div>
-              <h3 class="checklist-title">Could Improve</h3>
-              <ul class="plain-list" id="nutritionScoreImprove"></ul>
-            </div>
+          <div class="calorie-remaining-block">
+            <span class="calorie-remaining-value" id="nutritionCalorieRemaining">—</span>
+            <span class="calorie-remaining-label">remaining</span>
           </div>
         </div>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Macros &amp; Fiber</h2>
-        <div id="nutritionMacroBars"></div>
-      </div>
+      <div class="macro-card-grid" id="nutritionMacroCards"></div>
 
-      <div class="card">
-        <h2 class="card-title">Water</h2>
+      <div class="card water-card">
+        <div class="card-title-row">
+          <h2 class="card-title">Water</h2>
+          <span class="field-hint" id="nutritionWaterCount">0</span>
+        </div>
         <div id="nutritionWaterBar"></div>
         <div class="form-actions" style="margin-top:10px;align-items:center;">
           <button type="button" class="btn-icon" id="nutritionWaterRemoveBtn" aria-label="Remove a cup of water">&minus; Cup</button>
-          <span class="field-hint" id="nutritionWaterCount" style="margin:0 4px;">0</span>
-          <button type="button" class="btn-icon" id="nutritionWaterAddBtn" aria-label="Add a cup of water">+ Cup</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Cutting / Bulking Goals ---------- -->
-    <div id="nutrition-goals" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavGoals">
-      <div class="card">
-        <h2 class="card-title">Goal Mode</h2>
-        <p class="field-hint">Switch between Cutting and Bulking — each keeps its own saved targets, so switching back and forth never loses your numbers. This is a tracking and organization tool, not a recommendation engine — it never suggests a calorie number for you.</p>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" id="goalsModeCuttingBtn">Cutting</button>
-          <button type="button" class="btn btn-secondary" id="goalsModeBulkingBtn">Bulking</button>
+          <button type="button" class="btn btn-secondary" id="nutritionWaterAddBtn">+1 Cup</button>
         </div>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Targets</h2>
-        <form id="goalsForm" class="stacked-form" novalidate>
-          <div class="form-row two-col">
-            <div>
-              <label for="goalsCalories">Daily calories</label>
-              <input type="number" id="goalsCalories" min="0" step="1" placeholder="e.g. 2200">
-            </div>
-            <div>
-              <label for="goalsWater">Water (cups)</label>
-              <input type="number" id="goalsWater" min="0" step="1" placeholder="e.g. 8">
-            </div>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="goalsProtein">Protein (g)</label>
-              <input type="number" id="goalsProtein" min="0" step="1" placeholder="e.g. 160">
-            </div>
-            <div>
-              <label for="goalsCarbs">Carbohydrates (g)</label>
-              <input type="number" id="goalsCarbs" min="0" step="1" placeholder="e.g. 220">
-            </div>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="goalsFat">Fat (g)</label>
-              <input type="number" id="goalsFat" min="0" step="1" placeholder="e.g. 70">
-            </div>
-            <div>
-              <label for="goalsFiber">Fiber (g)</label>
-              <input type="number" id="goalsFiber" min="0" step="1" placeholder="e.g. 30">
-            </div>
-          </div>
+      <div class="quick-actions-row">
+        <button type="button" class="quick-action-btn" id="qaAddFoodBtn"><span class="quick-action-icon" aria-hidden="true">＋</span><span>Food</span></button>
+        <button type="button" class="quick-action-btn" id="qaAddWaterBtn"><span class="quick-action-icon" aria-hidden="true">💧</span><span>Water</span></button>
+        <button type="button" class="quick-action-btn" id="qaLogRecentBtn"><span class="quick-action-icon" aria-hidden="true">↻</span><span>Recent</span></button>
+        <button type="button" class="quick-action-btn" id="qaAddRecipeBtn"><span class="quick-action-icon" aria-hidden="true">🍲</span><span>Recipe</span></button>
+      </div>
+
+      <details class="card collapsible-card" id="goalsDetails">
+        <summary class="card-title">Goals &amp; Targets</summary>
+        <div class="collapsible-body">
+          <p class="field-hint">Switch between Cutting and Bulking — each keeps its own saved targets, so switching back and forth never loses your numbers. This is a tracking and organization tool, not a recommendation engine — it never suggests a calorie number for you.</p>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="goalsSaveBtn">Save Targets</button>
+            <button type="button" class="btn btn-secondary" id="goalsModeCuttingBtn">Cutting</button>
+            <button type="button" class="btn btn-secondary" id="goalsModeBulkingBtn">Bulking</button>
           </div>
-        </form>
-      </div>
+          <form id="goalsForm" class="stacked-form" novalidate>
+            <div class="form-row two-col">
+              <div>
+                <label for="goalsCalories">Daily calories</label>
+                <input type="number" id="goalsCalories" min="0" step="1" placeholder="e.g. 2200">
+              </div>
+              <div>
+                <label for="goalsWater">Water (cups)</label>
+                <input type="number" id="goalsWater" min="0" step="1" placeholder="e.g. 8">
+              </div>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="goalsProtein">Protein (g)</label>
+                <input type="number" id="goalsProtein" min="0" step="1" placeholder="e.g. 160">
+              </div>
+              <div>
+                <label for="goalsCarbs">Carbohydrates (g)</label>
+                <input type="number" id="goalsCarbs" min="0" step="1" placeholder="e.g. 220">
+              </div>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="goalsFat">Fat (g)</label>
+                <input type="number" id="goalsFat" min="0" step="1" placeholder="e.g. 70">
+              </div>
+              <div>
+                <label for="goalsFiber">Fiber (g)</label>
+                <input type="number" id="goalsFiber" min="0" step="1" placeholder="e.g. 30">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="goalsSaveBtn">Save Targets</button>
+            </div>
+          </form>
+          <h3 class="checklist-title" style="margin-top:14px;">Today's Progress Toward These Targets</h3>
+          <div id="goalsProgressBars"></div>
+        </div>
+      </details>
 
       <div class="card">
-        <h2 class="card-title">Today's Progress Toward These Targets</h2>
-        <div id="goalsProgressBars"></div>
+        <h2 class="card-title">Nutrition Score</h2>
+        <div class="strength-score-hero">
+          <div class="strength-score-value" id="nutritionScoreValue">0</div>
+          <div class="strength-score-level">out of 100 — a heuristic from what you've logged, not medical advice or a judgment of you</div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <h3 class="checklist-title">Good</h3>
+            <ul class="plain-list" id="nutritionScoreGood"></ul>
+          </div>
+          <div>
+            <h3 class="checklist-title">Could Improve</h3>
+            <ul class="plain-list" id="nutritionScoreImprove"></ul>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- ---------- Sub-panel: Food Log ---------- -->
     <div id="nutrition-food" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavFood">
-      <div class="card">
-        <h2 class="card-title" id="foodFormTitle">Add Food</h2>
-        <form id="foodForm" class="stacked-form" novalidate>
-          <div class="form-row two-col">
-            <div>
-              <label for="foodFormMealSelect">Meal</label>
-              <select id="foodFormMealSelect">
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="dinner">Dinner</option>
-                <option value="snacks">Snacks</option>
-              </select>
-            </div>
-            <div>
-              <label for="foodServing">Serving amount</label>
-              <input type="text" id="foodServing" placeholder="e.g. 1 cup">
-            </div>
-          </div>
-          <div class="form-row">
-            <label for="foodName">Food name</label>
-            <input type="text" id="foodName" maxlength="80" placeholder="e.g. Grilled chicken breast">
-          </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" id="foodAiEstimateBtn">Estimate with AI</button>
-          </div>
-          <p class="field-hint" id="foodAiStatus"></p>
-          <p class="field-hint">
-            AI estimates are not verified nutrition facts — always spot-check anything that matters.
-            <button type="button" class="btn-icon" id="foodGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
-          </p>
-          <div class="form-row two-col">
-            <div>
-              <label for="foodCalories">Calories</label>
-              <input type="number" id="foodCalories" min="0" step="1" placeholder="e.g. 250">
-            </div>
-            <div>
-              <label for="foodProtein">Protein (g)</label>
-              <input type="number" id="foodProtein" min="0" step="0.1" placeholder="e.g. 40">
-            </div>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="foodCarbs">Carbohydrates (g)</label>
-              <input type="number" id="foodCarbs" min="0" step="0.1" placeholder="e.g. 0">
-            </div>
-            <div>
-              <label for="foodFat">Fat (g)</label>
-              <input type="number" id="foodFat" min="0" step="0.1" placeholder="e.g. 6">
-            </div>
-          </div>
-          <div class="form-row">
-            <label for="foodFiber">Fiber (g)</label>
-            <input type="number" id="foodFiber" min="0" step="0.1" placeholder="e.g. 0">
-          </div>
-          <div class="checklist-item">
-            <input type="checkbox" id="foodIsFruitVeg">
-            <label for="foodIsFruitVeg">This counts as a fruit or vegetable serving</label>
-          </div>
-
-          <h3 class="checklist-title">More nutrients (optional)</h3>
-          <p class="field-hint">Leave any of these blank if you don't know them — they're only counted when entered, never guessed.</p>
-          <div class="form-row two-col">
-            <div>
-              <label for="foodSodium">Sodium (mg)</label>
-              <input type="number" id="foodSodium" min="0" step="1">
-            </div>
-            <div>
-              <label for="foodCalcium">Calcium (mg)</label>
-              <input type="number" id="foodCalcium" min="0" step="1">
-            </div>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="foodIron">Iron (mg)</label>
-              <input type="number" id="foodIron" min="0" step="0.1">
-            </div>
-            <div>
-              <label for="foodPotassium">Potassium (mg)</label>
-              <input type="number" id="foodPotassium" min="0" step="1">
-            </div>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="foodVitaminC">Vitamin C (mg)</label>
-              <input type="number" id="foodVitaminC" min="0" step="0.1">
-            </div>
-            <div>
-              <label for="foodVitaminD">Vitamin D (mcg)</label>
-              <input type="number" id="foodVitaminD" min="0" step="0.1">
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="foodFormSubmitBtn">Add to Log</button>
-            <button type="button" class="btn btn-secondary hidden" id="foodFormCancelBtn">Cancel</button>
-          </div>
-        </form>
-      </div>
+      <button type="button" class="btn btn-primary btn-lg add-food-cta" id="foodOpenModalBtn">+ Add Food</button>
 
       <div class="card">
         <div class="card-title-row">
           <h2 class="card-title">Today's Food</h2>
           <span class="field-hint" id="foodLogTotals"></span>
         </div>
-        <h3 class="checklist-title">Breakfast</h3>
-        <div id="foodMeal_breakfast" class="item-list"></div>
-        <h3 class="checklist-title">Lunch</h3>
-        <div id="foodMeal_lunch" class="item-list"></div>
-        <h3 class="checklist-title">Dinner</h3>
-        <div id="foodMeal_dinner" class="item-list"></div>
-        <h3 class="checklist-title">Snacks</h3>
-        <div id="foodMeal_snacks" class="item-list"></div>
+        <div class="meal-section" data-meal="breakfast">
+          <div class="meal-section-header"><span>Breakfast</span><span class="meal-section-total" id="foodMealTotal_breakfast"></span></div>
+          <div id="foodMeal_breakfast" class="item-list"></div>
+        </div>
+        <div class="meal-section" data-meal="lunch">
+          <div class="meal-section-header"><span>Lunch</span><span class="meal-section-total" id="foodMealTotal_lunch"></span></div>
+          <div id="foodMeal_lunch" class="item-list"></div>
+        </div>
+        <div class="meal-section" data-meal="dinner">
+          <div class="meal-section-header"><span>Dinner</span><span class="meal-section-total" id="foodMealTotal_dinner"></span></div>
+          <div id="foodMeal_dinner" class="item-list"></div>
+        </div>
+        <div class="meal-section" data-meal="snacks">
+          <div class="meal-section-header"><span>Snacks</span><span class="meal-section-total" id="foodMealTotal_snacks"></span></div>
+          <div id="foodMeal_snacks" class="item-list"></div>
+        </div>
       </div>
     </div>
 
@@ -891,7 +814,7 @@
     <div id="nutrition-saved" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavSaved">
       <div class="card">
         <h2 class="card-title" id="savedFoodFormTitle">Add Saved Food</h2>
-        <p class="field-hint">For foods you eat often — save them once, then add them to any day in one click.</p>
+        <p class="field-hint">For foods you eat often — save them once, then log them in one tap from Food Log's "+ Add Food".</p>
         <form id="savedFoodForm" class="stacked-form" novalidate>
           <div class="form-row two-col">
             <div>
@@ -935,6 +858,42 @@
             <label for="savedFoodFiber">Fiber (g)</label>
             <input type="number" id="savedFoodFiber" min="0" step="0.1">
           </div>
+          <details class="collapsible-section">
+            <summary>More Nutrition Information</summary>
+            <div class="collapsible-body">
+              <p class="field-hint">Leave any of these blank if you don't know them — they're only counted when entered, never guessed.</p>
+              <div class="form-row two-col">
+                <div>
+                  <label for="savedFoodSodium">Sodium (mg)</label>
+                  <input type="number" id="savedFoodSodium" min="0" step="1">
+                </div>
+                <div>
+                  <label for="savedFoodCalcium">Calcium (mg)</label>
+                  <input type="number" id="savedFoodCalcium" min="0" step="1">
+                </div>
+              </div>
+              <div class="form-row two-col">
+                <div>
+                  <label for="savedFoodIron">Iron (mg)</label>
+                  <input type="number" id="savedFoodIron" min="0" step="0.1">
+                </div>
+                <div>
+                  <label for="savedFoodPotassium">Potassium (mg)</label>
+                  <input type="number" id="savedFoodPotassium" min="0" step="1">
+                </div>
+              </div>
+              <div class="form-row two-col">
+                <div>
+                  <label for="savedFoodVitaminC">Vitamin C (mg)</label>
+                  <input type="number" id="savedFoodVitaminC" min="0" step="0.1">
+                </div>
+                <div>
+                  <label for="savedFoodVitaminD">Vitamin D (mcg)</label>
+                  <input type="number" id="savedFoodVitaminD" min="0" step="0.1">
+                </div>
+              </div>
+            </div>
+          </details>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="savedFoodSubmitBtn">Save Food</button>
             <button type="button" class="btn btn-secondary hidden" id="savedFoodCancelBtn">Cancel</button>
@@ -943,8 +902,24 @@
       </div>
 
       <div class="card">
-        <h2 class="card-title">Your Saved Foods</h2>
-        <div id="savedFoodsList" class="item-list">
+        <div class="card-title-row">
+          <h2 class="card-title">Your Saved Foods</h2>
+        </div>
+        <div class="form-row two-col" style="margin-bottom:10px;">
+          <div>
+            <label for="savedFoodSearchInput">Search</label>
+            <input type="text" id="savedFoodSearchInput" placeholder="Search saved foods">
+          </div>
+          <div>
+            <label for="savedFoodSortSelect">Sort</label>
+            <select id="savedFoodSortSelect">
+              <option value="name">Name (A–Z)</option>
+              <option value="recent">Recently added</option>
+              <option value="calories">Calories (low to high)</option>
+            </select>
+          </div>
+        </div>
+        <div id="savedFoodsList" class="saved-food-grid">
           <div class="empty-state">No saved foods yet.</div>
         </div>
       </div>
@@ -972,8 +947,9 @@
           <h3 class="checklist-title">Ingredients</h3>
           <p class="field-hint">
             Give each ingredient a name and quantity (e.g. "6 oz", "2 cups"), then either enter its total nutrition
-            for that amount yourself, or use "Calculate with AI" to have your own connected AI estimate it —
+            for that amount yourself, or use "Calculate Nutrition with AI" to have your own connected AI estimate it —
             per-serving macros are always calculated automatically afterward by dividing the totals by servings above.
+            AI-filled values are clearly badged and stay fully editable before you save.
           </p>
           <div id="recipeIngredientRows"></div>
           <div class="form-actions">
@@ -1003,11 +979,16 @@
     <!-- ---------- Sub-panel: Nutrients ---------- -->
     <div id="nutrition-nutrients" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavNutrients">
       <div class="card">
-        <h2 class="card-title">Today's Nutrients</h2>
+        <h2 class="card-title">Macros</h2>
+        <p class="field-hint">Shows a progress bar only when you've set a target for it in Goals &amp; Targets — otherwise just the amount logged today.</p>
+        <div id="nutrientsMacroList"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Micronutrients</h2>
         <p class="field-hint">
           Only shows a nutrient once you've entered it on at least one food today — nothing here is estimated or
           looked up. Reference amounts are commonly-cited general adult values for rough context only, not
-          personalized medical advice.
+          personalized targets or medical advice.
         </p>
         <div id="nutrientsList" class="item-list"></div>
       </div>
@@ -1016,8 +997,22 @@
     <!-- ---------- Sub-panel: History ---------- -->
     <div id="nutrition-history" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavHistory">
       <div class="card">
-        <h2 class="card-title">7-Day Averages</h2>
+        <div class="card-title-row">
+          <h2 class="card-title">Averages</h2>
+          <div class="segmented-control" id="historyRangeToggle">
+            <button type="button" class="segmented-btn active" data-range="7" id="historyRange7dBtn">7D</button>
+            <button type="button" class="segmented-btn" data-range="30" id="historyRange30dBtn">30D</button>
+          </div>
+        </div>
         <div id="historyAverages"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Calorie Trend</h2>
+        <div id="historyCalorieTrend" class="chart-container"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Protein Trend</h2>
+        <div id="historyProteinTrend" class="chart-container"></div>
       </div>
       <div class="card">
         <h2 class="card-title">Past Days</h2>
@@ -1838,24 +1833,180 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden sheet-overlay" id="addFoodModal" role="dialog" aria-modal="true" aria-labelledby="addFoodModalTitle">
+  <div class="modal-box sheet-box">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="card-title-row">
+      <h2 id="addFoodModalTitle">Add Food</h2>
+      <button type="button" class="btn-icon" id="addFoodModalCloseBtn" aria-label="Close">&times;</button>
+    </div>
+    <div class="segmented-control sheet-tabs" id="addFoodTabs" role="tablist">
+      <button type="button" class="segmented-btn" data-tab="recent" id="addFoodTabRecent">Recent</button>
+      <button type="button" class="segmented-btn" data-tab="saved" id="addFoodTabSaved">Saved</button>
+      <button type="button" class="segmented-btn" data-tab="create" id="addFoodTabCreate">Create</button>
+      <button type="button" class="segmented-btn" data-tab="recipe" id="addFoodTabRecipe">Recipe</button>
+    </div>
+
+    <div class="sheet-panel" id="addFoodPanelRecent">
+      <div id="recentFoodsList" class="picker-list"></div>
+    </div>
+
+    <div class="sheet-panel hidden" id="addFoodPanelSaved">
+      <div class="form-row">
+        <input type="text" id="modalSavedFoodSearchInput" placeholder="Search saved foods">
+      </div>
+      <div id="modalSavedFoodsList" class="picker-list"></div>
+    </div>
+
+    <div class="sheet-panel hidden" id="addFoodPanelCreate">
+      <h3 class="checklist-title" id="foodFormTitle">Add Food</h3>
+      <form id="foodForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="foodFormMealSelect">Meal</label>
+            <select id="foodFormMealSelect">
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snacks">Snacks</option>
+            </select>
+          </div>
+          <div>
+            <label for="foodServing">Serving amount</label>
+            <input type="text" id="foodServing" placeholder="e.g. 1 cup">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="foodName">Food name</label>
+          <input type="text" id="foodName" maxlength="80" placeholder="e.g. Grilled chicken breast">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="foodAiEstimateBtn">Estimate with AI</button>
+        </div>
+        <p class="field-hint" id="foodAiStatus"></p>
+        <p class="field-hint">
+          AI estimates are not verified nutrition facts — always spot-check anything that matters.
+          <button type="button" class="btn-icon" id="foodGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
+        </p>
+        <div class="form-row two-col">
+          <div>
+            <label for="foodCalories">Calories</label>
+            <input type="number" id="foodCalories" min="0" step="1" placeholder="e.g. 250">
+          </div>
+          <div>
+            <label for="foodProtein">Protein (g)</label>
+            <input type="number" id="foodProtein" min="0" step="0.1" placeholder="e.g. 40">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="foodCarbs">Carbohydrates (g)</label>
+            <input type="number" id="foodCarbs" min="0" step="0.1" placeholder="e.g. 0">
+          </div>
+          <div>
+            <label for="foodFat">Fat (g)</label>
+            <input type="number" id="foodFat" min="0" step="0.1" placeholder="e.g. 6">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="foodFiber">Fiber (g)</label>
+          <input type="number" id="foodFiber" min="0" step="0.1" placeholder="e.g. 0">
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="foodIsFruitVeg">
+          <label for="foodIsFruitVeg">This counts as a fruit or vegetable serving</label>
+        </div>
+        <details class="collapsible-section">
+          <summary>More Nutrition Information</summary>
+          <div class="collapsible-body">
+            <p class="field-hint">Leave any of these blank if you don't know them — they're only counted when entered, never guessed.</p>
+            <div class="form-row two-col">
+              <div>
+                <label for="foodSodium">Sodium (mg)</label>
+                <input type="number" id="foodSodium" min="0" step="1">
+              </div>
+              <div>
+                <label for="foodCalcium">Calcium (mg)</label>
+                <input type="number" id="foodCalcium" min="0" step="1">
+              </div>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="foodIron">Iron (mg)</label>
+                <input type="number" id="foodIron" min="0" step="0.1">
+              </div>
+              <div>
+                <label for="foodPotassium">Potassium (mg)</label>
+                <input type="number" id="foodPotassium" min="0" step="1">
+              </div>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="foodVitaminC">Vitamin C (mg)</label>
+                <input type="number" id="foodVitaminC" min="0" step="0.1">
+              </div>
+              <div>
+                <label for="foodVitaminD">Vitamin D (mcg)</label>
+                <input type="number" id="foodVitaminD" min="0" step="0.1">
+              </div>
+            </div>
+          </div>
+        </details>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="foodFormSubmitBtn">Add to Log</button>
+          <button type="button" class="btn btn-secondary hidden" id="foodFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="sheet-panel hidden" id="addFoodPanelRecipe">
+      <div id="modalRecipesList" class="picker-list"></div>
+    </div>
+
+    <div class="picker-confirm hidden" id="pickerConfirm">
+      <button type="button" class="btn-icon" id="pickerBackBtn">&larr; Back</button>
+      <h3 class="checklist-title" id="pickerConfirmName"></h3>
+      <div class="form-row two-col">
+        <div>
+          <label for="pickerMealSelect">Meal</label>
+          <select id="pickerMealSelect">
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="snacks">Snacks</option>
+          </select>
+        </div>
+        <div>
+          <label for="pickerServingsInput">Servings</label>
+          <input type="number" id="pickerServingsInput" min="0.25" step="0.25" value="1">
+        </div>
+      </div>
+      <p class="field-hint" id="pickerPreview"></p>
+      <div class="form-actions sheet-sticky-actions">
+        <button type="button" class="btn btn-primary" id="pickerConfirmAddBtn">Add to Log</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=10"></script>
-<script type="module" src="js/auth.js?v=10"></script>
-<script src="js/app.js?v=10"></script>
-<script src="js/exercises.js?v=10"></script>
-<script src="js/workout.js?v=10"></script>
-<script src="js/nutrition.js?v=10"></script>
-<script src="js/habits.js?v=10"></script>
-<script src="js/business.js?v=10"></script>
-<script src="js/trading.js?v=10"></script>
-<script src="js/blobstore.js?v=10"></script>
-<script src="js/video-api-client.js?v=10"></script>
-<script src="js/video-connections.js?v=10"></script>
-<script src="js/video.js?v=10"></script>
-<script src="js/video-studio.js?v=10"></script>
-<script src="js/form-check.js?v=10"></script>
+<script src="js/firebase-config.js?v=11"></script>
+<script type="module" src="js/auth.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
+<script src="js/exercises.js?v=11"></script>
+<script src="js/workout.js?v=11"></script>
+<script src="js/nutrition.js?v=11"></script>
+<script src="js/habits.js?v=11"></script>
+<script src="js/business.js?v=11"></script>
+<script src="js/trading.js?v=11"></script>
+<script src="js/blobstore.js?v=11"></script>
+<script src="js/video-api-client.js?v=11"></script>
+<script src="js/video-connections.js?v=11"></script>
+<script src="js/video.js?v=11"></script>
+<script src="js/video-studio.js?v=11"></script>
+<script src="js/form-check.js?v=11"></script>
 </body>
 </html>
