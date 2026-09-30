@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -718,7 +718,218 @@
       <details class="card collapsible-card" id="goalsDetails">
         <summary class="card-title">Goals &amp; Targets</summary>
         <div class="collapsible-body">
-          <p class="field-hint">Switch between Cutting and Bulking — each keeps its own saved targets, so switching back and forth never loses your numbers. This is a tracking and organization tool, not a recommendation engine — it never suggests a calorie number for you.</p>
+
+          <!-- ===== AI Nutrition Goal Calculator ===== -->
+          <div class="card-title-row">
+            <h3 class="checklist-title">Nutrition Goal Calculator</h3>
+            <button type="button" class="btn-icon hidden" id="calcRecalculateBtn">Recalculate Goals</button>
+          </div>
+          <p class="field-hint">
+            Enter some information about yourself and JARVIS calculates personalized daily targets using
+            established formulas (Mifflin-St Jeor resting energy + an activity multiplier) — these are estimates
+            from validated formulas, not medical advice, and actual needs vary and are best adjusted from real
+            trends over time.
+          </p>
+
+          <form id="calcForm" class="stacked-form" novalidate>
+            <div class="form-row two-col">
+              <div>
+                <label for="calcAge">Age</label>
+                <input type="number" id="calcAge" min="5" max="100" step="1" placeholder="e.g. 30">
+              </div>
+              <div>
+                <label for="calcSex">Sex (for the calorie formula)</label>
+                <select id="calcSex">
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="unspecified">Prefer not to say</option>
+                </select>
+              </div>
+            </div>
+            <p class="field-hint">
+              The Mifflin-St Jeor formula uses this only to estimate resting energy needs — it's a formula input,
+              not a statement about identity. "Prefer not to say" uses a rough average of both formulas.
+            </p>
+
+            <div class="form-row">
+              <label for="calcHeightUnit">Height units</label>
+              <div class="segmented-control" id="calcHeightUnitToggle">
+                <button type="button" class="segmented-btn" data-unit="ftin">ft / in</button>
+                <button type="button" class="segmented-btn" data-unit="cm">cm</button>
+              </div>
+              <select id="calcHeightUnit" class="hidden"><option value="ftin">ft/in</option><option value="cm">cm</option></select>
+            </div>
+            <div class="form-row two-col" id="calcHeightFtInRow">
+              <div>
+                <label for="calcHeightFt">Height (feet)</label>
+                <input type="number" id="calcHeightFt" min="1" max="8" step="1" placeholder="e.g. 5">
+              </div>
+              <div>
+                <label for="calcHeightIn">Height (inches)</label>
+                <input type="number" id="calcHeightIn" min="0" max="11" step="1" placeholder="e.g. 10">
+              </div>
+            </div>
+            <div class="form-row hidden" id="calcHeightCmRow">
+              <label for="calcHeightCm">Height (cm)</label>
+              <input type="number" id="calcHeightCm" min="100" max="250" step="1" placeholder="e.g. 178">
+            </div>
+
+            <div class="form-row">
+              <label for="calcWeightUnit">Weight units</label>
+              <div class="segmented-control" id="calcWeightUnitToggle">
+                <button type="button" class="segmented-btn" data-unit="lb">lb</button>
+                <button type="button" class="segmented-btn" data-unit="kg">kg</button>
+              </div>
+              <select id="calcWeightUnit" class="hidden"><option value="lb">lb</option><option value="kg">kg</option></select>
+            </div>
+            <div class="form-row" id="calcWeightLbRow">
+              <label for="calcWeightLb">Current weight (lb)</label>
+              <input type="number" id="calcWeightLb" min="1" step="0.1" placeholder="e.g. 180">
+            </div>
+            <div class="form-row hidden" id="calcWeightKgRow">
+              <label for="calcWeightKg">Current weight (kg)</label>
+              <input type="number" id="calcWeightKg" min="1" step="0.1" placeholder="e.g. 82">
+            </div>
+
+            <div class="form-row">
+              <label for="calcGoal">Goal</label>
+              <select id="calcGoal">
+                <option value="maintain">Maintain</option>
+                <option value="gain">Gain weight / muscle</option>
+                <option value="lose">Lose weight</option>
+              </select>
+            </div>
+
+            <div class="form-row" id="calcTargetWeightLbRow">
+              <label for="calcTargetWeightLb">Target weight (lb)</label>
+              <input type="number" id="calcTargetWeightLb" min="1" step="0.1" placeholder="e.g. 190">
+            </div>
+            <div class="form-row hidden" id="calcTargetWeightKgRow">
+              <label for="calcTargetWeightKg">Target weight (kg)</label>
+              <input type="number" id="calcTargetWeightKg" min="1" step="0.1" placeholder="e.g. 86">
+            </div>
+
+            <div class="form-row two-col">
+              <div>
+                <label for="calcTimeframeWeeks">Timeframe (weeks)</label>
+                <input type="number" id="calcTimeframeWeeks" min="1" max="104" step="1" placeholder="e.g. 16">
+              </div>
+              <div>
+                <label for="calcTargetDate">...or a target date</label>
+                <input type="date" id="calcTargetDate">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="calcActivityLevel">General activity level</label>
+              <select id="calcActivityLevel">
+                <option value="sedentary">Sedentary (little to no exercise)</option>
+                <option value="light">Lightly active</option>
+                <option value="moderate" selected>Moderately active</option>
+                <option value="very">Very active</option>
+                <option value="extreme">Extremely active</option>
+              </select>
+            </div>
+
+            <div class="form-row two-col">
+              <div>
+                <label for="calcWorkoutsPerWeek">Average workouts / week</label>
+                <input type="number" id="calcWorkoutsPerWeek" min="0" max="14" step="1" placeholder="e.g. 4">
+              </div>
+              <div>
+                <label for="calcWorkoutDuration">Average workout duration (min)</label>
+                <input type="number" id="calcWorkoutDuration" min="0" max="240" step="5" placeholder="e.g. 60">
+              </div>
+            </div>
+
+            <div class="form-row two-col">
+              <div>
+                <label for="calcTrainingType">Main training type</label>
+                <select id="calcTrainingType">
+                  <option value="weighttraining">Weight training</option>
+                  <option value="cardio">Cardio / endurance</option>
+                  <option value="sports">Sports</option>
+                  <option value="mixed" selected>Mixed</option>
+                </select>
+              </div>
+              <div>
+                <label for="calcDailySteps">Average daily steps (optional)</label>
+                <input type="number" id="calcDailySteps" min="0" step="500" placeholder="e.g. 8000">
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="calcFormSubmitBtn">Calculate My Targets</button>
+            </div>
+          </form>
+
+          <div class="guardrail-banner hidden" id="calcAgeBanner"></div>
+          <div class="calm-message hidden" id="calcTimelineBanner"></div>
+
+          <div class="hidden" id="calcResults">
+            <div class="calc-hero-card">
+              <div class="calc-hero-label">Your Daily Target</div>
+              <div class="calc-hero-value" id="calcHeroCalories">0</div>
+              <div class="calc-hero-unit">calories</div>
+            </div>
+            <div class="macro-card-grid calc-macro-grid" id="calcMacroCards"></div>
+            <div class="stat-grid" id="calcSummaryStats"></div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" id="calcExplainBtn">Explain My Targets</button>
+              <button type="button" class="btn btn-primary" id="calcApplyBtn">Apply These Targets</button>
+            </div>
+            <p class="field-hint" id="calcExplanationText"></p>
+          </div>
+
+          <!-- ===== Weekly Check-In ===== -->
+          <details class="collapsible-section" id="checkinDetails" style="margin-top:16px;">
+            <summary>Weekly Check-In</summary>
+            <div class="collapsible-body">
+              <p class="field-hint">
+                Log a quick weekly check-in — JARVIS looks at the trend across your recent check-ins (never a
+                single weigh-in) and, if it drifts from your goal, suggests a small calorie adjustment you can
+                choose to apply. Nothing changes automatically.
+              </p>
+              <form id="checkinForm" class="stacked-form" novalidate>
+                <div class="form-row">
+                  <label for="checkinWeight">Body weight</label>
+                  <input type="number" id="checkinWeight" min="1" step="0.1" placeholder="Same units as above">
+                </div>
+                <div class="form-row two-col">
+                  <div>
+                    <label for="checkinPerformance">Training performance (1-5)</label>
+                    <input type="number" id="checkinPerformance" min="1" max="5" step="1" value="3">
+                  </div>
+                  <div>
+                    <label for="checkinEnergy">Energy level (1-5)</label>
+                    <input type="number" id="checkinEnergy" min="1" max="5" step="1" value="3">
+                  </div>
+                </div>
+                <div class="form-row two-col">
+                  <div>
+                    <label for="checkinHunger">Hunger (1-5)</label>
+                    <input type="number" id="checkinHunger" min="1" max="5" step="1" value="3">
+                  </div>
+                  <div>
+                    <label for="checkinAdherence">Adherence to targets (1-5)</label>
+                    <input type="number" id="checkinAdherence" min="1" max="5" step="1" value="3">
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary">Save Check-In</button>
+                </div>
+              </form>
+              <div id="checkinTrendMessage"></div>
+              <h3 class="checklist-title" style="margin-top:14px;">Recent Check-Ins</h3>
+              <div id="checkinHistoryList" class="item-list">
+                <div class="empty-state">No check-ins yet.</div>
+              </div>
+            </div>
+          </details>
+
+          <!-- ===== Manual targets (still available to fine-tune or use on their own) ===== -->
+          <h3 class="checklist-title" style="margin-top:18px;">Manual Targets</h3>
+          <p class="field-hint">Switch between Cutting and Bulking — each keeps its own saved targets, so switching back and forth never loses your numbers. Calculated targets above land here too, and you can always hand-edit them.</p>
           <div class="form-actions">
             <button type="button" class="btn btn-secondary" id="goalsModeCuttingBtn">Cutting</button>
             <button type="button" class="btn btn-secondary" id="goalsModeBulkingBtn">Bulking</button>
@@ -1993,20 +2204,20 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=12"></script>
-<script type="module" src="js/auth.js?v=12"></script>
-<script src="js/app.js?v=12"></script>
-<script src="js/exercises.js?v=12"></script>
-<script src="js/workout.js?v=12"></script>
-<script src="js/nutrition.js?v=12"></script>
-<script src="js/habits.js?v=12"></script>
-<script src="js/business.js?v=12"></script>
-<script src="js/trading.js?v=12"></script>
-<script src="js/blobstore.js?v=12"></script>
-<script src="js/video-api-client.js?v=12"></script>
-<script src="js/video-connections.js?v=12"></script>
-<script src="js/video.js?v=12"></script>
-<script src="js/video-studio.js?v=12"></script>
-<script src="js/form-check.js?v=12"></script>
+<script src="js/firebase-config.js?v=13"></script>
+<script type="module" src="js/auth.js?v=13"></script>
+<script src="js/app.js?v=13"></script>
+<script src="js/exercises.js?v=13"></script>
+<script src="js/workout.js?v=13"></script>
+<script src="js/nutrition.js?v=13"></script>
+<script src="js/habits.js?v=13"></script>
+<script src="js/business.js?v=13"></script>
+<script src="js/trading.js?v=13"></script>
+<script src="js/blobstore.js?v=13"></script>
+<script src="js/video-api-client.js?v=13"></script>
+<script src="js/video-connections.js?v=13"></script>
+<script src="js/video.js?v=13"></script>
+<script src="js/video-studio.js?v=13"></script>
+<script src="js/form-check.js?v=13"></script>
 </body>
 </html>
