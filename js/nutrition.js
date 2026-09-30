@@ -692,9 +692,11 @@
   function renderIngredientRows() {
     const container = $("recipeIngredientRows");
     container.innerHTML = recipeBuilder.ingredients.map(function (ing, i) {
+      const aiTag = ing.aiEstimated ? ' <span class="badge badge-yellow">AI estimated</span>' : "";
       return (
-        '<div class="form-row recipe-ingredient-row" data-index="' + i + '" style="display:grid;grid-template-columns:2fr repeat(5,1fr) auto;gap:6px;align-items:end;">' +
-          '<div><label>Ingredient</label><input type="text" class="ri-name" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.name) + '" placeholder="e.g. Chicken breast"></div>' +
+        '<div class="form-row recipe-ingredient-row" data-index="' + i + '" style="display:grid;grid-template-columns:1.6fr 1fr repeat(5,1fr) auto;gap:6px;align-items:end;">' +
+          '<div><label>Ingredient' + aiTag + '</label><input type="text" class="ri-name" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.name) + '" placeholder="e.g. Chicken breast"></div>' +
+          '<div><label>Quantity</label><input type="text" class="ri-quantity" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.quantity) + '" placeholder="e.g. 6 oz"></div>' +
           '<div><label>Cal</label><input type="number" min="0" class="ri-calories" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.calories) + '"></div>' +
           '<div><label>Protein</label><input type="number" min="0" class="ri-protein" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.protein) + '"></div>' +
           '<div><label>Carbs</label><input type="number" min="0" class="ri-carbs" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.carbs) + '"></div>' +
@@ -707,7 +709,7 @@
   }
 
   function handleAddIngredientRow() {
-    recipeBuilder.ingredients.push({ name: "", calories: "", protein: "", carbs: "", fat: "", fiber: "" });
+    recipeBuilder.ingredients.push({ name: "", quantity: "", calories: "", protein: "", carbs: "", fat: "", fiber: "" });
     renderIngredientRows();
   }
 
@@ -716,7 +718,10 @@
     if (!input) return;
     const i = Number(input.getAttribute("data-index"));
     if (!recipeBuilder.ingredients[i]) return;
+    // Any manual edit means the value is no longer purely an AI guess.
+    recipeBuilder.ingredients[i].aiEstimated = false;
     if (input.classList.contains("ri-name")) recipeBuilder.ingredients[i].name = input.value;
+    else if (input.classList.contains("ri-quantity")) recipeBuilder.ingredients[i].quantity = input.value;
     else if (input.classList.contains("ri-calories")) recipeBuilder.ingredients[i].calories = input.value;
     else if (input.classList.contains("ri-protein")) recipeBuilder.ingredients[i].protein = input.value;
     else if (input.classList.contains("ri-carbs")) recipeBuilder.ingredients[i].carbs = input.value;
@@ -733,14 +738,132 @@
     renderIngredientRows();
   }
 
+  function setRecipeAiStatus(text, isError) {
+    const el = $("recipeAiStatus");
+    if (!el) return;
+    el.textContent = text || "";
+    el.classList.toggle("text-negative", !!isError);
+  }
+
+  // Strips a ```json fenced block, if present, since models frequently wrap
+  // JSON in markdown even when told not to — then parses what's left.
+  function parseJsonLoosely(text) {
+    let cleaned = String(text || "").trim();
+    const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fenceMatch) cleaned = fenceMatch[1].trim();
+    return JSON.parse(cleaned);
+  }
+
+  // Sends every ingredient's name + quantity to the user's own configured
+  // "nutrition" AI connection (Bring-Your-Own — see AI Video > Connections)
+  // and asks it to estimate calories/protein/carbs/fat/fiber for each one,
+  // instead of the user looking each one up and doing the math by hand.
+  // These are AI estimates, not verified nutrition facts — every filled-in
+  // field stays a normal, editable number the user can correct.
+  function handleCalculateNutritionWithAI() {
+    const core = window.JarvisCore;
+    if (!window.JarvisVideoConnections || !window.JarvisVideoApi) {
+      setRecipeAiStatus("AI connections aren't available right now.", true);
+      return;
+    }
+    const named = recipeBuilder.ingredients.filter(function (ing) { return ing.name.trim(); });
+    if (named.length === 0) {
+      core.showToast("Add at least one ingredient name first.");
+      return;
+    }
+    const connection = window.JarvisVideoConnections.getByKind("nutrition")[0];
+    if (!connection || !connection.endpointUrl) {
+      setRecipeAiStatus("No AI connection set up yet for nutrient calculation.", true);
+      return;
+    }
+
+    const ingredientsText = named.map(function (ing) {
+      return "- " + ing.name.trim() + (ing.quantity && ing.quantity.trim() ? " — " + ing.quantity.trim() : " — quantity not specified, assume a typical serving");
+    }).join("\n");
+
+    setRecipeAiStatus("Asking AI to estimate nutrition for " + named.length + " ingredient" + (named.length === 1 ? "" : "s") + "…");
+    const btn = $("recipeAiCalculateBtn");
+    if (btn) btn.disabled = true;
+
+    let jsonBody;
+    try {
+      jsonBody = window.JarvisVideoApi.fillJsonTemplate(connection.bodyTemplate, { ingredientsText: ingredientsText });
+    } catch (err) {
+      setRecipeAiStatus("Couldn't build the request from this connection's template.", true);
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    window.JarvisVideoApi.postRequest(connection, jsonBody, false).then(function (result) {
+      if (btn) btn.disabled = false;
+      if (!result.ok) {
+        setRecipeAiStatus("Request failed: " + (result.errorMessage || "unknown error"), true);
+        return;
+      }
+      let responseJson;
+      try { responseJson = JSON.parse(result.bodyText); } catch (e) {
+        setRecipeAiStatus("The connection's response wasn't valid JSON.", true);
+        return;
+      }
+      const extracted = window.JarvisVideoApi.resolveJsonPath(responseJson, connection.responsePath);
+      if (extracted === undefined) {
+        setRecipeAiStatus("Couldn't find the model's reply at that response path — check the connection's \"Result field\" setting.", true);
+        return;
+      }
+      let estimates;
+      try {
+        estimates = typeof extracted === "string" ? parseJsonLoosely(extracted) : extracted;
+      } catch (e) {
+        setRecipeAiStatus("The model's reply wasn't a parseable JSON array — see the connection's placeholder hint for the exact shape it needs to reply with.", true);
+        return;
+      }
+      if (!Array.isArray(estimates)) {
+        setRecipeAiStatus("The model's reply wasn't a JSON array of ingredients.", true);
+        return;
+      }
+
+      let filled = 0;
+      named.forEach(function (ing, i) {
+        const est = estimates[i];
+        if (!est || typeof est !== "object") return;
+        const originalIndex = recipeBuilder.ingredients.indexOf(ing);
+        if (originalIndex === -1) return;
+        MACRO_FIELDS.forEach(function (f) {
+          if (isNonNegativeNumber(est[f])) recipeBuilder.ingredients[originalIndex][f] = Number(est[f]);
+        });
+        recipeBuilder.ingredients[originalIndex].aiEstimated = true;
+        filled++;
+      });
+      renderIngredientRows();
+      if (filled === 0) {
+        setRecipeAiStatus("The model replied, but none of the estimates matched up with the ingredient list.", true);
+      } else if (filled < named.length) {
+        setRecipeAiStatus("Filled in " + filled + " of " + named.length + " ingredients — the model's reply had a different count than expected. Review the rest manually.", true);
+      } else {
+        setRecipeAiStatus("Filled in " + filled + " ingredient" + (filled === 1 ? "" : "s") + " with AI estimates — these are estimates, not verified nutrition facts, so double-check anything that matters.");
+      }
+    }).catch(function (err) {
+      if (btn) btn.disabled = false;
+      setRecipeAiStatus("Something went wrong: " + (err && err.message ? err.message : String(err)), true);
+    });
+  }
+
+  function handleGoToAiConnections() {
+    const videoNavBtn = document.getElementById("navBtnVideo");
+    const connectionsTabBtn = document.querySelector('.video-sub-nav-btn[data-subtarget="video-connections"]');
+    if (videoNavBtn) videoNavBtn.click();
+    if (connectionsTabBtn) connectionsTabBtn.click();
+  }
+
   function resetRecipeForm() {
-    recipeBuilder = { editId: null, ingredients: [{ name: "", calories: "", protein: "", carbs: "", fat: "", fiber: "" }] };
+    recipeBuilder = { editId: null, ingredients: [{ name: "", quantity: "", calories: "", protein: "", carbs: "", fat: "", fiber: "" }] };
     $("recipeName").value = "";
     $("recipeInstructions").value = "";
     $("recipeServings").value = "1";
     $("recipeFormTitle").textContent = "Create a Recipe";
     $("recipeSubmitBtn").textContent = "Save Recipe";
     $("recipeCancelBtn").classList.add("hidden");
+    setRecipeAiStatus("");
     renderIngredientRows();
   }
 
@@ -755,7 +878,7 @@
       .filter(function (ing) { return ing.name.trim(); })
       .map(function (ing) {
         return {
-          name: ing.name.trim(),
+          name: ing.name.trim(), quantity: (ing.quantity || "").trim(),
           calories: Number(ing.calories) || 0, protein: Number(ing.protein) || 0,
           carbs: Number(ing.carbs) || 0, fat: Number(ing.fat) || 0, fiber: Number(ing.fiber) || 0
         };
@@ -1027,6 +1150,8 @@
     $("recipeAddIngredientBtn").addEventListener("click", handleAddIngredientRow);
     $("recipeIngredientRows").addEventListener("input", handleIngredientRowsInput);
     $("recipeIngredientRows").addEventListener("click", handleIngredientRowsClick);
+    $("recipeAiCalculateBtn").addEventListener("click", handleCalculateNutritionWithAI);
+    $("recipeGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
     $("recipeCancelBtn").addEventListener("click", resetRecipeForm);
     $("recipesList").addEventListener("click", handleRecipesListClick);
 

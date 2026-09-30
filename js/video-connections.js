@@ -1,13 +1,17 @@
 /* ==========================================================================
-   JARVIS — AI Video connections (shared by Studio and Clip Generator)
+   JARVIS — AI connections (shared by AI Video and Nutrition's recipe
+   nutrition calculator)
    localStorage key: jarvisVideoConnections -> [{ id, name, kind, endpointUrl,
      authHeader, apiKey, bodyTemplate, responseKind, responsePath }, ...]
 
-   JARVIS doesn't bundle any AI provider. Every generation step (script,
-   voiceover, images, video clips) is powered by an HTTP connection the user
+   JARVIS doesn't bundle any AI provider. Every AI-powered step (script,
+   voiceover, images, video clips, and now estimating a recipe's nutrition
+   from its ingredient list) is powered by an HTTP connection the user
    configures here: their own endpoint, their own API key, their own request
-   body template. Kept as one shared module so Studio and Clip Generator
-   don't each reinvent connection management.
+   body template. Kept as one shared module (despite the "video" name, which
+   predates the Nutrition use) so every feature that needs a BYO-AI
+   connection reuses the same management UI and storage instead of
+   reinventing it.
    ========================================================================== */
 
 (function () {
@@ -48,6 +52,14 @@
       resultHint: "Dot-path to the generated video's URL in the response, e.g. video_url — the exact field name depends on your provider.",
       defaultTemplate: '{\n  "prompt": "{{prompt}}",\n  "aspect_ratio": "{{aspectRatio}}",\n  "duration": {{duration}}\n}',
       referenceVideoHint: "{{referenceVideo}} is base64 of an optional \"inspiration\" video attached on the Clip Generator screen — an empty string if none was attached. Only wire it into your template if your provider accepts a reference/style video (check its docs for the field name)."
+    },
+    {
+      key: "nutrition",
+      label: "Nutrient calculation (LLM)",
+      whatToLookFor: "A text-generation / chat API — the same kind of connection used above for Script generation. Used by Nutrition's Recipes tab to estimate a recipe's calories/protein/carbs/fat/fiber from its ingredient list, instead of you looking each one up and doing the math yourself. These are AI estimates, not verified nutrition facts.",
+      placeholderHint: "Placeholder: {{ingredientsText}} — a plain-text list of ingredient names and quantities, one per line. Your prompt MUST instruct the model to reply with ONLY a JSON array, one object per ingredient in the same order, shaped like [{\"name\":\"...\",\"calories\":0,\"protein\":0,\"carbs\":0,\"fat\":0,\"fiber\":0}] — Jarvis parses that JSON directly out of the model's reply, so any extra text around it (or a different shape) will make parsing fail. This is a generic starting shape, not any one provider's real request — match your provider's actual field names from their docs.",
+      resultHint: "Dot-path to the model's text reply within the JSON response — e.g. content.0.text for Anthropic's Messages API, or choices.0.message.content for an OpenAI-compatible Chat Completions API.",
+      defaultTemplate: '{\n  "prompt": "For each ingredient below, estimate calories, protein (g), carbohydrates (g), fat (g), and fiber (g) for the quantity given. These are estimates, not lab measurements. Respond with ONLY a JSON array, one object per ingredient in the same order, shaped like [{\\"name\\":\\"...\\",\\"calories\\":0,\\"protein\\":0,\\"carbs\\":0,\\"fat\\":0,\\"fiber\\":0}]. No other text before or after the array.\\n\\nIngredients:\\n{{ingredientsText}}"\n}'
     }
   ];
 
