@@ -371,7 +371,7 @@ textarea { resize: vertical; min-height: 44px; }
   padding-bottom: 2px;
 }
 
-.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn {
+.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn, .business-sub-nav-btn {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -382,11 +382,11 @@ textarea { resize: vertical; min-height: 44px; }
   font-weight: 500;
   white-space: nowrap;
 }
-.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover, .habits-sub-nav-btn:hover { color: var(--text); }
-.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active, .habits-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover, .habits-sub-nav-btn:hover, .business-sub-nav-btn:hover { color: var(--text); }
+.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active, .habits-sub-nav-btn.active, .business-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-.sub-panel, .workout-sub-panel, .nutrition-sub-panel, .habits-sub-panel { display: none; }
-.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active, .habits-sub-panel.active { display: block; }
+.sub-panel, .workout-sub-panel, .nutrition-sub-panel, .habits-sub-panel, .business-sub-panel { display: none; }
+.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active, .habits-sub-panel.active, .business-sub-panel.active { display: block; }
 
 .clock-block { text-align: center; padding: 10px 0 16px; }
 .clock-date { color: var(--text-dim); font-size: 13px; }
@@ -1560,6 +1560,32 @@ textarea { resize: vertical; min-height: 44px; }
 .task-row { align-items: center; }
 .task-row-done .task-text { text-decoration: line-through; color: var(--text-faint); }
 .task-check-btn { flex-shrink: 0; }
+
+/* ---------------- Business ---------------- */
+
+.channel-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.channel-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.channel-card:hover { border-color: var(--accent); }
+.channel-card-name { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; }
+.channel-card-stat { font-size: 12px; color: var(--text-dim); }
+.channel-card-stat strong { color: var(--text); font-weight: 600; }
+
+/* Product/Supplier/Sale/Goal/Task/Idea/Learning/Content rows reuse
+   .list-item / .food-item-* / .nutri-bar-* / .badge-* / .stepper-* from
+   Nutrition and Habits above — see js/business.js render functions. */
 
 /* ---------------- Header safe-area ---------------- */
 

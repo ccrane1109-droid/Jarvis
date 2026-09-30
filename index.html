@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
@@ -1460,89 +1460,924 @@
   <section id="panel-business" class="tab-panel" role="tabpanel" aria-labelledby="navBtnBusiness">
     <div class="panel-header">
       <h1>Business</h1>
-      <p class="panel-subtitle">Track goals and cash flow in one place.</p>
+      <p class="panel-subtitle">Your e-commerce command center — products, sales, marketing, and goals in one place.</p>
     </div>
 
-    <div class="card-grid">
+    <nav class="sub-nav business-sub-nav" role="tablist" aria-label="Business sections">
+      <button type="button" class="business-sub-nav-btn active" data-subtarget="biz-overview" role="tab" aria-selected="true" aria-controls="biz-overview" id="bizSubNavOverview">Overview</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-products" role="tab" aria-selected="false" aria-controls="biz-products" id="bizSubNavProducts">Products</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-sales" role="tab" aria-selected="false" aria-controls="biz-sales" id="bizSubNavSales">Sales</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-marketing" role="tab" aria-selected="false" aria-controls="biz-marketing" id="bizSubNavMarketing">Marketing</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-goals" role="tab" aria-selected="false" aria-controls="biz-goals" id="bizSubNavGoals">Goals</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-tasks" role="tab" aria-selected="false" aria-controls="biz-tasks" id="bizSubNavTasks">Tasks</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-suppliers" role="tab" aria-selected="false" aria-controls="biz-suppliers" id="bizSubNavSuppliers">Suppliers</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-ideas" role="tab" aria-selected="false" aria-controls="biz-ideas" id="bizSubNavIdeas">Ideas</button>
+      <button type="button" class="business-sub-nav-btn" data-subtarget="biz-analytics" role="tab" aria-selected="false" aria-controls="biz-analytics" id="bizSubNavAnalytics">Analytics</button>
+    </nav>
+
+    <!-- ---------- Overview ---------- -->
+    <div id="biz-overview" class="business-sub-panel active" role="tabpanel" aria-labelledby="bizSubNavOverview">
       <div class="card">
-        <h2 class="card-title">Add a Goal</h2>
-        <form id="goalForm" class="stacked-form" novalidate>
-          <div class="form-row">
-            <label for="goalText">Goal</label>
-            <input type="text" id="goalText" name="goalText" placeholder="e.g. Launch new website" required maxlength="100">
+        <div class="card-title-row">
+          <h2 class="card-title">Business Overview</h2>
+          <div class="segmented-control" id="bizRangeToggle">
+            <button type="button" class="segmented-btn" data-range="week">Week</button>
+            <button type="button" class="segmented-btn active" data-range="month">Month</button>
+            <button type="button" class="segmented-btn" data-range="year">Year</button>
+            <button type="button" class="segmented-btn" data-range="all">All Time</button>
           </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="goalTargetDate">Target date</label>
-              <input type="date" id="goalTargetDate" name="goalTargetDate">
-            </div>
-            <div>
-              <label for="goalStatus">Status</label>
-              <select id="goalStatus" name="goalStatus">
-                <option value="Not Started">Not Started</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Done">Done</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="goalSubmitBtn">Add Goal</button>
-          </div>
-        </form>
+        </div>
+        <div class="stat-grid" id="bizOverviewStats"></div>
+        <div id="bizOverviewGoalProgress" style="margin-top:6px;"></div>
       </div>
 
+      <details class="card collapsible-card" id="bizProfileDetails">
+        <summary class="card-title">Business Profile</summary>
+        <div class="collapsible-body">
+          <form id="bizProfileForm" class="stacked-form" novalidate>
+            <div class="form-row two-col">
+              <div>
+                <label for="bizProfileName">Business / brand name</label>
+                <input type="text" id="bizProfileName" maxlength="80" placeholder="e.g. Aurora Apparel">
+              </div>
+              <div>
+                <label for="bizProfileType">Business type</label>
+                <input type="text" id="bizProfileType" maxlength="60" placeholder="e.g. Clothing brand">
+              </div>
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="bizProfileNiche">Niche</label>
+                <input type="text" id="bizProfileNiche" maxlength="60" placeholder="e.g. Streetwear">
+              </div>
+              <div>
+                <label for="bizProfileUrl">Website / store URL</label>
+                <input type="text" id="bizProfileUrl" maxlength="200" placeholder="e.g. aurora-apparel.com">
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="bizProfileMission">Mission statement</label>
+              <textarea id="bizProfileMission" rows="2" placeholder="What this business is here to do"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="bizProfileLaunchDate">Launch date</label>
+              <input type="date" id="bizProfileLaunchDate">
+            </div>
+            <div class="form-row two-col">
+              <div>
+                <label for="bizProfileMonthlyGoal">Monthly revenue goal ($)</label>
+                <input type="number" id="bizProfileMonthlyGoal" min="0" step="1" placeholder="e.g. 5000">
+              </div>
+              <div>
+                <label for="bizProfileYearlyGoal">Yearly revenue goal ($)</label>
+                <input type="number" id="bizProfileYearlyGoal" min="0" step="1" placeholder="e.g. 60000">
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="bizProfileNotes">Notes</label>
+              <textarea id="bizProfileNotes" rows="2" placeholder="Anything else worth remembering"></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="bizProfileSaveBtn">Save Profile</button>
+            </div>
+          </form>
+        </div>
+      </details>
+
       <div class="card">
-        <h2 class="card-title">Add Ledger Entry</h2>
-        <form id="ledgerForm" class="stacked-form" novalidate>
-          <div class="form-row two-col">
-            <div>
-              <label for="ledgerType">Type</label>
-              <select id="ledgerType" name="ledgerType">
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-              </select>
-            </div>
-            <div>
-              <label for="ledgerAmount">Amount ($)</label>
-              <input type="number" id="ledgerAmount" name="ledgerAmount" min="0.01" step="0.01" placeholder="0.00" required>
-            </div>
-          </div>
-          <div class="form-row">
-            <label for="ledgerDesc">Description</label>
-            <input type="text" id="ledgerDesc" name="ledgerDesc" placeholder="e.g. Client invoice" maxlength="100">
-          </div>
-          <div class="form-row">
-            <label for="ledgerDate">Date</label>
-            <input type="date" id="ledgerDate" name="ledgerDate">
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="ledgerSubmitBtn">Add Entry</button>
-          </div>
-        </form>
+        <div class="card-title-row">
+          <h2 class="card-title">Expenses</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddExpenseBtn">+ Add Expense</button>
+        </div>
+        <div class="stat-grid" id="bizExpenseCategoryBreakdown"></div>
+        <div id="bizExpensesList" class="item-list">
+          <div class="empty-state">No expenses logged yet.</div>
+        </div>
       </div>
     </div>
 
-    <div class="card-grid">
+    <!-- ---------- Products ---------- -->
+    <div id="biz-products" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavProducts">
       <div class="card">
-        <h2 class="card-title">Finances</h2>
-        <div class="stat-grid" id="businessStats">
-          <div class="stat-box"><span class="stat-value" id="bizStatIncome">$0</span><span class="stat-label">Income</span></div>
-          <div class="stat-box"><span class="stat-value" id="bizStatExpense">$0</span><span class="stat-label">Expenses</span></div>
-          <div class="stat-box"><span class="stat-value" id="bizStatNet">$0</span><span class="stat-label">Net</span></div>
+        <div class="card-title-row">
+          <h2 class="card-title">Products</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddProductBtn">+ Add Product</button>
         </div>
-        <div id="ledgerList" class="item-list">
-          <div class="empty-state">No ledger entries yet.</div>
+        <div class="form-row two-col" style="margin-bottom:10px;">
+          <div>
+            <label for="bizProductSearchInput">Search</label>
+            <input type="text" id="bizProductSearchInput" placeholder="Search products">
+          </div>
+          <div>
+            <label for="bizProductStatusFilter">Status</label>
+            <select id="bizProductStatusFilter">
+              <option value="">All statuses</option>
+              <option value="Idea">Idea</option>
+              <option value="Designing">Designing</option>
+              <option value="Sample Ordered">Sample Ordered</option>
+              <option value="Ready">Ready</option>
+              <option value="Live">Live</option>
+              <option value="Paused">Paused</option>
+              <option value="Discontinued">Discontinued</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizProductSortSelect">Sort</label>
+          <select id="bizProductSortSelect">
+            <option value="name">Name (A-Z)</option>
+            <option value="margin">Margin (high to low)</option>
+            <option value="profit">Profit per unit (high to low)</option>
+            <option value="recent">Recently added</option>
+          </select>
+        </div>
+        <div id="bizProductsList" class="item-list" style="margin-top:10px;">
+          <div class="empty-state">No products yet. Add one above.</div>
         </div>
       </div>
 
       <div class="card">
-        <h2 class="card-title">Goals</h2>
-        <div id="goalList" class="item-list">
-          <div class="empty-state">No goals yet. Add one to get started.</div>
+        <h2 class="card-title">Launch Checklists</h2>
+        <p class="field-hint">Reusable task lists for launching a new product or collection — optionally linked to a product above.</p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="bizAddChecklistBtn">+ New Checklist</button>
         </div>
+        <div id="bizChecklistsList" class="item-list" style="margin-top:10px;">
+          <div class="empty-state">No checklists yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sales ---------- -->
+    <div id="biz-sales" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavSales">
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Sales</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddSaleBtn">+ Add Sale</button>
+        </div>
+        <div id="bizSalesList" class="item-list">
+          <div class="empty-state">No sales logged yet.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Revenue vs Expenses</h2>
+        <div id="bizRevenueChart" class="chart-container"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Profit Over Time</h2>
+        <div id="bizProfitChart" class="chart-container"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Marketing ---------- -->
+    <div id="biz-marketing" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavMarketing">
+      <div class="card">
+        <h2 class="card-title">Marketing Performance</h2>
+        <div class="stat-grid" id="bizMarketingSummaryStats"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Channels</h2>
+        <p class="field-hint">Numbers are entered manually for now — tap a channel to update it.</p>
+        <div class="channel-card-grid" id="bizMarketingChannelsGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Content Planner</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddContentBtn">+ Add Content Idea</button>
+        </div>
+        <div id="bizContentList" class="item-list">
+          <div class="empty-state">No content planned yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Goals ---------- -->
+    <div id="biz-goals" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavGoals">
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Business Goals</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddGoalBtn">+ Add Goal</button>
+        </div>
+        <div id="bizGoalsList" class="item-list">
+          <div class="empty-state">No goals yet. Add one above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Tasks (CEO Dashboard) ---------- -->
+    <div id="biz-tasks" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavTasks">
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Today's Business Work</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddTaskBtn">+ Add Task</button>
+        </div>
+        <div class="nutri-bar-row" id="bizTaskProgressRow"></div>
+      </div>
+      <div class="card">
+        <h3 class="checklist-title">Today</h3>
+        <div id="bizTasksToday" class="item-list"><div class="empty-state">Nothing due today.</div></div>
+      </div>
+      <div class="card">
+        <h3 class="checklist-title">This Week</h3>
+        <div id="bizTasksWeek" class="item-list"><div class="empty-state">Nothing due this week.</div></div>
+      </div>
+      <div class="card">
+        <h3 class="checklist-title">Overdue</h3>
+        <div id="bizTasksOverdue" class="item-list"><div class="empty-state">Nothing overdue.</div></div>
+      </div>
+      <div class="card">
+        <h3 class="checklist-title">Completed</h3>
+        <div id="bizTasksCompleted" class="item-list"><div class="empty-state">Nothing completed yet.</div></div>
+      </div>
+    </div>
+
+    <!-- ---------- Suppliers ---------- -->
+    <div id="biz-suppliers" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavSuppliers">
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Suppliers</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddSupplierBtn">+ Add Supplier</button>
+        </div>
+        <div class="form-row">
+          <label for="bizSupplierSearchInput">Search</label>
+          <input type="text" id="bizSupplierSearchInput" placeholder="Search suppliers">
+        </div>
+        <div id="bizSuppliersList" class="item-list" style="margin-top:10px;">
+          <div class="empty-state">No suppliers yet. Add one above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Ideas + Learning ---------- -->
+    <div id="biz-ideas" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavIdeas">
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Ideas Vault</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddIdeaBtn">+ Add Idea</button>
+        </div>
+        <div id="bizIdeasList" class="item-list">
+          <div class="empty-state">No ideas saved yet.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Learning Tracker</h2>
+          <button type="button" class="btn btn-secondary" id="bizAddLearningBtn">+ Add Learning</button>
+        </div>
+        <div id="bizLearningList" class="item-list">
+          <div class="empty-state">Nothing logged yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Analytics ---------- -->
+    <div id="biz-analytics" class="business-sub-panel" role="tabpanel" aria-labelledby="bizSubNavAnalytics">
+      <div class="card">
+        <h2 class="card-title">Revenue Trend</h2>
+        <div id="bizAnalyticsRevenueTrend" class="chart-container"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Profit Trend</h2>
+        <div id="bizAnalyticsProfitTrend" class="chart-container"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Top-Selling Products</h2>
+        <div id="bizAnalyticsTopProducts" class="item-list"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Highest-Margin Products</h2>
+        <div id="bizAnalyticsMarginProducts" class="item-list"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Expenses by Category</h2>
+        <div id="bizAnalyticsExpensesByCategory" class="stat-grid"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Marketing Performance</h2>
+        <div id="bizAnalyticsMarketingPerformance" class="stat-grid"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Month-over-Month Growth</h2>
+        <div id="bizAnalyticsMoM" class="stat-grid"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Goal Completion</h2>
+        <div id="bizAnalyticsGoalCompletion"></div>
       </div>
     </div>
   </section>
+
+  <!-- ===================== BUSINESS: modals ===================== -->
+  <div class="modal-overlay hidden sheet-overlay" id="bizProductModal" role="dialog" aria-modal="true" aria-labelledby="bizProductModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizProductModalTitle">Add Product</h2>
+        <button type="button" class="btn-icon" id="bizProductModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizProductForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="bizProductName">Product name</label>
+          <input type="text" id="bizProductName" maxlength="80" placeholder="e.g. Oversized Hoodie">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizProductCategory">Category</label>
+            <input type="text" id="bizProductCategory" maxlength="40" placeholder="e.g. Hoodies">
+          </div>
+          <div>
+            <label for="bizProductSupplier">Supplier</label>
+            <select id="bizProductSupplier"><option value="">None</option></select>
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizProductCost">Product cost ($)</label>
+            <input type="number" id="bizProductCost" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label for="bizProductShipping">Shipping cost ($)</label>
+            <input type="number" id="bizProductShipping" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizProductPrice">Selling price ($)</label>
+            <input type="number" id="bizProductPrice" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label for="bizProductFees">Estimated fees ($)</label>
+            <input type="number" id="bizProductFees" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <p class="field-hint" id="bizProductComputedPreview"></p>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizProductStatus">Status</label>
+            <select id="bizProductStatus">
+              <option value="Idea">Idea</option>
+              <option value="Designing">Designing</option>
+              <option value="Sample Ordered">Sample Ordered</option>
+              <option value="Ready">Ready</option>
+              <option value="Live">Live</option>
+              <option value="Paused">Paused</option>
+              <option value="Discontinued">Discontinued</option>
+            </select>
+          </div>
+          <div>
+            <label for="bizProductLaunchDate">Launch date</label>
+            <input type="date" id="bizProductLaunchDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizProductUrl">Product URL</label>
+          <input type="text" id="bizProductUrl" maxlength="200" placeholder="Optional link">
+        </div>
+        <div class="form-row">
+          <label for="bizProductNotes">Notes</label>
+          <textarea id="bizProductNotes" rows="2"></textarea>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizProductFormSubmitBtn">Add Product</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizProductFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizSupplierModal" role="dialog" aria-modal="true" aria-labelledby="bizSupplierModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizSupplierModalTitle">Add Supplier</h2>
+        <button type="button" class="btn-icon" id="bizSupplierModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizSupplierForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSupplierName">Supplier name</label>
+            <input type="text" id="bizSupplierName" maxlength="80">
+          </div>
+          <div>
+            <label for="bizSupplierWebsite">Website</label>
+            <input type="text" id="bizSupplierWebsite" maxlength="200">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizSupplierServices">Products / services</label>
+          <input type="text" id="bizSupplierServices" maxlength="120" placeholder="e.g. Print-on-demand hoodies, tees">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSupplierCostNotes">Product cost notes</label>
+            <input type="text" id="bizSupplierCostNotes" maxlength="120" placeholder="e.g. $12-18 per unit">
+          </div>
+          <div>
+            <label for="bizSupplierShippingCost">Shipping cost ($)</label>
+            <input type="number" id="bizSupplierShippingCost" min="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSupplierShippingTime">Shipping time</label>
+            <input type="text" id="bizSupplierShippingTime" maxlength="40" placeholder="e.g. 7-10 days">
+          </div>
+          <div>
+            <label for="bizSupplierQuality">Quality rating (1-5)</label>
+            <input type="number" id="bizSupplierQuality" min="1" max="5" step="1" value="3">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSupplierSampleStatus">Sample status</label>
+            <select id="bizSupplierSampleStatus">
+              <option value="Not Ordered">Not Ordered</option>
+              <option value="Ordered">Ordered</option>
+              <option value="Received">Received</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          <div>
+            <label for="bizSupplierContact">Contact info</label>
+            <input type="text" id="bizSupplierContact" maxlength="120">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizSupplierNotes">Notes</label>
+          <textarea id="bizSupplierNotes" rows="2"></textarea>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizSupplierFormSubmitBtn">Add Supplier</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizSupplierFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizSaleModal" role="dialog" aria-modal="true" aria-labelledby="bizSaleModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizSaleModalTitle">Add Sale</h2>
+        <button type="button" class="btn-icon" id="bizSaleModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizSaleForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSaleDate">Date</label>
+            <input type="date" id="bizSaleDate">
+          </div>
+          <div>
+            <label for="bizSaleProduct">Product</label>
+            <select id="bizSaleProduct"><option value="">Select a product</option></select>
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSaleQuantity">Quantity</label>
+            <input type="number" id="bizSaleQuantity" min="1" step="1" value="1">
+          </div>
+          <div>
+            <label for="bizSaleRevenue">Revenue ($)</label>
+            <input type="number" id="bizSaleRevenue" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSaleCost">Product cost ($)</label>
+            <input type="number" id="bizSaleCost" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label for="bizSaleShipping">Shipping ($)</label>
+            <input type="number" id="bizSaleShipping" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizSaleFees">Fees ($)</label>
+            <input type="number" id="bizSaleFees" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label for="bizSaleAdCost">Ad cost attributed ($)</label>
+            <input type="number" id="bizSaleAdCost" min="0" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <p class="field-hint" id="bizSaleProfitPreview"></p>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizSaleFormSubmitBtn">Add Sale</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizSaleFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizExpenseModal" role="dialog" aria-modal="true" aria-labelledby="bizExpenseModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizExpenseModalTitle">Add Expense</h2>
+        <button type="button" class="btn-icon" id="bizExpenseModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizExpenseForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizExpenseDate">Date</label>
+            <input type="date" id="bizExpenseDate">
+          </div>
+          <div>
+            <label for="bizExpenseAmount">Amount ($)</label>
+            <input type="number" id="bizExpenseAmount" min="0.01" step="0.01" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizExpenseCategory">Category</label>
+          <select id="bizExpenseCategory">
+            <option value="Product/Samples">Product/Samples</option>
+            <option value="Advertising">Advertising</option>
+            <option value="Shopify/Website">Shopify/Website</option>
+            <option value="Apps/Software">Apps/Software</option>
+            <option value="Supplier">Supplier</option>
+            <option value="Shipping">Shipping</option>
+            <option value="Packaging">Packaging</option>
+            <option value="Design">Design</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="bizExpenseDescription">Description</label>
+          <input type="text" id="bizExpenseDescription" maxlength="120">
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizExpenseFormSubmitBtn">Add Expense</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizExpenseFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizMarketingChannelModal" role="dialog" aria-modal="true" aria-labelledby="bizMarketingChannelModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizMarketingChannelModalTitle">Update Channel</h2>
+        <button type="button" class="btn-icon" id="bizMarketingChannelModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizMarketingChannelForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizMarketingAdSpend">Ad spend ($)</label>
+            <input type="number" id="bizMarketingAdSpend" min="0" step="0.01">
+          </div>
+          <div>
+            <label for="bizMarketingRevenue">Revenue from this channel ($)</label>
+            <input type="number" id="bizMarketingRevenue" min="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizMarketingVisitors">Website visitors</label>
+            <input type="number" id="bizMarketingVisitors" min="0" step="1">
+          </div>
+          <div>
+            <label for="bizMarketingAddToCarts">Add-to-carts</label>
+            <input type="number" id="bizMarketingAddToCarts" min="0" step="1">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizMarketingCheckoutStarts">Checkout starts</label>
+            <input type="number" id="bizMarketingCheckoutStarts" min="0" step="1">
+          </div>
+          <div>
+            <label for="bizMarketingPurchases">Purchases</label>
+            <input type="number" id="bizMarketingPurchases" min="0" step="1">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizMarketingSubscribers" id="bizMarketingSubscribersLabel">Email subscribers / social followers</label>
+          <input type="number" id="bizMarketingSubscribers" min="0" step="1">
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizMarketingChannelSaveBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizContentModal" role="dialog" aria-modal="true" aria-labelledby="bizContentModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizContentModalTitle">Add Content Idea</h2>
+        <button type="button" class="btn-icon" id="bizContentModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizContentForm" class="stacked-form" novalidate>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizContentPlatform">Platform</label>
+            <select id="bizContentPlatform">
+              <option value="TikTok">TikTok</option>
+              <option value="Instagram">Instagram</option>
+              <option value="Meta Ads">Meta Ads</option>
+              <option value="Google">Google</option>
+              <option value="Email">Email</option>
+              <option value="Organic">Organic</option>
+            </select>
+          </div>
+          <div>
+            <label for="bizContentType">Content type</label>
+            <input type="text" id="bizContentType" maxlength="40" placeholder="e.g. Reel, Story, Post">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizContentTitle">Title / idea</label>
+          <input type="text" id="bizContentTitle" maxlength="120">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizContentScheduledDate">Scheduled date</label>
+            <input type="date" id="bizContentScheduledDate">
+          </div>
+          <div>
+            <label for="bizContentStatus">Status</label>
+            <select id="bizContentStatus">
+              <option value="Idea">Idea</option>
+              <option value="Creating">Creating</option>
+              <option value="Ready">Ready</option>
+              <option value="Scheduled">Scheduled</option>
+              <option value="Posted">Posted</option>
+              <option value="Repurpose">Repurpose</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizContentCta">Call to action</label>
+          <input type="text" id="bizContentCta" maxlength="120">
+        </div>
+        <div class="form-row">
+          <label for="bizContentNotes">Notes</label>
+          <textarea id="bizContentNotes" rows="2"></textarea>
+        </div>
+        <div class="form-row">
+          <label for="bizContentPerformance">Performance (after posting)</label>
+          <textarea id="bizContentPerformance" rows="2" placeholder="Views, engagement, sales — whatever you tracked"></textarea>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizContentFormSubmitBtn">Add Content Idea</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizContentFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizGoalModal" role="dialog" aria-modal="true" aria-labelledby="bizGoalModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizGoalModalTitle">Add Goal</h2>
+        <button type="button" class="btn-icon" id="bizGoalModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizGoalForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="bizGoalTitle">Goal</label>
+          <input type="text" id="bizGoalTitle" maxlength="100" placeholder="e.g. Launch Clothing Brand">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizGoalCategory">Category</label>
+            <select id="bizGoalCategory">
+              <option value="Revenue">Revenue</option>
+              <option value="Product">Product</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Store">Store</option>
+              <option value="Learning">Learning</option>
+              <option value="Operations">Operations</option>
+            </select>
+          </div>
+          <div>
+            <label for="bizGoalPriority">Priority</label>
+            <select id="bizGoalPriority">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizGoalTargetDate">Target date</label>
+            <input type="date" id="bizGoalTargetDate">
+          </div>
+          <div>
+            <label for="bizGoalStatus">Status</label>
+            <select id="bizGoalStatus">
+              <option value="Not Started">Not Started</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Complete">Complete</option>
+              <option value="On Hold">On Hold</option>
+            </select>
+          </div>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="bizGoalHasNumeric">
+          <label for="bizGoalHasNumeric">Track with a measurable numeric target</label>
+        </div>
+        <div class="form-row two-col hidden" id="bizGoalNumericRow">
+          <div>
+            <label for="bizGoalCurrentValue">Current value</label>
+            <input type="number" id="bizGoalCurrentValue" step="any">
+          </div>
+          <div>
+            <label for="bizGoalTargetValue">Target value</label>
+            <input type="number" id="bizGoalTargetValue" step="any">
+          </div>
+        </div>
+        <div class="form-row hidden" id="bizGoalUnitRow">
+          <label for="bizGoalUnit">Unit (optional)</label>
+          <input type="text" id="bizGoalUnit" maxlength="20" placeholder="e.g. $ or lb">
+        </div>
+        <div class="form-row" id="bizGoalManualProgressRow">
+          <label for="bizGoalManualProgress">Progress (%)</label>
+          <input type="number" id="bizGoalManualProgress" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="form-row">
+          <label for="bizGoalNotes">Notes</label>
+          <textarea id="bizGoalNotes" rows="2"></textarea>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizGoalFormSubmitBtn">Save Goal</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizGoalFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizTaskModal" role="dialog" aria-modal="true" aria-labelledby="bizTaskModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizTaskModalTitle">Add Task</h2>
+        <button type="button" class="btn-icon" id="bizTaskModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizTaskForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="bizTaskText">Task</label>
+          <input type="text" id="bizTaskText" maxlength="140">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizTaskPriority">Priority</label>
+            <select id="bizTaskPriority">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div>
+            <label for="bizTaskDeadline">Deadline</label>
+            <input type="date" id="bizTaskDeadline">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizTaskCategory">Category</label>
+          <input type="text" id="bizTaskCategory" maxlength="40" placeholder="e.g. Marketing">
+        </div>
+        <div class="form-row">
+          <label for="bizTaskNotes">Notes</label>
+          <textarea id="bizTaskNotes" rows="2"></textarea>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizTaskFormSubmitBtn">Add Task</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizTaskFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizIdeaModal" role="dialog" aria-modal="true" aria-labelledby="bizIdeaModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizIdeaModalTitle">Add Idea</h2>
+        <button type="button" class="btn-icon" id="bizIdeaModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizIdeaForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="bizIdeaText">Idea</label>
+          <input type="text" id="bizIdeaText" maxlength="140">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="bizIdeaCategory">Category</label>
+            <select id="bizIdeaCategory">
+              <option value="Product">Product</option>
+              <option value="Design">Design</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Content">Content</option>
+              <option value="Business">Business</option>
+              <option value="Research">Research</option>
+            </select>
+          </div>
+          <div>
+            <label for="bizIdeaPriority">Priority</label>
+            <select id="bizIdeaPriority">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bizIdeaStatus">Status</label>
+          <select id="bizIdeaStatus">
+            <option value="New">New</option>
+            <option value="Considering">Considering</option>
+            <option value="Planned">Planned</option>
+            <option value="Archived">Archived</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="bizIdeaNotes">Notes</label>
+          <textarea id="bizIdeaNotes" rows="2"></textarea>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizIdeaFormSubmitBtn">Add Idea</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizIdeaFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizLearningModal" role="dialog" aria-modal="true" aria-labelledby="bizLearningModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizLearningModalTitle">Add Learning</h2>
+        <button type="button" class="btn-icon" id="bizLearningModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="bizLearningForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <label for="bizLearningTopic">Topic</label>
+          <input type="text" id="bizLearningTopic" maxlength="100">
+        </div>
+        <div class="form-row">
+          <label for="bizLearningResource">Resource / video</label>
+          <input type="text" id="bizLearningResource" maxlength="200">
+        </div>
+        <div class="form-row">
+          <label for="bizLearningKeyLesson">Key lesson</label>
+          <textarea id="bizLearningKeyLesson" rows="2"></textarea>
+        </div>
+        <div class="form-row">
+          <label for="bizLearningApplication">How I'll apply this</label>
+          <textarea id="bizLearningApplication" rows="2"></textarea>
+        </div>
+        <div class="form-row">
+          <label for="bizLearningNotes">Notes</label>
+          <textarea id="bizLearningNotes" rows="2"></textarea>
+        </div>
+        <div class="checklist-item">
+          <input type="checkbox" id="bizLearningCompleted">
+          <label for="bizLearningCompleted">Completed</label>
+        </div>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="bizLearningFormSubmitBtn">Add Learning</button>
+          <button type="button" class="btn btn-secondary hidden" id="bizLearningFormCancelBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden sheet-overlay" id="bizChecklistModal" role="dialog" aria-modal="true" aria-labelledby="bizChecklistModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="bizChecklistModalTitle">Checklist</h2>
+        <button type="button" class="btn-icon" id="bizChecklistModalCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <div class="form-row">
+        <label for="bizChecklistNameInput">Checklist name</label>
+        <input type="text" id="bizChecklistNameInput" maxlength="80">
+      </div>
+      <div class="form-row">
+        <label for="bizChecklistProductSelect">Linked product (optional)</label>
+        <select id="bizChecklistProductSelect"><option value="">None</option></select>
+      </div>
+      <div id="bizChecklistItemsList" class="item-list" style="margin:10px 0;"></div>
+      <div class="form-row two-col">
+        <input type="text" id="bizChecklistNewItemInput" placeholder="Add a checklist item">
+        <button type="button" class="btn-icon" id="bizChecklistAddItemBtn">+ Add Item</button>
+      </div>
+      <div class="form-actions sheet-sticky-actions">
+        <button type="button" class="btn btn-primary" id="bizChecklistSaveBtn">Save Checklist</button>
+        <button type="button" class="btn btn-secondary danger" id="bizChecklistDeleteBtn">Delete Checklist</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===================== TRADING LAB ===================== -->
   <section id="panel-trading" class="tab-panel" role="tabpanel" aria-labelledby="navBtnTrading">
@@ -2391,20 +3226,20 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=14"></script>
-<script type="module" src="js/auth.js?v=14"></script>
-<script src="js/app.js?v=14"></script>
-<script src="js/exercises.js?v=14"></script>
-<script src="js/workout.js?v=14"></script>
-<script src="js/nutrition.js?v=14"></script>
-<script src="js/habits.js?v=14"></script>
-<script src="js/business.js?v=14"></script>
-<script src="js/trading.js?v=14"></script>
-<script src="js/blobstore.js?v=14"></script>
-<script src="js/video-api-client.js?v=14"></script>
-<script src="js/video-connections.js?v=14"></script>
-<script src="js/video.js?v=14"></script>
-<script src="js/video-studio.js?v=14"></script>
-<script src="js/form-check.js?v=14"></script>
+<script src="js/firebase-config.js?v=15"></script>
+<script type="module" src="js/auth.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
+<script src="js/exercises.js?v=15"></script>
+<script src="js/workout.js?v=15"></script>
+<script src="js/nutrition.js?v=15"></script>
+<script src="js/habits.js?v=15"></script>
+<script src="js/business.js?v=15"></script>
+<script src="js/trading.js?v=15"></script>
+<script src="js/blobstore.js?v=15"></script>
+<script src="js/video-api-client.js?v=15"></script>
+<script src="js/video-connections.js?v=15"></script>
+<script src="js/video.js?v=15"></script>
+<script src="js/video-studio.js?v=15"></script>
+<script src="js/form-check.js?v=15"></script>
 </body>
 </html>
