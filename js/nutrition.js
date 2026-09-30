@@ -77,6 +77,17 @@
   let foodFormEditId = null; // { meal, id } when editing an existing entry
   let recipeBuilder = { editId: null, ingredients: [{ name: "", calories: "", protein: "", carbs: "", fat: "", fiber: "" }] };
   let historySelectedDate = "";
+  let historyRangeDays = 7;
+  let savedFoodSearch = "";
+  let savedFoodSort = "name";
+  let foodItemMenuOpenKey = null; // "<meal>:<id>" of the Today's Food item whose options menu is open
+  let foodItemMoveSubmenuOpen = false;
+  // "+ Add Food" bottom sheet: lets the user search Saved Foods, pick a
+  // Recent Food, use the manual Create form, or log a Recipe, instead of
+  // always typing every number by hand.
+  let addFoodModalTab = "recent";
+  let pickerSelection = null; // { source: "recent"|"saved"|"recipe", food, meal, multiplier }
+  let modalSavedFoodSearch = "";
 
   /* ---------------- persistence ---------------- */
 
@@ -291,54 +302,64 @@
       .sort(function (a, b) { return new Date(b) - new Date(a); });
   }
 
-  function getSevenDayAverages() {
-    const core = window.JarvisCore;
-    const today = new Date(core.todayISODate());
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const tzOffset = d.getTimezoneOffset() * 60000;
-      days.push(new Date(d.getTime() - tzOffset).toISOString().slice(0, 10));
-    }
-    const loggedDays = days.filter(function (d) { return getAllEntries(d).length > 0; });
-    if (loggedDays.length === 0) return null;
-    const sums = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, water: 0, score: 0 };
-    loggedDays.forEach(function (d) {
-      const t = getDayTotals(d);
-      sums.calories += t.calories; sums.protein += t.protein; sums.carbs += t.carbs;
-      sums.fat += t.fat; sums.fiber += t.fiber; sums.water += t.water;
-      sums.score += computeScore(d).score;
-    });
-    const n = loggedDays.length;
-    return {
-      days: n,
-      calories: Math.round(sums.calories / n), protein: Math.round(sums.protein / n),
-      carbs: Math.round(sums.carbs / n), fat: Math.round(sums.fat / n),
-      fiber: Math.round(sums.fiber / n), water: Math.round(sums.water / n),
-      score: Math.round(sums.score / n)
-    };
-  }
-
   /* ---------------- shared render helpers ---------------- */
 
   function $(id) { return document.getElementById(id); }
 
+  // Only renders an actual progress bar when a real target exists — showing
+  // a full-looking bar with no target would falsely imply a goal was hit.
+  // With no target, this is just the logged number, plainly labeled as such.
   function barHtml(label, consumed, target, unit) {
     const core = window.JarvisCore;
     const hasTarget = target > 0;
-    const pct = hasTarget ? Math.min(100, Math.round((consumed / target) * 100)) : 0;
-    const overCls = hasTarget && consumed > target ? " over" : "";
-    const targetText = hasTarget ? (Math.round(consumed) + " / " + Math.round(target) + (unit || "")) : (Math.round(consumed) + (unit || "") + " (no target set)");
+    if (!hasTarget) {
+      return (
+        '<div class="nutri-bar-row">' +
+          '<div class="nutri-bar-label"><span>' + core.escapeHtml(label) + '</span><span class="nutri-bar-value">' + Math.round(consumed) + (unit || "") + ' (no target set)</span></div>' +
+        '</div>'
+      );
+    }
+    const pct = Math.min(100, Math.round((consumed / target) * 100));
+    const overCls = consumed > target ? " over" : "";
+    const targetText = Math.round(consumed) + " / " + Math.round(target) + (unit || "");
     return (
       '<div class="nutri-bar-row">' +
         '<div class="nutri-bar-label"><span>' + core.escapeHtml(label) + '</span><span class="nutri-bar-value">' + targetText + '</span></div>' +
-        '<div class="nutri-bar-track"><div class="nutri-bar-fill' + overCls + '" style="width:' + (hasTarget ? pct : Math.min(100, consumed > 0 ? 100 : 0)) + '%"></div></div>' +
+        '<div class="nutri-bar-track"><div class="nutri-bar-fill' + overCls + '" style="width:' + pct + '%"></div></div>' +
       '</div>'
     );
   }
 
   /* ---------------- Dashboard ---------------- */
+
+  function macroCardHtml(label, consumed, target, unit) {
+    const core = window.JarvisCore;
+    const hasTarget = target > 0;
+    const pct = hasTarget ? Math.min(100, Math.round((consumed / target) * 100)) : 0;
+    const overCls = hasTarget && consumed > target ? " over" : "";
+    const remaining = hasTarget ? Math.max(0, Math.round(target - consumed)) : null;
+    return (
+      '<div class="macro-mini-card">' +
+        '<div class="macro-mini-label">' + core.escapeHtml(label) + '</div>' +
+        '<div class="macro-mini-value">' + Math.round(consumed) + (hasTarget ? ' / ' + Math.round(target) : '') + unit + '</div>' +
+        (hasTarget
+          ? '<div class="macro-mini-track"><div class="macro-mini-fill' + overCls + '" style="width:' + pct + '%"></div></div>' +
+            '<div class="macro-mini-sub">' + remaining + unit + ' left</div>'
+          : '<div class="macro-mini-sub">No target set</div>') +
+      '</div>'
+    );
+  }
+
+  function renderMacroCards() {
+    const today = window.JarvisCore.todayISODate();
+    const totals = getDayTotals(today);
+    const targets = getActiveTargets();
+    $("nutritionMacroCards").innerHTML =
+      macroCardHtml("Protein", totals.protein, targets.protein, "g") +
+      macroCardHtml("Carbs", totals.carbs, targets.carbs, "g") +
+      macroCardHtml("Fat", totals.fat, targets.fat, "g") +
+      macroCardHtml("Fiber", totals.fiber, targets.fiber, "g");
+  }
 
   function renderDashboard() {
     const core = window.JarvisCore;
@@ -352,16 +373,22 @@
     const remaining = targets.calories - totals.calories;
     const remainingEl = $("nutritionCalorieRemaining");
     remainingEl.textContent = targets.calories > 0 ? Math.round(remaining) : "—";
-    remainingEl.className = "stat-value " + (targets.calories > 0 ? (remaining >= 0 ? "positive" : "negative") : "");
+    remainingEl.className = "calorie-remaining-value " + (targets.calories > 0 ? (remaining >= 0 ? "text-positive" : "text-negative") : "");
 
-    $("nutritionMacroBars").innerHTML =
-      barHtml("Protein", totals.protein, targets.protein, "g") +
-      barHtml("Carbohydrates", totals.carbs, targets.carbs, "g") +
-      barHtml("Fat", totals.fat, targets.fat, "g") +
-      barHtml("Fiber", totals.fiber, targets.fiber, "g");
+    const ring = $("calorieRing");
+    if (ring) {
+      const overTarget = targets.calories > 0 && totals.calories > targets.calories;
+      const pct = targets.calories > 0 ? Math.min(100, Math.round((totals.calories / targets.calories) * 100)) : (totals.calories > 0 ? 100 : 0);
+      ring.style.setProperty("--pct", String(pct));
+      ring.classList.toggle("over", overTarget);
+    }
+
+    renderMacroCards();
 
     $("nutritionWaterBar").innerHTML = barHtml("Water", totals.water, targets.water, " cups");
     $("nutritionWaterCount").textContent = totals.water;
+
+    renderGoals();
 
     const scoreResult = computeScore(today);
     $("nutritionScoreValue").textContent = scoreResult.score;
@@ -380,7 +407,7 @@
     day.water = Math.max(0, day.water + delta);
     saveLog();
     renderDashboard();
-    if ($("historySelectedDate") && historySelectedDate === today) renderHistoryDetail();
+    if (historySelectedDate === today) renderHistoryDetail();
   }
 
   /* ---------------- Goals (Cutting / Bulking) ---------------- */
@@ -411,7 +438,6 @@
   function handleModeSwitch(mode) {
     goals.mode = mode;
     saveGoals();
-    renderGoals();
     renderDashboard();
   }
 
@@ -433,7 +459,6 @@
     }
     goals[mode] = next;
     saveGoals();
-    renderGoals();
     renderDashboard();
     core.showToast((mode === "bulking" ? "Bulking" : "Cutting") + " targets saved.");
   }
@@ -498,24 +523,60 @@
     renderFoodLog();
     renderDashboard();
     core.showToast("Food saved.");
+    core.closeModal("addFoodModal");
   }
 
-  function handleFoodFormCancel() { resetFoodForm(); }
+  function handleFoodFormCancel() { closeAddFoodModal(); }
+
+  function mealTotalsText(items) {
+    if (!items || items.length === 0) return "";
+    const cals = items.reduce(function (s, it) { return s + (it.calories || 0); }, 0);
+    return Math.round(cals) + " kcal";
+  }
+
+  // The options menu (kebab button) for a single Today's Food item. Shows a
+  // small "move to which meal" submenu in place of the main actions when
+  // "Move to another meal" is tapped, rather than a separate popup.
+  function foodItemMenuHtml(item, meal) {
+    const core = window.JarvisCore;
+    if (foodItemMoveSubmenuOpen) {
+      const otherMeals = MEALS.filter(function (m) { return m !== meal; });
+      return (
+        '<div class="food-item-menu">' +
+          otherMeals.map(function (m) {
+            return '<button type="button" class="food-item-menu-item food-move-target-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '" data-target-meal="' + m + '">Move to ' + MEAL_LABELS[m] + '</button>';
+          }).join("") +
+          '<button type="button" class="food-item-menu-item food-move-cancel-btn">&larr; Back</button>' +
+        '</div>'
+      );
+    }
+    return (
+      '<div class="food-item-menu">' +
+        '<button type="button" class="food-item-menu-item food-edit-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Edit</button>' +
+        '<button type="button" class="food-item-menu-item food-duplicate-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Duplicate</button>' +
+        '<button type="button" class="food-item-menu-item food-move-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Move to another meal</button>' +
+        '<button type="button" class="food-item-menu-item food-save-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Save as Saved Food</button>' +
+        '<button type="button" class="food-item-menu-item danger food-delete-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Delete</button>' +
+      '</div>'
+    );
+  }
 
   function foodItemRowHtml(item, meal) {
     const core = window.JarvisCore;
     const fvTag = item.isFruitVeg ? ' <span class="badge badge-green">fruit/veg</span>' : "";
+    const menuOpen = foodItemMenuOpenKey === (meal + ":" + item.id);
     return (
-      '<div class="list-item" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">' +
-        '<div class="list-item-row">' +
-          '<div class="list-item-main">' +
-            '<span class="list-item-title">' + core.escapeHtml(item.name) + fvTag + '</span>' +
-            '<span class="list-item-meta">' + core.escapeHtml(item.serving || "1 serving") + ' &middot; ' + Math.round(item.calories) + ' cal &middot; P ' + item.protein + 'g &middot; C ' + item.carbs + 'g &middot; F ' + item.fat + 'g &middot; Fiber ' + item.fiber + 'g</span>' +
+      '<div class="food-item-card" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">' +
+        '<div class="food-item-main">' +
+          '<div class="food-item-title-row">' +
+            '<span class="food-item-title">' + core.escapeHtml(item.name) + fvTag + '</span>' +
+            '<span class="food-item-cal">' + Math.round(item.calories) + ' cal</span>' +
           '</div>' +
-          '<div class="list-item-actions">' +
-            '<button type="button" class="btn-icon food-edit-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Edit</button>' +
-            '<button type="button" class="btn-icon danger food-delete-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Delete</button>' +
-          '</div>' +
+          '<div class="food-item-meta">' + core.escapeHtml(item.serving || "1 serving") + ' &middot; P ' + item.protein + 'g &middot; C ' + item.carbs + 'g &middot; F ' + item.fat + 'g &middot; Fiber ' + item.fiber + 'g</div>' +
+        '</div>' +
+        '<div class="food-item-menu-wrap">' +
+          '<button type="button" class="food-item-menu-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '" aria-label="Food options">&#8942;</button>' +
+          (menuOpen ? foodItemMenuHtml(item, meal) : "") +
         '</div>' +
       '</div>'
     );
@@ -532,6 +593,8 @@
       container.innerHTML = items.length
         ? items.map(function (item) { return foodItemRowHtml(item, meal); }).join("")
         : '<div class="empty-state">No ' + MEAL_LABELS[meal].toLowerCase() + ' logged yet.</div>';
+      const totalEl = $("foodMealTotal_" + meal);
+      if (totalEl) totalEl.textContent = mealTotalsText(items);
     });
     const totals = getDayTotals(today);
     $("foodLogTotals").textContent =
@@ -540,24 +603,97 @@
   }
 
   function handleFoodLogClick(e) {
+    const menuBtn = e.target.closest(".food-item-menu-btn");
+    if (menuBtn) {
+      const key = menuBtn.getAttribute("data-meal") + ":" + menuBtn.getAttribute("data-id");
+      foodItemMoveSubmenuOpen = false;
+      foodItemMenuOpenKey = (foodItemMenuOpenKey === key) ? null : key;
+      renderFoodLog();
+      return;
+    }
+    const moveBtn = e.target.closest(".food-move-btn");
+    if (moveBtn) {
+      foodItemMoveSubmenuOpen = true;
+      renderFoodLog();
+      return;
+    }
+    const moveCancelBtn = e.target.closest(".food-move-cancel-btn");
+    if (moveCancelBtn) {
+      foodItemMoveSubmenuOpen = false;
+      renderFoodLog();
+      return;
+    }
+    const moveTargetBtn = e.target.closest(".food-move-target-btn");
+    if (moveTargetBtn) {
+      const meal = moveTargetBtn.getAttribute("data-meal");
+      const id = moveTargetBtn.getAttribute("data-id");
+      const targetMeal = moveTargetBtn.getAttribute("data-target-meal");
+      const day = getDay(window.JarvisCore.todayISODate());
+      const idx = day.meals[meal].findIndex(function (it) { return it.id === id; });
+      if (idx !== -1) {
+        const item = day.meals[meal].splice(idx, 1)[0];
+        day.meals[targetMeal].push(item);
+        saveLog();
+      }
+      foodItemMenuOpenKey = null;
+      foodItemMoveSubmenuOpen = false;
+      renderFoodLog();
+      renderDashboard();
+      window.JarvisCore.showToast("Moved to " + MEAL_LABELS[targetMeal] + ".");
+      return;
+    }
+    const dupBtn = e.target.closest(".food-duplicate-btn");
+    if (dupBtn) {
+      const meal = dupBtn.getAttribute("data-meal");
+      const id = dupBtn.getAttribute("data-id");
+      const day = getDay(window.JarvisCore.todayISODate());
+      const item = day.meals[meal].find(function (it) { return it.id === id; });
+      if (item) {
+        const copy = Object.assign({}, item, { id: window.JarvisCore.uid("food"), createdAt: Date.now() });
+        day.meals[meal].push(copy);
+        saveLog();
+        window.JarvisCore.showToast("Duplicated.");
+      }
+      foodItemMenuOpenKey = null;
+      renderFoodLog();
+      renderDashboard();
+      return;
+    }
+    const saveBtn = e.target.closest(".food-save-btn");
+    if (saveBtn) {
+      const meal = saveBtn.getAttribute("data-meal");
+      const id = saveBtn.getAttribute("data-id");
+      const item = getDay(window.JarvisCore.todayISODate()).meals[meal].find(function (it) { return it.id === id; });
+      if (item) {
+        savedFoods.push(sanitizeFoodItem(Object.assign({}, item, { id: undefined, createdAt: undefined })));
+        saveSavedFoods();
+        renderSavedFoods();
+        window.JarvisCore.showToast('Saved "' + item.name + '" to Saved Foods.');
+      }
+      foodItemMenuOpenKey = null;
+      renderFoodLog();
+      return;
+    }
     const editBtn = e.target.closest(".food-edit-btn");
     if (editBtn) {
       const meal = editBtn.getAttribute("data-meal");
       const id = editBtn.getAttribute("data-id");
       const item = getDay(window.JarvisCore.todayISODate()).meals[meal].find(function (it) { return it.id === id; });
       if (!item) return;
+      foodItemMenuOpenKey = null;
+      openAddFoodModal("create");
       foodFormEditId = { meal: meal, id: id };
       $("foodFormMealSelect").value = meal;
       $("foodName").value = item.name;
       $("foodServing").value = item.serving;
-      MACRO_FIELDS.forEach(function (f) { $("food" + f.charAt(0).toUpperCase() + f.slice(1)).value = item[f]; });
+      MACRO_FIELDS.forEach(function (f) { $("food" + capitalize(f)).value = item[f]; });
       MICRO_FIELDS.forEach(function (f) {
-        const el = $("food" + f.charAt(0).toUpperCase() + f.slice(1));
+        const el = $("food" + capitalize(f));
         if (el) el.value = item[f] !== undefined ? item[f] : "";
       });
       $("foodIsFruitVeg").checked = !!item.isFruitVeg;
       renderFoodForm();
-      $("foodName").scrollIntoView({ behavior: "smooth", block: "center" });
+      renderFoodLog();
       return;
     }
     const delBtn = e.target.closest(".food-delete-btn");
@@ -565,8 +701,12 @@
       const meal = delBtn.getAttribute("data-meal");
       const id = delBtn.getAttribute("data-id");
       const day = getDay(window.JarvisCore.todayISODate());
+      const item = day.meals[meal].find(function (it) { return it.id === id; });
+      if (!item) return;
+      if (!window.confirm('Delete "' + item.name + '"? This can\'t be undone.')) return;
       day.meals[meal] = day.meals[meal].filter(function (it) { return it.id !== id; });
       saveLog();
+      foodItemMenuOpenKey = null;
       renderFoodLog();
       renderDashboard();
       window.JarvisCore.showToast("Food removed.");
@@ -583,7 +723,8 @@
 
   function resetSavedFoodForm() {
     window._savedFoodEditId = null;
-    ["savedFoodName", "savedFoodServing", "savedFoodCalories", "savedFoodProtein", "savedFoodCarbs", "savedFoodFat", "savedFoodFiber"].forEach(function (id) {
+    ["savedFoodName", "savedFoodServing", "savedFoodCalories", "savedFoodProtein", "savedFoodCarbs", "savedFoodFat", "savedFoodFiber",
+      "savedFoodSodium", "savedFoodCalcium", "savedFoodIron", "savedFoodPotassium", "savedFoodVitaminC", "savedFoodVitaminD"].forEach(function (id) {
       const el = $(id); if (el) el.value = "";
     });
     setAiStatus("savedFoodAiStatus", "");
@@ -599,11 +740,17 @@
     const raw = {
       name: name, serving: $("savedFoodServing").value.trim(),
       calories: $("savedFoodCalories").value, protein: $("savedFoodProtein").value,
-      carbs: $("savedFoodCarbs").value, fat: $("savedFoodFat").value, fiber: $("savedFoodFiber").value
+      carbs: $("savedFoodCarbs").value, fat: $("savedFoodFat").value, fiber: $("savedFoodFiber").value,
+      sodium: $("savedFoodSodium").value, calcium: $("savedFoodCalcium").value, iron: $("savedFoodIron").value,
+      potassium: $("savedFoodPotassium").value, vitaminC: $("savedFoodVitaminC").value, vitaminD: $("savedFoodVitaminD").value
     };
     if (window._savedFoodEditId) {
       const idx = savedFoods.findIndex(function (f) { return f.id === window._savedFoodEditId; });
-      if (idx !== -1) { raw.id = window._savedFoodEditId; savedFoods[idx] = sanitizeFoodItem(raw); }
+      if (idx !== -1) {
+        raw.id = window._savedFoodEditId;
+        raw.createdAt = savedFoods[idx].createdAt;
+        savedFoods[idx] = sanitizeFoodItem(raw);
+      }
     } else {
       savedFoods.push(sanitizeFoodItem(raw));
     }
@@ -616,26 +763,27 @@
   function renderSavedFoods() {
     const core = window.JarvisCore;
     const container = $("savedFoodsList");
-    if (savedFoods.length === 0) {
-      container.innerHTML = '<div class="empty-state">No saved foods yet. Add one above.</div>';
+    let list = savedFoods.slice();
+    const q = savedFoodSearch.trim().toLowerCase();
+    if (q) list = list.filter(function (f) { return f.name.toLowerCase().indexOf(q) !== -1; });
+    if (savedFoodSort === "calories") list.sort(function (a, b) { return a.calories - b.calories; });
+    else if (savedFoodSort === "recent") list.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    else list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet. Add one above." : "No saved foods match your search.") + '</div>';
       return;
     }
-    container.innerHTML = savedFoods.map(function (f) {
+    container.innerHTML = list.map(function (f) {
       return (
-        '<div class="list-item" data-id="' + core.escapeHtml(f.id) + '">' +
-          '<div class="list-item-row">' +
-            '<div class="list-item-main">' +
-              '<span class="list-item-title">' + core.escapeHtml(f.name) + '</span>' +
-              '<span class="list-item-meta">' + core.escapeHtml(f.serving || "1 serving") + ' &middot; ' + Math.round(f.calories) + ' cal &middot; P ' + f.protein + 'g &middot; C ' + f.carbs + 'g &middot; F ' + f.fat + 'g</span>' +
-            '</div>' +
-            '<div class="list-item-actions">' +
-              '<select class="saved-food-meal-select" data-id="' + core.escapeHtml(f.id) + '">' +
-                MEALS.map(function (m) { return '<option value="' + m + '">' + MEAL_LABELS[m] + '</option>'; }).join("") +
-              '</select>' +
-              '<button type="button" class="btn-icon saved-food-add-btn" data-id="' + core.escapeHtml(f.id) + '">+ Add to Today</button>' +
-              '<button type="button" class="btn-icon saved-food-edit-btn" data-id="' + core.escapeHtml(f.id) + '">Edit</button>' +
-              '<button type="button" class="btn-icon danger saved-food-delete-btn" data-id="' + core.escapeHtml(f.id) + '">Delete</button>' +
-            '</div>' +
+        '<div class="saved-food-card" data-id="' + core.escapeHtml(f.id) + '">' +
+          '<div class="saved-food-card-title">' + core.escapeHtml(f.name) + '</div>' +
+          '<div class="saved-food-card-meta">' + core.escapeHtml(f.serving || "1 serving") + '</div>' +
+          '<div class="saved-food-card-macros">' + Math.round(f.calories) + ' cal &middot; P ' + f.protein + 'g &middot; C ' + f.carbs + 'g &middot; F ' + f.fat + 'g</div>' +
+          '<div class="saved-food-card-actions">' +
+            '<button type="button" class="btn btn-secondary saved-food-log-btn" data-id="' + core.escapeHtml(f.id) + '">+ Log</button>' +
+            '<button type="button" class="btn-icon saved-food-edit-btn" data-id="' + core.escapeHtml(f.id) + '">Edit</button>' +
+            '<button type="button" class="btn-icon danger saved-food-delete-btn" data-id="' + core.escapeHtml(f.id) + '">Delete</button>' +
           '</div>' +
         '</div>'
       );
@@ -643,21 +791,11 @@
   }
 
   function handleSavedFoodsClick(e) {
-    const addBtn = e.target.closest(".saved-food-add-btn");
-    if (addBtn) {
-      const id = addBtn.getAttribute("data-id");
-      const food = savedFoods.find(function (f) { return f.id === id; });
-      if (!food) return;
-      const row = addBtn.closest(".list-item");
-      const meal = row.querySelector(".saved-food-meal-select").value;
-      const today = window.JarvisCore.todayISODate();
-      const day = getDay(today);
-      const copy = Object.assign({}, food, { id: window.JarvisCore.uid("food"), createdAt: Date.now() });
-      day.meals[meal].push(sanitizeFoodItem(copy));
-      saveLog();
-      renderFoodLog();
-      renderDashboard();
-      window.JarvisCore.showToast('Added "' + food.name + '" to ' + MEAL_LABELS[meal] + ".");
+    const logBtn = e.target.closest(".saved-food-log-btn");
+    if (logBtn) {
+      const id = logBtn.getAttribute("data-id");
+      openAddFoodModal("saved");
+      selectFoodForLogging("saved", id);
       return;
     }
     const editBtn = e.target.closest(".saved-food-edit-btn");
@@ -668,7 +806,11 @@
       window._savedFoodEditId = id;
       $("savedFoodName").value = food.name;
       $("savedFoodServing").value = food.serving;
-      MACRO_FIELDS.forEach(function (f2) { $("savedFood" + f2.charAt(0).toUpperCase() + f2.slice(1)).value = food[f2]; });
+      MACRO_FIELDS.forEach(function (f2) { $("savedFood" + capitalize(f2)).value = food[f2]; });
+      MICRO_FIELDS.forEach(function (f2) {
+        const el = $("savedFood" + capitalize(f2));
+        if (el) el.value = food[f2] !== undefined ? food[f2] : "";
+      });
       renderSavedFoodForm();
       $("savedFoodName").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -676,6 +818,9 @@
     const delBtn = e.target.closest(".saved-food-delete-btn");
     if (delBtn) {
       const id = delBtn.getAttribute("data-id");
+      const food = savedFoods.find(function (f) { return f.id === id; });
+      if (!food) return;
+      if (!window.confirm('Delete saved food "' + food.name + '"? This can\'t be undone.')) return;
       savedFoods = savedFoods.filter(function (f) { return f.id !== id; });
       saveSavedFoods();
       renderSavedFoods();
@@ -698,19 +843,32 @@
   }
 
   function renderIngredientRows() {
+    const core = window.JarvisCore;
     const container = $("recipeIngredientRows");
+    const last = recipeBuilder.ingredients.length - 1;
     container.innerHTML = recipeBuilder.ingredients.map(function (ing, i) {
       const aiTag = ing.aiEstimated ? ' <span class="badge badge-yellow">AI estimated</span>' : "";
       return (
-        '<div class="form-row recipe-ingredient-row" data-index="' + i + '" style="display:grid;grid-template-columns:1.6fr 1fr repeat(5,1fr) auto;gap:6px;align-items:end;">' +
-          '<div><label>Ingredient' + aiTag + '</label><input type="text" class="ri-name" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.name) + '" placeholder="e.g. Chicken breast"></div>' +
-          '<div><label>Quantity</label><input type="text" class="ri-quantity" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.quantity) + '" placeholder="e.g. 6 oz"></div>' +
-          '<div><label>Cal</label><input type="number" min="0" class="ri-calories" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.calories) + '"></div>' +
-          '<div><label>Protein</label><input type="number" min="0" class="ri-protein" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.protein) + '"></div>' +
-          '<div><label>Carbs</label><input type="number" min="0" class="ri-carbs" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.carbs) + '"></div>' +
-          '<div><label>Fat</label><input type="number" min="0" class="ri-fat" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.fat) + '"></div>' +
-          '<div><label>Fiber</label><input type="number" min="0" class="ri-fiber" data-index="' + i + '" value="' + window.JarvisCore.escapeHtml(ing.fiber) + '"></div>' +
-          '<button type="button" class="btn-icon danger ri-remove-btn" data-index="' + i + '" aria-label="Remove ingredient">&times;</button>' +
+        '<div class="recipe-ingredient-card" data-index="' + i + '">' +
+          '<div class="recipe-ingredient-card-header">' +
+            '<span class="recipe-ingredient-number">Ingredient ' + (i + 1) + aiTag + '</span>' +
+            '<div class="recipe-ingredient-card-actions">' +
+              '<button type="button" class="btn-icon ri-move-up-btn" data-index="' + i + '" aria-label="Move up"' + (i === 0 ? " disabled" : "") + '>&uarr;</button>' +
+              '<button type="button" class="btn-icon ri-move-down-btn" data-index="' + i + '" aria-label="Move down"' + (i === last ? " disabled" : "") + '>&darr;</button>' +
+              '<button type="button" class="btn-icon danger ri-remove-btn" data-index="' + i + '" aria-label="Remove ingredient">&times;</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="form-row two-col">' +
+            '<div><label>Name</label><input type="text" class="ri-name" data-index="' + i + '" value="' + core.escapeHtml(ing.name) + '" placeholder="e.g. Chicken breast"></div>' +
+            '<div><label>Quantity</label><input type="text" class="ri-quantity" data-index="' + i + '" value="' + core.escapeHtml(ing.quantity) + '" placeholder="e.g. 6 oz"></div>' +
+          '</div>' +
+          '<div class="recipe-ingredient-macro-grid">' +
+            '<div><label>Cal</label><input type="number" min="0" class="ri-calories" data-index="' + i + '" value="' + core.escapeHtml(ing.calories) + '"></div>' +
+            '<div><label>Protein</label><input type="number" min="0" class="ri-protein" data-index="' + i + '" value="' + core.escapeHtml(ing.protein) + '"></div>' +
+            '<div><label>Carbs</label><input type="number" min="0" class="ri-carbs" data-index="' + i + '" value="' + core.escapeHtml(ing.carbs) + '"></div>' +
+            '<div><label>Fat</label><input type="number" min="0" class="ri-fat" data-index="' + i + '" value="' + core.escapeHtml(ing.fat) + '"></div>' +
+            '<div><label>Fiber</label><input type="number" min="0" class="ri-fiber" data-index="' + i + '" value="' + core.escapeHtml(ing.fiber) + '"></div>' +
+          '</div>' +
         '</div>'
       );
     }).join("");
@@ -738,6 +896,28 @@
   }
 
   function handleIngredientRowsClick(e) {
+    const upBtn = e.target.closest(".ri-move-up-btn");
+    if (upBtn) {
+      const i = Number(upBtn.getAttribute("data-index"));
+      if (i > 0) {
+        const tmp = recipeBuilder.ingredients[i - 1];
+        recipeBuilder.ingredients[i - 1] = recipeBuilder.ingredients[i];
+        recipeBuilder.ingredients[i] = tmp;
+        renderIngredientRows();
+      }
+      return;
+    }
+    const downBtn = e.target.closest(".ri-move-down-btn");
+    if (downBtn) {
+      const i = Number(downBtn.getAttribute("data-index"));
+      if (i < recipeBuilder.ingredients.length - 1) {
+        const tmp = recipeBuilder.ingredients[i + 1];
+        recipeBuilder.ingredients[i + 1] = recipeBuilder.ingredients[i];
+        recipeBuilder.ingredients[i] = tmp;
+        renderIngredientRows();
+      }
+      return;
+    }
     const btn = e.target.closest(".ri-remove-btn");
     if (!btn) return;
     const i = Number(btn.getAttribute("data-index"));
@@ -922,7 +1102,7 @@
         setAiStatus("savedFoodAiStatus", "The model replied, but didn't return an estimate for this food.", true);
         return;
       }
-      MACRO_FIELDS.forEach(function (f) {
+      MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
         if (isNonNegativeNumber(est[f])) $("savedFood" + capitalize(f)).value = est[f];
       });
       setAiStatus("savedFoodAiStatus", "Filled in an AI estimate for " + name + " — this is an estimate, not a verified nutrition fact, so double-check anything that matters.");
@@ -1061,6 +1241,9 @@
     const delBtn = e.target.closest(".recipe-delete-btn");
     if (delBtn) {
       const id = delBtn.getAttribute("data-id");
+      const recipe = recipes.find(function (r) { return r.id === id; });
+      if (!recipe) return;
+      if (!window.confirm('Delete recipe "' + recipe.name + '"? This can\'t be undone.')) return;
       recipes = recipes.filter(function (r) { return r.id !== id; });
       saveRecipes();
       renderRecipes();
@@ -1069,6 +1252,17 @@
   }
 
   /* ---------------- Nutrients tab ---------------- */
+
+  function renderNutrientsMacros() {
+    const today = window.JarvisCore.todayISODate();
+    const totals = getDayTotals(today);
+    const targets = getActiveTargets();
+    $("nutrientsMacroList").innerHTML =
+      barHtml("Protein", totals.protein, targets.protein, "g") +
+      barHtml("Carbohydrates", totals.carbs, targets.carbs, "g") +
+      barHtml("Fat", totals.fat, targets.fat, "g") +
+      barHtml("Fiber", totals.fiber, targets.fiber, "g");
+  }
 
   function renderNutrients() {
     const core = window.JarvisCore;
@@ -1092,10 +1286,92 @@
           '<span class="list-item-meta">' + Math.round(totals[f] * 10) / 10 + unit + ' logged today &middot; ' + pct + '% of the general reference (' + ref + unit + ')</span>' +
         '</div></div></div>'
       );
-    }).join("") + barHtml("Fiber", totals.fiber, getActiveTargets().fiber, "g");
+    }).join("");
   }
 
   /* ---------------- History ---------------- */
+
+  function getDateRangeDescending(days) {
+    const core = window.JarvisCore;
+    const today = new Date(core.todayISODate());
+    const result = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      result.push(new Date(d.getTime() - tzOffset).toISOString().slice(0, 10));
+    }
+    return result;
+  }
+
+  function getAverages(days) {
+    const loggedDays = getDateRangeDescending(days).filter(function (d) { return getAllEntries(d).length > 0; });
+    if (loggedDays.length === 0) return null;
+    const sums = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, water: 0, score: 0, fruitVeg: 0 };
+    loggedDays.forEach(function (d) {
+      const t = getDayTotals(d);
+      sums.calories += t.calories; sums.protein += t.protein; sums.carbs += t.carbs;
+      sums.fat += t.fat; sums.fiber += t.fiber; sums.water += t.water; sums.fruitVeg += t.fruitVegCount;
+      sums.score += computeScore(d).score;
+    });
+    const n = loggedDays.length;
+    return {
+      days: n,
+      calories: Math.round(sums.calories / n), protein: Math.round(sums.protein / n),
+      carbs: Math.round(sums.carbs / n), fat: Math.round(sums.fat / n),
+      fiber: Math.round(sums.fiber / n), water: Math.round(sums.water / n),
+      fruitVeg: Math.round((sums.fruitVeg / n) * 10) / 10,
+      score: Math.round(sums.score / n)
+    };
+  }
+
+  // A small inline SVG line chart, same approach as workout.js's progress
+  // charts (kept local here rather than shared, since that module doesn't
+  // export its version) — only ever plots days that were actually logged,
+  // so a gap in the data is a gap in the line, never a fabricated zero.
+  function renderNutriLineChart(containerId, points, opts) {
+    const core = window.JarvisCore;
+    const container = $(containerId);
+    if (!points || points.length < 2) {
+      container.innerHTML = '<div class="empty-state">' + (opts.emptyMessage || "Log a few more days to see a trend line.") + '</div>';
+      return;
+    }
+    const width = 640, height = 200;
+    const padding = { top: 16, right: 16, bottom: 24, left: 44 };
+    const plotW = width - padding.left - padding.right;
+    const plotH = height - padding.top - padding.bottom;
+    const xs = points.map(function (p) { return p.t; });
+    const ys = points.map(function (p) { return p.v; });
+    const minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    const maxY = Math.max.apply(null, ys) * 1.15 || 1;
+    function xPos(t) { return padding.left + (maxX === minX ? plotW / 2 : ((t - minX) / (maxX - minX)) * plotW); }
+    function yPos(v) { return padding.top + plotH - (v / maxY) * plotH; }
+    const pathD = points.map(function (p, i) { return (i === 0 ? "M" : "L") + xPos(p.t).toFixed(1) + "," + yPos(p.v).toFixed(1); }).join(" ");
+    const circles = points.map(function (p) {
+      const label = core.escapeHtml(p.label) + ": " + core.escapeHtml(String(p.v));
+      return '<circle cx="' + xPos(p.t).toFixed(1) + '" cy="' + yPos(p.v).toFixed(1) + '" r="4" fill="var(--accent)"><title>' + label + '</title></circle>';
+    }).join("");
+    const gridY0 = yPos(0), gridY1 = yPos(maxY);
+    const gridLines =
+      '<line x1="' + padding.left + '" y1="' + gridY0.toFixed(1) + '" x2="' + (width - padding.right) + '" y2="' + gridY0.toFixed(1) + '" stroke="var(--card-border)" stroke-width="1"/>' +
+      '<text x="4" y="' + (gridY0 + 4).toFixed(1) + '" font-size="10" fill="var(--text-faint)">0</text>' +
+      '<text x="4" y="' + (gridY1 + 10).toFixed(1) + '" font-size="10" fill="var(--text-faint)">' + Math.round(maxY) + '</text>';
+    container.innerHTML =
+      '<svg viewBox="0 0 ' + width + ' ' + height + '" class="progress-chart-svg" role="img" aria-label="' + core.escapeHtml(opts.ariaLabel || "trend chart") + '">' +
+        gridLines +
+        '<path d="' + pathD + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        circles +
+      '</svg>';
+  }
+
+  function buildTrendPoints(days, field) {
+    const core = window.JarvisCore;
+    const loggedDates = getDateRangeDescending(days).reverse().filter(function (d) { return getAllEntries(d).length > 0; });
+    return loggedDates.map(function (d) {
+      const t = getDayTotals(d);
+      return { t: new Date(d).getTime(), v: Math.round(t[field]), label: core.formatDate(d) };
+    });
+  }
 
   function renderHistoryList() {
     const core = window.JarvisCore;
@@ -1110,20 +1386,36 @@
       }).join("");
     }
 
-    const avg = getSevenDayAverages();
+    const avg = getAverages(historyRangeDays);
     $("historyAverages").innerHTML = avg
-      ? ('<p class="field-hint">Average over the ' + avg.days + ' day' + (avg.days === 1 ? "" : "s") + ' you logged in the past week:</p>' +
+      ? ('<p class="field-hint">Average over the ' + avg.days + ' day' + (avg.days === 1 ? "" : "s") + ' you logged in the past ' + historyRangeDays + ' days:</p>' +
          '<div class="stat-grid">' +
            '<div class="stat-box"><span class="stat-value">' + avg.calories + '</span><span class="stat-label">Calories</span></div>' +
            '<div class="stat-box"><span class="stat-value">' + avg.protein + 'g</span><span class="stat-label">Protein</span></div>' +
            '<div class="stat-box"><span class="stat-value">' + avg.carbs + 'g</span><span class="stat-label">Carbs</span></div>' +
            '<div class="stat-box"><span class="stat-value">' + avg.fat + 'g</span><span class="stat-label">Fat</span></div>' +
            '<div class="stat-box"><span class="stat-value">' + avg.fiber + 'g</span><span class="stat-label">Fiber</span></div>' +
+           '<div class="stat-box"><span class="stat-value">' + avg.water + '</span><span class="stat-label">Water (cups)</span></div>' +
+           '<div class="stat-box"><span class="stat-value">' + avg.fruitVeg + '</span><span class="stat-label">Fruit/veg servings</span></div>' +
            '<div class="stat-box"><span class="stat-value">' + avg.score + '</span><span class="stat-label">Nutrition score</span></div>' +
          '</div>')
-      : '<p class="field-hint">Log a few days to see 7-day averages here.</p>';
+      : '<p class="field-hint">Log a few days to see averages here.</p>';
+
+    renderNutriLineChart("historyCalorieTrend", buildTrendPoints(historyRangeDays, "calories"),
+      { ariaLabel: "Calorie trend", emptyMessage: "Log at least two days in this range to see a calorie trend." });
+    renderNutriLineChart("historyProteinTrend", buildTrendPoints(historyRangeDays, "protein"),
+      { ariaLabel: "Protein trend", emptyMessage: "Log at least two days in this range to see a protein trend." });
 
     renderHistoryDetail();
+  }
+
+  function handleHistoryRangeClick(e) {
+    const btn = e.target.closest(".segmented-btn");
+    if (!btn) return;
+    historyRangeDays = Number(btn.getAttribute("data-range")) || 7;
+    $("historyRange7dBtn").classList.toggle("active", historyRangeDays === 7);
+    $("historyRange30dBtn").classList.toggle("active", historyRangeDays === 30);
+    renderHistoryList();
   }
 
   function renderHistoryDetail() {
@@ -1165,17 +1457,196 @@
     renderHistoryList();
   }
 
+  /* ---------------- "+ Add Food" bottom sheet ---------------- */
+
+  // Distinct foods logged recently, most-recent first — not a separate
+  // stored list, just derived from the existing log so there's nothing new
+  // to keep in sync. Two entries with the same (case-insensitive) name keep
+  // only the most recent one's numbers.
+  function getRecentFoods(limit) {
+    const seen = {};
+    const result = [];
+    getDateRangeDescending(30).forEach(function (d) {
+      const entries = getAllEntries(d).slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+      entries.forEach(function (item) {
+        const key = (item.name || "").trim().toLowerCase();
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        result.push(item);
+      });
+    });
+    result.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    return result.slice(0, limit || 12);
+  }
+
+  function guessCurrentMeal() {
+    const hour = new Date().getHours();
+    if (hour < 11) return "breakfast";
+    if (hour < 15) return "lunch";
+    if (hour < 20) return "dinner";
+    return "snacks";
+  }
+
+  function openAddFoodModal(tab) {
+    addFoodModalTab = tab || (getRecentFoods(1).length ? "recent" : "saved");
+    pickerSelection = null;
+    modalSavedFoodSearch = "";
+    const searchInput = $("modalSavedFoodSearchInput");
+    if (searchInput) searchInput.value = "";
+    renderAddFoodModal();
+    window.JarvisCore.openModal("addFoodModal");
+  }
+
+  function closeAddFoodModal() {
+    window.JarvisCore.closeModal("addFoodModal");
+    pickerSelection = null;
+    resetFoodForm();
+  }
+
+  function pickerListItemHtml(source, id, name, meta) {
+    const core = window.JarvisCore;
+    return (
+      '<button type="button" class="picker-list-item" data-source="' + source + '" data-id="' + core.escapeHtml(id) + '">' +
+        '<span class="picker-list-item-title">' + core.escapeHtml(name) + '</span>' +
+        '<span class="picker-list-item-meta">' + meta + '</span>' +
+      '</button>'
+    );
+  }
+
+  function renderRecentFoodsList() {
+    const core = window.JarvisCore;
+    const items = getRecentFoods(15);
+    $("recentFoodsList").innerHTML = items.length
+      ? items.map(function (it) { return pickerListItemHtml("recent", it.id, it.name, Math.round(it.calories) + " cal &middot; " + core.escapeHtml(it.serving || "1 serving")); }).join("")
+      : '<div class="empty-state">No recently logged foods yet — log something and it\'ll show up here.</div>';
+  }
+
+  function renderModalSavedFoodsList() {
+    const core = window.JarvisCore;
+    const q = modalSavedFoodSearch.trim().toLowerCase();
+    const items = savedFoods.filter(function (f) { return !q || f.name.toLowerCase().indexOf(q) !== -1; });
+    $("modalSavedFoodsList").innerHTML = items.length
+      ? items.map(function (f) { return pickerListItemHtml("saved", f.id, f.name, Math.round(f.calories) + " cal &middot; " + core.escapeHtml(f.serving || "1 serving")); }).join("")
+      : '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet." : "No matches.") + '</div>';
+  }
+
+  function renderModalRecipesList() {
+    $("modalRecipesList").innerHTML = recipes.length
+      ? recipes.map(function (r) {
+          const result = computeRecipeTotals(r.ingredients);
+          const perCal = result.totals.calories / r.servings;
+          return pickerListItemHtml("recipe", r.id, r.name, Math.round(perCal) + " cal/serving &middot; " + r.servings + " serving" + (r.servings === 1 ? "" : "s"));
+        }).join("")
+      : '<div class="empty-state">No recipes yet — build one in the Recipes tab.</div>';
+  }
+
+  function renderAddFoodModal() {
+    ["recent", "saved", "create", "recipe"].forEach(function (t) {
+      const btn = $("addFoodTab" + capitalize(t));
+      const panel = $("addFoodPanel" + capitalize(t));
+      if (btn) btn.classList.toggle("active", t === addFoodModalTab);
+      if (panel) panel.classList.toggle("hidden", t !== addFoodModalTab || !!pickerSelection);
+    });
+    $("pickerConfirm").classList.toggle("hidden", !pickerSelection);
+    if (pickerSelection) { renderPickerConfirm(); return; }
+    if (addFoodModalTab === "recent") renderRecentFoodsList();
+    else if (addFoodModalTab === "saved") renderModalSavedFoodsList();
+    else if (addFoodModalTab === "recipe") renderModalRecipesList();
+  }
+
+  // Recipe picks are converted to a food-shaped object (per-serving macros)
+  // up front, so the confirm step and the final log-write don't need to
+  // know the difference between a recipe, a saved food, or a recent food.
+  function findFoodForPicker(source, id) {
+    if (source === "recent") return getRecentFoods(50).find(function (it) { return it.id === id; });
+    if (source === "saved") return savedFoods.find(function (f) { return f.id === id; });
+    if (source === "recipe") {
+      const r = recipes.find(function (rr) { return rr.id === id; });
+      if (!r) return null;
+      const result = computeRecipeTotals(r.ingredients);
+      const per = {};
+      MACRO_FIELDS.forEach(function (f) { per[f] = result.totals[f] / r.servings; });
+      return Object.assign({ name: r.name, serving: "1 serving" }, per);
+    }
+    return null;
+  }
+
+  function selectFoodForLogging(source, id) {
+    const food = findFoodForPicker(source, id);
+    if (!food) return;
+    pickerSelection = { source: source, food: food, meal: guessCurrentMeal(), multiplier: 1 };
+    $("pickerMealSelect").value = pickerSelection.meal;
+    $("pickerServingsInput").value = "1";
+    renderAddFoodModal();
+  }
+
+  function renderPickerConfirm() {
+    if (!pickerSelection) return;
+    const food = pickerSelection.food;
+    const m = pickerSelection.multiplier;
+    $("pickerConfirmName").textContent = food.name;
+    const cal = Math.round((food.calories || 0) * m);
+    const p = Math.round((food.protein || 0) * m * 10) / 10;
+    const c = Math.round((food.carbs || 0) * m * 10) / 10;
+    const f = Math.round((food.fat || 0) * m * 10) / 10;
+    $("pickerPreview").textContent = "≈ " + cal + " cal · P " + p + "g · C " + c + "g · F " + f + "g";
+  }
+
+  function handlePickerMealChange(e) {
+    if (!pickerSelection) return;
+    pickerSelection.meal = e.target.value;
+  }
+
+  function handlePickerServingsInput(e) {
+    if (!pickerSelection) return;
+    const n = Number(e.target.value);
+    pickerSelection.multiplier = (isFinite(n) && n > 0) ? n : 1;
+    renderPickerConfirm();
+  }
+
+  function handlePickerBack() {
+    pickerSelection = null;
+    renderAddFoodModal();
+  }
+
+  function handlePickerConfirmAdd() {
+    const core = window.JarvisCore;
+    if (!pickerSelection) return;
+    const food = pickerSelection.food;
+    const m = pickerSelection.multiplier;
+    const raw = {
+      name: food.name,
+      serving: m !== 1 ? (m + "x " + (food.serving || "1 serving")) : (food.serving || "1 serving"),
+      calories: (food.calories || 0) * m, protein: (food.protein || 0) * m, carbs: (food.carbs || 0) * m,
+      fat: (food.fat || 0) * m, fiber: (food.fiber || 0) * m, isFruitVeg: !!food.isFruitVeg
+    };
+    MICRO_FIELDS.forEach(function (f) { if (food[f] !== undefined) raw[f] = food[f] * m; });
+    const day = getDay(core.todayISODate());
+    day.meals[pickerSelection.meal].push(sanitizeFoodItem(raw));
+    saveLog();
+    renderFoodLog();
+    renderDashboard();
+    core.showToast('Added "' + food.name + '" to ' + MEAL_LABELS[pickerSelection.meal] + ".");
+    closeAddFoodModal();
+  }
+
+  function handlePickerListClick(e) {
+    const btn = e.target.closest(".picker-list-item");
+    if (!btn) return;
+    selectFoodForLogging(btn.getAttribute("data-source"), btn.getAttribute("data-id"));
+  }
+
   /* ---------------- boot ---------------- */
 
   function renderAll() {
     renderDashboard();
-    renderGoals();
     renderFoodForm();
     renderFoodLog();
     renderSavedFoodForm();
     renderSavedFoods();
     renderIngredientRows();
     renderRecipes();
+    renderNutrientsMacros();
     renderNutrients();
     renderHistoryList();
   }
@@ -1201,8 +1672,7 @@
   // user switches to it, so it's never showing stale numbers.
   function onSubTabChange(targetId) {
     if (targetId === "nutrition-dashboard") renderDashboard();
-    if (targetId === "nutrition-goals") renderGoals();
-    if (targetId === "nutrition-nutrients") renderNutrients();
+    if (targetId === "nutrition-nutrients") { renderNutrientsMacros(); renderNutrients(); }
     if (targetId === "nutrition-history") renderHistoryList();
   }
 
@@ -1216,6 +1686,32 @@
     $("nutritionWaterAddBtn").addEventListener("click", function () { handleWaterAdjust(1); });
     $("nutritionWaterRemoveBtn").addEventListener("click", function () { handleWaterAdjust(-1); });
 
+    $("qaAddFoodBtn").addEventListener("click", function () { openAddFoodModal(); });
+    $("qaAddWaterBtn").addEventListener("click", function () { handleWaterAdjust(1); });
+    $("qaLogRecentBtn").addEventListener("click", function () { openAddFoodModal("recent"); });
+    $("qaAddRecipeBtn").addEventListener("click", function () { openAddFoodModal("recipe"); });
+
+    $("foodOpenModalBtn").addEventListener("click", function () { openAddFoodModal(); });
+    $("addFoodModalCloseBtn").addEventListener("click", closeAddFoodModal);
+    $("addFoodTabs").addEventListener("click", function (e) {
+      const btn = e.target.closest(".segmented-btn");
+      if (!btn) return;
+      pickerSelection = null;
+      addFoodModalTab = btn.getAttribute("data-tab");
+      renderAddFoodModal();
+    });
+    $("recentFoodsList").addEventListener("click", handlePickerListClick);
+    $("modalSavedFoodsList").addEventListener("click", handlePickerListClick);
+    $("modalRecipesList").addEventListener("click", handlePickerListClick);
+    $("modalSavedFoodSearchInput").addEventListener("input", function (e) {
+      modalSavedFoodSearch = e.target.value;
+      renderModalSavedFoodsList();
+    });
+    $("pickerBackBtn").addEventListener("click", handlePickerBack);
+    $("pickerMealSelect").addEventListener("change", handlePickerMealChange);
+    $("pickerServingsInput").addEventListener("input", handlePickerServingsInput);
+    $("pickerConfirmAddBtn").addEventListener("click", handlePickerConfirmAdd);
+
     $("foodForm").addEventListener("submit", handleFoodFormSubmit);
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
     $("foodAiEstimateBtn").addEventListener("click", handleEstimateFoodWithAI);
@@ -1224,12 +1720,22 @@
       const el = $("foodMeal_" + meal);
       if (el) el.addEventListener("click", handleFoodLogClick);
     });
+    // Close an open food-item options menu on any click outside it.
+    document.addEventListener("click", function (e) {
+      if (foodItemMenuOpenKey && !e.target.closest(".food-item-menu-wrap")) {
+        foodItemMenuOpenKey = null;
+        foodItemMoveSubmenuOpen = false;
+        renderFoodLog();
+      }
+    });
 
     $("savedFoodForm").addEventListener("submit", handleSavedFoodFormSubmit);
     $("savedFoodCancelBtn").addEventListener("click", resetSavedFoodForm);
     $("savedFoodAiEstimateBtn").addEventListener("click", handleEstimateSavedFoodWithAI);
     $("savedFoodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
+    $("savedFoodSearchInput").addEventListener("input", function (e) { savedFoodSearch = e.target.value; renderSavedFoods(); });
+    $("savedFoodSortSelect").addEventListener("change", function (e) { savedFoodSort = e.target.value; renderSavedFoods(); });
 
     $("recipeForm").addEventListener("submit", handleRecipeFormSubmit);
     $("recipeAddIngredientBtn").addEventListener("click", handleAddIngredientRow);
@@ -1241,6 +1747,7 @@
     $("recipesList").addEventListener("click", handleRecipesListClick);
 
     $("historyDateList").addEventListener("click", handleHistoryDateListClick);
+    $("historyRangeToggle").addEventListener("click", handleHistoryRangeClick);
 
     resetFoodForm();
     resetSavedFoodForm();

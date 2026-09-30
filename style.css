@@ -1047,6 +1047,404 @@ textarea { resize: vertical; min-height: 44px; }
   color: #fff;
 }
 
+/* ---------------- Profile / account menu ---------------- */
+
+.profile-menu-wrap { position: relative; flex-shrink: 0; }
+
+.profile-menu-btn {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 17px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile-menu-btn:hover { color: var(--text); background: var(--card-hover); }
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  min-width: 240px;
+  padding: 8px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-menu-email {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 8px 10px 6px;
+  word-break: break-all;
+  border-bottom: 1px solid var(--card-border);
+  margin-bottom: 4px;
+}
+.profile-menu-email:empty { display: none; }
+
+.profile-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  min-height: 40px;
+}
+.profile-menu-item:hover { background: var(--card-hover); }
+
+/* ---------------- Nutrition: Dashboard hero ---------------- */
+
+.calorie-hero-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+}
+
+.calorie-ring {
+  --pct: 0;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--bg-elevated) 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.25s;
+}
+.calorie-ring.over { background: conic-gradient(var(--yellow) calc(var(--pct) * 1%), var(--bg-elevated) 0); }
+.calorie-ring-inner {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+}
+.calorie-ring-line1 { font-size: 19px; font-weight: 700; }
+.calorie-ring-line2 { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+
+.calorie-remaining-block { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.calorie-remaining-value { font-size: 30px; font-weight: 700; }
+.calorie-remaining-label { font-size: 12px; color: var(--text-dim); }
+
+.macro-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.macro-mini-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 12px 10px;
+  box-shadow: var(--shadow);
+}
+.macro-mini-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.macro-mini-value { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.macro-mini-track {
+  height: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.macro-mini-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.2s; }
+.macro-mini-fill.over { background: var(--yellow); }
+.macro-mini-sub { font-size: 11px; color: var(--text-faint); margin-top: 5px; }
+
+.water-card #nutritionWaterBar { margin-bottom: 0; }
+
+.quick-actions-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.quick-action-btn {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 14px 6px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.quick-action-btn:hover { border-color: var(--accent); background: var(--card-hover); }
+.quick-action-icon { font-size: 20px; line-height: 1; }
+
+/* Collapsible <details> cards (Goals & Targets, More Nutrition Information) */
+
+.collapsible-card { cursor: default; }
+.collapsible-card > summary {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+.collapsible-card > summary::-webkit-details-marker { display: none; }
+.collapsible-card > summary::after { content: "  ▾ expand"; font-size: 12px; color: var(--accent); font-weight: 500; }
+.collapsible-card[open] > summary::after { content: "  ▴ collapse"; }
+.collapsible-card .collapsible-body { margin-top: 14px; }
+
+.collapsible-section {
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  padding: 10px 12px;
+}
+.collapsible-section summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.collapsible-section summary::-webkit-details-marker { display: none; }
+.collapsible-section summary::before { content: "▸ "; font-size: 10px; }
+.collapsible-section[open] summary::before { content: "▾ "; }
+.collapsible-section .collapsible-body { margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------------- Nutrition: Food Log ---------------- */
+
+.add-food-cta { display: block; width: 100%; margin-bottom: 16px; }
+
+.meal-section { margin-bottom: 16px; }
+.meal-section:last-child { margin-bottom: 0; }
+.meal-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.meal-section-total { font-size: 12px; font-weight: 500; color: var(--text-dim); }
+
+.food-item-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.food-item-card:last-child { margin-bottom: 0; }
+.food-item-main { min-width: 0; flex: 1; }
+.food-item-title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.food-item-title { font-weight: 600; font-size: 14px; }
+.food-item-cal { font-size: 13px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+.food-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+
+.food-item-menu-wrap { position: relative; flex-shrink: 0; }
+.food-item-menu-btn {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  cursor: pointer;
+  font-size: 16px;
+}
+.food-item-menu-btn:hover { color: var(--text); background: var(--card-hover); }
+.food-item-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  min-width: 190px;
+  padding: 6px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.food-item-menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.food-item-menu-item:hover { background: var(--card-hover); }
+.food-item-menu-item.danger { color: var(--red); }
+.food-item-menu-item.danger:hover { background: var(--red-dim); }
+
+/* ---------------- Nutrition: Saved Foods ---------------- */
+
+.saved-food-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.saved-food-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.saved-food-card-title { font-weight: 600; font-size: 14px; }
+.saved-food-card-meta { font-size: 12px; color: var(--text-faint); }
+.saved-food-card-macros { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.saved-food-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+
+/* ---------------- Nutrition: Recipe ingredient cards ---------------- */
+
+.recipe-ingredient-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.recipe-ingredient-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.recipe-ingredient-number { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.recipe-ingredient-card-actions { display: flex; gap: 4px; }
+.recipe-ingredient-macro-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.recipe-ingredient-macro-grid label { font-size: 11px; }
+.recipe-ingredient-macro-grid input { padding: 8px 6px; }
+
+/* ---------------- Segmented control (7D/30D, sheet tabs) ---------------- */
+
+.segmented-control {
+  display: flex;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 2px;
+}
+.segmented-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  min-height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.segmented-btn:hover { color: var(--text); }
+.segmented-btn.active { background: var(--accent-dim); border: 1px solid var(--accent); color: #fff; }
+
+/* ---------------- Bottom sheet modal (Add Food) ---------------- */
+
+.sheet-overlay {
+  align-items: flex-end;
+  padding: 0;
+}
+.sheet-box {
+  max-width: 560px;
+  width: 100%;
+  max-height: 88vh;
+  border-radius: 20px 20px 0 0;
+  padding: 10px 18px calc(18px + env(safe-area-inset-bottom));
+  margin: 0 auto;
+}
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--card-border);
+  margin: 2px auto 12px;
+}
+.sheet-tabs { margin-bottom: 14px; }
+.sheet-panel { min-height: 120px; }
+
+.picker-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.picker-list-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+  justify-content: center;
+}
+.picker-list-item:hover { border-color: var(--accent); background: var(--card-hover); }
+.picker-list-item-title { font-weight: 600; font-size: 14px; }
+.picker-list-item-meta { font-size: 12px; color: var(--text-faint); }
+
+.picker-confirm { display: flex; flex-direction: column; gap: 12px; }
+.picker-confirm .btn-icon { align-self: flex-start; }
+
+.sheet-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+/* ---------------- Header safe-area ---------------- */
+
+.app-header { padding-top: env(safe-area-inset-top); }
+.app-main { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+
 /* ---------------- Responsive ---------------- */
 
 @media (max-width: 720px) {
@@ -1057,10 +1455,16 @@ textarea { resize: vertical; min-height: 44px; }
   .header-inner { flex-direction: column; align-items: flex-start; }
   .main-nav { width: 100%; }
   .home-hero { flex-direction: column; align-items: flex-start; }
+  .macro-card-grid { grid-template-columns: repeat(2, 1fr); }
+  .recipe-ingredient-macro-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 480px) {
-  .app-main { padding: 16px 12px 70px; }
+  .app-main { padding: 16px 12px calc(70px + env(safe-area-inset-bottom)); }
   .card { padding: 14px; }
   .filter-row { grid-template-columns: 1fr; }
+  .quick-actions-row { grid-template-columns: repeat(2, 1fr); }
+  .calorie-ring { width: 140px; height: 140px; }
+  .calorie-ring-inner { width: 112px; height: 112px; }
+  .sheet-box { max-width: 100%; padding-left: 14px; padding-right: 14px; }
 }
