@@ -53,6 +53,8 @@
   const LS_RECIPES = "jarvisNutritionRecipes";
   const LS_MIGRATED = "jarvisNutritionMigrated";
   const LS_OLD_CALORIES = "jarvisCalories";
+  const LS_PROFILE = "jarvisNutritionProfile";
+  const LS_CHECKINS = "jarvisNutritionCheckins";
 
   const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
   const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snacks: "Snacks" };
@@ -88,6 +90,17 @@
   let addFoodModalTab = "recent";
   let pickerSelection = null; // { source: "recent"|"saved"|"recipe", food, meal, multiplier }
   let modalSavedFoodSearch = "";
+
+  // AI Nutrition Goal Calculator: nutritionProfile is the last SAVED profile
+  // (persists across reloads); calculatorResult/calculatorPendingProfile hold
+  // a just-computed preview that hasn't been applied to goals[] yet, so
+  // calculating never silently overwrites a previously saved target.
+  let nutritionProfile = null;
+  let checkins = [];
+  let calculatorFormVisible = true;
+  let calculatorResult = null;
+  let calculatorPendingProfile = null;
+  let pendingAdjustment = null; // { delta, reason } from the weekly check-in trend, awaiting explicit confirm
 
   /* ---------------- persistence ---------------- */
 
@@ -149,6 +162,11 @@
     const loadedRecipes = core.loadJSON(LS_RECIPES, []);
     recipes = Array.isArray(loadedRecipes) ? loadedRecipes : [];
 
+    loadNutritionProfile();
+    const loadedCheckins = core.loadJSON(LS_CHECKINS, []);
+    checkins = Array.isArray(loadedCheckins) ? loadedCheckins : [];
+    calculatorFormVisible = !(nutritionProfile && nutritionProfile.lastResult);
+
     migrateOldCalorieData();
   }
 
@@ -186,6 +204,188 @@
   function saveLog() { window.JarvisCore.saveJSON(LS_LOG, log); }
   function saveSavedFoods() { window.JarvisCore.saveJSON(LS_SAVED, savedFoods); }
   function saveRecipes() { window.JarvisCore.saveJSON(LS_RECIPES, recipes); }
+
+  // Persists the calculator's inputs plus its last computed result together,
+  // so "Recalculate Goals" can re-open the form pre-filled, and the results
+  // dashboard can be redrawn on load without recomputing anything.
+  function saveNutritionProfile(profile, result) {
+    nutritionProfile = Object.assign({}, profile, { lastResult: result, lastCalculatedAt: Date.now() });
+    window.JarvisCore.saveJSON(LS_PROFILE, nutritionProfile);
+  }
+  function loadNutritionProfile() {
+    const loaded = window.JarvisCore.loadJSON(LS_PROFILE, null);
+    nutritionProfile = (loaded && typeof loaded === "object") ? loaded : null;
+  }
+  function saveCheckins() { window.JarvisCore.saveJSON(LS_CHECKINS, checkins); }
+
+  /* ---------------- AI Nutrition Goal Calculator: pure calculation engine ----------------
+     Deterministic and formula-based throughout — nothing here calls an AI. Every function
+     is a plain, independently-testable calculation so the numbers stay auditable. */
+
+  const ACTIVITY_MULTIPLIERS = { sedentary: 1.2, light: 1.375, moderate: 1.55, very: 1.725, extreme: 1.9 };
+  const CALC_MIN_CALORIE_FLOOR = 1200; // conservative absolute floor — not a clinical minimum, just a hard stop
+  const CALC_SAFE_LOSS_RATE_KG_PER_WEEK = 0.5;  // ~1 lb/week, a widely-cited sustainable ceiling
+  const CALC_SAFE_GAIN_RATE_KG_PER_WEEK = 0.25; // a modest lean-gain ceiling
+  const CALC_GOAL_LABELS = { maintain: "Maintain", gain: "Muscle Gain", lose: "Weight Loss" };
+
+  function calcClamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
+  function feetInchesToCm(feet, inches) { return ((Number(feet) || 0) * 12 + (Number(inches) || 0)) * 2.54; }
+  function cmToFeetInches(cm) {
+    const totalIn = Number(cm) / 2.54;
+    const feet = Math.floor(totalIn / 12);
+    return { feet: feet, inches: Math.round(totalIn - feet * 12) };
+  }
+  function lbToKg(lb) { return Number(lb) * 0.453592; }
+  function kgToLb(kg) { return Number(kg) / 0.453592; }
+
+  function isRealisticAge(v) { const n = Number(v); return isFinite(n) && n >= 5 && n <= 100; }
+  function isRealisticHeightCm(v) { const n = Number(v); return isFinite(n) && n >= 100 && n <= 250; }
+  function isRealisticWeightKg(v) { const n = Number(v); return isFinite(n) && n >= 25 && n <= 300; }
+  function isRealisticWeeks(v) { const n = Number(v); return isFinite(n) && n > 0 && n <= 104; }
+
+  // Mifflin-St Jeor — the most broadly validated resting-energy equation for
+  // general (non-clinical) use. "unspecified" sex averages the male/female
+  // constants as a rough approximation, since the formula itself is binary.
+  function calculateBMR(sex, weightKg, heightCm, age) {
+    const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+    if (sex === "male") return base + 5;
+    if (sex === "female") return base - 161;
+    return base - 78;
+  }
+
+  function calculateTDEE(bmr, activityLevel) {
+    return bmr * (ACTIVITY_MULTIPLIERS[activityLevel] || ACTIVITY_MULTIPLIERS.sedentary);
+  }
+
+  // Age + timeline safety gate, run before any calorie target is finalized.
+  // Minors never get a restrictive/surplus target — only a maintenance-style
+  // estimate. Adults requesting an unsafe rate of change get the requested
+  // timeline overridden by a conservative default deficit/surplus instead of
+  // an aggressive one, plus a suggested, more gradual timeframe.
+  function validateGoal(profile) {
+    const result = { isMinor: profile.age < 18, blockedForMinor: false, timelineWarning: null, suggestedWeeks: null, effectiveGoal: profile.goal };
+    if (result.isMinor) {
+      if (profile.goal !== "maintain") { result.blockedForMinor = true; result.effectiveGoal = "maintain"; }
+      return result;
+    }
+    if (profile.goal === "maintain") return result;
+
+    const weightDeltaKg = profile.targetWeightKg - profile.weightKg;
+    const wantsLoss = profile.goal === "lose";
+    const directionMatches = wantsLoss ? weightDeltaKg < 0 : weightDeltaKg > 0;
+    if (!directionMatches || !profile.timeframeWeeks) return result;
+
+    const impliedWeeklyRateKg = Math.abs(weightDeltaKg) / profile.timeframeWeeks;
+    const safeRate = wantsLoss ? CALC_SAFE_LOSS_RATE_KG_PER_WEEK : CALC_SAFE_GAIN_RATE_KG_PER_WEEK;
+    if (impliedWeeklyRateKg > safeRate) {
+      result.timelineWarning = "Your selected timeline may be too aggressive. JARVIS recommends using a more gradual approach.";
+      result.suggestedWeeks = Math.ceil(Math.abs(weightDeltaKg) / safeRate);
+    }
+    return result;
+  }
+
+  // Protein: evidence-based g/kg range by goal + training load (higher on a
+  // cut to help preserve muscle, lower for infrequent/non-resistance training).
+  // Fat: kept within the commonly-cited 20-35% of calories dietary range, with
+  // a per-kg floor for hormonal health. Carbs fill whatever calories remain.
+  // Fiber: ~14g per 1000 kcal (a standard general guideline). Water: ~0.5 oz
+  // per lb bodyweight plus a modest bump for average daily exercise time.
+  function calculateMacros(calories, weightKg, goal, trainingType, workoutsPerWeek, workoutDurationMin) {
+    let proteinPerKg = goal === "lose" ? 2.0 : goal === "gain" ? 1.8 : 1.6;
+    if ((workoutsPerWeek || 0) < 2) proteinPerKg -= 0.3;
+    if (trainingType === "cardio") proteinPerKg -= 0.2;
+    else if (trainingType === "weighttraining") proteinPerKg += 0.1;
+    proteinPerKg = calcClamp(proteinPerKg, 1.2, 2.2);
+    let proteinG = proteinPerKg * weightKg;
+
+    let fatG = Math.max((calories * 0.25) / 9, 0.5 * weightKg);
+    let proteinCal = proteinG * 4;
+    let fatCal = fatG * 9;
+
+    // Guard rail for very low calorie targets on a heavy user: trim fat
+    // first (down to its own floor), then protein, before ever letting
+    // carbs go negative.
+    if (proteinCal + fatCal > calories * 0.9) {
+      const overage = (proteinCal + fatCal) - calories * 0.9;
+      fatCal = Math.max(fatCal - overage, 0.3 * weightKg * 9);
+      fatG = fatCal / 9;
+      proteinCal = proteinG * 4;
+      if (proteinCal + fatCal > calories * 0.9) {
+        proteinG = Math.max((calories * 0.9 - fatCal) / 4, 1.0 * weightKg);
+        proteinCal = proteinG * 4;
+      }
+    }
+
+    const carbCal = Math.max(calories - proteinCal - fatCal, 0);
+    const carbG = carbCal / 4;
+    const fiber = calcClamp(Math.round((calories / 1000) * 14), 20, 50);
+
+    const weightLb = weightKg * 2.20462;
+    const avgDailyExerciseMin = ((workoutDurationMin || 0) * (workoutsPerWeek || 0)) / 7;
+    const exerciseOz = (avgDailyExerciseMin / 30) * 12;
+    const water = calcClamp(Math.round((weightLb * 0.5 + exerciseOz) / 8), 6, 16);
+
+    return { protein: Math.round(proteinG), carbs: Math.round(carbG), fat: Math.round(fatG), fiber: fiber, water: water };
+  }
+
+  // Orchestrates BMR -> TDEE -> safety validation -> goal-adjusted calories
+  // -> macros. This is the single entry point the UI calls; every number in
+  // the result traces back to one of the formulas above.
+  function calculateNutritionTargets(profile) {
+    const bmr = calculateBMR(profile.sex, profile.weightKg, profile.heightCm, profile.age);
+    const tdee = calculateTDEE(bmr, profile.activityLevel);
+    const validation = validateGoal(profile);
+    const effectiveGoal = validation.effectiveGoal;
+
+    let calories;
+    if (effectiveGoal === "maintain") calories = tdee;
+    else if (effectiveGoal === "gain") calories = tdee + 350; // modest surplus, not an aggressive bulk
+    else calories = tdee - 500; // modest deficit, not an aggressive cut
+
+    // Safety floor: never below resting energy needs, and never below the
+    // absolute minimum — this is what makes an aggressive deadline
+    // impossible to force by just widening the deficit/surplus.
+    const floor = Math.max(CALC_MIN_CALORIE_FLOOR, bmr);
+    if (calories < floor) calories = floor;
+    calories = Math.round(calories);
+
+    const macros = calculateMacros(calories, profile.weightKg, effectiveGoal, profile.trainingType, profile.workoutsPerWeek, profile.workoutDurationMin);
+
+    return {
+      bmr: Math.round(bmr), tdee: Math.round(tdee),
+      maintenanceLow: Math.round(tdee - 100), maintenanceHigh: Math.round(tdee + 100),
+      calories: calories, effectiveGoal: effectiveGoal,
+      isMinor: validation.isMinor, blockedForMinor: validation.blockedForMinor,
+      timelineWarning: validation.timelineWarning, suggestedWeeks: validation.suggestedWeeks,
+      protein: macros.protein, carbs: macros.carbs, fat: macros.fat, fiber: macros.fiber, water: macros.water
+    };
+  }
+
+  // A deterministic, template-built explanation — never an AI call. The
+  // numbers it describes are exactly the ones already computed above, so
+  // there's no way for this step to invent or alter a target.
+  function buildTargetsExplanation(result) {
+    const goalPhrase = result.effectiveGoal === "lose"
+      ? "a modest calorie deficit to support gradual fat loss while preserving muscle"
+      : result.effectiveGoal === "gain"
+      ? "a modest calorie surplus to support lean muscle gain without excess fat gain"
+      : "your estimated maintenance calories to support your current weight";
+    let text =
+      "Your calorie target (" + result.calories.toLocaleString() + " cal) is based on your estimated resting energy needs " +
+      "(Mifflin-St Jeor formula) and activity level, adjusted for " + goalPhrase + ". " +
+      "Protein (" + result.protein + "g) is set relative to your body weight, training frequency, and goal to support " +
+      "muscle recovery and repair. Fat (" + result.fat + "g) stays within a healthy dietary range to support normal " +
+      "body functions like hormone production. Carbohydrates (" + result.carbs + "g) fill the remaining calories to " +
+      "fuel your training and daily activity. Fiber (" + result.fiber + "g) and water (" + result.water + " cups) " +
+      "follow general daily guidelines based on your calorie intake and activity level.";
+    if (result.blockedForMinor) {
+      text += " Because you're under 18, JARVIS shows a conservative maintenance-based estimate rather than a " +
+        "restrictive or aggressive target — a parent/guardian, pediatrician, or registered dietitian can help " +
+        "determine an appropriate target for intentional weight change.";
+    }
+    text += " These are estimates from established formulas, not medical advice — actual needs vary and are best adjusted from real-world trends over time.";
+    return text;
+  }
 
   /* ---------------- day data helpers ---------------- */
 
@@ -389,6 +589,9 @@
     $("nutritionWaterCount").textContent = totals.water;
 
     renderGoals();
+    renderCalculator();
+    renderCheckinHistory();
+    renderCheckinSuggestion();
 
     const scoreResult = computeScore(today);
     $("nutritionScoreValue").textContent = scoreResult.score;
@@ -461,6 +664,337 @@
     saveGoals();
     renderDashboard();
     core.showToast((mode === "bulking" ? "Bulking" : "Cutting") + " targets saved.");
+  }
+
+  /* ---------------- AI Nutrition Goal Calculator: UI ---------------- */
+
+  function updateCalculatorUnitVisibility() {
+    const heightUnit = $("calcHeightUnit").value;
+    $("calcHeightFtInRow").classList.toggle("hidden", heightUnit !== "ftin");
+    $("calcHeightCmRow").classList.toggle("hidden", heightUnit !== "cm");
+    const weightUnit = $("calcWeightUnit").value;
+    $("calcWeightLbRow").classList.toggle("hidden", weightUnit !== "lb");
+    $("calcWeightKgRow").classList.toggle("hidden", weightUnit !== "kg");
+    $("calcTargetWeightLbRow").classList.toggle("hidden", weightUnit !== "lb");
+    $("calcTargetWeightKgRow").classList.toggle("hidden", weightUnit !== "kg");
+    $("calcHeightUnitToggle").querySelectorAll(".segmented-btn").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-unit") === heightUnit);
+    });
+    $("calcWeightUnitToggle").querySelectorAll(".segmented-btn").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-unit") === weightUnit);
+    });
+  }
+
+  function handleCalcUnitToggleClick(e) {
+    const btn = e.target.closest(".segmented-btn");
+    if (!btn) return;
+    const group = btn.closest(".segmented-control");
+    const targetSelectId = group.id === "calcHeightUnitToggle" ? "calcHeightUnit" : "calcWeightUnit";
+    $(targetSelectId).value = btn.getAttribute("data-unit");
+    updateCalculatorUnitVisibility();
+  }
+
+  function prefillCalculatorForm(profile) {
+    $("calcAge").value = profile.age || "";
+    $("calcSex").value = profile.sex || "unspecified";
+    $("calcHeightUnit").value = profile.heightUnit || "ftin";
+    if (profile.heightUnit === "cm") {
+      $("calcHeightCm").value = Math.round(profile.heightCm) || "";
+    } else {
+      const fi = cmToFeetInches(profile.heightCm);
+      $("calcHeightFt").value = fi.feet || "";
+      $("calcHeightIn").value = fi.inches || "";
+    }
+    $("calcWeightUnit").value = profile.weightUnit || "lb";
+    if (profile.weightUnit === "kg") {
+      $("calcWeightKg").value = Math.round(profile.weightKg * 10) / 10 || "";
+      $("calcTargetWeightKg").value = Math.round(profile.targetWeightKg * 10) / 10 || "";
+    } else {
+      $("calcWeightLb").value = Math.round(kgToLb(profile.weightKg) * 10) / 10 || "";
+      $("calcTargetWeightLb").value = Math.round(kgToLb(profile.targetWeightKg) * 10) / 10 || "";
+    }
+    $("calcGoal").value = profile.goal || "maintain";
+    $("calcTimeframeWeeks").value = profile.timeframeWeeks || "";
+    $("calcActivityLevel").value = profile.activityLevel || "moderate";
+    $("calcTrainingType").value = profile.trainingType || "mixed";
+    $("calcWorkoutsPerWeek").value = profile.workoutsPerWeek || "";
+    $("calcWorkoutDuration").value = profile.workoutDurationMin || "";
+    $("calcDailySteps").value = profile.dailySteps || "";
+    updateCalculatorUnitVisibility();
+  }
+
+  function macroResultCardHtml(label, value, unit) {
+    return (
+      '<div class="macro-mini-card">' +
+        '<div class="macro-mini-label">' + label + '</div>' +
+        '<div class="macro-mini-value">' + value + unit + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderCalculatorResults(result, profile) {
+    if (!result) return;
+    $("calcHeroCalories").textContent = result.calories.toLocaleString();
+    $("calcMacroCards").innerHTML =
+      macroResultCardHtml("Protein", result.protein, "g") +
+      macroResultCardHtml("Carbohydrates", result.carbs, "g") +
+      macroResultCardHtml("Fat", result.fat, "g") +
+      macroResultCardHtml("Fiber", result.fiber, "g") +
+      macroResultCardHtml("Water", result.water, " cups");
+
+    const targetWeightText = profile.weightUnit === "kg"
+      ? Math.round(profile.targetWeightKg) + " kg"
+      : Math.round(kgToLb(profile.targetWeightKg)) + " lb";
+    $("calcSummaryStats").innerHTML =
+      '<div class="stat-box"><span class="stat-value">' + result.maintenanceLow.toLocaleString() + '–' + result.maintenanceHigh.toLocaleString() + '</span><span class="stat-label">Estimated maintenance (cal)</span></div>' +
+      '<div class="stat-box"><span class="stat-value">' + (CALC_GOAL_LABELS[result.effectiveGoal] || result.effectiveGoal) + '</span><span class="stat-label">Goal</span></div>' +
+      '<div class="stat-box"><span class="stat-value">' + targetWeightText + '</span><span class="stat-label">Target weight</span></div>';
+
+    $("calcAgeBanner").classList.toggle("hidden", !result.blockedForMinor);
+    if (result.blockedForMinor) {
+      $("calcAgeBanner").textContent =
+        "Calorie needs during adolescence also support growth and development, so JARVIS shows a conservative " +
+        "maintenance-based estimate instead of a weight-loss or weight-gain target. A parent/guardian, pediatrician, " +
+        "or registered dietitian can help determine an appropriate target for intentional weight change.";
+    }
+    $("calcTimelineBanner").classList.toggle("hidden", !result.timelineWarning);
+    if (result.timelineWarning) {
+      $("calcTimelineBanner").textContent = result.timelineWarning +
+        (result.suggestedWeeks ? (" A more gradual pace would take about " + result.suggestedWeeks + " weeks.") : "");
+    }
+    $("calcExplanationText").textContent = "";
+  }
+
+  function renderCalculator() {
+    const hasSavedProfile = !!(nutritionProfile && nutritionProfile.lastResult);
+    const showResults = !!calculatorResult || (hasSavedProfile && !calculatorFormVisible);
+    $("calcForm").classList.toggle("hidden", showResults && !calculatorFormVisible);
+    $("calcResults").classList.toggle("hidden", !showResults);
+    // Available whenever results are showing — including a just-computed
+    // preview that hasn't been applied/saved yet — so there's always a way
+    // back to tweak inputs, not only after the first Apply.
+    $("calcRecalculateBtn").classList.toggle("hidden", !showResults);
+    if (!showResults) {
+      $("calcAgeBanner").classList.add("hidden");
+      $("calcTimelineBanner").classList.add("hidden");
+      return;
+    }
+    const result = calculatorResult || nutritionProfile.lastResult;
+    const profile = calculatorPendingProfile || nutritionProfile;
+    renderCalculatorResults(result, profile);
+  }
+
+  function readCalculatorFormProfile() {
+    const heightUnit = $("calcHeightUnit").value;
+    const weightUnit = $("calcWeightUnit").value;
+    const heightCm = heightUnit === "cm" ? Number($("calcHeightCm").value) : feetInchesToCm($("calcHeightFt").value, $("calcHeightIn").value);
+    const weightKg = weightUnit === "kg" ? Number($("calcWeightKg").value) : lbToKg($("calcWeightLb").value);
+    const targetWeightKg = weightUnit === "kg" ? Number($("calcTargetWeightKg").value) : lbToKg($("calcTargetWeightLb").value);
+
+    let timeframeWeeks = Number($("calcTimeframeWeeks").value);
+    const dateInput = $("calcTargetDate").value;
+    if (!isRealisticWeeks(timeframeWeeks) && dateInput) {
+      const days = (new Date(dateInput) - new Date(window.JarvisCore.todayISODate())) / 86400000;
+      timeframeWeeks = Math.max(1, Math.round(days / 7));
+    }
+
+    return {
+      age: Number($("calcAge").value), sex: $("calcSex").value,
+      heightCm: heightCm, heightUnit: heightUnit,
+      weightKg: weightKg, weightUnit: weightUnit,
+      goal: $("calcGoal").value, targetWeightKg: targetWeightKg, timeframeWeeks: timeframeWeeks,
+      activityLevel: $("calcActivityLevel").value, trainingType: $("calcTrainingType").value,
+      workoutsPerWeek: Number($("calcWorkoutsPerWeek").value) || 0,
+      workoutDurationMin: Number($("calcWorkoutDuration").value) || 0,
+      dailySteps: $("calcDailySteps").value ? Number($("calcDailySteps").value) : undefined
+    };
+  }
+
+  function handleCalculatorFormSubmit(e) {
+    e.preventDefault();
+    const core = window.JarvisCore;
+    const profile = readCalculatorFormProfile();
+
+    if (!isRealisticAge(profile.age)) { core.showToast("Enter a realistic age (5-100)."); return; }
+    if (!isRealisticHeightCm(profile.heightCm)) { core.showToast("Enter a realistic height."); return; }
+    if (!isRealisticWeightKg(profile.weightKg)) { core.showToast("Enter a realistic current weight."); return; }
+
+    if (profile.goal !== "maintain") {
+      if (!isRealisticWeightKg(profile.targetWeightKg)) { core.showToast("Enter a realistic target weight."); return; }
+      if (!isRealisticWeeks(profile.timeframeWeeks)) { core.showToast("Enter a realistic timeframe — weeks, or a target date."); return; }
+    } else {
+      if (!isRealisticWeightKg(profile.targetWeightKg)) profile.targetWeightKg = profile.weightKg;
+      if (!isRealisticWeeks(profile.timeframeWeeks)) profile.timeframeWeeks = 12;
+    }
+
+    calculatorResult = calculateNutritionTargets(profile);
+    calculatorPendingProfile = profile;
+    calculatorFormVisible = false;
+    renderCalculator();
+    core.showToast("Targets calculated — review below, then Apply to save them.");
+  }
+
+  function handleApplyCalculatedTargets() {
+    const core = window.JarvisCore;
+    if (!calculatorResult || !calculatorPendingProfile) return;
+    const result = calculatorResult;
+    const profile = calculatorPendingProfile;
+
+    // Routes into the existing Cutting/Bulking target sets, since that's the
+    // same data the Dashboard, Nutrients tab, and manual form all already
+    // read — no new "mode" concept needed. "Maintain" keeps whichever mode
+    // is currently selected rather than forcing one.
+    if (result.effectiveGoal === "lose") goals.mode = "cutting";
+    else if (result.effectiveGoal === "gain") goals.mode = "bulking";
+
+    goals[goals.mode] = {
+      calories: result.calories, protein: result.protein, carbs: result.carbs,
+      fat: result.fat, fiber: result.fiber, water: result.water
+    };
+    saveGoals();
+    saveNutritionProfile(profile, result);
+    calculatorResult = null;
+    calculatorPendingProfile = null;
+    calculatorFormVisible = false;
+    renderCalculator();
+    renderDashboard();
+    core.showToast("Applied to your " + (goals.mode === "bulking" ? "Bulking" : "Cutting") + " targets.");
+  }
+
+  function handleRecalculateGoals() {
+    // Prefer the not-yet-applied preview's inputs if there is one, so
+    // re-opening the form after a first-ever calculation (before any Apply)
+    // still shows what was just entered, not a blank form.
+    const sourceProfile = calculatorPendingProfile || nutritionProfile;
+    calculatorFormVisible = true;
+    calculatorResult = null;
+    calculatorPendingProfile = null;
+    if (sourceProfile) prefillCalculatorForm(sourceProfile);
+    renderCalculator();
+  }
+
+  function handleExplainTargets() {
+    const result = calculatorResult || (nutritionProfile && nutritionProfile.lastResult);
+    if (!result) return;
+    $("calcExplanationText").textContent = buildTargetsExplanation(result);
+  }
+
+  /* ---------------- Weekly Check-In (adaptive targets) ---------------- */
+
+  function renderCheckinHistory() {
+    const core = window.JarvisCore;
+    const container = $("checkinHistoryList");
+    if (checkins.length === 0) {
+      container.innerHTML = '<div class="empty-state">No check-ins yet.</div>';
+      return;
+    }
+    const sorted = checkins.slice().sort(function (a, b) { return b.createdAt - a.createdAt; });
+    container.innerHTML = sorted.slice(0, 8).map(function (c) {
+      return (
+        '<div class="list-item"><div class="list-item-row"><div class="list-item-main">' +
+          '<span class="list-item-title">' + core.formatDate(c.date) + '</span>' +
+          '<span class="list-item-meta">Weight: ' + core.escapeHtml(c.weightDisplay) + ' &middot; Performance ' + c.performance + '/5 &middot; Energy ' + c.energy + '/5 &middot; Hunger ' + c.hunger + '/5 &middot; Adherence ' + c.adherence + '/5</span>' +
+        '</div></div></div>'
+      );
+    }).join("");
+  }
+
+  // Trend across the last several check-ins (never a single weigh-in), in
+  // kg/week. Returns null when there isn't enough of a time spread yet.
+  function analyzeWeightTrend() {
+    const withWeight = checkins
+      .filter(function (c) { return isNonNegativeNumber(c.weightKg); })
+      .sort(function (a, b) { return a.createdAt - b.createdAt; });
+    if (withWeight.length < 2) return null;
+    const recent = withWeight.slice(-4);
+    const first = recent[0], last = recent[recent.length - 1];
+    const daysBetween = (last.createdAt - first.createdAt) / 86400000;
+    if (daysBetween < 3) return null;
+    return ((last.weightKg - first.weightKg) / daysBetween) * 7;
+  }
+
+  function renderCheckinSuggestion() {
+    const el = $("checkinTrendMessage");
+    if (!el) return;
+    pendingAdjustment = null;
+    if (!nutritionProfile || !nutritionProfile.lastResult) { el.innerHTML = ""; return; }
+    // Never auto-suggest a calorie change for minors, per the same age-safety
+    // policy the calculator itself follows.
+    if (nutritionProfile.age < 18) { el.innerHTML = ""; return; }
+
+    const trend = analyzeWeightTrend();
+    if (trend === null) {
+      el.innerHTML = '<p class="field-hint">Log a few weekly check-ins to see a weight trend here.</p>';
+      return;
+    }
+
+    const goal = nutritionProfile.lastResult.effectiveGoal;
+    let suggestion = null;
+    if (goal === "lose" && trend > -0.15) {
+      suggestion = { delta: -150, reason: "Your weight trend over your recent check-ins is fairly flat even with a calorie deficit in place." };
+    } else if (goal === "lose" && trend < -0.7) {
+      suggestion = { delta: 150, reason: "You're losing faster than the intended gradual pace — a small increase can help protect muscle and energy." };
+    } else if (goal === "gain" && trend < 0.05) {
+      suggestion = { delta: 150, reason: "Your weight trend isn't moving up much despite a calorie surplus in place." };
+    } else if (goal === "gain" && trend > 0.4) {
+      suggestion = { delta: -150, reason: "You're gaining faster than the intended lean pace — a small decrease can help limit excess fat gain." };
+    }
+
+    if (!suggestion) {
+      el.innerHTML = '<p class="field-hint text-positive">Your weight trend (' + (trend >= 0 ? "+" : "") + (Math.round(trend * 10) / 10) + ' kg/week) looks in line with your goal — no change suggested.</p>';
+      return;
+    }
+    pendingAdjustment = suggestion;
+    el.innerHTML =
+      '<div class="calm-message">' + window.JarvisCore.escapeHtml(suggestion.reason) +
+      ' JARVIS suggests a small adjustment: ' + (suggestion.delta > 0 ? "+" : "") + suggestion.delta + ' calories/day.' +
+      '<div class="form-actions" style="margin-top:8px;"><button type="button" class="btn btn-secondary" id="checkinApplyAdjustmentBtn">Apply Suggested Adjustment</button></div>' +
+      '</div>';
+  }
+
+  function handleCheckinFormSubmit(e) {
+    e.preventDefault();
+    const core = window.JarvisCore;
+    const weightRaw = $("checkinWeight").value;
+    if (!isNonNegativeNumber(weightRaw) || Number(weightRaw) <= 0) { core.showToast("Enter a valid weight."); return; }
+    const unit = (nutritionProfile && nutritionProfile.weightUnit) || "lb";
+    const weightKg = unit === "kg" ? Number(weightRaw) : lbToKg(weightRaw);
+    checkins.push({
+      id: core.uid("checkin"), date: core.todayISODate(),
+      weightKg: weightKg, weightDisplay: (Math.round(Number(weightRaw) * 10) / 10) + " " + unit,
+      performance: Number($("checkinPerformance").value) || 3, energy: Number($("checkinEnergy").value) || 3,
+      hunger: Number($("checkinHunger").value) || 3, adherence: Number($("checkinAdherence").value) || 3,
+      createdAt: Date.now()
+    });
+    saveCheckins();
+    $("checkinForm").reset();
+    ["checkinPerformance", "checkinEnergy", "checkinHunger", "checkinAdherence"].forEach(function (id) { $(id).value = "3"; });
+    renderCheckinHistory();
+    renderCheckinSuggestion();
+    core.showToast("Check-in saved.");
+  }
+
+  // Adjusts the currently-applied calorie target by a small confirmed
+  // amount and recomputes macros to match — never automatic, always behind
+  // an explicit button the user has to click after reviewing the reason.
+  function handleApplyAdjustment() {
+    const core = window.JarvisCore;
+    if (!pendingAdjustment || !nutritionProfile || !nutritionProfile.lastResult) return;
+    if (!window.confirm("Adjust your daily calorie target by " + (pendingAdjustment.delta > 0 ? "+" : "") + pendingAdjustment.delta + " calories? Your macros will be recalculated to match.")) return;
+    const newCalories = Math.max(CALC_MIN_CALORIE_FLOOR, nutritionProfile.lastResult.calories + pendingAdjustment.delta);
+    const macros = calculateMacros(newCalories, nutritionProfile.weightKg, nutritionProfile.lastResult.effectiveGoal, nutritionProfile.trainingType, nutritionProfile.workoutsPerWeek, nutritionProfile.workoutDurationMin);
+    const newResult = Object.assign({}, nutritionProfile.lastResult, { calories: newCalories }, macros);
+    goals[goals.mode] = { calories: newResult.calories, protein: newResult.protein, carbs: newResult.carbs, fat: newResult.fat, fiber: newResult.fiber, water: newResult.water };
+    saveGoals();
+    saveNutritionProfile(nutritionProfile, newResult);
+    renderCalculator();
+    renderDashboard();
+    renderCheckinSuggestion();
+    core.showToast("Targets adjusted.");
+  }
+
+  function handleCheckinTrendClick(e) {
+    if (e.target.closest("#checkinApplyAdjustmentBtn")) handleApplyAdjustment();
   }
 
   /* ---------------- Food log ---------------- */
@@ -1682,6 +2216,17 @@
     $("goalsModeCuttingBtn").addEventListener("click", function () { handleModeSwitch("cutting"); });
     $("goalsModeBulkingBtn").addEventListener("click", function () { handleModeSwitch("bulking"); });
     $("goalsForm").addEventListener("submit", handleGoalsFormSubmit);
+
+    $("calcForm").addEventListener("submit", handleCalculatorFormSubmit);
+    $("calcHeightUnitToggle").addEventListener("click", handleCalcUnitToggleClick);
+    $("calcWeightUnitToggle").addEventListener("click", handleCalcUnitToggleClick);
+    $("calcRecalculateBtn").addEventListener("click", handleRecalculateGoals);
+    $("calcExplainBtn").addEventListener("click", handleExplainTargets);
+    $("calcApplyBtn").addEventListener("click", handleApplyCalculatedTargets);
+    updateCalculatorUnitVisibility();
+
+    $("checkinForm").addEventListener("submit", handleCheckinFormSubmit);
+    $("checkinTrendMessage").addEventListener("click", handleCheckinTrendClick);
 
     $("nutritionWaterAddBtn").addEventListener("click", function () { handleWaterAdjust(1); });
     $("nutritionWaterRemoveBtn").addEventListener("click", function () { handleWaterAdjust(-1); });

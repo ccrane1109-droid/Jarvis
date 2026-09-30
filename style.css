@@ -1441,6 +1441,21 @@ textarea { resize: vertical; min-height: 44px; }
   margin-top: 4px;
 }
 
+/* ---------------- Nutrition: AI Goal Calculator ---------------- */
+
+.calc-hero-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.calc-hero-label { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.calc-hero-value { font-size: 44px; font-weight: 800; line-height: 1; color: var(--accent); }
+.calc-hero-unit { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+.calc-macro-grid { margin-bottom: 14px; }
+
 /* ---------------- Header safe-area ---------------- */
 
 .app-header { padding-top: env(safe-area-inset-top); }
