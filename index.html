@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
@@ -1239,32 +1239,219 @@
   <section id="panel-habits" class="tab-panel" role="tabpanel" aria-labelledby="navBtnHabits">
     <div class="panel-header">
       <h1>Habits</h1>
-      <p class="panel-subtitle">Small consistent actions compound over time.</p>
+      <p class="panel-subtitle">Tasks, habits, and goals — small consistent actions compound over time.</p>
     </div>
 
-    <div class="card">
-      <h2 class="card-title">Add a Habit</h2>
-      <form id="habitForm" class="stacked-form" novalidate>
-        <div class="form-row two-col">
-          <div>
-            <label for="habitName">Habit name</label>
-            <input type="text" id="habitName" name="habitName" placeholder="e.g. Read 10 pages" required maxlength="60">
-          </div>
-          <div>
-            <label for="habitTargetDays">Target days / week</label>
-            <input type="number" id="habitTargetDays" name="habitTargetDays" min="1" max="7" step="1" value="7">
+    <!-- ---------- Today Overview (always visible) ---------- -->
+    <div class="card today-overview-card">
+      <div class="card-title-row">
+        <h2 class="card-title" id="todayOverviewDate">Today</h2>
+        <span class="badge badge-neutral" id="todayOverviewStreak">0 day streak</span>
+      </div>
+      <div class="today-overview-body">
+        <div class="calorie-ring today-progress-ring" id="todayProgressRing">
+          <div class="calorie-ring-inner">
+            <span class="calorie-ring-line1" id="todayProgressPct">0%</span>
+            <span class="calorie-ring-line2">today</span>
           </div>
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary" id="habitSubmitBtn">Add Habit</button>
+        <div class="today-overview-stats">
+          <div class="stat-box"><span class="stat-value" id="todayTasksStat">0 / 0</span><span class="stat-label">Tasks completed</span></div>
+          <div class="stat-box"><span class="stat-value" id="todayHabitsStat">0 / 0</span><span class="stat-label">Habits completed</span></div>
         </div>
-      </form>
+      </div>
     </div>
 
-    <div class="card">
-      <h2 class="card-title">Today</h2>
-      <div id="habitList" class="item-list">
-        <div class="empty-state">No habits yet. Add one above to start tracking.</div>
+    <nav class="sub-nav habits-sub-nav" role="tablist" aria-label="Habits sections">
+      <button type="button" class="habits-sub-nav-btn active" data-subtarget="habits-today" role="tab" aria-selected="true" aria-controls="habits-today" id="habitsSubNavToday">Today</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-week" role="tab" aria-selected="false" aria-controls="habits-week" id="habitsSubNavWeek">Week</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-goals" role="tab" aria-selected="false" aria-controls="habits-goals" id="habitsSubNavGoals">Goals</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-stats" role="tab" aria-selected="false" aria-controls="habits-stats" id="habitsSubNavStats">Stats</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Today ---------- -->
+    <div id="habits-today" class="habits-sub-panel active" role="tabpanel" aria-labelledby="habitsSubNavToday">
+      <div class="card">
+        <div class="day-selector-row">
+          <button type="button" class="btn-icon" id="daySelectorPrevWeekBtn" aria-label="Previous week">&larr;</button>
+          <div class="day-pill-row" id="daySelectorPills"></div>
+          <button type="button" class="btn-icon" id="daySelectorNextWeekBtn" aria-label="Next week">&rarr;</button>
+        </div>
+        <button type="button" class="btn-icon" id="daySelectorTodayBtn" style="margin-top:8px;">Jump to Today</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">To-Do &mdash; <span id="todoSelectedDateLabel"></span></h2>
+          <button type="button" class="btn btn-secondary" id="taskAddToggleBtn">+ Add Task</button>
+        </div>
+
+        <form id="taskForm" class="stacked-form hidden" novalidate>
+          <h3 class="checklist-title" id="taskFormTitle">Add Task</h3>
+          <div class="form-row">
+            <label for="taskText">Task</label>
+            <input type="text" id="taskText" maxlength="140" placeholder="e.g. Work on business">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="taskPriority">Priority</label>
+              <select id="taskPriority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label for="taskTime">Time (optional)</label>
+              <input type="time" id="taskTime">
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="taskCategory">Category (optional)</label>
+              <input type="text" id="taskCategory" maxlength="40" placeholder="e.g. Business">
+            </div>
+            <div>
+              <label for="taskGoalSelect">Linked goal (optional)</label>
+              <select id="taskGoalSelect"><option value="">None</option></select>
+            </div>
+          </div>
+          <details class="collapsible-section" id="taskRepeatDetails">
+            <summary>Also add this task to other days this week</summary>
+            <div class="collapsible-body">
+              <div class="day-picker-row" id="taskRepeatDaysRow"></div>
+            </div>
+          </details>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="taskFormSubmitBtn">Add Task</button>
+            <button type="button" class="btn btn-secondary hidden" id="taskFormCancelBtn">Cancel</button>
+          </div>
+        </form>
+
+        <div id="taskList" class="item-list">
+          <div class="empty-state">No tasks for this day yet.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Habits</h2>
+        <div id="todayHabitsList" class="habit-card-grid">
+          <div class="empty-state">No habits yet — add one in the Week tab.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Week (Habit History + manage habits) ---------- -->
+    <div id="habits-week" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavWeek">
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Habit History</h2>
+          <div class="week-nav-row">
+            <button type="button" class="btn-icon" id="historyPrevWeekBtn" aria-label="Previous week">&larr;</button>
+            <span class="field-hint" id="historyWeekLabel"></span>
+            <button type="button" class="btn-icon" id="historyNextWeekBtn" aria-label="Next week">&rarr;</button>
+          </div>
+        </div>
+        <div id="habitHistoryGrid" class="habit-history-grid-wrap">
+          <div class="empty-state">No habits yet — add one below.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title" id="habitFormTitle">Add a Habit</h2>
+        <p class="field-hint">Leave "Daily target" at 1 for a simple check-off habit, or raise it for something you do several times a day (e.g. 8 cups of water).</p>
+        <form id="habitForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="habitName">Habit name</label>
+              <input type="text" id="habitName" name="habitName" placeholder="e.g. Drink Water" required maxlength="60">
+            </div>
+            <div>
+              <label for="habitTargetDays">Target days / week</label>
+              <input type="number" id="habitTargetDays" name="habitTargetDays" min="1" max="7" step="1" value="7">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="habitDailyTarget">Daily target / count</label>
+            <input type="number" id="habitDailyTarget" name="habitDailyTarget" min="1" max="50" step="1" value="1">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="habitSubmitBtn">Add Habit</button>
+            <button type="button" class="btn btn-secondary hidden" id="habitFormCancelBtn">Cancel</button>
+          </div>
+        </form>
+        <div id="habitManageList" class="item-list">
+          <div class="empty-state">No habits yet. Add one above to start tracking.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Goals ---------- -->
+    <div id="habits-goals" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavGoals">
+      <div class="card">
+        <h2 class="card-title" id="habitsGoalFormTitle">Create a Goal</h2>
+        <form id="habitsGoalForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="habitsGoalName">Goal name</label>
+            <input type="text" id="habitsGoalName" maxlength="80" placeholder="e.g. Launch Clothing Brand">
+          </div>
+          <div class="form-row">
+            <label for="habitsGoalDescription">Description (optional)</label>
+            <textarea id="habitsGoalDescription" rows="2" placeholder="Optional details"></textarea>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="habitsGoalCategory">Category (optional)</label>
+              <input type="text" id="habitsGoalCategory" maxlength="40" placeholder="e.g. Business">
+            </div>
+            <div>
+              <label for="habitsGoalTargetDate">Target date (optional)</label>
+              <input type="date" id="habitsGoalTargetDate">
+            </div>
+          </div>
+          <div class="checklist-item">
+            <input type="checkbox" id="habitsGoalHasNumeric">
+            <label for="habitsGoalHasNumeric">Track with a numeric target (e.g. dollars saved, pounds lifted)</label>
+          </div>
+          <div class="form-row two-col hidden" id="habitsGoalNumericRow">
+            <div>
+              <label for="habitsGoalCurrentValue">Current value</label>
+              <input type="number" id="habitsGoalCurrentValue" step="any" placeholder="e.g. 1800">
+            </div>
+            <div>
+              <label for="habitsGoalTargetValue">Target value</label>
+              <input type="number" id="habitsGoalTargetValue" step="any" placeholder="e.g. 5000">
+            </div>
+          </div>
+          <div class="form-row hidden" id="habitsGoalUnitRow">
+            <label for="habitsGoalUnit">Unit (optional)</label>
+            <input type="text" id="habitsGoalUnit" maxlength="20" placeholder="e.g. $ or lb">
+          </div>
+          <div class="form-row" id="habitsGoalManualProgressRow">
+            <label for="habitsGoalManualProgress">Progress (%)</label>
+            <input type="number" id="habitsGoalManualProgress" min="0" max="100" step="1" value="0">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="habitsGoalSubmitBtn">Save Goal</button>
+            <button type="button" class="btn btn-secondary hidden" id="habitsGoalCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your Goals</h2>
+        <div id="habitsGoalsList" class="item-list">
+          <div class="empty-state">No goals yet. Create one above.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Stats ---------- -->
+    <div id="habits-stats" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavStats">
+      <div class="card">
+        <h2 class="card-title">Productivity Stats</h2>
+        <p class="field-hint">A simple, honest snapshot from what you've actually logged — not a judgment, just a mirror.</p>
+        <div class="stat-grid" id="productivityStatsGrid"></div>
       </div>
     </div>
   </section>
@@ -2204,20 +2391,20 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=13"></script>
-<script type="module" src="js/auth.js?v=13"></script>
-<script src="js/app.js?v=13"></script>
-<script src="js/exercises.js?v=13"></script>
-<script src="js/workout.js?v=13"></script>
-<script src="js/nutrition.js?v=13"></script>
-<script src="js/habits.js?v=13"></script>
-<script src="js/business.js?v=13"></script>
-<script src="js/trading.js?v=13"></script>
-<script src="js/blobstore.js?v=13"></script>
-<script src="js/video-api-client.js?v=13"></script>
-<script src="js/video-connections.js?v=13"></script>
-<script src="js/video.js?v=13"></script>
-<script src="js/video-studio.js?v=13"></script>
-<script src="js/form-check.js?v=13"></script>
+<script src="js/firebase-config.js?v=14"></script>
+<script type="module" src="js/auth.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
+<script src="js/exercises.js?v=14"></script>
+<script src="js/workout.js?v=14"></script>
+<script src="js/nutrition.js?v=14"></script>
+<script src="js/habits.js?v=14"></script>
+<script src="js/business.js?v=14"></script>
+<script src="js/trading.js?v=14"></script>
+<script src="js/blobstore.js?v=14"></script>
+<script src="js/video-api-client.js?v=14"></script>
+<script src="js/video-connections.js?v=14"></script>
+<script src="js/video.js?v=14"></script>
+<script src="js/video-studio.js?v=14"></script>
+<script src="js/form-check.js?v=14"></script>
 </body>
 </html>
