@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -149,7 +149,6 @@
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-log" role="tab" aria-selected="false" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-routines" role="tab" aria-selected="false" aria-controls="workout-routines" id="workoutSubNavRoutines">Routines</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
-      <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-strength" role="tab" aria-selected="false" aria-controls="workout-strength" id="workoutSubNavStrength">Strength</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-progress" role="tab" aria-selected="false" aria-controls="workout-progress" id="workoutSubNavProgress">Progress</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
     </nav>
@@ -445,12 +444,289 @@
       </div>
     </div>
 
-    <!-- ---------- Sub-panel: Strength ---------- -->
-    <div id="workout-strength" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavStrength">
-      <div class="card-grid">
+    <!-- ---------- Sub-panel: Progress ---------- -->
+    <div id="workout-progress" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavProgress">
+      <div class="progress-header">
+        <h2 class="progress-title">Progress</h2>
+        <p class="progress-subtitle">Strength, recovery, and training trends</p>
+      </div>
+
+      <div class="segmented-control progress-main-tabs" role="tablist" aria-label="Progress sections">
+        <button type="button" class="segmented-btn progress-main-tab-btn active" data-subtarget="progress-analytics" role="tab" aria-selected="true" aria-controls="progress-analytics" id="progressMainTabAnalytics">Analytics</button>
+        <button type="button" class="segmented-btn progress-main-tab-btn" data-subtarget="progress-exercises" role="tab" aria-selected="false" aria-controls="progress-exercises" id="progressMainTabExercises">Exercises</button>
+        <button type="button" class="segmented-btn progress-main-tab-btn" data-subtarget="progress-bodyweight" role="tab" aria-selected="false" aria-controls="progress-bodyweight" id="progressMainTabBodyweight">Bodyweight</button>
+      </div>
+
+      <!-- ===== ANALYTICS ===== -->
+      <div id="progress-analytics" class="progress-main-tab-panel active" role="tabpanel" aria-labelledby="progressMainTabAnalytics">
+
+        <div class="segmented-control progress-analytics-tabs" role="tablist" aria-label="Analytics view" style="margin-bottom:16px;">
+          <button type="button" class="segmented-btn progress-analytics-tab-btn active" data-subtarget="progress-overview" role="tab" aria-selected="true" aria-controls="progress-overview" id="progressAnalyticsTabOverview">Overview</button>
+          <button type="button" class="segmented-btn progress-analytics-tab-btn" data-subtarget="progress-thisweek" role="tab" aria-selected="false" aria-controls="progress-thisweek" id="progressAnalyticsTabThisWeek">This Week</button>
+          <button type="button" class="segmented-btn progress-analytics-tab-btn" data-subtarget="progress-trends" role="tab" aria-selected="false" aria-controls="progress-trends" id="progressAnalyticsTabTrends">Trends</button>
+        </div>
+
+        <!-- ---- Overview ---- -->
+        <div id="progress-overview" class="progress-analytics-tab-panel active" role="tabpanel" aria-labelledby="progressAnalyticsTabOverview">
+
+          <div class="card">
+            <h2 class="card-title">Overall Strength</h2>
+            <div class="strength-score-hero">
+              <div class="strength-score-value" id="overallStrengthScore">--</div>
+              <div class="strength-score-level" id="overallStrengthLevel">Log a benchmark lift and body weight to see your score</div>
+            </div>
+            <div id="strengthDistributionBar" class="strength-distribution-wrap"></div>
+            <details class="collapsible-section" id="strengthBreakdownDetails" style="margin-top:14px;">
+              <summary>Benchmark lift breakdown &amp; settings</summary>
+              <div id="strengthBreakdownList" class="item-list" style="margin-top:12px;">
+                <div class="empty-state">No benchmark lifts logged yet.</div>
+              </div>
+              <form id="strengthSettingsForm" class="stacked-form" novalidate style="margin-top:14px;">
+                <div class="form-row">
+                  <label for="strengthCompareSelect">Compare against</label>
+                  <select id="strengthCompareSelect">
+                    <option value="male">Male standards</option>
+                    <option value="female">Female standards</option>
+                    <option value="none">Don't compare</option>
+                  </select>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-secondary" id="strengthSettingsSaveBtn">Save</button>
+                </div>
+              </form>
+            </details>
+          </div>
+
+          <div class="card">
+            <div class="card-title-row">
+              <h2 class="card-title">Body Map</h2>
+              <div class="segmented-control bodymap-mode-toggle" id="bodyMapModeToggle">
+                <button type="button" class="segmented-btn bodymap-mode-btn active" data-mode="strength">Strength</button>
+                <button type="button" class="segmented-btn bodymap-mode-btn" data-mode="readiness">Readiness</button>
+              </div>
+            </div>
+            <div class="bodymap-row">
+              <div class="bodymap-col">
+                <div id="bodyMapFront" class="bodymap-svg-wrap"></div>
+                <div class="bodymap-view-label">Front</div>
+              </div>
+              <div class="bodymap-col">
+                <div id="bodyMapBack" class="bodymap-svg-wrap"></div>
+                <div class="bodymap-view-label">Back</div>
+              </div>
+            </div>
+            <div id="bodyMapLegend" class="bodymap-legend"></div>
+            <p class="field-hint" id="bodyMapHint">Tap a muscle to see details.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title-row">
+              <h2 class="card-title">Your Lifts</h2>
+              <button type="button" class="btn-icon" id="yourLiftsAllBtn">All lifts &rsaquo;</button>
+            </div>
+            <div id="yourLiftsScroll" class="lift-card-scroll">
+              <div class="empty-state">Log some sets to see your top lifts here.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- This Week ---- -->
+        <div id="progress-thisweek" class="progress-analytics-tab-panel" role="tabpanel" aria-labelledby="progressAnalyticsTabThisWeek">
+          <div class="card">
+            <h2 class="card-title">This Week</h2>
+            <div class="stat-grid" id="thisWeekStats"></div>
+          </div>
+          <div class="card">
+            <h2 class="card-title">Muscle Groups Trained</h2>
+            <p class="field-hint">Working sets per muscle this week. Compound lifts split credit between primary and secondary muscles.</p>
+            <div id="thisWeekMuscleVolume" class="item-list">
+              <div class="empty-state">Log a workout this week to see your muscle split.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- Trends ---- -->
+        <div id="progress-trends" class="progress-analytics-tab-panel" role="tabpanel" aria-labelledby="progressAnalyticsTabTrends">
+          <div class="card">
+            <h2 class="card-title">Weekly Training Volume</h2>
+            <p class="field-hint">Total weight &times; reps across all logged sets, summed per week.</p>
+            <div id="volumeChart" class="chart-container">
+              <div class="empty-state">Log a couple of weeks of workouts to see your volume trend.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title">Strength Trend</h2>
+            <p class="field-hint">Recomputed from your logged benchmark lifts and body weight history over time.</p>
+            <div id="strengthScoreChart" class="chart-container">
+              <div class="empty-state">Log benchmark lifts (Squat, Bench, Deadlift, Overhead Press, Pull-Up) and body weight to see this trend.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title">Workout Frequency</h2>
+            <p class="field-hint">Workouts logged per week.</p>
+            <div id="frequencyChart" class="chart-container">
+              <div class="empty-state">Log a few weeks of workouts to see your frequency trend.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title">Muscle Group Volume</h2>
+            <p class="field-hint">Total working sets per muscle group over the last 8 weeks.</p>
+            <div id="trendsMuscleVolumeList" class="item-list">
+              <div class="empty-state">Log some workouts to see your muscle group balance.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title">Body Measurements</h2>
+            <form id="measurementForm" class="stacked-form" novalidate>
+              <input type="hidden" id="measurementEditId" value="">
+              <div class="form-row">
+                <label for="measurementType">Body part</label>
+                <input type="text" id="measurementType" list="measurementTypeSuggestions" placeholder="e.g. Waist" maxlength="40" required>
+                <datalist id="measurementTypeSuggestions">
+                  <option value="Chest"></option>
+                  <option value="Waist"></option>
+                  <option value="Arms"></option>
+                  <option value="Forearms"></option>
+                  <option value="Shoulders"></option>
+                  <option value="Thighs"></option>
+                  <option value="Calves"></option>
+                  <option value="Neck"></option>
+                  <option value="Hips"></option>
+                </datalist>
+              </div>
+              <div class="form-row two-col">
+                <div>
+                  <label for="measurementValue">Value</label>
+                  <input type="number" id="measurementValue" min="0" step="0.1" placeholder="e.g. 32" required>
+                </div>
+                <div>
+                  <label for="measurementUnit">Unit</label>
+                  <select id="measurementUnit">
+                    <option value="in">in</option>
+                    <option value="cm">cm</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <label for="measurementDate">Date</label>
+                <input type="date" id="measurementDate">
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="measurementSubmitBtn">Log Measurement</button>
+                <button type="button" class="btn btn-secondary hidden" id="measurementFormCancelBtn">Cancel</button>
+              </div>
+            </form>
+            <div class="form-row" style="margin-top:14px;">
+              <label for="progressMeasurementSelect">View trend for</label>
+              <select id="progressMeasurementSelect">
+                <option value="">Log a measurement to see its trend</option>
+              </select>
+            </div>
+            <div class="stat-grid" id="measurementCompareStat"></div>
+            <div id="measurementChart" class="chart-container">
+              <div class="empty-state">Log a couple of measurements for this body part to see a trend line.</div>
+            </div>
+            <h3 class="checklist-title" style="margin-top:14px;">History</h3>
+            <div id="measurementList" class="item-list">
+              <div class="empty-state">No measurements logged yet.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title">Bodyweight Trend</h2>
+            <div id="trendsBodyweightChart" class="chart-container">
+              <div class="empty-state">Log a couple of body weight entries to see a trend line.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== EXERCISES ===== -->
+      <div id="progress-exercises" class="progress-main-tab-panel" role="tabpanel" aria-labelledby="progressMainTabExercises">
         <div class="card">
-          <h2 class="card-title">Body Weight</h2>
+          <h2 class="card-title">All Lifts</h2>
+          <p class="field-hint">Your best logged set and estimated 1-rep max (Epley formula) for every exercise you've tracked. Tap one to see its full history.</p>
+          <div id="exercisePrList" class="item-list">
+            <div class="empty-state">Log some sets to see your PRs and estimated 1-rep max here.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Exercise Detail</h2>
+          <div class="form-row">
+            <label for="progressExerciseSelect">Exercise</label>
+            <select id="progressExerciseSelect">
+              <option value="">Log some sets to see progress</option>
+            </select>
+          </div>
+          <div class="stat-grid" id="progressStats">
+            <div class="stat-box"><span class="stat-value" id="progressCurrentE1rm">--</span><span class="stat-label">Current est. 1RM</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressAllTimePr">--</span><span class="stat-label">All-time PR</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressBestWeight">--</span><span class="stat-label">Best weight</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressBestReps">--</span><span class="stat-label">Best reps</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressTotalSets">0</span><span class="stat-label">Total sets</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressTotalReps">0</span><span class="stat-label">Total reps</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressRecentVolume">--</span><span class="stat-label">Volume (28d)</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressSessionCount">0</span><span class="stat-label">Sessions logged</span></div>
+            <div class="stat-box"><span class="stat-value" id="progressLastPerformed">--</span><span class="stat-label">Last performed</span></div>
+          </div>
+
+          <div class="segmented-control" id="exerciseChartRangeToggle">
+            <button type="button" class="segmented-btn exercise-range-btn" data-range="28">4W</button>
+            <button type="button" class="segmented-btn exercise-range-btn" data-range="90">3M</button>
+            <button type="button" class="segmented-btn exercise-range-btn" data-range="180">6M</button>
+            <button type="button" class="segmented-btn exercise-range-btn" data-range="365">1Y</button>
+            <button type="button" class="segmented-btn exercise-range-btn active" data-range="all">ALL</button>
+          </div>
+
+          <h3 class="checklist-title" style="margin-top:14px;">Estimated 1RM</h3>
+          <div id="exerciseProgressChart" class="chart-container">
+            <div class="empty-state">Log a couple of sessions for this exercise to see a trend line.</div>
+          </div>
+
+          <h3 class="checklist-title" style="margin-top:14px;">Training Volume</h3>
+          <div id="exerciseVolumeChart" class="chart-container">
+            <div class="empty-state">Log a couple of sessions for this exercise to see a trend line.</div>
+          </div>
+
+          <h3 class="checklist-title" style="margin-top:14px;">Best Working Weight</h3>
+          <div id="exerciseBestWeightChart" class="chart-container">
+            <div class="empty-state">Log a couple of sessions for this exercise to see a trend line.</div>
+          </div>
+
+          <h3 class="checklist-title" style="margin-top:14px;">PR History</h3>
+          <div id="exercisePrHistoryList" class="item-list">
+            <div class="empty-state">No PRs recorded yet for this exercise.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== BODYWEIGHT ===== -->
+      <div id="progress-bodyweight" class="progress-main-tab-panel" role="tabpanel" aria-labelledby="progressMainTabBodyweight">
+        <div class="card">
+          <h2 class="card-title">Bodyweight</h2>
+          <div class="stat-grid" id="bodyweightStats"></div>
+          <div class="segmented-control" id="bodyweightRangeToggle">
+            <button type="button" class="segmented-btn bw-range-btn" data-range="30">1M</button>
+            <button type="button" class="segmented-btn bw-range-btn" data-range="90">3M</button>
+            <button type="button" class="segmented-btn bw-range-btn" data-range="180">6M</button>
+            <button type="button" class="segmented-btn bw-range-btn" data-range="365">1Y</button>
+            <button type="button" class="segmented-btn bw-range-btn active" data-range="all">ALL</button>
+          </div>
+          <div id="bodyweightChart" class="chart-container">
+            <div class="empty-state">Log a couple of body weight entries to see a trend line.</div>
+          </div>
+          <p class="field-hint hidden" id="bodyweightTargetNote"></p>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">Log Body Weight</h2>
           <form id="bodyweightForm" class="stacked-form" novalidate>
+            <input type="hidden" id="bodyweightEditId" value="">
             <div class="form-row two-col">
               <div>
                 <label for="bodyweightInput">Weight</label>
@@ -470,146 +746,12 @@
             </div>
             <div class="form-actions">
               <button type="submit" class="btn btn-primary" id="bodyweightSubmitBtn">Log Body Weight</button>
+              <button type="button" class="btn btn-secondary hidden" id="bodyweightFormCancelBtn">Cancel</button>
             </div>
           </form>
           <div id="bodyweightList" class="item-list" style="margin-top:14px;">
             <div class="empty-state">No body weight logged yet.</div>
           </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">Body Measurements</h2>
-          <form id="measurementForm" class="stacked-form" novalidate>
-            <div class="form-row">
-              <label for="measurementType">Body part</label>
-              <input type="text" id="measurementType" list="measurementTypeSuggestions" placeholder="e.g. Waist" maxlength="40" required>
-              <datalist id="measurementTypeSuggestions">
-                <option value="Waist"></option>
-                <option value="Chest"></option>
-                <option value="Arms"></option>
-                <option value="Thighs"></option>
-                <option value="Hips"></option>
-                <option value="Neck"></option>
-                <option value="Shoulders"></option>
-                <option value="Calves"></option>
-              </datalist>
-            </div>
-            <div class="form-row two-col">
-              <div>
-                <label for="measurementValue">Value</label>
-                <input type="number" id="measurementValue" min="0" step="0.1" placeholder="e.g. 32" required>
-              </div>
-              <div>
-                <label for="measurementUnit">Unit</label>
-                <select id="measurementUnit">
-                  <option value="in">in</option>
-                  <option value="cm">cm</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <label for="measurementDate">Date</label>
-              <input type="date" id="measurementDate">
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" id="measurementSubmitBtn">Log Measurement</button>
-            </div>
-          </form>
-          <div id="measurementList" class="item-list" style="margin-top:14px;">
-            <div class="empty-state">No measurements logged yet.</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2 class="card-title">Strength Settings</h2>
-          <p class="field-hint">Used only to compare your lifts against general published bodyweight-ratio benchmarks. Skip it any time for personal progress only.</p>
-          <form id="strengthSettingsForm" class="stacked-form" novalidate>
-            <div class="form-row">
-              <label for="strengthCompareSelect">Compare against</label>
-              <select id="strengthCompareSelect">
-                <option value="male">Male standards</option>
-                <option value="female">Female standards</option>
-                <option value="none">Don't compare</option>
-              </select>
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn-secondary" id="strengthSettingsSaveBtn">Save</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Strength Score</h2>
-        <p class="field-hint">Based on approximate, commonly referenced bodyweight-ratio strength standards for five major lifts. This is general context for motivation, not a precise or scientific measurement — treat it as a rough guide, not a verdict.</p>
-        <div class="strength-score-hero">
-          <div class="strength-score-value" id="overallStrengthScore">--</div>
-          <div class="strength-score-level" id="overallStrengthLevel">Log a benchmark lift and body weight to see your score</div>
-        </div>
-        <div id="strengthBreakdownList" class="item-list">
-          <div class="empty-state">No benchmark lifts logged yet.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Progress ---------- -->
-    <div id="workout-progress" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavProgress">
-      <div class="card">
-        <h2 class="card-title">Personal Records</h2>
-        <p class="field-hint">Your best logged set and estimated 1-rep max (Epley formula) for every exercise you've tracked.</p>
-        <div id="exercisePrList" class="item-list">
-          <div class="empty-state">Log some sets to see your PRs and estimated 1-rep max here.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Exercise Progress</h2>
-        <div class="form-row">
-          <label for="progressExerciseSelect">Exercise</label>
-          <select id="progressExerciseSelect">
-            <option value="">Log some sets to see progress</option>
-          </select>
-        </div>
-        <div class="stat-grid" id="progressStats">
-          <div class="stat-box"><span class="stat-value" id="progressCurrentE1rm">--</span><span class="stat-label">Current est. 1RM</span></div>
-          <div class="stat-box"><span class="stat-value" id="progressAllTimePr">--</span><span class="stat-label">All-time PR</span></div>
-          <div class="stat-box"><span class="stat-value" id="progressSessionCount">0</span><span class="stat-label">Sessions logged</span></div>
-        </div>
-        <div id="exerciseProgressChart" class="chart-container">
-          <div class="empty-state">Log a couple of sessions for this exercise to see a trend line.</div>
-        </div>
-        <h3 class="checklist-title" style="margin-top:14px;">PR History</h3>
-        <div id="exercisePrHistoryList" class="item-list">
-          <div class="empty-state">No PRs recorded yet for this exercise.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Weekly Training Volume</h2>
-        <p class="field-hint">Total weight &times; reps across all logged sets, summed per week.</p>
-        <div id="volumeChart" class="chart-container">
-          <div class="empty-state">Log a couple of weeks of workouts to see your volume trend.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Measurement Trends</h2>
-        <div class="form-row">
-          <label for="progressMeasurementSelect">Body part</label>
-          <select id="progressMeasurementSelect">
-            <option value="">Log a measurement to see its trend</option>
-          </select>
-        </div>
-        <div id="measurementChart" class="chart-container">
-          <div class="empty-state">Log a couple of measurements for this body part to see a trend line.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Overall Strength Score Trend</h2>
-        <p class="field-hint">Recomputed from your logged benchmark lifts and body weight history over time.</p>
-        <div id="strengthScoreChart" class="chart-container">
-          <div class="empty-state">Log benchmark lifts (Squat, Bench, Deadlift, Overhead Press, Pull-Up) and body weight to see this trend.</div>
         </div>
       </div>
     </div>
@@ -656,6 +798,18 @@
       </div>
     </div>
   </section>
+
+  <!-- ===================== WORKOUT: modals ===================== -->
+  <div class="modal-overlay hidden sheet-overlay" id="muscleDetailModal" role="dialog" aria-modal="true" aria-labelledby="muscleDetailTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="muscleDetailTitle">Muscle</h2>
+        <button type="button" class="btn-icon" id="muscleDetailCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <div id="muscleDetailBody"></div>
+    </div>
+  </div>
 
   <!-- ===================== NUTRITION ===================== -->
   <section id="panel-nutrition" class="tab-panel" role="tabpanel" aria-labelledby="navBtnNutrition">
@@ -3226,20 +3380,20 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=15"></script>
-<script type="module" src="js/auth.js?v=15"></script>
-<script src="js/app.js?v=15"></script>
-<script src="js/exercises.js?v=15"></script>
-<script src="js/workout.js?v=15"></script>
-<script src="js/nutrition.js?v=15"></script>
-<script src="js/habits.js?v=15"></script>
-<script src="js/business.js?v=15"></script>
-<script src="js/trading.js?v=15"></script>
-<script src="js/blobstore.js?v=15"></script>
-<script src="js/video-api-client.js?v=15"></script>
-<script src="js/video-connections.js?v=15"></script>
-<script src="js/video.js?v=15"></script>
-<script src="js/video-studio.js?v=15"></script>
-<script src="js/form-check.js?v=15"></script>
+<script src="js/firebase-config.js?v=16"></script>
+<script type="module" src="js/auth.js?v=16"></script>
+<script src="js/app.js?v=16"></script>
+<script src="js/exercises.js?v=16"></script>
+<script src="js/workout.js?v=16"></script>
+<script src="js/nutrition.js?v=16"></script>
+<script src="js/habits.js?v=16"></script>
+<script src="js/business.js?v=16"></script>
+<script src="js/trading.js?v=16"></script>
+<script src="js/blobstore.js?v=16"></script>
+<script src="js/video-api-client.js?v=16"></script>
+<script src="js/video-connections.js?v=16"></script>
+<script src="js/video.js?v=16"></script>
+<script src="js/video-studio.js?v=16"></script>
+<script src="js/form-check.js?v=16"></script>
 </body>
 </html>

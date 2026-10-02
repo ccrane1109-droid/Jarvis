@@ -1138,7 +1138,7 @@
       const prText = pr.bestSet ? (core.escapeHtml(pr.bestSet.weight) + " &times; " + core.escapeHtml(pr.bestSet.reps)) : "--";
       const e1rmText = pr.bestE1rm > 0 ? Math.round(pr.bestE1rm) : "--";
       return (
-        '<div class="list-item">' +
+        '<div class="list-item" data-exercise-id="' + core.escapeHtml(ex.id) + '" style="cursor:pointer;">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
               '<span class="list-item-title">' + core.escapeHtml(ex.name) + ' <span class="badge badge-neutral">' + core.escapeHtml(ex.muscleGroup) + '</span></span>' +
@@ -1952,6 +1952,14 @@
     }
   }
 
+  /* ---------------- Progress: shared state ---------------- */
+
+  let bodyMapMode = "strength"; // "strength" | "readiness"
+  let exerciseChartRangeDays = null; // null = all time
+  let bodyweightChartRangeDays = null;
+  let editingBodyweightId = null;
+  let editingMeasurementId = null;
+
   /* ---------------- body weight ---------------- */
 
   function toLb(weight, unit) {
@@ -1993,12 +2001,34 @@
               '<span class="list-item-meta">' + core.formatDate(e.date) + '</span>' +
             '</div>' +
             '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon bodyweight-edit-btn" data-id="' + core.escapeHtml(e.id) + '">Edit</button>' +
               '<button type="button" class="btn-icon danger bodyweight-delete-btn" data-id="' + core.escapeHtml(e.id) + '">Delete</button>' +
             '</div>' +
           '</div>' +
         '</div>'
       );
     }).join("");
+  }
+
+  function populateBodyweightFormForEdit(id) {
+    const entry = bodyweightEntries.find(function (x) { return x.id === id; });
+    if (!entry) return;
+    editingBodyweightId = id;
+    document.getElementById("bodyweightEditId").value = id;
+    document.getElementById("bodyweightInput").value = entry.weight;
+    document.getElementById("bodyweightUnit").value = entry.unit;
+    document.getElementById("bodyweightDate").value = entry.date;
+    document.getElementById("bodyweightSubmitBtn").textContent = "Update Body Weight";
+    document.getElementById("bodyweightFormCancelBtn").classList.remove("hidden");
+  }
+
+  function resetBodyweightForm() {
+    editingBodyweightId = null;
+    document.getElementById("bodyweightForm").reset();
+    document.getElementById("bodyweightEditId").value = "";
+    document.getElementById("bodyweightDate").value = "";
+    document.getElementById("bodyweightSubmitBtn").textContent = "Log Body Weight";
+    document.getElementById("bodyweightFormCancelBtn").classList.add("hidden");
   }
 
   function handleBodyweightSubmit(e) {
@@ -2008,26 +2038,120 @@
     const unit = document.getElementById("bodyweightUnit").value;
     const date = document.getElementById("bodyweightDate").value || core.todayISODate();
     if (!core.isPositiveNumber(weight)) { core.showToast("Weight must be a positive number."); return; }
-    bodyweightEntries.push({ id: core.uid("bw"), weight: weight, unit: unit, date: date, createdAt: Date.now() });
+    const wasEditing = !!editingBodyweightId;
+    if (editingBodyweightId) {
+      const entry = bodyweightEntries.find(function (x) { return x.id === editingBodyweightId; });
+      if (entry) { entry.weight = weight; entry.unit = unit; entry.date = date; }
+    } else {
+      bodyweightEntries.push({ id: core.uid("bw"), weight: weight, unit: unit, date: date, createdAt: Date.now() });
+    }
     saveBodyweight();
+    resetBodyweightForm();
     renderBodyweightList();
     renderStrengthSection();
     renderProgressTab();
-    document.getElementById("bodyweightForm").reset();
-    document.getElementById("bodyweightDate").value = "";
-    document.getElementById("bodyweightUnit").value = unit;
-    core.showToast("Body weight logged.");
+    core.showToast(wasEditing ? "Body weight updated." : "Body weight logged.");
   }
 
   function handleBodyweightListClick(e) {
+    const editBtn = e.target.closest(".bodyweight-edit-btn");
+    if (editBtn) { populateBodyweightFormForEdit(editBtn.getAttribute("data-id")); return; }
     const btn = e.target.closest(".bodyweight-delete-btn");
     if (!btn) return;
     const id = btn.getAttribute("data-id");
+    if (!window.confirm("Delete this body weight entry? This can't be undone.")) return;
     bodyweightEntries = bodyweightEntries.filter(function (x) { return x.id !== id; });
+    if (editingBodyweightId === id) resetBodyweightForm();
     saveBodyweight();
     renderBodyweightList();
     renderStrengthSection();
     renderProgressTab();
+  }
+
+  function computeBodyweightStats() {
+    if (bodyweightEntries.length === 0) return null;
+    const sorted = bodyweightEntries.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    const lbEntries = sorted.map(function (e) { return { date: e.date, lb: toLb(e.weight, e.unit) }; });
+    const current = lbEntries[lbEntries.length - 1].lb;
+    const starting = lbEntries[0].lb;
+    let highest = -Infinity, lowest = Infinity;
+    lbEntries.forEach(function (e) { if (e.lb > highest) highest = e.lb; if (e.lb < lowest) lowest = e.lb; });
+    const cutoff = Date.now() - 30 * 86400000;
+    const recent = lbEntries.filter(function (e) { return new Date(e.date).getTime() >= cutoff; });
+    const avgRecent = recent.length ? recent.reduce(function (s, e) { return s + e.lb; }, 0) / recent.length : current;
+    return { current: current, starting: starting, change: current - starting, highest: highest, lowest: lowest, avgRecent: avgRecent };
+  }
+
+  // Reads the Nutrition module's own stored profile directly (read-only) so
+  // the Bodyweight trend can show a target line without duplicating target-
+  // weight storage. Tolerates it being missing/malformed — no target shown.
+  function getNutritionTargetWeightLb() {
+    try {
+      const raw = localStorage.getItem("jarvisNutritionProfile");
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (!p || typeof p.targetWeightKg !== "number" || !isFinite(p.targetWeightKg) || p.targetWeightKg <= 0) return null;
+      return p.targetWeightKg * 2.20462;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function renderBodyweightChart(containerId, rangeDays) {
+    const core = window.JarvisCore;
+    if (bodyweightEntries.length === 0) {
+      renderLineChart(containerId, [], { emptyMessage: "Log a couple of body weight entries to see a trend line." });
+      return;
+    }
+    const sorted = bodyweightEntries.slice().sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    let points = sorted.map(function (e) { return { t: new Date(e.date).getTime(), v: toLb(e.weight, e.unit), label: core.formatDate(e.date) }; });
+    if (rangeDays !== null && rangeDays !== undefined) {
+      const cutoff = Date.now() - rangeDays * 86400000;
+      points = points.filter(function (p) { return p.t >= cutoff; });
+    }
+    renderLineChart(containerId, points, {
+      emptyMessage: "Log a couple of body weight entries to see a trend line.",
+      yFormat: function (v) { return Math.round(v * 10) / 10 + " lb"; },
+      ariaLabel: "Body weight trend",
+      targetY: getNutritionTargetWeightLb()
+    });
+  }
+
+  function renderBodyweightTab() {
+    const stats = computeBodyweightStats();
+    const statsEl = document.getElementById("bodyweightStats");
+    if (!stats) {
+      statsEl.innerHTML = '<div class="empty-state-compact">Log your body weight to see stats here.</div>';
+    } else {
+      const changeCls = stats.change > 0 ? "positive" : stats.change < 0 ? "negative" : "";
+      statsEl.innerHTML =
+        statBoxHtml(Math.round(stats.current * 10) / 10 + " lb", "Current") +
+        statBoxHtml(Math.round(stats.starting * 10) / 10 + " lb", "Starting") +
+        '<div class="stat-box"><span class="stat-value ' + changeCls + '">' + (stats.change >= 0 ? "+" : "") + Math.round(stats.change * 10) / 10 + ' lb</span><span class="stat-label">Change</span></div>' +
+        statBoxHtml(Math.round(stats.highest * 10) / 10 + " lb", "Highest") +
+        statBoxHtml(Math.round(stats.lowest * 10) / 10 + " lb", "Lowest") +
+        statBoxHtml(Math.round(stats.avgRecent * 10) / 10 + " lb", "Avg (30d)");
+    }
+    renderBodyweightChart("bodyweightChart", bodyweightChartRangeDays);
+
+    const targetLb = getNutritionTargetWeightLb();
+    const noteEl = document.getElementById("bodyweightTargetNote");
+    if (targetLb && stats) {
+      noteEl.textContent = "Target weight from your Nutrition goals: " + Math.round(targetLb) + " lb (dashed line on the chart).";
+      noteEl.classList.remove("hidden");
+    } else {
+      noteEl.classList.add("hidden");
+    }
+  }
+
+  function handleBodyweightRangeClick(e) {
+    const btn = e.target.closest(".bw-range-btn");
+    if (!btn) return;
+    document.querySelectorAll("#bodyweightRangeToggle .bw-range-btn").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    const r = btn.getAttribute("data-range");
+    bodyweightChartRangeDays = r === "all" ? null : Number(r);
+    renderBodyweightChart("bodyweightChart", bodyweightChartRangeDays);
   }
 
   /* ---------------- body measurements ---------------- */
@@ -2049,12 +2173,35 @@
               '<span class="list-item-meta">' + core.formatDate(m.date) + '</span>' +
             '</div>' +
             '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon measurement-edit-btn" data-id="' + core.escapeHtml(m.id) + '">Edit</button>' +
               '<button type="button" class="btn-icon danger measurement-delete-btn" data-id="' + core.escapeHtml(m.id) + '">Delete</button>' +
             '</div>' +
           '</div>' +
         '</div>'
       );
     }).join("");
+  }
+
+  function populateMeasurementFormForEdit(id) {
+    const m = measurements.find(function (x) { return x.id === id; });
+    if (!m) return;
+    editingMeasurementId = id;
+    document.getElementById("measurementEditId").value = id;
+    document.getElementById("measurementType").value = m.type;
+    document.getElementById("measurementValue").value = m.value;
+    document.getElementById("measurementUnit").value = m.unit;
+    document.getElementById("measurementDate").value = m.date;
+    document.getElementById("measurementSubmitBtn").textContent = "Update Measurement";
+    document.getElementById("measurementFormCancelBtn").classList.remove("hidden");
+  }
+
+  function resetMeasurementForm() {
+    editingMeasurementId = null;
+    document.getElementById("measurementForm").reset();
+    document.getElementById("measurementEditId").value = "";
+    document.getElementById("measurementDate").value = "";
+    document.getElementById("measurementSubmitBtn").textContent = "Log Measurement";
+    document.getElementById("measurementFormCancelBtn").classList.add("hidden");
   }
 
   function handleMeasurementSubmit(e) {
@@ -2066,21 +2213,29 @@
     const date = document.getElementById("measurementDate").value || core.todayISODate();
     if (!type) { core.showToast("Enter a body part."); return; }
     if (!core.isPositiveNumber(value)) { core.showToast("Value must be a positive number."); return; }
-    measurements.push({ id: core.uid("meas"), type: type, value: value, unit: unit, date: date, createdAt: Date.now() });
+    const wasEditing = !!editingMeasurementId;
+    if (editingMeasurementId) {
+      const m = measurements.find(function (x) { return x.id === editingMeasurementId; });
+      if (m) { m.type = type; m.value = value; m.unit = unit; m.date = date; }
+    } else {
+      measurements.push({ id: core.uid("meas"), type: type, value: value, unit: unit, date: date, createdAt: Date.now() });
+    }
     saveMeasurements();
+    resetMeasurementForm();
     renderMeasurementList();
     renderProgressTab();
-    document.getElementById("measurementForm").reset();
-    document.getElementById("measurementDate").value = "";
-    document.getElementById("measurementUnit").value = unit;
-    core.showToast("Measurement logged.");
+    core.showToast(wasEditing ? "Measurement updated." : "Measurement logged.");
   }
 
   function handleMeasurementListClick(e) {
+    const editBtn = e.target.closest(".measurement-edit-btn");
+    if (editBtn) { populateMeasurementFormForEdit(editBtn.getAttribute("data-id")); return; }
     const btn = e.target.closest(".measurement-delete-btn");
     if (!btn) return;
     const id = btn.getAttribute("data-id");
+    if (!window.confirm("Delete this measurement entry? This can't be undone.")) return;
     measurements = measurements.filter(function (x) { return x.id !== id; });
+    if (editingMeasurementId === id) resetMeasurementForm();
     saveMeasurements();
     renderMeasurementList();
     renderProgressTab();
@@ -2102,22 +2257,44 @@
   function renderMeasurementChart() {
     const core = window.JarvisCore;
     const type = document.getElementById("progressMeasurementSelect").value;
+    const compareEl = document.getElementById("measurementCompareStat");
     if (!type) {
       renderLineChart("measurementChart", [], { emptyMessage: "Log a couple of measurements for this body part to see a trend line." });
+      if (compareEl) compareEl.innerHTML = "";
       return;
     }
     // Measurements are shown in whatever unit they were logged in — no
     // cross-unit conversion, unlike body weight's lb normalization.
-    const rawPoints = measurements
+    const typeEntries = measurements
       .filter(function (m) { return m.type === type; })
-      .sort(function (a, b) { return new Date(a.date) - new Date(b.date); })
-      .map(function (m) { return { t: new Date(m.date).getTime(), v: m.value, label: core.formatDate(m.date) }; });
-    const unit = measurements.filter(function (m) { return m.type === type; })[0].unit;
+      .sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+    const rawPoints = typeEntries.map(function (m) { return { t: new Date(m.date).getTime(), v: m.value, label: core.formatDate(m.date) }; });
+    const unit = typeEntries.length ? typeEntries[0].unit : "";
     renderLineChart("measurementChart", rawPoints, {
       emptyMessage: "Log a couple of measurements for this body part to see a trend line.",
       yFormat: function (v) { return v.toFixed(1) + " " + unit; },
       ariaLabel: type + " measurement trend"
     });
+
+    if (!compareEl) return;
+    if (typeEntries.length === 0) {
+      compareEl.innerHTML = "";
+      return;
+    }
+    const currentEntry = typeEntries[typeEntries.length - 1];
+    const previousEntry = typeEntries.length > 1 ? typeEntries[typeEntries.length - 2] : null;
+    let html = statBoxHtml(currentEntry.value.toFixed(1) + " " + currentEntry.unit, "Current");
+    if (previousEntry) {
+      const change = currentEntry.value - previousEntry.value;
+      const cls = change > 0 ? "positive" : change < 0 ? "negative" : "";
+      html += statBoxHtml(previousEntry.value.toFixed(1) + " " + previousEntry.unit, "Previous");
+      html += '<div class="stat-box"><span class="stat-value ' + cls + '">' + (change >= 0 ? "+" : "") + change.toFixed(1) + ' ' + currentEntry.unit + '</span><span class="stat-label">Change</span></div>';
+    }
+    compareEl.innerHTML = html;
+  }
+
+  function statBoxHtml(value, label) {
+    return '<div class="stat-box"><span class="stat-value">' + value + '</span><span class="stat-label">' + label + '</span></div>';
   }
 
   /* ---------------- strength score ---------------- */
@@ -2199,8 +2376,9 @@
 
     if (!result) {
       scoreEl.textContent = "--";
-      levelEl.textContent = "Log your body weight to see your Strength Score.";
+      levelEl.textContent = "Not enough data yet — log your body weight to see your Strength Score.";
       listEl.innerHTML = '<div class="empty-state">Log a benchmark lift (Squat, Bench, Deadlift, Overhead Press, or Pull-Up) and your body weight.</div>';
+      renderStrengthDistributionBar(null);
       return;
     }
 
@@ -2209,11 +2387,12 @@
       levelEl.textContent = "Standards comparison is off. Showing your best estimated 1-rep max per lift instead.";
     } else if (result.overallScore === null) {
       scoreEl.textContent = "--";
-      levelEl.textContent = "Log a benchmark lift to see your score.";
+      levelEl.textContent = "Not enough data yet — log a benchmark lift to see your score.";
     } else {
       scoreEl.textContent = Math.round(result.overallScore);
-      levelEl.textContent = "Overall score across logged benchmark lifts";
+      levelEl.textContent = "Overall score across logged benchmark lifts (Squat, Bench, Deadlift, OHP, Pull-Up) vs. bodyweight-ratio standards";
     }
+    renderStrengthDistributionBar(result);
 
     if (result.breakdown.every(function (b) { return !b.hasData; })) {
       listEl.innerHTML = '<div class="empty-state">Log a benchmark lift (Squat, Bench, Deadlift, Overhead Press, or Pull-Up) to see a breakdown.</div>';
@@ -2259,8 +2438,41 @@
     strengthSettings.compareSex = document.getElementById("strengthCompareSelect").value;
     saveStrengthSettings();
     renderStrengthSection();
+    renderBodyMap();
     renderProgressTab();
     window.JarvisCore.showToast("Strength settings saved.");
+  }
+
+  // 5-stop color scale shared by the strength distribution bar and the body
+  // map's Strength mode (gray -> blue -> purple -> green, never orange/red —
+  // those are reserved for semantic warnings elsewhere in the app).
+  const LEVEL_COLORS = { Beginner: "#5b6475", Novice: "#3a5f99", Intermediate: "#4f8cff", Advanced: "#9b6bff", Elite: "#33d17a" };
+  function getMuscleColorForLevel(level) { return LEVEL_COLORS[level] || null; }
+  function scoreToLevelLabel(score) {
+    if (score >= 80) return "Elite";
+    if (score >= 60) return "Advanced";
+    if (score >= 40) return "Intermediate";
+    if (score >= 20) return "Novice";
+    return "Beginner";
+  }
+
+  // Visualizes the real 0-100 score the app already computes against its own
+  // 5 bands, with a "You" marker — not a fabricated population percentile.
+  function renderStrengthDistributionBar(result) {
+    const container = document.getElementById("strengthDistributionBar");
+    if (!container) return;
+    if (!result || result.overallScore === null || strengthSettings.compareSex === "none") {
+      container.innerHTML = "";
+      return;
+    }
+    const bands = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"];
+    const bandsHtml = bands.map(function (l) { return '<div class="strength-distribution-band" style="background:' + getMuscleColorForLevel(l) + '"></div>'; }).join("");
+    const pct = Math.max(2, Math.min(98, result.overallScore));
+    container.innerHTML =
+      '<div class="strength-distribution-track">' + bandsHtml +
+        '<div class="strength-distribution-marker" style="left:' + pct + '%">You</div>' +
+      '</div>' +
+      '<div class="strength-distribution-labels"><span>Beginner</span><span>Elite</span></div>';
   }
 
   /* ---------------- charts ---------------- */
@@ -2278,8 +2490,9 @@
     const plotH = height - padding.top - padding.bottom;
     const xs = points.map(function (p) { return p.t; });
     const ys = points.map(function (p) { return p.v; });
+    const hasTarget = opts.targetY !== undefined && opts.targetY !== null && isFinite(opts.targetY);
     const minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
-    const maxY = Math.max.apply(null, ys) * 1.15 || 1;
+    const maxY = Math.max.apply(null, hasTarget ? ys.concat([opts.targetY]) : ys) * 1.15 || 1;
 
     function xPos(t) { return padding.left + (maxX === minX ? plotW / 2 : ((t - minX) / (maxX - minX)) * plotW); }
     function yPos(v) { return padding.top + plotH - (v / maxY) * plotH; }
@@ -2296,9 +2509,18 @@
       '<text x="4" y="' + (gridY0 + 4).toFixed(1) + '" font-size="10" fill="var(--text-faint)">0</text>' +
       '<text x="4" y="' + (gridY1 + 10).toFixed(1) + '" font-size="10" fill="var(--text-faint)">' + core.escapeHtml(opts.yFormat ? opts.yFormat(maxY) : Math.round(maxY)) + '</text>';
 
+    let targetLine = "";
+    if (hasTarget) {
+      const ty = yPos(opts.targetY);
+      targetLine =
+        '<line x1="' + padding.left + '" y1="' + ty.toFixed(1) + '" x2="' + (width - padding.right) + '" y2="' + ty.toFixed(1) + '" stroke="var(--purple)" stroke-width="1.5" stroke-dasharray="4,4"/>' +
+        '<text x="' + (width - padding.right) + '" y="' + (ty - 4).toFixed(1) + '" font-size="10" fill="var(--purple)" text-anchor="end">Target</text>';
+    }
+
     container.innerHTML =
       '<svg viewBox="0 0 ' + width + ' ' + height + '" class="progress-chart-svg" role="img" aria-label="' + core.escapeHtml(opts.ariaLabel || "progress chart") + '">' +
         gridLines +
+        targetLine +
         '<path d="' + pathD + '" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
         circles +
       '</svg>';
@@ -2323,53 +2545,115 @@
     if (loggedIds.has(current)) sel.value = current;
   }
 
-  function renderExerciseProgressChart() {
+  function selectExerciseAndRenderDetail(exerciseId) {
+    document.getElementById("progressExerciseSelect").value = exerciseId;
+    renderExerciseDetail();
+  }
+
+  function jumpToExercise(exerciseId) {
+    const tabBtn = document.getElementById("progressMainTabExercises");
+    if (tabBtn) tabBtn.click();
+    selectExerciseAndRenderDetail(exerciseId);
+  }
+
+  function filterPointsByRange(points, rangeDays) {
+    if (rangeDays === null || rangeDays === undefined) return points;
+    const cutoff = Date.now() - rangeDays * 86400000;
+    return points.filter(function (p) { return p.t >= cutoff; });
+  }
+
+  function renderExerciseDetail() {
     const core = window.JarvisCore;
     const JE = window.JarvisExercises;
     const exerciseId = document.getElementById("progressExerciseSelect").value;
-    const currentEl = document.getElementById("progressCurrentE1rm");
+    const e1rmEl = document.getElementById("progressCurrentE1rm");
     const prEl = document.getElementById("progressAllTimePr");
+    const bestWeightEl = document.getElementById("progressBestWeight");
+    const bestRepsEl = document.getElementById("progressBestReps");
+    const totalSetsEl = document.getElementById("progressTotalSets");
+    const totalRepsEl = document.getElementById("progressTotalReps");
+    const recentVolumeEl = document.getElementById("progressRecentVolume");
     const countEl = document.getElementById("progressSessionCount");
+    const lastPerformedEl = document.getElementById("progressLastPerformed");
 
     if (!exerciseId) {
-      currentEl.textContent = "--";
-      prEl.textContent = "--";
+      [e1rmEl, prEl, bestWeightEl, bestRepsEl, recentVolumeEl, lastPerformedEl].forEach(function (el) { el.textContent = "--"; });
+      totalSetsEl.textContent = "0";
+      totalRepsEl.textContent = "0";
       countEl.textContent = "0";
       renderLineChart("exerciseProgressChart", [], { emptyMessage: "Log a couple of sessions for this exercise to see a trend line." });
+      renderLineChart("exerciseVolumeChart", [], { emptyMessage: "Log a couple of sessions for this exercise to see a trend line." });
+      renderLineChart("exerciseBestWeightChart", [], { emptyMessage: "Log a couple of sessions for this exercise to see a trend line." });
       renderPrHistoryList(null);
       return;
     }
 
-    const points = [];
-    let allTimeBest = null;
+    const e1rmPoints = [], volumePoints = [], bestWeightPoints = [];
+    let allTimeBest = null, totalSets = 0, totalReps = 0, maxReps = 0, recentVolume = 0, lastPerformed = null;
+    const recentCutoff = Date.now() - 28 * 86400000;
+
     workouts.forEach(function (w) {
       if (w.schema !== 2) return;
       const se = w.exercises.find(function (x) { return x.exerciseId === exerciseId; });
       if (!se || se.sets.length === 0) return;
-      let bestE1rmThisSession = 0;
+      const t = new Date(w.dateTime || w.date).getTime();
+      let bestE1rmThisSession = 0, sessionVolume = 0, bestWeightThisSession = 0;
       se.sets.forEach(function (s) {
         const e1rm = JE.estimateOneRepMax(s.weight, s.reps);
         if (e1rm > bestE1rmThisSession) bestE1rmThisSession = e1rm;
-        if (!allTimeBest || s.weight > allTimeBest.weight || (s.weight === allTimeBest.weight && s.reps > allTimeBest.reps)) {
-          allTimeBest = s;
-        }
+        sessionVolume += (Number(s.weight) || 0) * (Number(s.reps) || 0);
+        if (s.weight > bestWeightThisSession) bestWeightThisSession = s.weight;
+        if (s.reps > maxReps) maxReps = s.reps;
+        if (!allTimeBest || s.weight > allTimeBest.weight || (s.weight === allTimeBest.weight && s.reps > allTimeBest.reps)) allTimeBest = s;
+        totalSets++;
+        totalReps += Number(s.reps) || 0;
       });
-      points.push({ t: new Date(w.dateTime || w.date).getTime(), v: bestE1rmThisSession, label: core.formatDate(w.date) });
+      if (t >= recentCutoff) recentVolume += sessionVolume;
+      if (lastPerformed === null || t > lastPerformed) lastPerformed = t;
+      e1rmPoints.push({ t: t, v: bestE1rmThisSession, label: core.formatDate(w.date) });
+      volumePoints.push({ t: t, v: sessionVolume, label: core.formatDate(w.date) });
+      bestWeightPoints.push({ t: t, v: bestWeightThisSession, label: core.formatDate(w.date) });
     });
-    points.sort(function (a, b) { return a.t - b.t; });
+    [e1rmPoints, volumePoints, bestWeightPoints].forEach(function (arr) { arr.sort(function (a, b) { return a.t - b.t; }); });
 
-    countEl.textContent = points.length;
-    currentEl.textContent = points.length ? Math.round(points[points.length - 1].v) + " lb" : "--";
+    countEl.textContent = e1rmPoints.length;
+    e1rmEl.textContent = e1rmPoints.length ? Math.round(e1rmPoints[e1rmPoints.length - 1].v) + " lb" : "--";
     prEl.textContent = allTimeBest ? (allTimeBest.weight + " &times; " + allTimeBest.reps) : "--";
+    bestWeightEl.textContent = allTimeBest ? allTimeBest.weight + " lb" : "--";
+    bestRepsEl.textContent = totalSets > 0 ? maxReps : "--";
+    totalSetsEl.textContent = totalSets;
+    totalRepsEl.textContent = totalReps;
+    recentVolumeEl.textContent = Math.round(recentVolume).toLocaleString() + " lb";
+    lastPerformedEl.textContent = lastPerformed !== null ? core.formatDate(new Date(lastPerformed).toISOString().slice(0, 10)) : "--";
 
     const ex = JE.getExerciseById(exerciseId);
-    renderLineChart("exerciseProgressChart", points, {
+    renderLineChart("exerciseProgressChart", filterPointsByRange(e1rmPoints, exerciseChartRangeDays), {
       emptyMessage: "Log a couple of sessions for this exercise to see a trend line.",
       yFormat: function (v) { return Math.round(v) + " lb"; },
       ariaLabel: "Estimated one rep max trend for " + (ex ? ex.name : "exercise")
     });
+    renderLineChart("exerciseVolumeChart", filterPointsByRange(volumePoints, exerciseChartRangeDays), {
+      emptyMessage: "Log a couple of sessions for this exercise to see a trend line.",
+      yFormat: function (v) { return Math.round(v).toLocaleString() + " lb"; },
+      ariaLabel: "Training volume trend for " + (ex ? ex.name : "exercise")
+    });
+    renderLineChart("exerciseBestWeightChart", filterPointsByRange(bestWeightPoints, exerciseChartRangeDays), {
+      emptyMessage: "Log a couple of sessions for this exercise to see a trend line.",
+      yFormat: function (v) { return Math.round(v) + " lb"; },
+      ariaLabel: "Best working weight trend for " + (ex ? ex.name : "exercise")
+    });
 
     renderPrHistoryList(exerciseId);
+  }
+
+  function handleExerciseRangeClick(e) {
+    const btn = e.target.closest(".exercise-range-btn");
+    if (!btn) return;
+    document.querySelectorAll("#exerciseChartRangeToggle .exercise-range-btn").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    const r = btn.getAttribute("data-range");
+    exerciseChartRangeDays = r === "all" ? null : Number(r);
+    renderExerciseDetail();
   }
 
   // Chronological list of estimated-1RM PRs for an exercise: every time a
@@ -2422,19 +2706,19 @@
     }).join("");
   }
 
+  // Sunday-start ISO week key for a given date string, local-timezone-safe.
+  function weekStartIso(dateStr) {
+    const d = new Date(dateStr);
+    const day = d.getDay();
+    const start = new Date(d);
+    start.setDate(d.getDate() - day);
+    start.setHours(0, 0, 0, 0);
+    const tzOffset = start.getTimezoneOffset() * 60000;
+    return new Date(start.getTime() - tzOffset).toISOString().slice(0, 10);
+  }
+
   function renderVolumeChart() {
     const core = window.JarvisCore;
-
-    function weekStartIso(dateStr) {
-      const d = new Date(dateStr);
-      const day = d.getDay();
-      const start = new Date(d);
-      start.setDate(d.getDate() - day);
-      start.setHours(0, 0, 0, 0);
-      const tzOffset = start.getTimezoneOffset() * 60000;
-      return new Date(start.getTime() - tzOffset).toISOString().slice(0, 10);
-    }
-
     const volumeByWeek = {};
     workouts.forEach(function (w) {
       if (w.schema !== 2) return;
@@ -2481,14 +2765,397 @@
     });
   }
 
+  function renderFrequencyChart() {
+    const core = window.JarvisCore;
+    const byWeek = {};
+    workouts.forEach(function (w) { if (w.schema !== 2) return; const ws = weekStartIso(w.date); byWeek[ws] = (byWeek[ws] || 0) + 1; });
+    const points = Object.keys(byWeek)
+      .sort(function (a, b) { return new Date(a) - new Date(b); })
+      .map(function (ws) { return { t: new Date(ws).getTime(), v: byWeek[ws], label: "Week of " + core.formatDate(ws) }; });
+    renderLineChart("frequencyChart", points, {
+      emptyMessage: "Log a few weeks of workouts to see your frequency trend.",
+      yFormat: function (v) { return Math.round(v) + (Math.round(v) === 1 ? " workout" : " workouts"); },
+      ariaLabel: "Workout frequency trend"
+    });
+  }
+
+  /* ---------------- muscle volume (This Week + Trends + body map) ---------------- */
+
+  // Credits each logged set to its exercise's primary muscleGroup (1x) and,
+  // for recognizable compound lifts, a fraction (0.5x) to each secondary
+  // muscle from JarvisExercises.getSecondaryMuscles — an intelligent split
+  // instead of counting every exercise equally. sinceDate=null means all-time.
+  function computeMuscleVolume(sinceDate) {
+    const JE = window.JarvisExercises;
+    const totals = {};
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      if (sinceDate && new Date(w.date) < sinceDate) return;
+      w.exercises.forEach(function (se) {
+        if (!se.sets.length) return;
+        const ex = JE.getExerciseById(se.exerciseId);
+        if (!ex) return;
+        const n = se.sets.length;
+        totals[ex.muscleGroup] = (totals[ex.muscleGroup] || 0) + n;
+        JE.getSecondaryMuscles(ex.id).forEach(function (m) { totals[m] = (totals[m] || 0) + n * 0.5; });
+      });
+    });
+    return totals;
+  }
+
+  function renderMuscleVolumeList(containerId, totals, emptyMessage) {
+    const entries = Object.keys(totals)
+      .map(function (k) { return { muscle: k, sets: totals[k] }; })
+      .filter(function (e) { return e.sets > 0; })
+      .sort(function (a, b) { return b.sets - a.sets; });
+    const container = document.getElementById(containerId);
+    if (!entries.length) {
+      container.innerHTML = '<div class="empty-state">' + emptyMessage + '</div>';
+      return;
+    }
+    const max = entries[0].sets;
+    container.innerHTML = entries.map(function (e) {
+      const pct = max > 0 ? Math.round((e.sets / max) * 100) : 0;
+      return (
+        '<div class="nutri-bar-row"><div class="nutri-bar-label"><span>' + e.muscle + '</span>' +
+        '<span class="nutri-bar-value">' + (Math.round(e.sets * 10) / 10) + ' sets</span></div>' +
+        '<div class="nutri-bar-track"><div class="nutri-bar-fill" style="width:' + pct + '%"></div></div></div>'
+      );
+    }).join("");
+  }
+
+  function renderTrendsMuscleVolume() {
+    renderMuscleVolumeList("trendsMuscleVolumeList", computeMuscleVolume(new Date(Date.now() - 56 * 86400000)), "Log some workouts to see your muscle group balance.");
+  }
+
+  /* ---------------- This Week ---------------- */
+
+  function getWeekStartDate(now) {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  function countPrsSince(start) {
+    const ids = {};
+    workouts.forEach(function (w) { if (w.schema !== 2) return; w.exercises.forEach(function (se) { ids[se.exerciseId] = true; }); });
+    let count = 0;
+    Object.keys(ids).forEach(function (id) {
+      getPrHistory(id).forEach(function (h) { if (new Date(h.date) >= start) count++; });
+    });
+    return count;
+  }
+
+  function computeThisWeekStats() {
+    const JE = window.JarvisExercises;
+    const start = getWeekStartDate(new Date());
+    const weekWorkouts = workouts.filter(function (w) { return w.schema === 2 && new Date(w.date) >= start; });
+    let sets = 0, reps = 0, volume = 0;
+    const muscleSet = {}, days = {};
+    weekWorkouts.forEach(function (w) {
+      days[w.date] = true;
+      w.exercises.forEach(function (se) {
+        const ex = JE.getExerciseById(se.exerciseId);
+        if (ex) muscleSet[ex.muscleGroup] = true;
+        se.sets.forEach(function (s) { sets++; reps += Number(s.reps) || 0; volume += (Number(s.weight) || 0) * (Number(s.reps) || 0); });
+      });
+    });
+    return {
+      workouts: weekWorkouts.length, sets: sets, reps: reps, volume: volume,
+      muscleGroups: Object.keys(muscleSet).length, trainingDays: Object.keys(days).length, prs: countPrsSince(start)
+    };
+  }
+
+  function renderThisWeekTab() {
+    const stats = computeThisWeekStats();
+    document.getElementById("thisWeekStats").innerHTML =
+      statBoxHtml(stats.workouts, "Workouts") +
+      statBoxHtml(stats.sets, "Working sets") +
+      statBoxHtml(stats.reps, "Total reps") +
+      statBoxHtml(Math.round(stats.volume).toLocaleString() + " lb", "Volume") +
+      statBoxHtml(stats.trainingDays, "Training days") +
+      statBoxHtml(stats.prs, "PRs this week");
+    renderMuscleVolumeList("thisWeekMuscleVolume", computeMuscleVolume(getWeekStartDate(new Date())), "Log a workout this week to see your muscle split.");
+  }
+
+  /* ---------------- Your Lifts ---------------- */
+
+  function computeYourLifts(limit) {
+    const JE = window.JarvisExercises;
+    const byExercise = {};
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      const t = new Date(w.dateTime || w.date).getTime();
+      w.exercises.forEach(function (se) {
+        if (!se.sets.length) return;
+        let best = 0;
+        se.sets.forEach(function (s) { const v = JE.estimateOneRepMax(s.weight, s.reps); if (v > best) best = v; });
+        if (!byExercise[se.exerciseId]) byExercise[se.exerciseId] = [];
+        byExercise[se.exerciseId].push({ t: t, v: best });
+      });
+    });
+    const lifts = Object.keys(byExercise).map(function (id) {
+      const sessions = byExercise[id].sort(function (a, b) { return a.t - b.t; });
+      const latest = sessions[sessions.length - 1];
+      const prev = sessions.length > 1 ? sessions[sessions.length - 2] : null;
+      const ex = JE.getExerciseById(id);
+      return { id: id, name: ex ? ex.name : "Exercise", e1rm: latest.v, delta: prev ? latest.v - prev.v : null, lastT: latest.t };
+    });
+    lifts.sort(function (a, b) { return b.lastT - a.lastT; });
+    return lifts.slice(0, limit);
+  }
+
+  function renderYourLifts() {
+    const core = window.JarvisCore;
+    const lifts = computeYourLifts(10);
+    const container = document.getElementById("yourLiftsScroll");
+    if (!lifts.length) {
+      container.innerHTML = '<div class="empty-state-compact">Log some sets to see your top lifts here.</div>';
+      return;
+    }
+    container.innerHTML = lifts.map(function (l) {
+      let deltaHtml = '<span class="lift-card-delta flat">New</span>';
+      if (l.delta !== null) {
+        const cls = l.delta > 0.5 ? "positive" : l.delta < -0.5 ? "negative" : "flat";
+        const arrow = l.delta > 0.5 ? "&#9650; " : l.delta < -0.5 ? "&#9660; " : "";
+        deltaHtml = '<span class="lift-card-delta ' + cls + '">' + arrow + (l.delta >= 0 ? "+" : "") + Math.round(l.delta) + ' lb</span>';
+      }
+      return (
+        '<button type="button" class="lift-card" data-exercise-id="' + core.escapeHtml(l.id) + '">' +
+          '<div class="lift-card-name">' + core.escapeHtml(l.name) + '</div>' +
+          '<div class="lift-card-value">' + Math.round(l.e1rm) + ' lb</div>' +
+          deltaHtml +
+          '<div class="lift-card-sub">e1RM</div>' +
+        '</button>'
+      );
+    }).join("");
+  }
+
+  /* ---------------- Body map ---------------- */
+
+  // Limited to the 12 muscle groups a body outline can meaningfully show —
+  // "Full Body" and "Cardio" from JarvisExercises.MUSCLE_GROUPS are excluded.
+  const BODY_MAP_MUSCLES = ["Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Abs / Core", "Back", "Traps", "Quadriceps", "Hamstrings", "Glutes", "Calves"];
+  const READINESS_COLORS = { fatigued: "var(--red)", recovering: "var(--yellow)", ready: "var(--green)" };
+
+  // Only Chest/Shoulders/Quadriceps/Back have a real population strength
+  // standard in this app (via their linked benchmark lift). Every other
+  // muscle falls back to a personal training-volume tier so the map never
+  // claims a population-level "Beginner..Elite" rating it can't back up.
+  const BENCHMARK_KEYS_FOR_MUSCLE = { Chest: ["bench"], Shoulders: ["ohp"], Quadriceps: ["squat"], Back: ["deadlift", "pullup"] };
+
+  function computeMuscleVolumeTier(muscleGroup) {
+    const everTotals = computeMuscleVolume(null);
+    if (!everTotals[muscleGroup]) return { hasData: false };
+    const totals8w = computeMuscleVolume(new Date(Date.now() - 56 * 86400000));
+    const avgWeekly = (totals8w[muscleGroup] || 0) / 8;
+    const score = Math.max(0, Math.min(100, (avgWeekly / 20) * 100));
+    const level = scoreToLevelLabel(score);
+    return {
+      hasData: true, score: score, level: level, basis: "volume",
+      basisText: "No population strength standard exists for " + muscleGroup + " — level estimated from ~" + (Math.round(avgWeekly * 10) / 10) +
+        " sets/week over the last 8 weeks (common hypertrophy guidelines suggest roughly 10-20 sets/week per muscle)."
+    };
+  }
+
+  function computeMuscleStrengthLevel(muscleGroup) {
+    const keys = BENCHMARK_KEYS_FOR_MUSCLE[muscleGroup];
+    if (keys && strengthSettings.compareSex !== "none") {
+      const result = computeStrengthBreakdown(null);
+      if (result) {
+        const candidates = result.breakdown.filter(function (b) { return keys.indexOf(b.benchmarkKey) !== -1 && b.hasData && b.score !== null; });
+        if (candidates.length) {
+          const best = candidates.reduce(function (a, b) { return b.score > a.score ? b : a; });
+          return {
+            hasData: true, score: best.score, level: best.level, basis: "standard",
+            basisText: "Based on your " + best.label + " estimated 1RM vs. common bodyweight-ratio strength standards."
+          };
+        }
+      }
+    }
+    return computeMuscleVolumeTier(muscleGroup);
+  }
+
+  function computeMuscleReadiness(muscleGroup) {
+    const JE = window.JarvisExercises;
+    let lastDate = null;
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      const hasPrimary = w.exercises.some(function (se) {
+        const ex = JE.getExerciseById(se.exerciseId);
+        return ex && ex.muscleGroup === muscleGroup && se.sets.length > 0;
+      });
+      if (hasPrimary) { const d = new Date(w.date); if (!lastDate || d > lastDate) lastDate = d; }
+    });
+    if (!lastDate) return { hasData: false };
+    const daysSince = Math.max(0, (Date.now() - lastDate.getTime()) / 86400000);
+    const totals7d = computeMuscleVolume(new Date(Date.now() - 7 * 86400000));
+    const recentSets = totals7d[muscleGroup] || 0;
+    const recoveryDays = Math.max(2, Math.min(5, 2 + recentSets * 0.15));
+    const pct = Math.max(0, Math.min(100, (daysSince / recoveryDays) * 100));
+    const status = pct >= 80 ? "ready" : pct >= 40 ? "recovering" : "fatigued";
+    return { hasData: true, pct: pct, status: status, daysSince: Math.round(daysSince), recentSets: recentSets };
+  }
+
+  function readinessLabel(status) { return status === "ready" ? "Ready" : status === "recovering" ? "Recovering" : "Fatigued"; }
+
+  function computeMuscleMapColors() {
+    const colors = {};
+    BODY_MAP_MUSCLES.forEach(function (m) {
+      if (bodyMapMode === "strength") {
+        const d = computeMuscleStrengthLevel(m);
+        colors[m] = d.hasData ? getMuscleColorForLevel(d.level) : null;
+      } else {
+        const d = computeMuscleReadiness(m);
+        colors[m] = d.hasData ? READINESS_COLORS[d.status] : null;
+      }
+    });
+    return colors;
+  }
+
+  function svgRegionAttrs(muscle, colors) {
+    const color = colors[muscle];
+    return { cls: "bodymap-muscle-region" + (color ? "" : " is-unrated"), style: color ? ' style="fill:' + color + '"' : "" };
+  }
+
+  // A simplified, stylized humanoid silhouette (not based on any specific
+  // app or copyrighted asset) with 12 clickable muscle regions overlaid on a
+  // muted base outline, front and back views sharing the same coordinates.
+  function bodyMapSvg(view, colors) {
+    function ellipse(cx, cy, rx, ry, muscle) {
+      const a = svgRegionAttrs(muscle, colors);
+      return '<ellipse class="' + a.cls + '" cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '"' + a.style + ' data-muscle="' + muscle + '"><title>' + muscle + '</title></ellipse>';
+    }
+    function rect(x, y, w, h, rx, muscle) {
+      const a = svgRegionAttrs(muscle, colors);
+      return '<rect class="' + a.cls + '" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + rx + '"' + a.style + ' data-muscle="' + muscle + '"><title>' + muscle + '</title></rect>';
+    }
+    const base =
+      '<circle cx="100" cy="28" r="20" class="bodymap-body-outline"/>' +
+      '<rect x="92" y="44" width="16" height="16" class="bodymap-body-outline"/>' +
+      '<path d="M70,60 L130,60 L140,118 L128,212 L72,212 L60,118 Z" class="bodymap-body-outline"/>' +
+      '<rect x="37" y="64" width="27" height="142" rx="13" class="bodymap-body-outline"/>' +
+      '<rect x="136" y="64" width="27" height="142" rx="13" class="bodymap-body-outline"/>' +
+      '<rect x="64" y="210" width="31" height="182" rx="15" class="bodymap-body-outline"/>' +
+      '<rect x="105" y="210" width="31" height="182" rx="15" class="bodymap-body-outline"/>';
+
+    let regions = "";
+    if (view === "front") {
+      regions += ellipse(50, 72, 16, 14, "Shoulders") + ellipse(150, 72, 16, 14, "Shoulders");
+      regions += rect(76, 78, 48, 40, 10, "Chest");
+      regions += ellipse(44, 128, 12, 28, "Biceps") + ellipse(156, 128, 12, 28, "Biceps");
+      regions += ellipse(42, 182, 10, 28, "Forearms") + ellipse(158, 182, 10, 28, "Forearms");
+      regions += rect(80, 122, 40, 54, 8, "Abs / Core");
+      regions += rect(68, 216, 26, 90, 12, "Quadriceps") + rect(106, 216, 26, 90, 12, "Quadriceps");
+      regions += ellipse(81, 350, 13, 35, "Calves") + ellipse(119, 350, 13, 35, "Calves");
+    } else {
+      regions += ellipse(50, 72, 16, 14, "Shoulders") + ellipse(150, 72, 16, 14, "Shoulders");
+      regions += rect(82, 58, 36, 24, 8, "Traps");
+      regions += rect(72, 84, 56, 92, 14, "Back");
+      regions += ellipse(44, 128, 12, 28, "Triceps") + ellipse(156, 128, 12, 28, "Triceps");
+      regions += rect(72, 206, 56, 34, 14, "Glutes");
+      regions += rect(68, 242, 26, 68, 12, "Hamstrings") + rect(106, 242, 26, 68, 12, "Hamstrings");
+      regions += ellipse(81, 350, 13, 35, "Calves") + ellipse(119, 350, 13, 35, "Calves");
+    }
+    return '<svg viewBox="0 0 200 400" role="img" aria-label="' + (view === "front" ? "Front" : "Back") + ' body map">' + base + regions + '</svg>';
+  }
+
+  function renderBodyMap() {
+    const colors = computeMuscleMapColors();
+    document.getElementById("bodyMapFront").innerHTML = bodyMapSvg("front", colors);
+    document.getElementById("bodyMapBack").innerHTML = bodyMapSvg("back", colors);
+    const legendEl = document.getElementById("bodyMapLegend");
+    const hintEl = document.getElementById("bodyMapHint");
+    if (bodyMapMode === "strength") {
+      legendEl.innerHTML = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"].map(function (l) {
+        return '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:' + getMuscleColorForLevel(l) + '"></span>' + l + '</div>';
+      }).join("") + '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--card-hover)"></span>Not enough data</div>';
+      hintEl.textContent = "Tap a muscle for details. Chest/Back/Shoulders/Quads use real strength standards; other muscles use your training volume.";
+    } else {
+      legendEl.innerHTML =
+        '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--red)"></span>Fatigued</div>' +
+        '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--yellow)"></span>Recovering</div>' +
+        '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--green)"></span>Ready</div>' +
+        '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--card-hover)"></span>Not trained yet</div>';
+      hintEl.textContent = "Readiness is an estimate from time since last trained and recent set volume — not a biological measurement.";
+    }
+  }
+
+  function handleBodyMapModeClick(e) {
+    const btn = e.target.closest(".bodymap-mode-btn");
+    if (!btn) return;
+    document.querySelectorAll(".bodymap-mode-btn").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    bodyMapMode = btn.getAttribute("data-mode");
+    renderBodyMap();
+  }
+
+  function handleBodyMapClick(e) {
+    const el = e.target.closest("[data-muscle]");
+    if (!el) return;
+    openMuscleDetail(el.getAttribute("data-muscle"));
+  }
+
+  function openMuscleDetail(muscleGroup) {
+    const core = window.JarvisCore;
+    const JE = window.JarvisExercises;
+    const strengthData = computeMuscleStrengthLevel(muscleGroup);
+    const readinessData = computeMuscleReadiness(muscleGroup);
+    const totals8w = computeMuscleVolume(new Date(Date.now() - 56 * 86400000));
+    const recentSets = totals8w[muscleGroup] || 0;
+
+    const contributingNames = {};
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      w.exercises.forEach(function (se) {
+        if (!se.sets.length) return;
+        const ex = JE.getExerciseById(se.exerciseId);
+        if (ex && ex.muscleGroup === muscleGroup) contributingNames[ex.name] = true;
+      });
+    });
+
+    document.getElementById("muscleDetailTitle").textContent = muscleGroup;
+    let html = "";
+    if (!strengthData.hasData) {
+      html += '<div class="empty-state">Not enough data yet — log a few sets for this muscle to see its level.</div>';
+    } else {
+      html += '<div class="muscle-detail-stat-row"><span>Level</span><span>' + core.escapeHtml(strengthData.level || "--") + ' (' + Math.round(strengthData.score) + '/100)</span></div>';
+      html += '<p class="field-hint">' + core.escapeHtml(strengthData.basisText) + '</p>';
+    }
+    html += '<div class="muscle-detail-stat-row"><span>Sets (last 8 weeks)</span><span>' + (Math.round(recentSets * 10) / 10) + '</span></div>';
+    if (readinessData.hasData) {
+      html += '<div class="muscle-detail-stat-row"><span>Readiness</span><span>' + readinessLabel(readinessData.status) + '</span></div>';
+      html += '<div class="muscle-detail-stat-row"><span>Last trained</span><span>' + readinessData.daysSince + ' day' + (readinessData.daysSince === 1 ? "" : "s") + ' ago</span></div>';
+      html += '<p class="field-hint">Readiness is an estimate from time since last trained and recent set volume — not a biological measurement.</p>';
+    } else {
+      html += '<div class="muscle-detail-stat-row"><span>Readiness</span><span>Not trained yet</span></div>';
+    }
+    const names = Object.keys(contributingNames);
+    if (names.length) {
+      html += '<h3 class="checklist-title" style="margin-top:12px;">Exercises</h3><div class="item-list">' +
+        names.map(function (n) { return '<div class="list-item"><span class="list-item-title">' + core.escapeHtml(n) + '</span></div>'; }).join("") +
+        '</div>';
+    }
+    document.getElementById("muscleDetailBody").innerHTML = html;
+    core.openModal("muscleDetailModal");
+  }
+
   function renderProgressTab() {
     renderExercisePrList();
     populateProgressExerciseSelect();
-    renderExerciseProgressChart();
+    renderExerciseDetail();
     renderVolumeChart();
     populateProgressMeasurementSelect();
     renderMeasurementChart();
     renderStrengthScoreChart();
+    renderFrequencyChart();
+    renderTrendsMuscleVolume();
+    renderBodyweightChart("trendsBodyweightChart", null);
+    renderThisWeekTab();
+    renderYourLifts();
+    renderBodyMap();
+    renderBodyweightTab();
   }
 
   /* ---------------- render all / init ---------------- */
@@ -2600,12 +3267,41 @@
 
     document.getElementById("bodyweightForm").addEventListener("submit", handleBodyweightSubmit);
     document.getElementById("bodyweightList").addEventListener("click", handleBodyweightListClick);
+    document.getElementById("bodyweightFormCancelBtn").addEventListener("click", resetBodyweightForm);
+    document.getElementById("bodyweightRangeToggle").addEventListener("click", handleBodyweightRangeClick);
     document.getElementById("measurementForm").addEventListener("submit", handleMeasurementSubmit);
     document.getElementById("measurementList").addEventListener("click", handleMeasurementListClick);
+    document.getElementById("measurementFormCancelBtn").addEventListener("click", resetMeasurementForm);
     document.getElementById("strengthSettingsForm").addEventListener("submit", handleStrengthSettingsSubmit);
 
-    document.getElementById("progressExerciseSelect").addEventListener("change", renderExerciseProgressChart);
+    document.getElementById("progressExerciseSelect").addEventListener("change", renderExerciseDetail);
     document.getElementById("progressMeasurementSelect").addEventListener("change", renderMeasurementChart);
+    document.getElementById("exerciseChartRangeToggle").addEventListener("click", handleExerciseRangeClick);
+    document.getElementById("exercisePrList").addEventListener("click", function (e) {
+      const row = e.target.closest("[data-exercise-id]");
+      if (row) selectExerciseAndRenderDetail(row.getAttribute("data-exercise-id"));
+    });
+
+    const progressMainBtns = Array.prototype.slice.call(document.querySelectorAll(".progress-main-tab-btn"));
+    const progressMainPanels = Array.prototype.slice.call(document.querySelectorAll(".progress-main-tab-panel"));
+    window.JarvisCore.setupTabGroup(progressMainBtns, progressMainPanels, function () { renderProgressTab(); });
+    const progressAnalyticsBtns = Array.prototype.slice.call(document.querySelectorAll(".progress-analytics-tab-btn"));
+    const progressAnalyticsPanels = Array.prototype.slice.call(document.querySelectorAll(".progress-analytics-tab-panel"));
+    window.JarvisCore.setupTabGroup(progressAnalyticsBtns, progressAnalyticsPanels, function () { renderProgressTab(); });
+
+    document.getElementById("bodyMapModeToggle").addEventListener("click", handleBodyMapModeClick);
+    document.getElementById("bodyMapFront").addEventListener("click", handleBodyMapClick);
+    document.getElementById("bodyMapBack").addEventListener("click", handleBodyMapClick);
+    document.getElementById("muscleDetailCloseBtn").addEventListener("click", function () { window.JarvisCore.closeModal("muscleDetailModal"); });
+
+    document.getElementById("yourLiftsScroll").addEventListener("click", function (e) {
+      const card = e.target.closest(".lift-card");
+      if (card) jumpToExercise(card.getAttribute("data-exercise-id"));
+    });
+    document.getElementById("yourLiftsAllBtn").addEventListener("click", function () {
+      const tabBtn = document.getElementById("progressMainTabExercises");
+      if (tabBtn) tabBtn.click();
+    });
 
     renderSessionExerciseList();
     renderAll();
