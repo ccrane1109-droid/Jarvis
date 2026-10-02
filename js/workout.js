@@ -2443,21 +2443,26 @@
     window.JarvisCore.showToast("Strength settings saved.");
   }
 
-  // 5-stop color scale shared by the strength distribution bar and the body
-  // map's Strength mode (gray -> blue -> purple -> green, never orange/red —
-  // those are reserved for semantic warnings elsewhere in the app).
-  const LEVEL_COLORS = { Beginner: "#5b6475", Novice: "#3a5f99", Intermediate: "#4f8cff", Advanced: "#9b6bff", Elite: "#33d17a" };
+  // 6-stop color scale shared by the strength distribution bar and the body
+  // map's Strength mode (gray -> blue -> purple -> green -> gold, never
+  // orange/red — those are reserved for semantic warnings elsewhere).
+  const STRENGTH_LEVELS = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite", "World Class"];
+  const LEVEL_COLORS = {
+    Beginner: "#5b6475", Novice: "#3a5f99", Intermediate: "#4f8cff",
+    Advanced: "#9b6bff", Elite: "#33d17a", "World Class": "#ffc857"
+  };
   function getMuscleColorForLevel(level) { return LEVEL_COLORS[level] || null; }
   function scoreToLevelLabel(score) {
-    if (score >= 80) return "Elite";
-    if (score >= 60) return "Advanced";
-    if (score >= 40) return "Intermediate";
-    if (score >= 20) return "Novice";
+    if (score >= 100 * 5 / 6) return "World Class";
+    if (score >= 100 * 4 / 6) return "Elite";
+    if (score >= 100 * 3 / 6) return "Advanced";
+    if (score >= 100 * 2 / 6) return "Intermediate";
+    if (score >= 100 * 1 / 6) return "Novice";
     return "Beginner";
   }
 
   // Visualizes the real 0-100 score the app already computes against its own
-  // 5 bands, with a "You" marker — not a fabricated population percentile.
+  // 6 bands, with a "You" marker — not a fabricated population percentile.
   function renderStrengthDistributionBar(result) {
     const container = document.getElementById("strengthDistributionBar");
     if (!container) return;
@@ -2465,14 +2470,13 @@
       container.innerHTML = "";
       return;
     }
-    const bands = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"];
-    const bandsHtml = bands.map(function (l) { return '<div class="strength-distribution-band" style="background:' + getMuscleColorForLevel(l) + '"></div>'; }).join("");
+    const bandsHtml = STRENGTH_LEVELS.map(function (l) { return '<div class="strength-distribution-band" style="background:' + getMuscleColorForLevel(l) + '"></div>'; }).join("");
     const pct = Math.max(2, Math.min(98, result.overallScore));
     container.innerHTML =
       '<div class="strength-distribution-track">' + bandsHtml +
         '<div class="strength-distribution-marker" style="left:' + pct + '%">You</div>' +
       '</div>' +
-      '<div class="strength-distribution-labels"><span>Beginner</span><span>Elite</span></div>';
+      '<div class="strength-distribution-labels"><span>Beginner</span><span>World Class</span></div>';
   }
 
   /* ---------------- charts ---------------- */
@@ -2934,64 +2938,103 @@
 
   /* ---------------- Body map ---------------- */
 
-  // Limited to the 12 muscle groups a body outline can meaningfully show —
-  // "Full Body" and "Cardio" from JarvisExercises.MUSCLE_GROUPS are excluded.
-  const BODY_MAP_MUSCLES = ["Chest", "Shoulders", "Biceps", "Triceps", "Forearms", "Abs / Core", "Back", "Traps", "Quadriceps", "Hamstrings", "Glutes", "Calves"];
+  // The 17 anatomical regions the map shows — finer than JarvisExercises'
+  // coarse MUSCLE_GROUPS (which only This Week / Trends use). Every exercise
+  // is classified into these via JarvisExercises.getFineMuscleTargets, which
+  // has its own per-exercise mapping plus a coarse-group fallback — see
+  // exercises.js for the full table. "Full Body" / "Cardio" exercises still
+  // contribute wherever their real primary muscles are (e.g. a clean credits
+  // Traps + Quads); cardio-only movements contribute secondary credit only.
+  const FINE_MUSCLES = window.JarvisExercises ? window.JarvisExercises.FINE_MUSCLES : [];
+  const MUSCLE_DISPLAY_NAMES = {
+    Chest: "Chest", FrontDelts: "Front Delts", SideDelts: "Side Delts", RearDelts: "Rear Delts",
+    Traps: "Traps", Lats: "Lats", UpperBack: "Upper Back", LowerBack: "Lower Back",
+    Biceps: "Biceps", Triceps: "Triceps", Forearms: "Forearms", Abs: "Abs", Obliques: "Obliques",
+    Glutes: "Glutes", Quads: "Quads", Hamstrings: "Hamstrings", Calves: "Calves"
+  };
+  function muscleDisplayName(m) { return MUSCLE_DISPLAY_NAMES[m] || m; }
+
   const READINESS_COLORS = { fatigued: "var(--red)", recovering: "var(--yellow)", ready: "var(--green)" };
 
-  // Only Chest/Shoulders/Quadriceps/Back have a real population strength
-  // standard in this app (via their linked benchmark lift). Every other
-  // muscle falls back to a personal training-volume tier so the map never
-  // claims a population-level "Beginner..Elite" rating it can't back up.
-  const BENCHMARK_KEYS_FOR_MUSCLE = { Chest: ["bench"], Shoulders: ["ohp"], Quadriceps: ["squat"], Back: ["deadlift", "pullup"] };
+  // Only 4 regions have a real population strength standard in this app (via
+  // their linked benchmark lift). Every other region falls back to a
+  // personal training-volume tier so the map never claims a population-level
+  // "Beginner..World Class" rating it can't actually back up.
+  const BENCHMARK_KEYS_FOR_FINE_MUSCLE = { Chest: ["bench"], FrontDelts: ["ohp"], Quads: ["squat"], Lats: ["deadlift", "pullup"] };
 
-  function computeMuscleVolumeTier(muscleGroup) {
-    const everTotals = computeMuscleVolume(null);
-    if (!everTotals[muscleGroup]) return { hasData: false };
-    const totals8w = computeMuscleVolume(new Date(Date.now() - 56 * 86400000));
-    const avgWeekly = (totals8w[muscleGroup] || 0) / 8;
+  // Fine-grained equivalent of computeMuscleVolume (coarse, used by This Week
+  // / Trends — left untouched). Primary credit = 1 set, secondary = 0.5.
+  function computeFineMuscleVolume(sinceDate) {
+    const JE = window.JarvisExercises;
+    const totals = {};
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      if (sinceDate && new Date(w.date) < sinceDate) return;
+      w.exercises.forEach(function (se) {
+        if (!se.sets.length) return;
+        const targets = JE.getFineMuscleTargets(se.exerciseId);
+        const n = se.sets.length;
+        targets.primary.forEach(function (m) { totals[m] = (totals[m] || 0) + n; });
+        targets.secondary.forEach(function (m) { totals[m] = (totals[m] || 0) + n * 0.5; });
+      });
+    });
+    return totals;
+  }
+
+  function computeMuscleVolumeTier(muscle) {
+    const everTotals = computeFineMuscleVolume(null);
+    if (!everTotals[muscle]) return { hasData: false };
+    const totals8w = computeFineMuscleVolume(new Date(Date.now() - 56 * 86400000));
+    const avgWeekly = (totals8w[muscle] || 0) / 8;
     const score = Math.max(0, Math.min(100, (avgWeekly / 20) * 100));
     const level = scoreToLevelLabel(score);
     return {
-      hasData: true, score: score, level: level, basis: "volume",
-      basisText: "No population strength standard exists for " + muscleGroup + " — level estimated from ~" + (Math.round(avgWeekly * 10) / 10) +
+      hasData: true, score: score, level: level, basis: "volume", avgWeekly: avgWeekly,
+      basisText: "No population strength standard exists for " + muscleDisplayName(muscle) + " — level estimated from ~" + (Math.round(avgWeekly * 10) / 10) +
         " sets/week over the last 8 weeks (common hypertrophy guidelines suggest roughly 10-20 sets/week per muscle)."
     };
   }
 
-  function computeMuscleStrengthLevel(muscleGroup) {
-    const keys = BENCHMARK_KEYS_FOR_MUSCLE[muscleGroup];
+  function computeMuscleStrengthLevel(muscle, cutoffDate) {
+    const keys = BENCHMARK_KEYS_FOR_FINE_MUSCLE[muscle];
     if (keys && strengthSettings.compareSex !== "none") {
-      const result = computeStrengthBreakdown(null);
+      const result = computeStrengthBreakdown(cutoffDate || null);
       if (result) {
         const candidates = result.breakdown.filter(function (b) { return keys.indexOf(b.benchmarkKey) !== -1 && b.hasData && b.score !== null; });
         if (candidates.length) {
           const best = candidates.reduce(function (a, b) { return b.score > a.score ? b : a; });
           return {
-            hasData: true, score: best.score, level: best.level, basis: "standard",
+            hasData: true, score: best.score, level: best.level, basis: "standard", liftLabel: best.label,
             basisText: "Based on your " + best.label + " estimated 1RM vs. common bodyweight-ratio strength standards."
           };
         }
       }
+      // Standards-eligible muscle but no benchmark lift logged yet (e.g. leg
+      // press without ever squatting) — fall through to the volume tier for
+      // the CURRENT snapshot, same as any other muscle. A historical "as of"
+      // snapshot (cutoffDate set, used only for the 4-weeks-ago comparison)
+      // stays "not enough data" instead, since a volume-tier number wouldn't
+      // be an apples-to-apples comparison against a standards-based current score.
     }
-    return computeMuscleVolumeTier(muscleGroup);
+    if (cutoffDate) return { hasData: false };
+    return computeMuscleVolumeTier(muscle);
   }
 
-  function computeMuscleReadiness(muscleGroup) {
+  function computeMuscleReadiness(muscle) {
     const JE = window.JarvisExercises;
     let lastDate = null;
     workouts.forEach(function (w) {
       if (w.schema !== 2) return;
       const hasPrimary = w.exercises.some(function (se) {
-        const ex = JE.getExerciseById(se.exerciseId);
-        return ex && ex.muscleGroup === muscleGroup && se.sets.length > 0;
+        if (!se.sets.length) return false;
+        return JE.getFineMuscleTargets(se.exerciseId).primary.indexOf(muscle) !== -1;
       });
       if (hasPrimary) { const d = new Date(w.date); if (!lastDate || d > lastDate) lastDate = d; }
     });
     if (!lastDate) return { hasData: false };
     const daysSince = Math.max(0, (Date.now() - lastDate.getTime()) / 86400000);
-    const totals7d = computeMuscleVolume(new Date(Date.now() - 7 * 86400000));
-    const recentSets = totals7d[muscleGroup] || 0;
+    const totals7d = computeFineMuscleVolume(new Date(Date.now() - 7 * 86400000));
+    const recentSets = totals7d[muscle] || 0;
     const recoveryDays = Math.max(2, Math.min(5, 2 + recentSets * 0.15));
     const pct = Math.max(0, Math.min(100, (daysSince / recoveryDays) * 100));
     const status = pct >= 80 ? "ready" : pct >= 40 ? "recovering" : "fatigued";
@@ -3000,9 +3043,47 @@
 
   function readinessLabel(status) { return status === "ready" ? "Ready" : status === "recovering" ? "Recovering" : "Fatigued"; }
 
+  // "What would move them to the next level" — a concrete, honest next step
+  // rather than a vague platitude, grounded in whichever basis (standard vs.
+  // volume) produced the current level.
+  function nextLevelHint(data, muscle) {
+    if (!data.hasData) return "Log a few sets for " + muscleDisplayName(muscle) + " to see a level here.";
+    const idx = STRENGTH_LEVELS.indexOf(data.level);
+    if (idx === -1) return null;
+    if (idx === STRENGTH_LEVELS.length - 1) return "Already at the top tier tracked here (World Class).";
+    const nextLabel = STRENGTH_LEVELS[idx + 1];
+    if (data.basis === "standard") {
+      return "Reaching " + nextLabel + " means raising your " + data.liftLabel + " 1RM relative to your body weight.";
+    }
+    return "Reaching " + nextLabel + " means averaging more weekly sets for " + muscleDisplayName(muscle) + " (you're at ~" + (Math.round(data.avgWeekly * 10) / 10) + "/week now).";
+  }
+
+  // Trend vs. ~4 weeks ago, using the same basis (standard or volume) as the
+  // current level so the comparison is apples-to-apples.
+  function recentProgressText(data, muscle) {
+    if (!data.hasData) return null;
+    const cutoff = new Date(Date.now() - 28 * 86400000);
+    let past;
+    if (data.basis === "standard") {
+      past = computeMuscleStrengthLevel(muscle, cutoff.toISOString().slice(0, 10));
+    } else {
+      // Isolate the 8-week window ending 4 weeks ago: everything from 12
+      // weeks ago to now, minus everything from 4 weeks ago to now.
+      const totalsFrom12w = computeFineMuscleVolume(new Date(cutoff.getTime() - 56 * 86400000));
+      const totalsFrom4w = computeFineMuscleVolume(cutoff);
+      const windowSets = (totalsFrom12w[muscle] || 0) - (totalsFrom4w[muscle] || 0);
+      const pastWeekly = windowSets / 8;
+      past = { hasData: true, score: Math.max(0, Math.min(100, (pastWeekly / 20) * 100)) };
+    }
+    if (!past.hasData) return "No 4-week-ago comparison yet.";
+    const delta = data.score - past.score;
+    if (Math.abs(delta) < 2) return "Holding steady vs. 4 weeks ago.";
+    return (delta > 0 ? "Up " : "Down ") + Math.abs(Math.round(delta)) + " points vs. 4 weeks ago.";
+  }
+
   function computeMuscleMapColors() {
     const colors = {};
-    BODY_MAP_MUSCLES.forEach(function (m) {
+    FINE_MUSCLES.forEach(function (m) {
       if (bodyMapMode === "strength") {
         const d = computeMuscleStrengthLevel(m);
         colors[m] = d.hasData ? getMuscleColorForLevel(d.level) : null;
@@ -3014,64 +3095,107 @@
     return colors;
   }
 
+  /* ---- anatomical SVG (original artwork, not based on any copyrighted asset) ---- */
+
+  // Builds a smooth closed path through a small list of [x,y] anchor points:
+  // each edge is a quadratic curve from one anchor, through the midpoint to
+  // the next — a standard trick for turning a handful of corner points into
+  // an organic, rounded "blob" outline without hand-plotting bezier handles.
+  function smoothClosedPath(points) {
+    function mid(a, b) { return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+    const n = points.length;
+    if (n < 3) return "";
+    const start = mid(points[n - 1], points[0]);
+    let d = "M" + start[0].toFixed(1) + "," + start[1].toFixed(1) + " ";
+    for (let i = 0; i < n; i++) {
+      const p = points[i];
+      const next = points[(i + 1) % n];
+      const m = mid(p, next);
+      d += "Q" + p[0].toFixed(1) + "," + p[1].toFixed(1) + " " + m[0].toFixed(1) + "," + m[1].toFixed(1) + " ";
+    }
+    return d + "Z";
+  }
+
+  function mirrorPoints(points) { return points.map(function (p) { return [220 - p[0], p[1]]; }); }
+
   function svgRegionAttrs(muscle, colors) {
     const color = colors[muscle];
     return { cls: "bodymap-muscle-region" + (color ? "" : " is-unrated"), style: color ? ' style="fill:' + color + '"' : "" };
   }
 
-  // A simplified, stylized humanoid silhouette (not based on any specific
-  // app or copyrighted asset) with 12 clickable muscle regions overlaid on a
-  // muted base outline, front and back views sharing the same coordinates.
-  function bodyMapSvg(view, colors) {
-    function ellipse(cx, cy, rx, ry, muscle) {
-      const a = svgRegionAttrs(muscle, colors);
-      return '<ellipse class="' + a.cls + '" cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '"' + a.style + ' data-muscle="' + muscle + '"><title>' + muscle + '</title></ellipse>';
-    }
-    function rect(x, y, w, h, rx, muscle) {
-      const a = svgRegionAttrs(muscle, colors);
-      return '<rect class="' + a.cls + '" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + rx + '"' + a.style + ' data-muscle="' + muscle + '"><title>' + muscle + '</title></rect>';
-    }
-    const base =
-      '<circle cx="100" cy="28" r="20" class="bodymap-body-outline"/>' +
-      '<rect x="92" y="44" width="16" height="16" class="bodymap-body-outline"/>' +
-      '<path d="M70,60 L130,60 L140,118 L128,212 L72,212 L60,118 Z" class="bodymap-body-outline"/>' +
-      '<rect x="37" y="64" width="27" height="142" rx="13" class="bodymap-body-outline"/>' +
-      '<rect x="136" y="64" width="27" height="142" rx="13" class="bodymap-body-outline"/>' +
-      '<rect x="64" y="210" width="31" height="182" rx="15" class="bodymap-body-outline"/>' +
-      '<rect x="105" y="210" width="31" height="182" rx="15" class="bodymap-body-outline"/>';
+  function regionPath(muscle, points, colors) {
+    const a = svgRegionAttrs(muscle, colors);
+    return '<path class="' + a.cls + '" d="' + smoothClosedPath(points) + '"' + a.style + ' data-muscle="' + muscle + '"><title>' + muscleDisplayName(muscle) + '</title></path>';
+  }
 
-    let regions = "";
-    if (view === "front") {
-      regions += ellipse(50, 72, 16, 14, "Shoulders") + ellipse(150, 72, 16, 14, "Shoulders");
-      regions += rect(76, 78, 48, 40, 10, "Chest");
-      regions += ellipse(44, 128, 12, 28, "Biceps") + ellipse(156, 128, 12, 28, "Biceps");
-      regions += ellipse(42, 182, 10, 28, "Forearms") + ellipse(158, 182, 10, 28, "Forearms");
-      regions += rect(80, 122, 40, 54, 8, "Abs / Core");
-      regions += rect(68, 216, 26, 90, 12, "Quadriceps") + rect(106, 216, 26, 90, 12, "Quadriceps");
-      regions += ellipse(81, 350, 13, 35, "Calves") + ellipse(119, 350, 13, 35, "Calves");
-    } else {
-      regions += ellipse(50, 72, 16, 14, "Shoulders") + ellipse(150, 72, 16, 14, "Shoulders");
-      regions += rect(82, 58, 36, 24, 8, "Traps");
-      regions += rect(72, 84, 56, 92, 14, "Back");
-      regions += ellipse(44, 128, 12, 28, "Triceps") + ellipse(156, 128, 12, 28, "Triceps");
-      regions += rect(72, 206, 56, 34, 14, "Glutes");
-      regions += rect(68, 242, 26, 68, 12, "Hamstrings") + rect(106, 242, 26, 68, 12, "Hamstrings");
-      regions += ellipse(81, 350, 13, 35, "Calves") + ellipse(119, 350, 13, 35, "Calves");
-    }
-    return '<svg viewBox="0 0 200 400" role="img" aria-label="' + (view === "front" ? "Front" : "Back") + ' body map">' + base + regions + '</svg>';
+  function bilateral(muscle, leftPoints, colors) {
+    return regionPath(muscle, leftPoints, colors) + regionPath(muscle, mirrorPoints(leftPoints), colors);
+  }
+
+  function basePartPath(points) { return '<path class="bodymap-body-part" d="' + smoothClosedPath(points) + '"/>'; }
+  function bilateralBase(leftPoints) { return basePartPath(leftPoints) + basePartPath(mirrorPoints(leftPoints)); }
+
+  // Shared base silhouette (head/neck/torso/arms/legs) in a muted tone, with
+  // the colored muscle regions painted on top — same underlying body for
+  // front and back, only the overlay regions differ.
+  function bodyBaseSvg() {
+    return (
+      '<circle cx="110" cy="24" r="17" class="bodymap-body-part"/>' +
+      basePartPath([[98, 32], [122, 32], [120, 68], [100, 68]]) +
+      basePartPath([[50, 64], [170, 64], [148, 102], [130, 168], [142, 200], [78, 200], [90, 168], [72, 102]]) +
+      bilateralBase([[52, 64], [38, 180], [42, 268], [36, 300], [48, 300], [50, 270], [54, 180], [70, 100]]) +
+      bilateralBase([[82, 200], [78, 328], [82, 420], [68, 454], [94, 450], [98, 420], [96, 328], [98, 202]])
+    );
+  }
+
+  // 17 original, simplified anatomical shapes per view — not traced from or
+  // resembling any specific copyrighted illustration, just a stylized
+  // muscle-chart convention (teardrop limbs, wing-shaped lats, diamond traps)
+  // scaled to fit an iPhone-width card without scrolling.
+  function bodyMapFrontSvg(colors) {
+    const regions =
+      bilateral("FrontDelts", [[64, 64], [74, 70], [76, 94], [62, 96], [58, 76]], colors) +
+      bilateral("SideDelts", [[40, 68], [64, 64], [58, 76], [62, 96], [44, 98]], colors) +
+      bilateral("Chest", [[66, 70], [100, 66], [104, 98], [86, 110], [68, 100]], colors) +
+      bilateral("Biceps", [[46, 106], [62, 104], [58, 172], [44, 174]], colors) +
+      bilateral("Forearms", [[44, 182], [56, 180], [52, 264], [40, 266]], colors) +
+      regionPath("Abs", [[92, 112], [128, 112], [126, 196], [94, 196]], colors) +
+      bilateral("Obliques", [[78, 112], [92, 112], [94, 196], [82, 192]], colors) +
+      bilateral("Quads", [[84, 204], [104, 204], [100, 322], [80, 324]], colors) +
+      bilateral("Calves", [[84, 336], [100, 336], [96, 414], [86, 414]], colors);
+    // Thin six-pack divider lines drawn over the Abs fill — purely cosmetic.
+    const absLines =
+      '<line x1="92" y1="137" x2="128" y2="137" class="bodymap-muscle-divider"/>' +
+      '<line x1="91" y1="162" x2="127" y2="162" class="bodymap-muscle-divider"/>' +
+      '<line x1="110" y1="113" x2="110" y2="195" class="bodymap-muscle-divider"/>';
+    return '<svg viewBox="0 0 220 480" role="img" aria-label="Front body map">' + bodyBaseSvg() + regions + absLines + '</svg>';
+  }
+
+  function bodyMapBackSvg(colors) {
+    const regions =
+      bilateral("RearDelts", [[40, 68], [58, 66], [62, 96], [44, 98]], colors) +
+      regionPath("Traps", [[96, 58], [124, 58], [134, 100], [110, 112], [86, 100]], colors) +
+      bilateral("Lats", [[70, 102], [94, 106], [98, 170], [84, 176], [66, 140]], colors) +
+      bilateral("UpperBack", [[86, 100], [108, 108], [106, 140], [88, 138]], colors) +
+      regionPath("LowerBack", [[94, 172], [126, 172], [122, 198], [98, 198]], colors) +
+      bilateral("Triceps", [[46, 106], [62, 104], [58, 172], [44, 174]], colors) +
+      bilateral("Glutes", [[78, 200], [108, 200], [106, 232], [80, 230]], colors) +
+      bilateral("Hamstrings", [[82, 236], [104, 234], [100, 322], [80, 324]], colors) +
+      bilateral("Calves", [[84, 336], [100, 336], [96, 414], [86, 414]], colors);
+    return '<svg viewBox="0 0 220 480" role="img" aria-label="Back body map">' + bodyBaseSvg() + regions + '</svg>';
   }
 
   function renderBodyMap() {
     const colors = computeMuscleMapColors();
-    document.getElementById("bodyMapFront").innerHTML = bodyMapSvg("front", colors);
-    document.getElementById("bodyMapBack").innerHTML = bodyMapSvg("back", colors);
+    document.getElementById("bodyMapFront").innerHTML = bodyMapFrontSvg(colors);
+    document.getElementById("bodyMapBack").innerHTML = bodyMapBackSvg(colors);
     const legendEl = document.getElementById("bodyMapLegend");
     const hintEl = document.getElementById("bodyMapHint");
     if (bodyMapMode === "strength") {
-      legendEl.innerHTML = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"].map(function (l) {
+      legendEl.innerHTML = STRENGTH_LEVELS.map(function (l) {
         return '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:' + getMuscleColorForLevel(l) + '"></span>' + l + '</div>';
       }).join("") + '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--card-hover)"></span>Not enough data</div>';
-      hintEl.textContent = "Tap a muscle for details. Chest/Back/Shoulders/Quads use real strength standards; other muscles use your training volume.";
+      hintEl.textContent = "Tap a muscle for details. Chest/Lats/Front Delts/Quads use real strength standards; other muscles use your training volume.";
     } else {
       legendEl.innerHTML =
         '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--red)"></span>Fatigued</div>' +
@@ -3097,31 +3221,34 @@
     openMuscleDetail(el.getAttribute("data-muscle"));
   }
 
-  function openMuscleDetail(muscleGroup) {
+  function openMuscleDetail(muscle) {
     const core = window.JarvisCore;
     const JE = window.JarvisExercises;
-    const strengthData = computeMuscleStrengthLevel(muscleGroup);
-    const readinessData = computeMuscleReadiness(muscleGroup);
-    const totals8w = computeMuscleVolume(new Date(Date.now() - 56 * 86400000));
-    const recentSets = totals8w[muscleGroup] || 0;
+    const strengthData = computeMuscleStrengthLevel(muscle);
+    const readinessData = computeMuscleReadiness(muscle);
+    const totals8w = computeFineMuscleVolume(new Date(Date.now() - 56 * 86400000));
+    const recentSets = totals8w[muscle] || 0;
 
     const contributingNames = {};
     workouts.forEach(function (w) {
       if (w.schema !== 2) return;
       w.exercises.forEach(function (se) {
         if (!se.sets.length) return;
+        if (JE.getFineMuscleTargets(se.exerciseId).primary.indexOf(muscle) === -1) return;
         const ex = JE.getExerciseById(se.exerciseId);
-        if (ex && ex.muscleGroup === muscleGroup) contributingNames[ex.name] = true;
+        if (ex) contributingNames[ex.name] = true;
       });
     });
 
-    document.getElementById("muscleDetailTitle").textContent = muscleGroup;
+    document.getElementById("muscleDetailTitle").textContent = muscleDisplayName(muscle);
     let html = "";
     if (!strengthData.hasData) {
       html += '<div class="empty-state">Not enough data yet — log a few sets for this muscle to see its level.</div>';
     } else {
       html += '<div class="muscle-detail-stat-row"><span>Level</span><span>' + core.escapeHtml(strengthData.level || "--") + ' (' + Math.round(strengthData.score) + '/100)</span></div>';
+      html += '<div class="muscle-detail-stat-row"><span>Recent progress</span><span>' + core.escapeHtml(recentProgressText(strengthData, muscle) || "--") + '</span></div>';
       html += '<p class="field-hint">' + core.escapeHtml(strengthData.basisText) + '</p>';
+      html += '<p class="field-hint">' + core.escapeHtml(nextLevelHint(strengthData, muscle) || "") + '</p>';
     }
     html += '<div class="muscle-detail-stat-row"><span>Sets (last 8 weeks)</span><span>' + (Math.round(recentSets * 10) / 10) + '</span></div>';
     if (readinessData.hasData) {
@@ -3133,7 +3260,7 @@
     }
     const names = Object.keys(contributingNames);
     if (names.length) {
-      html += '<h3 class="checklist-title" style="margin-top:12px;">Exercises</h3><div class="item-list">' +
+      html += '<h3 class="checklist-title" style="margin-top:12px;">Exercises contributing</h3><div class="item-list">' +
         names.map(function (n) { return '<div class="list-item"><span class="list-item-title">' + core.escapeHtml(n) + '</span></div>'; }).join("") +
         '</div>';
     }
