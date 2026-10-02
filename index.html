@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 
@@ -497,7 +497,7 @@
             </details>
           </div>
 
-          <div class="card">
+          <div class="card bodymap-card">
             <div class="card-title-row">
               <h2 class="card-title">Body Map</h2>
               <div class="segmented-control bodymap-mode-toggle" id="bodyMapModeToggle">
@@ -505,18 +505,24 @@
                 <button type="button" class="segmented-btn bodymap-mode-btn" data-mode="readiness">Readiness</button>
               </div>
             </div>
-            <div class="bodymap-row">
-              <div class="bodymap-col">
-                <div id="bodyMapFront" class="bodymap-svg-wrap"></div>
-                <div class="bodymap-view-label">Front</div>
-              </div>
-              <div class="bodymap-col">
-                <div id="bodyMapBack" class="bodymap-svg-wrap"></div>
-                <div class="bodymap-view-label">Back</div>
-              </div>
+            <div class="segmented-control bodymap-side-toggle" id="bodyMapSideToggle">
+              <button type="button" class="segmented-btn bodymap-side-btn active" data-side="front">Front</button>
+              <button type="button" class="segmented-btn bodymap-side-btn" data-side="back">Back</button>
             </div>
+            <div id="bodyMapView" class="bodymap-view-wrap"></div>
             <div id="bodyMapLegend" class="bodymap-legend"></div>
-            <p class="field-hint" id="bodyMapHint">Tap a muscle to see details.</p>
+            <p class="field-hint" id="bodyMapHint">Tap a muscle for details.</p>
+
+            <div id="muscleSheet" class="muscle-sheet hidden">
+              <div class="muscle-sheet-header">
+                <div>
+                  <div class="muscle-sheet-title" id="muscleSheetTitle">Chest</div>
+                  <div class="muscle-sheet-subtitle" id="muscleSheetSubtitle"></div>
+                </div>
+                <button type="button" class="btn-icon" id="muscleSheetCloseBtn" aria-label="Clear selection">&times;</button>
+              </div>
+              <div id="muscleSheetBody"></div>
+            </div>
           </div>
 
           <div class="card">
@@ -798,18 +804,6 @@
       </div>
     </div>
   </section>
-
-  <!-- ===================== WORKOUT: modals ===================== -->
-  <div class="modal-overlay hidden sheet-overlay" id="muscleDetailModal" role="dialog" aria-modal="true" aria-labelledby="muscleDetailTitle">
-    <div class="modal-box sheet-box">
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <div class="card-title-row">
-        <h2 id="muscleDetailTitle">Muscle</h2>
-        <button type="button" class="btn-icon" id="muscleDetailCloseBtn" aria-label="Close">&times;</button>
-      </div>
-      <div id="muscleDetailBody"></div>
-    </div>
-  </div>
 
   <!-- ===================== NUTRITION ===================== -->
   <section id="panel-nutrition" class="tab-panel" role="tabpanel" aria-labelledby="navBtnNutrition">
@@ -3380,20 +3374,20 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=17"></script>
-<script type="module" src="js/auth.js?v=17"></script>
-<script src="js/app.js?v=17"></script>
-<script src="js/exercises.js?v=17"></script>
-<script src="js/workout.js?v=17"></script>
-<script src="js/nutrition.js?v=17"></script>
-<script src="js/habits.js?v=17"></script>
-<script src="js/business.js?v=17"></script>
-<script src="js/trading.js?v=17"></script>
-<script src="js/blobstore.js?v=17"></script>
-<script src="js/video-api-client.js?v=17"></script>
-<script src="js/video-connections.js?v=17"></script>
-<script src="js/video.js?v=17"></script>
-<script src="js/video-studio.js?v=17"></script>
-<script src="js/form-check.js?v=17"></script>
+<script src="js/firebase-config.js?v=18"></script>
+<script type="module" src="js/auth.js?v=18"></script>
+<script src="js/app.js?v=18"></script>
+<script src="js/exercises.js?v=18"></script>
+<script src="js/workout.js?v=18"></script>
+<script src="js/nutrition.js?v=18"></script>
+<script src="js/habits.js?v=18"></script>
+<script src="js/business.js?v=18"></script>
+<script src="js/trading.js?v=18"></script>
+<script src="js/blobstore.js?v=18"></script>
+<script src="js/video-api-client.js?v=18"></script>
+<script src="js/video-connections.js?v=18"></script>
+<script src="js/video.js?v=18"></script>
+<script src="js/video-studio.js?v=18"></script>
+<script src="js/form-check.js?v=18"></script>
 </body>
 </html>
