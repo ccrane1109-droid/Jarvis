@@ -249,35 +249,38 @@
 
   // Approximate bodyweight-ratio standards (load / bodyweight). See file header.
   // Order: [Beginner, Novice, Intermediate, Advanced, Elite]
+  // 6th ("World Class") threshold per lift extrapolates the same spacing
+  // pattern as the other bands — still an approximate, general-context
+  // number like the rest of this table, not a scientifically precise cutoff.
   const STRENGTH_STANDARDS = {
     squat: {
       label: "Barbell Back Squat",
-      male: [0.5, 0.75, 1.25, 1.75, 2.25],
-      female: [0.4, 0.6, 0.9, 1.25, 1.6]
+      male: [0.5, 0.75, 1.25, 1.75, 2.25, 2.75],
+      female: [0.4, 0.6, 0.9, 1.25, 1.6, 2.0]
     },
     bench: {
       label: "Barbell Bench Press",
-      male: [0.5, 0.75, 1.0, 1.5, 2.0],
-      female: [0.25, 0.4, 0.6, 0.9, 1.25]
+      male: [0.5, 0.75, 1.0, 1.5, 2.0, 2.5],
+      female: [0.25, 0.4, 0.6, 0.9, 1.25, 1.6]
     },
     deadlift: {
       label: "Barbell Deadlift",
-      male: [0.75, 1.25, 1.75, 2.25, 2.75],
-      female: [0.6, 1.0, 1.4, 1.8, 2.25]
+      male: [0.75, 1.25, 1.75, 2.25, 2.75, 3.25],
+      female: [0.6, 1.0, 1.4, 1.8, 2.25, 2.75]
     },
     ohp: {
       label: "Barbell Overhead Press",
-      male: [0.35, 0.55, 0.8, 1.1, 1.4],
-      female: [0.2, 0.35, 0.5, 0.7, 0.9]
+      male: [0.35, 0.55, 0.8, 1.1, 1.4, 1.7],
+      female: [0.2, 0.35, 0.5, 0.7, 0.9, 1.1]
     },
     pullup: {
       label: "Pull-Up",
-      male: [1.0, 1.15, 1.35, 1.6, 2.0],
-      female: [0.85, 1.0, 1.15, 1.35, 1.6]
+      male: [1.0, 1.15, 1.35, 1.6, 2.0, 2.4],
+      female: [0.85, 1.0, 1.15, 1.35, 1.6, 1.9]
     }
   };
 
-  const LEVEL_LABELS = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"];
+  const LEVEL_LABELS = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite", "World Class"];
 
   // Secondary-muscle credit for well-known compound movements only — used by
   // Progress's muscle-volume breakdowns to intelligently split a compound
@@ -329,6 +332,177 @@
   };
   function getSecondaryMuscles(exerciseId) {
     return SECONDARY_MUSCLES[exerciseId] || [];
+  }
+
+  /* ---------------- fine-grained muscle map (Progress body map) ---------------- */
+
+  // Finer anatomical regions than MUSCLE_GROUPS, used only by the Progress
+  // body map so it can show front/side/rear delts, lats vs. upper/lower back,
+  // and obliques separately instead of one coarse "Shoulders"/"Back"/"Abs"
+  // blob. Every other feature (exercise picker, routines, PRs, This Week /
+  // Trends muscle-volume lists) keeps using the coarse MUSCLE_GROUPS above —
+  // unaffected by anything below.
+  const FINE_MUSCLES = [
+    "Chest", "FrontDelts", "SideDelts", "RearDelts", "Traps", "Lats", "UpperBack", "LowerBack",
+    "Biceps", "Triceps", "Forearms", "Abs", "Obliques", "Glutes", "Quads", "Hamstrings", "Calves"
+  ];
+
+  // Fallback used for any exercise (built-in or custom) with no explicit
+  // entry in FINE_MUSCLE_MAP below — keyed by the coarse muscleGroup every
+  // exercise already has, so a custom exercise always gets a sane default.
+  const DEFAULT_FINE_BY_GROUP = {
+    "Chest": { primary: ["Chest"], secondary: [] },
+    "Back": { primary: ["Lats"], secondary: ["UpperBack"] },
+    "Shoulders": { primary: ["FrontDelts"], secondary: ["SideDelts"] },
+    "Biceps": { primary: ["Biceps"], secondary: [] },
+    "Triceps": { primary: ["Triceps"], secondary: [] },
+    "Quadriceps": { primary: ["Quads"], secondary: ["Glutes"] },
+    "Hamstrings": { primary: ["Hamstrings"], secondary: ["Glutes"] },
+    "Glutes": { primary: ["Glutes"], secondary: ["Hamstrings"] },
+    "Calves": { primary: ["Calves"], secondary: [] },
+    "Abs / Core": { primary: ["Abs"], secondary: [] },
+    "Forearms": { primary: ["Forearms"], secondary: [] },
+    "Traps": { primary: ["Traps"], secondary: [] },
+    "Full Body": { primary: [], secondary: [] },
+    "Cardio": { primary: [], secondary: [] }
+  };
+
+  // Explicit per-exercise overrides for every built-in exercise where the
+  // coarse-group default above would be wrong or too vague (e.g. every
+  // "Shoulders" exercise defaulting to front delts would mislabel a lateral
+  // raise). Exercises not listed here fall back to DEFAULT_FINE_BY_GROUP.
+  const FINE_MUSCLE_MAP = {
+    // Chest
+    "bench-press-barbell": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "bench-press-dumbbell": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "incline-bench-barbell": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "incline-bench-dumbbell": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "decline-bench-barbell": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "decline-bench-dumbbell": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "smith-machine-bench-press": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "smith-machine-incline-bench-press": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "chest-press-machine": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "iso-lateral-chest-press": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "iso-lateral-incline-chest-press": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "svend-press": { primary: ["Chest"], secondary: ["Triceps"] },
+    "push-up": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "dip-chest": { primary: ["Chest"], secondary: ["Triceps", "FrontDelts"] },
+    "dumbbell-fly": { primary: ["Chest"], secondary: [] },
+    "incline-cable-fly": { primary: ["Chest"], secondary: [] },
+    "low-cable-fly": { primary: ["Chest"], secondary: [] },
+    "high-cable-fly": { primary: ["Chest"], secondary: [] },
+    "pec-deck": { primary: ["Chest"], secondary: [] },
+    "cable-crossover": { primary: ["Chest"], secondary: [] },
+
+    // Back
+    "deadlift-barbell": { primary: ["LowerBack"], secondary: ["Hamstrings", "Glutes", "Traps"] },
+    "sumo-deadlift": { primary: ["LowerBack"], secondary: ["Hamstrings", "Glutes", "Traps"] },
+    "deficit-deadlift": { primary: ["LowerBack"], secondary: ["Hamstrings", "Glutes", "Traps"] },
+    "rack-pull": { primary: ["Traps"], secondary: ["LowerBack", "Hamstrings"] },
+    "barbell-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "pendlay-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "meadows-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "dumbbell-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "landmine-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "smith-machine-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "chest-supported-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "iso-lateral-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "iso-lateral-high-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "seated-cable-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "t-bar-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "inverted-row": { primary: ["Lats"], secondary: ["UpperBack", "Biceps"] },
+    "iso-lateral-front-pulldown": { primary: ["Lats"], secondary: ["Biceps"] },
+    "lat-pulldown": { primary: ["Lats"], secondary: ["Biceps"] },
+    "pull-up": { primary: ["Lats"], secondary: ["Biceps"] },
+    "chin-up": { primary: ["Lats"], secondary: ["Biceps"] },
+    "straight-arm-pulldown": { primary: ["Lats"], secondary: [] },
+    "cable-pullover": { primary: ["Lats"], secondary: [] },
+    "back-extension": { primary: ["LowerBack"], secondary: ["Hamstrings", "Glutes"] },
+
+    // Shoulders
+    "overhead-press-barbell": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "shoulder-press-dumbbell": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "behind-neck-press": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "landmine-press": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "shoulder-press-machine": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "iso-lateral-shoulder-press": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "smith-machine-shoulder-press": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "arnold-press": { primary: ["FrontDelts"], secondary: ["SideDelts", "Triceps"] },
+    "lateral-raise-dumbbell": { primary: ["SideDelts"], secondary: [] },
+    "lateral-raise-cable": { primary: ["SideDelts"], secondary: [] },
+    "lateral-raise-machine": { primary: ["SideDelts"], secondary: [] },
+    "front-raise": { primary: ["FrontDelts"], secondary: [] },
+    "cable-front-raise": { primary: ["FrontDelts"], secondary: [] },
+    "rear-delt-fly": { primary: ["RearDelts"], secondary: [] },
+    "cable-rear-delt-fly": { primary: ["RearDelts"], secondary: [] },
+    "face-pull": { primary: ["RearDelts"], secondary: ["Traps"] },
+    "upright-row-barbell": { primary: ["Traps"], secondary: ["SideDelts"] },
+    "upright-row-cable": { primary: ["Traps"], secondary: ["SideDelts"] },
+
+    // Biceps (forearm-biased variants get a secondary credit)
+    "hammer-curl": { primary: ["Biceps"], secondary: ["Forearms"] },
+    "zottman-curl": { primary: ["Biceps"], secondary: ["Forearms"] },
+    "reverse-curl": { primary: ["Biceps"], secondary: ["Forearms"] },
+    "cable-rope-curl": { primary: ["Biceps"], secondary: ["Forearms"] },
+
+    // Triceps (pressing-adjacent variants get a Chest secondary)
+    "close-grip-bench": { primary: ["Triceps"], secondary: ["Chest"] },
+    "jm-press": { primary: ["Triceps"], secondary: ["Chest"] },
+    "dip-triceps": { primary: ["Triceps"], secondary: ["Chest"] },
+    "bench-dip": { primary: ["Triceps"], secondary: ["Chest"] },
+    "diamond-push-up": { primary: ["Triceps"], secondary: ["Chest"] },
+
+    // Quadriceps (leg-extension is a true isolation, no glute secondary)
+    "leg-extension": { primary: ["Quads"], secondary: [] },
+    "sissy-squat": { primary: ["Quads"], secondary: [] },
+
+    // Hamstrings (machine leg curls are isolation, no glute secondary)
+    "leg-curl-machine": { primary: ["Hamstrings"], secondary: [] },
+    "seated-leg-curl-machine": { primary: ["Hamstrings"], secondary: [] },
+
+    // Glutes
+    "step-up": { primary: ["Glutes"], secondary: ["Quads"] },
+    "hip-abduction-machine": { primary: ["Glutes"], secondary: [] },
+
+    // Abs / Core
+    "side-plank": { primary: ["Obliques"], secondary: [] },
+    "plank": { primary: ["Abs"], secondary: ["Obliques"] },
+    "bicycle-crunch": { primary: ["Abs"], secondary: ["Obliques"] },
+    "cable-woodchop": { primary: ["Obliques"], secondary: [] },
+    "russian-twist": { primary: ["Obliques"], secondary: [] },
+    "pallof-press": { primary: ["Obliques"], secondary: [] },
+
+    // Forearms
+    "farmers-carry": { primary: ["Forearms"], secondary: ["Traps"] },
+
+    // Full Body — real multi-muscle credit instead of being skipped entirely
+    "power-clean": { primary: ["Traps", "Quads"], secondary: ["Hamstrings", "Glutes", "FrontDelts"] },
+    "hang-clean": { primary: ["Traps", "Quads"], secondary: ["Hamstrings", "Glutes", "FrontDelts"] },
+    "clean-and-jerk": { primary: ["Traps", "Quads"], secondary: ["Hamstrings", "Glutes", "FrontDelts"] },
+    "snatch": { primary: ["Traps", "Quads"], secondary: ["Hamstrings", "Glutes", "FrontDelts"] },
+    "thruster": { primary: ["Quads", "FrontDelts"], secondary: ["Triceps"] },
+    "kettlebell-swing": { primary: ["Glutes", "Hamstrings"], secondary: ["LowerBack"] },
+    "turkish-get-up": { primary: ["SideDelts", "Abs"], secondary: ["Obliques"] },
+    "wall-ball": { primary: ["Quads", "FrontDelts"], secondary: [] },
+
+    // Cardio — secondary-only credit, never a primary driver of any one muscle
+    "rowing-machine": { primary: [], secondary: ["Lats", "Biceps", "Quads"] },
+    "stairmaster": { primary: [], secondary: ["Quads", "Glutes"] },
+    "elliptical": { primary: [], secondary: ["Quads"] },
+    "battle-ropes": { primary: [], secondary: ["SideDelts", "Abs"] },
+    "jump-rope": { primary: [], secondary: ["Calves"] },
+    "burpee": { primary: [], secondary: ["Chest", "Quads"] },
+    "mountain-climber": { primary: [], secondary: ["Abs"] },
+    "sprint-intervals": { primary: [], secondary: ["Quads", "Hamstrings", "Calves"] }
+  };
+
+  function getFineMuscleTargets(exerciseId) {
+    const override = FINE_MUSCLE_MAP[exerciseId];
+    if (override) return { primary: override.primary.slice(), secondary: (override.secondary || []).slice() };
+    const ex = getExerciseById(exerciseId);
+    if (!ex) return { primary: [], secondary: [] };
+    const fallback = DEFAULT_FINE_BY_GROUP[ex.muscleGroup] || { primary: [], secondary: [] };
+    return { primary: fallback.primary.slice(), secondary: fallback.secondary.slice() };
   }
 
   /* ---------------- custom exercises ---------------- */
@@ -423,16 +597,21 @@
   }
 
   // Returns { score: 0-100, level: 'Beginner'..'Elite', ratio } or null if ratio is 0/invalid.
+  // thresholds can be any length N (bounds = [0, ...thresholds] -> N bands);
+  // works for the 6-value tables above or any future addition/removal of a tier.
   function scoreForRatio(ratio, thresholds) {
     if (!isFinite(ratio) || ratio <= 0) return { score: 0, level: null, ratio: 0 };
-    const bounds = [0].concat(thresholds); // 6 points -> 5 bands, scores 0/20/40/60/80/100
-    if (ratio >= bounds[5]) return { score: 100, level: "Elite", ratio: ratio };
-    for (let i = 0; i < 5; i++) {
+    const bounds = [0].concat(thresholds);
+    const n = thresholds.length;
+    const bandWidth = 100 / n;
+    const topLabel = LEVEL_LABELS[n - 1] || "Elite";
+    if (ratio >= bounds[n]) return { score: 100, level: topLabel, ratio: ratio };
+    for (let i = 0; i < n; i++) {
       const lo = bounds[i], hi = bounds[i + 1];
       if (ratio >= lo && ratio < hi) {
-        const bandScore = i * 20;
+        const bandScore = i * bandWidth;
         const frac = (ratio - lo) / (hi - lo);
-        const score = bandScore + frac * 20;
+        const score = bandScore + frac * bandWidth;
         const level = i === 0 ? null : LEVEL_LABELS[i - 1];
         return { score: score, level: level, ratio: ratio };
       }
@@ -457,6 +636,8 @@
     getExerciseById: getExerciseById,
     getBenchmarkExercises: getBenchmarkExercises,
     getSecondaryMuscles: getSecondaryMuscles,
+    FINE_MUSCLES: FINE_MUSCLES,
+    getFineMuscleTargets: getFineMuscleTargets,
     estimateOneRepMax: estimateOneRepMax,
     scoreForRatio: scoreForRatio,
     getStandard: getStandard,
