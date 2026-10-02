@@ -1955,6 +1955,10 @@
   /* ---------------- Progress: shared state ---------------- */
 
   let bodyMapMode = "strength"; // "strength" | "readiness"
+  let bodyMapSide = "front"; // "front" | "back" — which single body is shown
+  let selectedMuscle = null; // persists across mode/side switches
+  let muscleSheetExpanded = false;
+  let muscleSheetHistoryOpen = false;
   let exerciseChartRangeDays = null; // null = all time
   let bodyweightChartRangeDays = null;
   let editingBodyweightId = null;
@@ -3120,7 +3124,9 @@
 
   function svgRegionAttrs(muscle, colors) {
     const color = colors[muscle];
-    return { cls: "bodymap-muscle-region" + (color ? "" : " is-unrated"), style: color ? ' style="fill:' + color + '"' : "" };
+    let cls = "bodymap-muscle-region" + (color ? "" : " is-unrated");
+    if (selectedMuscle) cls += muscle === selectedMuscle ? " is-selected" : " is-dimmed";
+    return { cls: cls, style: color ? ' style="fill:' + color + '"' : "" };
   }
 
   function regionPath(muscle, points, colors) {
@@ -3185,87 +3191,310 @@
     return '<svg viewBox="0 0 220 480" role="img" aria-label="Back body map">' + bodyBaseSvg() + regions + '</svg>';
   }
 
-  function renderBodyMap() {
+  function renderBodyMapView() {
     const colors = computeMuscleMapColors();
-    document.getElementById("bodyMapFront").innerHTML = bodyMapFrontSvg(colors);
-    document.getElementById("bodyMapBack").innerHTML = bodyMapBackSvg(colors);
+    const svg = bodyMapSide === "front" ? bodyMapFrontSvg(colors) : bodyMapBackSvg(colors);
+    document.getElementById("bodyMapView").innerHTML = svg;
+  }
+
+  function renderBodyMapLegend() {
     const legendEl = document.getElementById("bodyMapLegend");
     const hintEl = document.getElementById("bodyMapHint");
     if (bodyMapMode === "strength") {
       legendEl.innerHTML = STRENGTH_LEVELS.map(function (l) {
         return '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:' + getMuscleColorForLevel(l) + '"></span>' + l + '</div>';
       }).join("") + '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--card-hover)"></span>Not enough data</div>';
-      hintEl.textContent = "Tap a muscle for details. Chest/Lats/Front Delts/Quads use real strength standards; other muscles use your training volume.";
+      hintEl.textContent = "Tap a muscle for details.";
     } else {
       legendEl.innerHTML =
         '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--red)"></span>Fatigued</div>' +
         '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--yellow)"></span>Recovering</div>' +
         '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--green)"></span>Ready</div>' +
         '<div class="bodymap-legend-item"><span class="bodymap-legend-swatch" style="background:var(--card-hover)"></span>Not trained yet</div>';
-      hintEl.textContent = "Readiness is an estimate from time since last trained and recent set volume — not a biological measurement.";
+      hintEl.textContent = "An estimate from time since trained + recent volume — not biological.";
     }
   }
 
+  function renderBodyMap() {
+    renderBodyMapView();
+    renderBodyMapLegend();
+  }
+
+  // Mode and side switches never clear the current selection — the sheet
+  // stays open and its content updates in place (continuity, per spec).
   function handleBodyMapModeClick(e) {
     const btn = e.target.closest(".bodymap-mode-btn");
     if (!btn) return;
     document.querySelectorAll(".bodymap-mode-btn").forEach(function (b) { b.classList.remove("active"); });
     btn.classList.add("active");
     bodyMapMode = btn.getAttribute("data-mode");
-    renderBodyMap();
+    renderBodyMapView();
+    renderMuscleSheet();
+  }
+
+  function handleBodyMapSideClick(e) {
+    const btn = e.target.closest(".bodymap-side-btn");
+    if (!btn) return;
+    document.querySelectorAll(".bodymap-side-btn").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    const nextSide = btn.getAttribute("data-side");
+    if (nextSide === bodyMapSide) return;
+    const wrap = document.getElementById("bodyMapView");
+    wrap.classList.add("is-fading");
+    setTimeout(function () {
+      bodyMapSide = nextSide;
+      renderBodyMapView();
+      wrap.classList.remove("is-fading");
+    }, 90);
+  }
+
+  // Maps a click's screen coordinates into the SVG's own viewBox coordinate
+  // space, so a near-miss tap near a small region (forearms, obliques) can
+  // still resolve to the nearest region's center instead of doing nothing —
+  // a forgiving hitbox without needing invisible duplicate shapes.
+  function svgPointFromEvent(svg, clientX, clientY) {
+    const pt = svg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    return pt.matrixTransform(ctm.inverse());
   }
 
   function handleBodyMapClick(e) {
-    const el = e.target.closest("[data-muscle]");
+    let el = e.target.closest("[data-muscle]");
+    if (!el) {
+      const svg = e.currentTarget.querySelector("svg");
+      if (!svg) return;
+      const pt = svgPointFromEvent(svg, e.clientX, e.clientY);
+      if (pt) {
+        let best = null, bestDist = Infinity;
+        svg.querySelectorAll("[data-muscle]").forEach(function (region) {
+          const bbox = region.getBBox();
+          const cx = bbox.x + bbox.width / 2, cy = bbox.y + bbox.height / 2;
+          const d = Math.hypot(pt.x - cx, pt.y - cy);
+          if (d < bestDist) { bestDist = d; best = region; }
+        });
+        if (best && bestDist < 40) el = best;
+      }
+    }
     if (!el) return;
-    openMuscleDetail(el.getAttribute("data-muscle"));
+    selectMuscle(el.getAttribute("data-muscle"));
   }
 
-  function openMuscleDetail(muscle) {
-    const core = window.JarvisCore;
-    const JE = window.JarvisExercises;
-    const strengthData = computeMuscleStrengthLevel(muscle);
-    const readinessData = computeMuscleReadiness(muscle);
-    const totals8w = computeFineMuscleVolume(new Date(Date.now() - 56 * 86400000));
-    const recentSets = totals8w[muscle] || 0;
+  // Tapping the already-selected muscle deselects it (closes the sheet) —
+  // the same gesture that opened it closes it, no separate mode needed.
+  function selectMuscle(muscle) {
+    selectedMuscle = selectedMuscle === muscle ? null : muscle;
+    muscleSheetExpanded = false;
+    muscleSheetHistoryOpen = false;
+    renderBodyMapView();
+    renderMuscleSheet();
+  }
 
-    const contributingNames = {};
+  function exercisesTargetingMuscle(muscle) {
+    const JE = window.JarvisExercises;
+    const loggedIds = {};
     workouts.forEach(function (w) {
       if (w.schema !== 2) return;
+      w.exercises.forEach(function (se) { if (se.sets.length) loggedIds[se.exerciseId] = true; });
+    });
+    const list = JE.getExercises().filter(function (ex) { return JE.getFineMuscleTargets(ex.id).primary.indexOf(muscle) !== -1; });
+    list.sort(function (a, b) {
+      const la = loggedIds[a.id] ? 0 : 1, lb = loggedIds[b.id] ? 0 : 1;
+      if (la !== lb) return la - lb;
+      return a.name.localeCompare(b.name);
+    });
+    return list;
+  }
+
+  // For a standards-backed muscle, the "primary lift" is the exact benchmark
+  // exercise that produced the score (so Add to Workout / Recent PR line up
+  // with what's shown) — otherwise the most relevant logged exercise.
+  function primaryExerciseForMuscle(muscle, strengthData) {
+    const JE = window.JarvisExercises;
+    if (strengthData && strengthData.basis === "standard" && strengthData.liftLabel) {
+      const benchmarkEx = JE.getBenchmarkExercises().find(function (ex) { return ex.name === strengthData.liftLabel; });
+      if (benchmarkEx) return benchmarkEx;
+    }
+    const list = exercisesTargetingMuscle(muscle);
+    return list.length ? list[0] : null;
+  }
+
+  function bandProgressPct(score) {
+    const bandWidth = 100 / STRENGTH_LEVELS.length;
+    const within = score % bandWidth;
+    return Math.max(0, Math.min(100, Math.round((within / bandWidth) * 100)));
+  }
+
+  function muscleHistoryStats(muscle) {
+    const JE = window.JarvisExercises;
+    const cutoff = new Date(Date.now() - 30 * 86400000);
+    let sessions = 0;
+    const sessionDates = [];
+    const exIdsSeen = {};
+    workouts.forEach(function (w) {
+      if (w.schema !== 2) return;
+      if (new Date(w.date) < cutoff) return;
+      const hit = w.exercises.some(function (se) {
+        return se.sets.length && JE.getFineMuscleTargets(se.exerciseId).primary.indexOf(muscle) !== -1;
+      });
+      if (!hit) return;
+      sessions++;
+      sessionDates.push(w.date);
       w.exercises.forEach(function (se) {
-        if (!se.sets.length) return;
-        if (JE.getFineMuscleTargets(se.exerciseId).primary.indexOf(muscle) === -1) return;
-        const ex = JE.getExerciseById(se.exerciseId);
-        if (ex) contributingNames[ex.name] = true;
+        if (se.sets.length && JE.getFineMuscleTargets(se.exerciseId).primary.indexOf(muscle) !== -1) exIdsSeen[se.exerciseId] = true;
       });
     });
+    let prCount = 0;
+    Object.keys(exIdsSeen).forEach(function (exId) {
+      getPrHistory(exId).forEach(function (h) { if (new Date(h.date) >= cutoff) prCount++; });
+    });
+    sessionDates.sort(function (a, b) { return new Date(b) - new Date(a); });
+    return { sessions: sessions, prCount: prCount, recentDates: sessionDates.slice(0, 5) };
+  }
 
-    document.getElementById("muscleDetailTitle").textContent = muscleDisplayName(muscle);
-    let html = "";
-    if (!strengthData.hasData) {
-      html += '<div class="empty-state">Not enough data yet — log a few sets for this muscle to see its level.</div>';
+  function addExerciseToDraftById(exerciseId) {
+    const core = window.JarvisCore;
+    const existing = draft.exercises.find(function (se) { return se.exerciseId === exerciseId; });
+    if (existing) { core.showToast("Already in your current session."); return; }
+    draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: exerciseId, sets: buildSetsFromRoutinePlan(exerciseId) });
+    draft.activeIndex = draft.exercises.length - 1;
+    saveDraft();
+    renderSessionExerciseList();
+    const ex = window.JarvisExercises.getExerciseById(exerciseId);
+    core.showToast((ex ? ex.name : "Exercise") + " added to your current session.");
+  }
+
+  // The inline muscle panel — replaces the old modal. It never covers the
+  // body map, so tapping a different muscle while it's open just updates its
+  // content in place; nothing needs to be closed and reopened.
+  function renderMuscleSheet() {
+    const sheet = document.getElementById("muscleSheet");
+    if (!selectedMuscle) { sheet.classList.add("hidden"); return; }
+    sheet.classList.remove("hidden");
+
+    const core = window.JarvisCore;
+    const muscle = selectedMuscle;
+    const strengthData = computeMuscleStrengthLevel(muscle);
+    const readinessData = computeMuscleReadiness(muscle);
+    const primaryEx = primaryExerciseForMuscle(muscle, strengthData);
+
+    document.getElementById("muscleSheetTitle").textContent = muscleDisplayName(muscle);
+
+    let compactHtml = "";
+    if (bodyMapMode === "strength") {
+      document.getElementById("muscleSheetSubtitle").textContent = "Strength";
+      if (!strengthData.hasData) {
+        compactHtml = '<div class="empty-state-compact">Log a few sets for ' + core.escapeHtml(muscleDisplayName(muscle)) + ' to see a strength level.</div>';
+      } else {
+        const progressPct = bandProgressPct(strengthData.score);
+        const idx = STRENGTH_LEVELS.indexOf(strengthData.level);
+        const nextLabel = idx >= 0 && idx < STRENGTH_LEVELS.length - 1 ? STRENGTH_LEVELS[idx + 1] : null;
+        compactHtml =
+          '<div class="muscle-sheet-stat-row"><span>Strength Score</span><span class="muscle-sheet-stat-value">' + Math.round(strengthData.score) + '</span></div>' +
+          '<div class="muscle-sheet-stat-row"><span>30-Day Trend</span><span>' + core.escapeHtml(recentProgressText(strengthData, muscle) || "--") + '</span></div>' +
+          '<div class="muscle-sheet-stat-row"><span>' + (strengthData.basis === "standard" ? "Primary Lift" : "Primary Exercise") + '</span><span>' + core.escapeHtml(primaryEx ? primaryEx.name : "--") + '</span></div>' +
+          (nextLabel
+            ? '<div class="muscle-sheet-progress"><div class="muscle-sheet-progress-label"><span>Progress to ' + core.escapeHtml(nextLabel) + '</span><span>' + progressPct + '%</span></div>' +
+              '<div class="nutri-bar-track"><div class="nutri-bar-fill" style="width:' + progressPct + '%"></div></div></div>'
+            : '<p class="field-hint">Already at the top tier tracked here.</p>');
+      }
     } else {
-      html += '<div class="muscle-detail-stat-row"><span>Level</span><span>' + core.escapeHtml(strengthData.level || "--") + ' (' + Math.round(strengthData.score) + '/100)</span></div>';
-      html += '<div class="muscle-detail-stat-row"><span>Recent progress</span><span>' + core.escapeHtml(recentProgressText(strengthData, muscle) || "--") + '</span></div>';
-      html += '<p class="field-hint">' + core.escapeHtml(strengthData.basisText) + '</p>';
-      html += '<p class="field-hint">' + core.escapeHtml(nextLevelHint(strengthData, muscle) || "") + '</p>';
+      document.getElementById("muscleSheetSubtitle").textContent = "Readiness";
+      if (!readinessData.hasData) {
+        compactHtml = '<div class="empty-state-compact">' + core.escapeHtml(muscleDisplayName(muscle)) + " hasn't been trained yet.</div>";
+      } else {
+        compactHtml =
+          '<div class="muscle-sheet-stat-row"><span>Readiness</span><span class="muscle-sheet-stat-value">' + Math.round(readinessData.pct) + '%</span></div>' +
+          '<div class="muscle-sheet-stat-row"><span>Status</span><span>' + readinessLabel(readinessData.status) + '</span></div>' +
+          '<div class="muscle-sheet-stat-row"><span>Last trained</span><span>' + readinessData.daysSince + ' day' + (readinessData.daysSince === 1 ? "" : "s") + ' ago</span></div>';
+      }
     }
-    html += '<div class="muscle-detail-stat-row"><span>Sets (last 8 weeks)</span><span>' + (Math.round(recentSets * 10) / 10) + '</span></div>';
-    if (readinessData.hasData) {
-      html += '<div class="muscle-detail-stat-row"><span>Readiness</span><span>' + readinessLabel(readinessData.status) + '</span></div>';
-      html += '<div class="muscle-detail-stat-row"><span>Last trained</span><span>' + readinessData.daysSince + ' day' + (readinessData.daysSince === 1 ? "" : "s") + ' ago</span></div>';
-      html += '<p class="field-hint">Readiness is an estimate from time since last trained and recent set volume — not a biological measurement.</p>';
-    } else {
-      html += '<div class="muscle-detail-stat-row"><span>Readiness</span><span>Not trained yet</span></div>';
-    }
-    const names = Object.keys(contributingNames);
-    if (names.length) {
-      html += '<h3 class="checklist-title" style="margin-top:12px;">Exercises contributing</h3><div class="item-list">' +
-        names.map(function (n) { return '<div class="list-item"><span class="list-item-title">' + core.escapeHtml(n) + '</span></div>'; }).join("") +
+
+    let html = compactHtml;
+    html += '<div class="muscle-sheet-actions">' +
+      '<button type="button" class="btn btn-secondary muscle-sheet-expand-btn" data-action="toggle-expand">' +
+      (muscleSheetExpanded ? "Hide Details" : "View " + core.escapeHtml(muscleDisplayName(muscle)) + " Details") +
+      '</button></div>';
+
+    if (muscleSheetExpanded) {
+      html += '<div class="muscle-sheet-expanded">';
+
+      if (strengthData.hasData) {
+        html += '<p class="field-hint">' + core.escapeHtml(strengthData.basisText) + '</p>';
+        html += '<p class="field-hint">' + core.escapeHtml(nextLevelHint(strengthData, muscle) || "") + '</p>';
+      }
+
+      const totals8w = computeFineMuscleVolume(new Date(Date.now() - 56 * 86400000));
+      const recentSets = totals8w[muscle] || 0;
+      html += '<div class="muscle-sheet-stat-row"><span>Weekly sets (8-week avg)</span><span>' + (Math.round((recentSets / 8) * 10) / 10) + '</span></div>';
+
+      if (readinessData.hasData) {
+        html += '<div class="muscle-sheet-stat-row"><span>Recovery</span><span>' + readinessLabel(readinessData.status) + ' (' + Math.round(readinessData.pct) + '%)</span></div>';
+      }
+
+      let suggestion;
+      if (!readinessData.hasData) suggestion = "Log a session for " + muscleDisplayName(muscle) + " to get a recovery estimate.";
+      else if (readinessData.status === "ready") suggestion = "Ready for normal training volume.";
+      else if (readinessData.status === "recovering") suggestion = "Still recovering — consider lighter volume or an extra rest day.";
+      else suggestion = "This muscle is fatigued — consider resting it before your next session.";
+      html += '<div class="muscle-sheet-suggestion">' + core.escapeHtml(suggestion) + '</div>';
+
+      if (primaryEx) {
+        const prHistory = getPrHistory(primaryEx.id);
+        if (prHistory.length) {
+          const latestPr = prHistory[0];
+          html += '<div class="muscle-sheet-stat-row"><span>Recent PR</span><span>' + core.escapeHtml(latestPr.weight) + ' &times; ' + core.escapeHtml(latestPr.reps) + ' (' + core.formatDate(latestPr.date) + ')</span></div>';
+        }
+      }
+
+      const relevant = exercisesTargetingMuscle(muscle).slice(0, 6);
+      if (relevant.length) {
+        html += '<h3 class="checklist-title" style="margin-top:10px;">Relevant Exercises</h3><div class="muscle-sheet-exercise-chips">' +
+          relevant.map(function (ex) { return '<button type="button" class="muscle-sheet-chip" data-action="jump-exercise" data-exercise-id="' + core.escapeHtml(ex.id) + '">' + core.escapeHtml(ex.name) + '</button>'; }).join("") +
+          '</div>';
+      }
+
+      html += '<div class="muscle-sheet-actions">' +
+        '<button type="button" class="btn-icon" data-action="view-history">' + (muscleSheetHistoryOpen ? "Hide History" : "View History") + '</button>' +
+        (primaryEx ? '<button type="button" class="btn-icon" data-action="add-to-workout" data-exercise-id="' + core.escapeHtml(primaryEx.id) + '">Add to Workout</button>' : '') +
         '</div>';
+
+      if (muscleSheetHistoryOpen) {
+        const hist = muscleHistoryStats(muscle);
+        html += '<div class="muscle-sheet-history">' +
+          '<h3 class="checklist-title">' + core.escapeHtml(muscleDisplayName(muscle)) + ' History (Last 30 Days)</h3>' +
+          '<div class="muscle-sheet-stat-row"><span>Sessions</span><span>' + hist.sessions + '</span></div>' +
+          '<div class="muscle-sheet-stat-row"><span>PRs</span><span>' + hist.prCount + '</span></div>' +
+          (hist.recentDates.length
+            ? '<div class="item-list">' + hist.recentDates.map(function (d) { return '<div class="list-item"><span class="list-item-title">' + core.formatDate(d) + '</span></div>'; }).join("") + '</div>'
+            : '<div class="empty-state-compact">No sessions in the last 30 days.</div>') +
+          '</div>';
+      }
+
+      html += '</div>';
     }
-    document.getElementById("muscleDetailBody").innerHTML = html;
-    core.openModal("muscleDetailModal");
+
+    document.getElementById("muscleSheetBody").innerHTML = html;
+  }
+
+  function handleMuscleSheetClick(e) {
+    const expandBtn = e.target.closest('[data-action="toggle-expand"]');
+    if (expandBtn) { muscleSheetExpanded = !muscleSheetExpanded; renderMuscleSheet(); return; }
+    const historyBtn = e.target.closest('[data-action="view-history"]');
+    if (historyBtn) { muscleSheetHistoryOpen = !muscleSheetHistoryOpen; renderMuscleSheet(); return; }
+    const jumpBtn = e.target.closest('[data-action="jump-exercise"]');
+    if (jumpBtn) { jumpToExercise(jumpBtn.getAttribute("data-exercise-id")); return; }
+    const addBtn = e.target.closest('[data-action="add-to-workout"]');
+    if (addBtn) { addExerciseToDraftById(addBtn.getAttribute("data-exercise-id")); return; }
+  }
+
+  function handleMuscleSheetCloseClick() {
+    selectedMuscle = null;
+    muscleSheetExpanded = false;
+    muscleSheetHistoryOpen = false;
+    renderBodyMapView();
+    renderMuscleSheet();
   }
 
   function renderProgressTab() {
@@ -3282,6 +3511,7 @@
     renderThisWeekTab();
     renderYourLifts();
     renderBodyMap();
+    renderMuscleSheet();
     renderBodyweightTab();
   }
 
@@ -3417,9 +3647,10 @@
     window.JarvisCore.setupTabGroup(progressAnalyticsBtns, progressAnalyticsPanels, function () { renderProgressTab(); });
 
     document.getElementById("bodyMapModeToggle").addEventListener("click", handleBodyMapModeClick);
-    document.getElementById("bodyMapFront").addEventListener("click", handleBodyMapClick);
-    document.getElementById("bodyMapBack").addEventListener("click", handleBodyMapClick);
-    document.getElementById("muscleDetailCloseBtn").addEventListener("click", function () { window.JarvisCore.closeModal("muscleDetailModal"); });
+    document.getElementById("bodyMapSideToggle").addEventListener("click", handleBodyMapSideClick);
+    document.getElementById("bodyMapView").addEventListener("click", handleBodyMapClick);
+    document.getElementById("muscleSheet").addEventListener("click", handleMuscleSheetClick);
+    document.getElementById("muscleSheetCloseBtn").addEventListener("click", handleMuscleSheetCloseClick);
 
     document.getElementById("yourLiftsScroll").addEventListener("click", function (e) {
       const card = e.target.closest(".lift-card");
