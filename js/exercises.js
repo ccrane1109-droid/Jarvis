@@ -279,6 +279,58 @@
 
   const LEVEL_LABELS = ["Beginner", "Novice", "Intermediate", "Advanced", "Elite"];
 
+  // Secondary-muscle credit for well-known compound movements only — used by
+  // Progress's muscle-volume breakdowns to intelligently split a compound
+  // lift's sets across the muscles it trains instead of crediting 100% to a
+  // single tagged muscleGroup. Deliberately NOT exhaustive: most accessory/
+  // isolation exercises have no meaningful secondary and are left out, which
+  // simply means they keep counting 100% toward their primary muscleGroup.
+  const SECONDARY_MUSCLES = {
+    "bench-press-barbell": ["Triceps", "Shoulders"],
+    "bench-press-dumbbell": ["Triceps", "Shoulders"],
+    "incline-bench-barbell": ["Triceps", "Shoulders"],
+    "incline-bench-dumbbell": ["Triceps", "Shoulders"],
+    "decline-bench-barbell": ["Triceps", "Shoulders"],
+    "decline-bench-dumbbell": ["Triceps", "Shoulders"],
+    "smith-machine-bench-press": ["Triceps", "Shoulders"],
+    "chest-press-machine": ["Triceps", "Shoulders"],
+    "push-up": ["Triceps", "Shoulders"],
+    "dip-chest": ["Triceps", "Shoulders"],
+    "deadlift-barbell": ["Hamstrings", "Glutes", "Traps"],
+    "sumo-deadlift": ["Hamstrings", "Glutes", "Traps"],
+    "deficit-deadlift": ["Hamstrings", "Glutes", "Traps"],
+    "rack-pull": ["Traps", "Hamstrings"],
+    "barbell-row": ["Biceps", "Traps"],
+    "pendlay-row": ["Biceps", "Traps"],
+    "dumbbell-row": ["Biceps", "Traps"],
+    "chest-supported-row": ["Biceps"],
+    "seated-cable-row": ["Biceps"],
+    "t-bar-row": ["Biceps", "Traps"],
+    "lat-pulldown": ["Biceps"],
+    "pull-up": ["Biceps", "Forearms"],
+    "chin-up": ["Biceps", "Forearms"],
+    "inverted-row": ["Biceps"],
+    "overhead-press-barbell": ["Triceps"],
+    "shoulder-press-dumbbell": ["Triceps"],
+    "shoulder-press-machine": ["Triceps"],
+    "arnold-press": ["Triceps"],
+    "back-squat-barbell": ["Glutes", "Hamstrings"],
+    "front-squat-barbell": ["Glutes", "Hamstrings"],
+    "box-squat": ["Glutes", "Hamstrings"],
+    "goblet-squat": ["Glutes", "Hamstrings"],
+    "smith-machine-squat": ["Glutes", "Hamstrings"],
+    "leg-press": ["Glutes", "Hamstrings"],
+    "bulgarian-split-squat": ["Glutes", "Hamstrings"],
+    "walking-lunge": ["Glutes", "Hamstrings"],
+    "romanian-deadlift-barbell": ["Glutes", "Back"],
+    "romanian-deadlift-dumbbell": ["Glutes", "Back"],
+    "hip-thrust-barbell": ["Hamstrings"],
+    "good-morning": ["Glutes", "Back"]
+  };
+  function getSecondaryMuscles(exerciseId) {
+    return SECONDARY_MUSCLES[exerciseId] || [];
+  }
+
   /* ---------------- custom exercises ---------------- */
 
   // Cached in memory so getExercises()/getExerciseById() — called on every
@@ -404,6 +456,7 @@
     getExercises: getExercises,
     getExerciseById: getExerciseById,
     getBenchmarkExercises: getBenchmarkExercises,
+    getSecondaryMuscles: getSecondaryMuscles,
     estimateOneRepMax: estimateOneRepMax,
     scoreForRatio: scoreForRatio,
     getStandard: getStandard,
