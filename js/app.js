@@ -109,8 +109,35 @@
           }
         });
         if (typeof onChange === "function") onChange(targetId);
+        // A tab that was just switched to may have been display:none until
+        // now, so its own nav bar's scroll width wasn't measurable yet —
+        // re-check on the next frame once the browser has laid it out.
+        window.requestAnimationFrame(refreshScrollFades);
       });
     });
+  }
+
+  // Horizontally-scrolling nav bars (.main-nav, every .sub-nav) get a fade
+  // mask over whichever edge still has hidden content, so a hard-cut tab at
+  // the viewport edge reads as "more tabs this way" instead of a clipped
+  // label. Called on load, on each one's own scroll, on window resize, and
+  // after every tab switch (a newly-visible nav may not have been
+  // measurable before).
+  function updateScrollFadeState(el) {
+    const atStart = el.scrollLeft <= 1;
+    const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+    el.setAttribute("data-at-start", atStart ? "true" : "false");
+    el.setAttribute("data-at-end", atEnd ? "true" : "false");
+  }
+  function refreshScrollFades() {
+    document.querySelectorAll(".main-nav, .sub-nav").forEach(updateScrollFadeState);
+  }
+  function initScrollFades() {
+    document.querySelectorAll(".main-nav, .sub-nav").forEach(function (el) {
+      updateScrollFadeState(el);
+      el.addEventListener("scroll", function () { updateScrollFadeState(el); }, { passive: true });
+    });
+    window.addEventListener("resize", refreshScrollFades);
   }
 
   function isPositiveNumber(value) {
@@ -141,6 +168,7 @@
     nowLocalDateTimeInputValue: nowLocalDateTimeInputValue,
     showToast: showToast,
     setupTabGroup: setupTabGroup,
+    refreshScrollFades: refreshScrollFades,
     isPositiveNumber: isPositiveNumber,
     openModal: openModal,
     closeModal: closeModal
@@ -287,6 +315,8 @@
         window.JarvisBusiness.onSubTabChange(targetId);
       }
     });
+
+    initScrollFades();
 
     const briefingBtn = document.getElementById("dailyBriefingBtn");
     if (briefingBtn) briefingBtn.addEventListener("click", showBriefing);
