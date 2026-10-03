@@ -93,6 +93,33 @@ button, input, select, textarea {
   gap: 6px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  padding-right: 16px;
+}
+
+/* Scroll-fade affordance: a hard-cut edge on a horizontally-scrolling nav
+   reads as a clipped/broken label rather than "more tabs this way." Masking
+   the edge toward whichever direction still has hidden content (updated by
+   JarvisApp.refreshScrollFades in app.js on load/scroll/resize/tab-switch)
+   fixes that without changing the scroll mechanism itself. */
+.main-nav,
+.sub-nav {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+.main-nav[data-at-start="true"],
+.sub-nav[data-at-start="true"] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+.main-nav[data-at-end="true"],
+.sub-nav[data-at-end="true"] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px);
+  mask-image: linear-gradient(to right, transparent, #000 16px);
+}
+.main-nav[data-at-start="true"][data-at-end="true"],
+.sub-nav[data-at-start="true"][data-at-end="true"] {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .main-nav-btn {
@@ -369,6 +396,7 @@ textarea { resize: vertical; min-height: 44px; }
   margin-bottom: 16px;
   border-bottom: 1px solid var(--card-border);
   padding-bottom: 2px;
+  padding-right: 16px;
 }
 
 .sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn, .business-sub-nav-btn {
