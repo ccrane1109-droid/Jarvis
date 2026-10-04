@@ -1706,22 +1706,27 @@ textarea { resize: vertical; min-height: 44px; }
 .bodymap-view-wrap.is-fading { opacity: 0; }
 .bodymap-view-wrap svg { width: 100%; height: auto; display: block; }
 
+/* The whole colored-muscle layer gets a soft blur (defined per-SVG as
+   #heatBlur) so adjacent regions melt into each other at their borders —
+   a heat-map blend — instead of reading as flat, hard-edged puzzle pieces.
+   Selection/hover/dim states stay on the individual regions underneath the
+   blur, so a blurred glow still clearly marks which one is selected. */
+.bodymap-heat-layer { filter: url(#heatBlur); }
 .bodymap-muscle-region {
   cursor: pointer;
-  stroke: var(--bg);
-  stroke-width: 1.1;
+  stroke: none;
   transition: opacity 120ms ease, stroke 120ms ease, stroke-width 120ms ease, filter 120ms ease;
 }
 .bodymap-muscle-region:hover { opacity: 0.82; }
-.bodymap-muscle-region.is-unrated { fill: var(--card-hover); }
+.bodymap-muscle-region.is-unrated { fill: #343f58; }
 /* Selection is never color-only: a selected region also gets a bright
    outline + glow, and every other region dims — both satisfy accessibility
    (not color-alone) and give the "connected" feel of tapping into one part
    of a single system rather than picking from an unrelated list. */
-.bodymap-muscle-region.is-selected { stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55)); }
+.bodymap-muscle-region.is-selected { stroke: #fff; stroke-width: 2.5; filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.7)); }
 .bodymap-muscle-region.is-dimmed { opacity: 0.4; }
-.bodymap-body-part { fill: var(--bg-elevated); stroke: var(--card-border); stroke-width: 1.2; }
-.bodymap-muscle-divider { stroke: var(--bg); stroke-width: 1; opacity: 0.7; }
+.bodymap-body-part { fill: url(#bodyShade); stroke: var(--card-border); stroke-width: 1.2; }
+.bodymap-muscle-divider { stroke: var(--bg); stroke-width: 1; opacity: 0.55; }
 
 .bodymap-legend {
   display: grid;
