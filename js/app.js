@@ -117,25 +117,45 @@
     });
   }
 
-  // Horizontally-scrolling nav bars (.main-nav, every .sub-nav) get a fade
-  // mask over whichever edge still has hidden content, so a hard-cut tab at
-  // the viewport edge reads as "more tabs this way" instead of a clipped
-  // label. Called on load, on each one's own scroll, on window resize, and
+  // Horizontally-scrolling nav bars (.main-nav, every .sub-nav) get a real,
+  // non-scrolling overlay indicator on whichever edge still has hidden
+  // content, so a hard-cut tab at the viewport edge reads as "more tabs
+  // this way" instead of a clipped label. The indicator spans are plain
+  // DOM siblings of the nav (via .nav-scroll-wrap, built once below) rather
+  // than content layered inside the scrolling element itself, so they can
+  // never overlap or get dragged along with the tab text scrolling under
+  // them. Called on load, on each nav's own scroll, on window resize, and
   // after every tab switch (a newly-visible nav may not have been
   // measurable before).
-  function updateScrollFadeState(el) {
-    const atStart = el.scrollLeft <= 1;
-    const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
-    el.setAttribute("data-at-start", atStart ? "true" : "false");
-    el.setAttribute("data-at-end", atEnd ? "true" : "false");
+  function updateScrollFadeState(nav) {
+    const wrap = nav.parentElement;
+    if (!wrap || !wrap.classList.contains("nav-scroll-wrap")) return;
+    const atStart = nav.scrollLeft <= 1;
+    const atEnd = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 1;
+    wrap.setAttribute("data-at-start", atStart ? "true" : "false");
+    wrap.setAttribute("data-at-end", atEnd ? "true" : "false");
   }
   function refreshScrollFades() {
     document.querySelectorAll(".main-nav, .sub-nav").forEach(updateScrollFadeState);
   }
   function initScrollFades() {
-    document.querySelectorAll(".main-nav, .sub-nav").forEach(function (el) {
-      updateScrollFadeState(el);
-      el.addEventListener("scroll", function () { updateScrollFadeState(el); }, { passive: true });
+    document.querySelectorAll(".main-nav, .sub-nav").forEach(function (nav) {
+      const wrap = document.createElement("div");
+      wrap.className = "nav-scroll-wrap" + (nav.classList.contains("main-nav") ? " main-nav-scroll-wrap" : "");
+      nav.parentNode.insertBefore(wrap, nav);
+      const edgeStart = document.createElement("span");
+      edgeStart.className = "nav-scroll-edge nav-scroll-edge-start";
+      edgeStart.setAttribute("aria-hidden", "true");
+      edgeStart.textContent = "‹";
+      const edgeEnd = document.createElement("span");
+      edgeEnd.className = "nav-scroll-edge nav-scroll-edge-end";
+      edgeEnd.setAttribute("aria-hidden", "true");
+      edgeEnd.textContent = "›";
+      wrap.appendChild(edgeStart);
+      wrap.appendChild(nav);
+      wrap.appendChild(edgeEnd);
+      updateScrollFadeState(nav);
+      nav.addEventListener("scroll", function () { updateScrollFadeState(nav); }, { passive: true });
     });
     window.addEventListener("resize", refreshScrollFades);
   }

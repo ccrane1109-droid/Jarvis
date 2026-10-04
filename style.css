@@ -96,31 +96,50 @@ button, input, select, textarea {
   padding-right: 16px;
 }
 
-/* Scroll-fade affordance: a hard-cut edge on a horizontally-scrolling nav
-   reads as a clipped/broken label rather than "more tabs this way." Masking
-   the edge toward whichever direction still has hidden content (updated by
-   JarvisApp.refreshScrollFades in app.js on load/scroll/resize/tab-switch)
-   fixes that without changing the scroll mechanism itself. */
-.main-nav,
-.sub-nav {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+/* Scroll affordance: a hard-cut edge on a horizontally-scrolling nav reads
+   as a clipped/broken label rather than "more tabs this way." Two earlier
+   attempts (a mask-image fade, then a sticky pseudo-element riding inside
+   the scroll container) both proved too subtle or visually collided with
+   the tab text scrolling underneath. This version is a plain DOM overlay:
+   JarvisApp.initScrollFades (app.js) wraps every .main-nav/.sub-nav in a
+   .nav-scroll-wrap and inserts two real, non-scrolling indicator spans as
+   its siblings — fully outside the scrolling element, so they can never
+   overlap or get dragged along with its content. refreshScrollFades keeps
+   data-at-start/data-at-end current on the wrapper (load/scroll/resize/
+   tab-switch), and pure CSS opacity shows only the side with more to see. */
+.nav-scroll-wrap {
+  position: relative;
+  min-width: 0;
 }
-.main-nav[data-at-start="true"],
-.sub-nav[data-at-start="true"] {
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+.nav-scroll-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-dim);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.15s ease;
 }
-.main-nav[data-at-end="true"],
-.sub-nav[data-at-end="true"] {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px);
-  mask-image: linear-gradient(to right, transparent, #000 16px);
+.nav-scroll-edge-start {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(to right, var(--nav-scroll-bg, var(--bg)) 55%, transparent);
 }
-.main-nav[data-at-start="true"][data-at-end="true"],
-.sub-nav[data-at-start="true"][data-at-end="true"] {
-  -webkit-mask-image: none;
-  mask-image: none;
+.nav-scroll-edge-end {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(to left, var(--nav-scroll-bg, var(--bg)) 55%, transparent);
 }
+.nav-scroll-wrap[data-at-start="true"] .nav-scroll-edge-start,
+.nav-scroll-wrap[data-at-end="true"] .nav-scroll-edge-end {
+  opacity: 0;
+}
+.header-inner .nav-scroll-wrap { --nav-scroll-bg: rgba(10, 14, 20, 0.97); }
 
 .main-nav-btn {
   background: transparent;
@@ -1838,7 +1857,7 @@ textarea { resize: vertical; min-height: 44px; }
      floating, disconnected control once content scrolled under it. */
   .header-inner { flex-wrap: nowrap; }
   .brand { flex-shrink: 0; }
-  .main-nav { flex: 1 1 auto; min-width: 0; }
+  .main-nav-scroll-wrap { flex: 1 1 auto; min-width: 0; }
   .home-hero { flex-direction: column; align-items: flex-start; }
   .macro-card-grid { grid-template-columns: repeat(2, 1fr); }
   .recipe-ingredient-macro-grid { grid-template-columns: repeat(2, 1fr); }
