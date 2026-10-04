@@ -1045,58 +1045,5 @@
     renderAll();
   }
 
-  /* ---------------- Gladiator Mode integration ---------------- */
-
-  function gladiatorGetRemainingToday() {
-    const today = window.JarvisCore.todayISODate();
-    return habits.filter(function (h) { return !isHabitDoneOnDate(h, today); })
-      .map(function (h) {
-        return { id: h.id, name: h.name, dailyTarget: habitDailyTarget(h), countToday: habitCountOn(h, today), streak: computeCurrentStreak(h) };
-      });
-  }
-
-  function gladiatorGetStudyCandidates() {
-    return tasks.filter(function (t) { return !t.completed && /^study$/i.test(t.category || ""); })
-      .sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); })
-      .map(function (t) { return { id: t.id, text: t.text, category: t.category, time: t.time || null }; });
-  }
-
-  function gladiatorIncrementHabit(habitId) {
-    const h = habits.find(function (hh) { return hh.id === habitId; });
-    if (!h) return null;
-    const today = window.JarvisCore.todayISODate();
-    h.completions = h.completions || {};
-    const target = habitDailyTarget(h);
-    const wasFirstEver = Object.keys(h.completions).every(function (d) { return !h.completions[d]; });
-    if (target === 1) {
-      h.completions[today] = isHabitDoneOnDate(h, today) ? 0 : target;
-    } else {
-      h.completions[today] = (h.completions[today] || 0) + 1;
-    }
-    saveHabits();
-    renderAllHabitViews();
-    return {
-      done: isHabitDoneOnDate(h, today), streak: computeCurrentStreak(h),
-      count: h.completions[today], target: target, isFirstCompletionEver: wasFirstEver && isHabitDoneOnDate(h, today)
-    };
-  }
-
-  function gladiatorCompleteTask(taskId) {
-    const t = tasks.find(function (tt) { return tt.id === taskId; });
-    if (!t) return false;
-    t.completed = true;
-    saveTasks();
-    renderTaskList();
-    renderTodayOverview();
-    return true;
-  }
-
-  const gladiator = {
-    getRemainingToday: gladiatorGetRemainingToday,
-    getStudyCandidates: gladiatorGetStudyCandidates,
-    incrementHabit: gladiatorIncrementHabit,
-    completeTask: gladiatorCompleteTask
-  };
-
-  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, gladiator: gladiator };
+  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
 })();

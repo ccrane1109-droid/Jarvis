@@ -1732,44 +1732,5 @@
     renderAll();
   }
 
-  /* ---------------- Gladiator Mode integration ---------------- */
-
-  function gladiatorGetOpenTasksRanked(limit) {
-    const weight = { high: 2, medium: 1, low: 0 };
-    const open = data.tasks.filter(function (t) { return !t.completed; });
-    open.sort(function (a, b) {
-      const wa = weight[(a.priority || "").toLowerCase()] || 0;
-      const wb = weight[(b.priority || "").toLowerCase()] || 0;
-      if (wb !== wa) return wb - wa;
-      const da = a.deadline || "9999-99-99";
-      const db = b.deadline || "9999-99-99";
-      if (da !== db) return da < db ? -1 : 1;
-      return (a.createdAt || 0) - (b.createdAt || 0);
-    });
-    return open.slice(0, limit).map(function (t) {
-      return { id: t.id, text: t.text, priority: t.priority, deadline: t.deadline || null, category: t.category, notes: t.notes || "" };
-    });
-  }
-
-  function gladiatorGetTopTask() {
-    const r = gladiatorGetOpenTasksRanked(1);
-    return r.length ? r[0] : null;
-  }
-
-  function gladiatorCompleteTask(taskId) {
-    const t = data.tasks.find(function (tt) { return tt.id === taskId; });
-    if (!t) return false;
-    t.completed = true;
-    save();
-    renderTasks();
-    return true;
-  }
-
-  const gladiator = {
-    getTopTask: gladiatorGetTopTask,
-    getOpenTasksRanked: gladiatorGetOpenTasksRanked,
-    completeTask: gladiatorCompleteTask
-  };
-
-  window.JarvisBusiness = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, gladiator: gladiator };
+  window.JarvisBusiness = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
 })();
