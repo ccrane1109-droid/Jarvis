@@ -3143,52 +3143,71 @@
 
   // Shared base silhouette (head/neck/torso/arms/legs) in a muted tone, with
   // the colored muscle regions painted on top — same underlying body for
-  // front and back, only the overlay regions differ.
+  // front and back, only the overlay regions differ. Torso is a gentle
+  // hourglass (wide shoulders, narrow waist, flared hips) and each limb is
+  // plotted along its own outer/inner edge (10-12 anchor points) rather than
+  // a 4-point box, so the silhouette itself already reads as a body before
+  // any muscle region is painted on top of it.
   function bodyBaseSvg() {
     return (
       '<circle cx="110" cy="24" r="17" class="bodymap-body-part"/>' +
-      basePartPath([[98, 32], [122, 32], [120, 68], [100, 68]]) +
-      basePartPath([[50, 64], [170, 64], [148, 102], [130, 168], [142, 200], [78, 200], [90, 168], [72, 102]]) +
-      bilateralBase([[52, 64], [38, 180], [42, 268], [36, 300], [48, 300], [50, 270], [54, 180], [70, 100]]) +
-      bilateralBase([[82, 200], [78, 328], [82, 420], [68, 454], [94, 450], [98, 420], [96, 328], [98, 202]])
+      basePartPath([[99, 34], [121, 34], [118, 60], [102, 60]]) +
+      basePartPath([[70, 58], [150, 58], [146, 108], [134, 150], [136, 172], [144, 206], [76, 206], [84, 172], [86, 150], [74, 108]]) +
+      bilateralBase([[48, 64], [38, 110], [36, 170], [34, 230], [36, 270], [48, 270], [46, 230], [50, 170], [58, 110], [66, 70]]) +
+      bilateralBase([[78, 206], [72, 260], [70, 325], [66, 375], [68, 440], [60, 456], [98, 456], [86, 440], [84, 375], [86, 325], [92, 260], [100, 206]])
     );
   }
 
-  // 17 original, simplified anatomical shapes per view — not traced from or
-  // resembling any specific copyrighted illustration, just a stylized
-  // muscle-chart convention (teardrop limbs, wing-shaped lats, diamond traps)
-  // scaled to fit an iPhone-width card without scrolling.
+  // 17 original, anatomically-proportioned shapes per view — not traced from
+  // or resembling any specific copyrighted illustration, just the standard
+  // muscle-chart convention (teardrop pecs, wing-shaped lats, diamond traps,
+  // segmented abs) every strength app in this genre draws, scaled to fit an
+  // iPhone-width card without scrolling. Each region is its own path with
+  // its own stroke, so adjacent same-colored muscles still read as visually
+  // distinct parts, the way real anatomy charts separate them.
   function bodyMapFrontSvg(colors) {
     const regions =
-      bilateral("FrontDelts", [[64, 64], [74, 70], [76, 94], [62, 96], [58, 76]], colors) +
-      bilateral("SideDelts", [[40, 68], [64, 64], [58, 76], [62, 96], [44, 98]], colors) +
-      bilateral("Chest", [[66, 70], [100, 66], [104, 98], [86, 110], [68, 100]], colors) +
-      bilateral("Biceps", [[46, 106], [62, 104], [58, 172], [44, 174]], colors) +
-      bilateral("Forearms", [[44, 182], [56, 180], [52, 264], [40, 266]], colors) +
-      regionPath("Abs", [[92, 112], [128, 112], [126, 196], [94, 196]], colors) +
-      bilateral("Obliques", [[78, 112], [92, 112], [94, 196], [82, 192]], colors) +
-      bilateral("Quads", [[84, 204], [104, 204], [100, 322], [80, 324]], colors) +
-      bilateral("Calves", [[84, 336], [100, 336], [96, 414], [86, 414]], colors);
-    // Thin six-pack divider lines drawn over the Abs fill — purely cosmetic.
-    const absLines =
-      '<line x1="92" y1="137" x2="128" y2="137" class="bodymap-muscle-divider"/>' +
-      '<line x1="91" y1="162" x2="127" y2="162" class="bodymap-muscle-divider"/>' +
-      '<line x1="110" y1="113" x2="110" y2="195" class="bodymap-muscle-divider"/>';
-    return '<svg viewBox="0 0 220 480" role="img" aria-label="Front body map">' + bodyBaseSvg() + regions + absLines + '</svg>';
+      bilateral("FrontDelts", [[64, 62], [78, 60], [82, 78], [74, 92], [62, 94], [54, 78]], colors) +
+      bilateral("SideDelts", [[40, 66], [56, 64], [60, 82], [52, 96], [38, 92], [32, 78]], colors) +
+      bilateral("Chest", [[108, 68], [78, 66], [70, 92], [78, 112], [100, 116], [110, 100]], colors) +
+      bilateral("Biceps", [[52, 96], [64, 94], [62, 150], [50, 156], [40, 130], [42, 108]], colors) +
+      bilateral("Forearms", [[42, 160], [54, 158], [52, 258], [42, 262], [34, 200]], colors) +
+      regionPath("Abs", [[96, 112], [124, 112], [126, 145], [122, 175], [112, 198], [98, 198], [94, 175], [90, 145]], colors) +
+      bilateral("Obliques", [[80, 114], [96, 112], [92, 145], [88, 178], [96, 196], [82, 188], [72, 150], [74, 128]], colors) +
+      bilateral("Quads", [[80, 206], [104, 208], [106, 260], [102, 315], [88, 322], [76, 315], [72, 260], [74, 230]], colors) +
+      bilateral("Calves", [[84, 328], [99, 330], [97, 400], [95, 418], [87, 430], [79, 414], [79, 380]], colors);
+    // Thin divider lines drawn over a couple of fills — purely cosmetic
+    // detail (six-pack segmentation, a hint of rectus-femoris separation on
+    // the quad) matching the look of a real anatomy chart.
+    const dividerLines =
+      '<line x1="96" y1="141" x2="124" y2="141" class="bodymap-muscle-divider"/>' +
+      '<line x1="94" y1="167" x2="122" y2="167" class="bodymap-muscle-divider"/>' +
+      '<line x1="110" y1="113" x2="110" y2="197" class="bodymap-muscle-divider"/>' +
+      '<line x1="90" y1="218" x2="88" y2="312" class="bodymap-muscle-divider"/>' +
+      '<line x1="130" y1="218" x2="132" y2="312" class="bodymap-muscle-divider"/>';
+    return '<svg viewBox="0 0 220 480" role="img" aria-label="Front body map">' + bodyBaseSvg() + regions + dividerLines + '</svg>';
   }
 
   function bodyMapBackSvg(colors) {
     const regions =
-      bilateral("RearDelts", [[40, 68], [58, 66], [62, 96], [44, 98]], colors) +
-      regionPath("Traps", [[96, 58], [124, 58], [134, 100], [110, 112], [86, 100]], colors) +
-      bilateral("Lats", [[70, 102], [94, 106], [98, 170], [84, 176], [66, 140]], colors) +
-      bilateral("UpperBack", [[86, 100], [108, 108], [106, 140], [88, 138]], colors) +
-      regionPath("LowerBack", [[94, 172], [126, 172], [122, 198], [98, 198]], colors) +
-      bilateral("Triceps", [[46, 106], [62, 104], [58, 172], [44, 174]], colors) +
-      bilateral("Glutes", [[78, 200], [108, 200], [106, 232], [80, 230]], colors) +
-      bilateral("Hamstrings", [[82, 236], [104, 234], [100, 322], [80, 324]], colors) +
-      bilateral("Calves", [[84, 336], [100, 336], [96, 414], [86, 414]], colors);
-    return '<svg viewBox="0 0 220 480" role="img" aria-label="Back body map">' + bodyBaseSvg() + regions + '</svg>';
+      bilateral("RearDelts", [[40, 66], [56, 64], [60, 84], [52, 98], [36, 92], [32, 78]], colors) +
+      regionPath("Traps", [[110, 58], [134, 74], [120, 110], [110, 120], [100, 110], [86, 74]], colors) +
+      bilateral("Lats", [[72, 100], [94, 106], [100, 140], [96, 170], [84, 180], [68, 160], [62, 125]], colors) +
+      bilateral("UpperBack", [[90, 100], [108, 108], [106, 136], [92, 134], [86, 116]], colors) +
+      bilateral("LowerBack", [[98, 172], [108, 174], [106, 200], [98, 198]], colors) +
+      bilateral("Triceps", [[50, 96], [64, 94], [62, 152], [48, 156], [38, 128], [40, 106]], colors) +
+      bilateral("Forearms", [[42, 160], [54, 158], [52, 258], [42, 262], [34, 200]], colors) +
+      bilateral("Glutes", [[78, 202], [108, 204], [106, 232], [92, 240], [76, 230], [74, 214]], colors) +
+      bilateral("Hamstrings", [[80, 240], [104, 238], [102, 312], [86, 320], [78, 290], [76, 260]], colors) +
+      bilateral("Calves", [[82, 328], [100, 330], [98, 396], [96, 416], [88, 428], [80, 410], [80, 378]], colors);
+    // Spine groove between the two LowerBack strips, and a hint of the
+    // gastrocnemius/soleus split on each calf — same cosmetic-divider
+    // convention as the front view.
+    const dividerLines =
+      '<line x1="110" y1="60" x2="110" y2="118" class="bodymap-muscle-divider"/>' +
+      '<line x1="88" y1="345" x2="85" y2="410" class="bodymap-muscle-divider"/>' +
+      '<line x1="132" y1="345" x2="135" y2="410" class="bodymap-muscle-divider"/>';
+    return '<svg viewBox="0 0 220 480" role="img" aria-label="Back body map">' + bodyBaseSvg() + regions + dividerLines + '</svg>';
   }
 
   function renderBodyMapView() {
