@@ -3148,8 +3148,28 @@
   // plotted along its own outer/inner edge (10-12 anchor points) rather than
   // a 4-point box, so the silhouette itself already reads as a body before
   // any muscle region is painted on top of it.
+  // Shared <defs>: a soft radial shade for the base silhouette (so "no data"
+  // areas read as a gently-lit body, not a flat cutout) and a mild blur
+  // filter applied to the muscle-color layer only, so adjacent regions melt
+  // into each other at their borders — a heat-map blend — rather than
+  // reading as hard-edged puzzle pieces.
+  function bodyMapDefsSvg() {
+    return (
+      '<defs>' +
+        '<radialGradient id="bodyShade" cx="38%" cy="18%" r="90%">' +
+          '<stop offset="0%" stop-color="#242c40"/>' +
+          '<stop offset="100%" stop-color="#121623"/>' +
+        '</radialGradient>' +
+        '<filter id="heatBlur" x="-30%" y="-30%" width="160%" height="160%">' +
+          '<feGaussianBlur stdDeviation="2.6"/>' +
+        '</filter>' +
+      '</defs>'
+    );
+  }
+
   function bodyBaseSvg() {
     return (
+      bodyMapDefsSvg() +
       '<circle cx="110" cy="24" r="17" class="bodymap-body-part"/>' +
       basePartPath([[99, 34], [121, 34], [118, 60], [102, 60]]) +
       basePartPath([[70, 58], [150, 58], [146, 108], [134, 150], [136, 172], [144, 206], [76, 206], [84, 172], [86, 150], [74, 108]]) +
@@ -3185,7 +3205,8 @@
       '<line x1="110" y1="113" x2="110" y2="197" class="bodymap-muscle-divider"/>' +
       '<line x1="90" y1="218" x2="88" y2="312" class="bodymap-muscle-divider"/>' +
       '<line x1="130" y1="218" x2="132" y2="312" class="bodymap-muscle-divider"/>';
-    return '<svg viewBox="0 0 220 480" role="img" aria-label="Front body map">' + bodyBaseSvg() + regions + dividerLines + '</svg>';
+    return '<svg viewBox="0 0 220 480" role="img" aria-label="Front body map">' + bodyBaseSvg() +
+      '<g class="bodymap-heat-layer">' + regions + '</g>' + dividerLines + '</svg>';
   }
 
   function bodyMapBackSvg(colors) {
@@ -3207,7 +3228,8 @@
       '<line x1="110" y1="60" x2="110" y2="118" class="bodymap-muscle-divider"/>' +
       '<line x1="88" y1="345" x2="85" y2="410" class="bodymap-muscle-divider"/>' +
       '<line x1="132" y1="345" x2="135" y2="410" class="bodymap-muscle-divider"/>';
-    return '<svg viewBox="0 0 220 480" role="img" aria-label="Back body map">' + bodyBaseSvg() + regions + dividerLines + '</svg>';
+    return '<svg viewBox="0 0 220 480" role="img" aria-label="Back body map">' + bodyBaseSvg() +
+      '<g class="bodymap-heat-layer">' + regions + '</g>' + dividerLines + '</svg>';
   }
 
   function renderBodyMapView() {
