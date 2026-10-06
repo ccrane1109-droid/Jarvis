@@ -1503,6 +1503,31 @@ textarea { resize: vertical; min-height: 44px; }
 .calc-hero-unit { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
 .calc-macro-grid { margin-bottom: 14px; }
 
+/* ---------------- Nutrition: Groceries ---------------- */
+
+.grocery-category-group { margin-bottom: 16px; }
+.grocery-category-group:last-child { margin-bottom: 0; }
+.grocery-category-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--card-border);
+}
+.grocery-item-row { align-items: flex-start; gap: 10px; }
+.grocery-item-row.is-purchased { opacity: 0.55; }
+.grocery-item-row.is-purchased .list-item-title { text-decoration: line-through; }
+.grocery-purchased-label { padding: 0; margin: 0; flex-shrink: 0; }
+.grocery-purchased-label input { width: 20px; height: 20px; margin: 0; cursor: pointer; }
+.grocery-item-quick-actions { margin-top: 8px; gap: 6px; flex-wrap: wrap; }
+.grocery-qty-input { width: 64px; }
+
+#groceryUpdateBanner { border-left: 3px solid var(--accent); }
+#groceryUpdateDetailsList { margin: 6px 0 0; padding-left: 18px; }
+
 /* ---------------- Habits / Productivity ---------------- */
 
 .today-overview-body {
