@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
 
@@ -819,6 +819,7 @@
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-recipes" role="tab" aria-selected="false" aria-controls="nutrition-recipes" id="nutritionSubNavRecipes">Recipes</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-nutrients" role="tab" aria-selected="false" aria-controls="nutrition-nutrients" id="nutritionSubNavNutrients">Nutrients</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-history" role="tab" aria-selected="false" aria-controls="nutrition-history" id="nutritionSubNavHistory">History</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-groceries" role="tab" aria-selected="false" aria-controls="nutrition-groceries" id="nutritionSubNavGroceries">Groceries</button>
     </nav>
 
     <!-- ---------- Sub-panel: Dashboard ---------- -->
@@ -1379,6 +1380,188 @@
       </div>
       <div class="card" id="historyDetailCard">
         <div id="historyDetail"><div class="empty-state">Pick a day above to see its details.</div></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Groceries ---------- -->
+    <div id="nutrition-groceries" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavGroceries">
+      <div class="card" id="grocerySetupCard">
+        <h2 class="card-title">Groceries Setup</h2>
+        <div id="grocerySetupSummary" class="hidden">
+          <p class="field-hint" id="grocerySetupSummaryText"></p>
+          <button type="button" class="btn-icon" id="grocerySetupEditBtn">Change</button>
+        </div>
+        <form id="grocerySetupForm" class="stacked-form" novalidate>
+          <p class="field-hint">Pick the day you usually shop. Your grocery list automatically covers meals planned for the week ahead.</p>
+          <div class="form-row">
+            <label for="groceryShoppingDaySelect">Shopping day</label>
+            <select id="groceryShoppingDaySelect">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card hidden" id="groceryUpdateBanner">
+        <div class="list-item-row">
+          <div class="list-item-main">
+            <span class="list-item-title" id="groceryUpdateMessage"></span>
+            <button type="button" class="btn-icon" id="groceryUpdateDetailsToggle">See details</button>
+            <ul class="field-hint hidden" id="groceryUpdateDetailsList"></ul>
+          </div>
+          <div class="list-item-actions">
+            <button type="button" class="btn-icon" id="groceryUpdateUndoBtn">Undo</button>
+            <button type="button" class="btn-icon" id="groceryUpdateDismissBtn">Dismiss</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Meal Plan</h2>
+          <button type="button" class="btn-icon" id="groceryPlanAddToggleBtn">+ Add Planned Meal</button>
+        </div>
+        <form id="groceryPlanForm" class="stacked-form hidden" novalidate>
+          <h3 class="checklist-title" id="groceryPlanFormTitle">Add a Planned Meal</h3>
+          <div class="segmented-control">
+            <button type="button" class="segmented-btn active" id="groceryPlanTypeSingleBtn">One Date</button>
+            <button type="button" class="segmented-btn" id="groceryPlanTypeRecurringBtn">Recurring</button>
+          </div>
+          <div class="form-row" id="groceryPlanDateRow">
+            <label for="groceryPlanDate">Date</label>
+            <input type="date" id="groceryPlanDate">
+          </div>
+          <div class="form-row hidden" id="groceryPlanDaysRow">
+            <label>Repeats on</label>
+            <div class="badge-row">
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="0"> Sun</label>
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="1"> Mon</label>
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="2"> Tue</label>
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="3"> Wed</label>
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="4"> Thu</label>
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="5"> Fri</label>
+              <label class="checklist-item"><input type="checkbox" class="plan-day-chk" value="6"> Sat</label>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="groceryPlanMealSelect">Meal</label>
+              <select id="groceryPlanMealSelect">
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snacks">Snacks</option>
+              </select>
+            </div>
+            <div>
+              <label for="groceryPlanServings">Servings</label>
+              <input type="number" id="groceryPlanServings" min="1" step="1" value="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="groceryPlanRecipeSelect">Recipe</label>
+            <select id="groceryPlanRecipeSelect"></select>
+          </div>
+          <div class="form-row">
+            <label for="groceryPlanCustomName">Custom meal name (if no recipe)</label>
+            <input type="text" id="groceryPlanCustomName" maxlength="80" placeholder="e.g. Leftovers">
+          </div>
+          <label class="checklist-item"><input type="checkbox" id="groceryPlanRestaurantChk"> This is a restaurant / takeout meal</label>
+          <div class="form-row hidden" id="groceryPlanIncludeRow">
+            <label class="checklist-item"><input type="checkbox" id="groceryPlanIncludeChk"> Still include this in my grocery calculations</label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="groceryPlanSubmitBtn">Add to Plan</button>
+            <button type="button" class="btn btn-secondary" id="groceryPlanCancelBtn">Cancel</button>
+          </div>
+        </form>
+        <div id="groceryPlanList" class="item-list">
+          <div class="empty-state">No planned meals yet. Add one above.</div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="groceryPlanNeedsDetailsCard">
+        <h2 class="card-title">Meals Needing Ingredient Details</h2>
+        <p class="field-hint">These planned meals aren't linked to a recipe, so nothing is guessed for them. Save them as a Recipe with ingredients to include them automatically.</p>
+        <div id="groceryPlanNeedsDetails" class="item-list"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Regularly Eaten Foods</h2>
+        <p class="field-hint">Foods you've logged often. Turn on auto-add to restock them every week without having to plan a meal for them.</p>
+        <div id="groceryRegularFoodsList" class="item-list"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Pantry</h2>
+        <p class="field-hint">Estimated from purchases and recipes you've logged as eaten. Correct any amount any time.</p>
+        <div id="groceryPantryList" class="item-list"></div>
+        <form id="groceryPantryAddForm" class="stacked-form" novalidate style="margin-top:10px;">
+          <div class="form-row two-col">
+            <div>
+              <label for="groceryPantryAddName">Item you already have</label>
+              <input type="text" id="groceryPantryAddName" maxlength="60">
+            </div>
+            <div>
+              <label for="groceryPantryAddQty">Quantity</label>
+              <div class="form-row two-col">
+                <input type="number" id="groceryPantryAddQty" min="0" step="0.1" value="1">
+                <select id="groceryPantryAddUnit">
+                  <option value="each">each</option><option value="g">g</option><option value="kg">kg</option>
+                  <option value="oz">oz</option><option value="lb">lb</option><option value="ml">ml</option>
+                  <option value="l">l</option><option value="tsp">tsp</option><option value="tbsp">tbsp</option>
+                  <option value="cup">cup</option><option value="qt">qt</option><option value="pt">pt</option>
+                  <option value="gal">gal</option><option value="can">can</option><option value="clove">clove</option>
+                  <option value="slice">slice</option><option value="bunch">bunch</option><option value="package">package</option>
+                  <option value="head">head</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary">Add to Pantry</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Grocery List</h2>
+        <div id="groceryListContainer"></div>
+        <form id="groceryAddItemForm" class="stacked-form" novalidate style="margin-top:14px;">
+          <div class="form-row two-col">
+            <div>
+              <label for="groceryAddItemName">Add an item</label>
+              <input type="text" id="groceryAddItemName" maxlength="60">
+            </div>
+            <div>
+              <label for="groceryAddItemQty">Quantity</label>
+              <div class="form-row two-col">
+                <input type="number" id="groceryAddItemQty" min="0" step="0.1" value="1">
+                <select id="groceryAddItemUnit">
+                  <option value="each">each</option><option value="g">g</option><option value="kg">kg</option>
+                  <option value="oz">oz</option><option value="lb">lb</option><option value="ml">ml</option>
+                  <option value="l">l</option><option value="tsp">tsp</option><option value="tbsp">tbsp</option>
+                  <option value="cup">cup</option><option value="qt">qt</option><option value="pt">pt</option>
+                  <option value="gal">gal</option><option value="can">can</option><option value="clove">clove</option>
+                  <option value="slice">slice</option><option value="bunch">bunch</option><option value="package">package</option>
+                  <option value="head">head</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary">Add Item</button>
+          </div>
+        </form>
       </div>
     </div>
   </section>
@@ -3374,20 +3557,21 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=19"></script>
-<script type="module" src="js/auth.js?v=19"></script>
-<script src="js/app.js?v=19"></script>
-<script src="js/exercises.js?v=19"></script>
-<script src="js/workout.js?v=19"></script>
-<script src="js/nutrition.js?v=19"></script>
-<script src="js/habits.js?v=19"></script>
-<script src="js/business.js?v=19"></script>
-<script src="js/trading.js?v=19"></script>
-<script src="js/blobstore.js?v=19"></script>
-<script src="js/video-api-client.js?v=19"></script>
-<script src="js/video-connections.js?v=19"></script>
-<script src="js/video.js?v=19"></script>
-<script src="js/video-studio.js?v=19"></script>
-<script src="js/form-check.js?v=19"></script>
+<script src="js/firebase-config.js?v=20"></script>
+<script type="module" src="js/auth.js?v=20"></script>
+<script src="js/app.js?v=20"></script>
+<script src="js/exercises.js?v=20"></script>
+<script src="js/workout.js?v=20"></script>
+<script src="js/nutrition.js?v=20"></script>
+<script src="js/groceries.js?v=20"></script>
+<script src="js/habits.js?v=20"></script>
+<script src="js/business.js?v=20"></script>
+<script src="js/trading.js?v=20"></script>
+<script src="js/blobstore.js?v=20"></script>
+<script src="js/video-api-client.js?v=20"></script>
+<script src="js/video-connections.js?v=20"></script>
+<script src="js/video.js?v=20"></script>
+<script src="js/video-studio.js?v=20"></script>
+<script src="js/form-check.js?v=20"></script>
 </body>
 </html>

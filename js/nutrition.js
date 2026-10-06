@@ -1753,6 +1753,12 @@
       saveLog();
       renderFoodLog();
       renderDashboard();
+      if (window.JarvisGroceries && typeof window.JarvisGroceries.onRecipeLogged === "function") {
+        window.JarvisGroceries.onRecipeLogged({
+          recipeId: recipe.id, recipeName: recipe.name,
+          ingredients: recipe.ingredients, recipeServings: recipe.servings, servingsLogged: 1
+        });
+      }
       window.JarvisCore.showToast('Added 1 serving of "' + recipe.name + '" to ' + MEAL_LABELS[meal] + ".");
       return;
     }
@@ -2108,7 +2114,7 @@
   function selectFoodForLogging(source, id) {
     const food = findFoodForPicker(source, id);
     if (!food) return;
-    pickerSelection = { source: source, food: food, meal: guessCurrentMeal(), multiplier: 1 };
+    pickerSelection = { source: source, sourceId: id, food: food, meal: guessCurrentMeal(), multiplier: 1 };
     $("pickerMealSelect").value = pickerSelection.meal;
     $("pickerServingsInput").value = "1";
     renderAddFoodModal();
@@ -2160,6 +2166,19 @@
     saveLog();
     renderFoodLog();
     renderDashboard();
+    if (window.JarvisGroceries) {
+      if (pickerSelection.source === "recipe" && typeof window.JarvisGroceries.onRecipeLogged === "function") {
+        const sourceRecipe = recipes.find(function (r) { return r.id === pickerSelection.sourceId; });
+        if (sourceRecipe) {
+          window.JarvisGroceries.onRecipeLogged({
+            recipeId: sourceRecipe.id, recipeName: sourceRecipe.name,
+            ingredients: sourceRecipe.ingredients, recipeServings: sourceRecipe.servings, servingsLogged: m
+          });
+        }
+      } else if (typeof window.JarvisGroceries.onSimpleFoodLogged === "function") {
+        window.JarvisGroceries.onSimpleFoodLogged(food.name, raw.serving);
+      }
+    }
     core.showToast('Added "' + food.name + '" to ' + MEAL_LABELS[pickerSelection.meal] + ".");
     closeAddFoodModal();
   }
@@ -2208,6 +2227,7 @@
     if (targetId === "nutrition-dashboard") renderDashboard();
     if (targetId === "nutrition-nutrients") { renderNutrientsMacros(); renderNutrients(); }
     if (targetId === "nutrition-history") renderHistoryList();
+    if (targetId === "nutrition-groceries" && window.JarvisGroceries) window.JarvisGroceries.onSubTabChange(targetId);
   }
 
   function init() {
