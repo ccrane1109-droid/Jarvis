@@ -116,12 +116,23 @@
 
     draft = core.loadJSON(LS_DRAFT, null);
     if (!draft || typeof draft !== "object" || !Array.isArray(draft.exercises)) {
-      draft = { dateTime: core.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0 };
+      draft = { dateTime: core.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0, startedAt: null };
     }
     if (typeof draft.activeIndex !== "number") draft.activeIndex = 0;
+    if (typeof draft.startedAt !== "number") draft.startedAt = null;
+    // Pre-0.x drafts (or sets added before this release) may be missing the
+    // newer completed/rpe fields — normalize so isCompletedSet/hasValidSetValues
+    // never choke on `undefined`, and nothing that was mid-session looks
+    // silently "already done" after an app update.
+    draft.exercises.forEach(function (se) {
+      (se.sets || []).forEach(function (s) {
+        if (typeof s.completed !== "boolean") s.completed = false;
+        if (s.rpe === undefined) s.rpe = "";
+      });
+    });
   }
 
-  function saveWorkouts() { window.JarvisCore.saveJSON(LS_WORKOUTS, workouts); }
+  function saveWorkouts() { return window.JarvisCore.saveJSON(LS_WORKOUTS, workouts); }
   function saveRoutines() { window.JarvisCore.saveJSON(LS_ROUTINES, routines); }
   function savePrograms() { window.JarvisCore.saveJSON(LS_PROGRAMS, programs); }
   function saveBodyweight() { window.JarvisCore.saveJSON(LS_BODYWEIGHT, bodyweightEntries); }
@@ -514,6 +525,44 @@
     else startRestTimer(sessionExId, 30);
   }
 
+  /* ---------------- session timer & totals ---------------- */
+
+  function formatElapsed(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+    return (h > 0 ? h + ":" + String(m).padStart(2, "0") : String(m)) + ":" + String(s).padStart(2, "0");
+  }
+
+  function sessionTotals() {
+    let completedSets = 0, volume = 0;
+    draft.exercises.forEach(function (se) {
+      se.sets.forEach(function (s) {
+        if (isCompletedSet(s)) {
+          completedSets++;
+          volume += (Number(s.weight) || 0) * (Number(s.reps) || 0);
+        }
+      });
+    });
+    return { completedSets: completedSets, volume: volume };
+  }
+
+  // Updates the session timer/sets/volume readout — cheap enough to call on
+  // every set mutation AND on a 1s tick while a session is in progress.
+  function renderSessionStatsBar() {
+    const timerEl = document.getElementById("sessionTimerValue");
+    if (!timerEl) return;
+    timerEl.textContent = draft.startedAt ? formatElapsed(Date.now() - draft.startedAt) : "0:00";
+    const totals = sessionTotals();
+    document.getElementById("sessionTotalSets").textContent = totals.completedSets;
+    document.getElementById("sessionTotalVolume").textContent = Math.round(totals.volume).toLocaleString();
+  }
+
+  let sessionTimerIntervalId = null;
+  function startSessionTimerTick() {
+    if (sessionTimerIntervalId) clearInterval(sessionTimerIntervalId);
+    sessionTimerIntervalId = setInterval(renderSessionStatsBar, 1000);
+  }
+
   /* ---------------- draft session (Log tab) ---------------- */
 
   // Renders one exercise's full logging card (name, sets, rest timer, add-set
@@ -525,22 +574,40 @@
     const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
       const exName = ex ? ex.name : "Unknown exercise";
       const muscle = ex ? ex.muscleGroup : "";
+      const repRange = exerciseRepRangeLabel(se.exerciseId);
+      const repBadge = repRange ? '<span class="badge badge-accent rep-target-badge">' + core.escapeHtml(repRange) + ' reps</span> ' : '';
+      const headerRow =
+        '<div class="set-row set-row-header">' +
+          '<span class="set-row-col-label"></span>' +
+          '<span class="set-row-col-label">Previous</span>' +
+          '<span class="set-row-col-label">Reps</span>' +
+          '<span class="set-row-col-label">Weight</span>' +
+          '<span class="set-row-col-label">RPE</span>' +
+          '<span class="set-row-col-label">Done</span>' +
+          '<span class="set-row-col-label"></span>' +
+        '</div>';
       const setsHtml = se.sets.length === 0
         ? '<div class="field-hint">No sets yet.</div>'
-        : se.sets.map(function (s, i) {
+        : headerRow + se.sets.map(function (s, i) {
             const warmupTag = s.warmup ? ' <span class="badge badge-neutral">warm-up</span>' : '';
             const dropsetTag = s.dropset ? ' <span class="badge badge-neutral">drop set</span>' : '';
+            const tagsRow = (warmupTag || dropsetTag) ? '<div class="set-row-tags">' + warmupTag + dropsetTag + '</div>' : '';
             const weightVal = s.weight === "" || s.weight === null || s.weight === undefined ? "" : s.weight;
+            const repsVal = s.reps === "" || s.reps === null || s.reps === undefined ? "" : s.reps;
+            const rpeVal = s.rpe === "" || s.rpe === null || s.rpe === undefined ? "" : s.rpe;
             return (
-              '<div class="set-row set-row-editable">' +
-                '<span class="set-row-label">Set ' + (i + 1) + '</span>' +
+              '<div class="set-row set-row-editable' + (s.completed ? " is-complete" : "") + '">' +
+                '<span class="set-row-label">' + (i + 1) + '</span>' +
+                '<span class="set-row-previous">' + core.escapeHtml(previousSetText(se.exerciseId, i)) + '</span>' +
+                '<input type="number" class="set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(repsVal) + '" ' +
+                  'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Reps for set ' + (i + 1) + '">' +
                 '<input type="number" class="set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(weightVal) + '" ' +
                   'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Weight for set ' + (i + 1) + '">' +
-                '<span>&times;</span>' +
-                '<input type="number" class="set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(s.reps) + '" ' +
-                  'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Reps for set ' + (i + 1) + '">' +
-                warmupTag + dropsetTag +
+                '<input type="number" class="set-rpe-input" min="1" max="10" step="0.5" placeholder="—" value="' + core.escapeHtml(rpeVal) + '" ' +
+                  'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="RPE for set ' + (i + 1) + '">' +
+                '<label class="set-complete-label"><input type="checkbox" class="set-complete-chk"' + (s.completed ? " checked" : "") + ' data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Mark set ' + (i + 1) + ' complete"></label>' +
                 '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button>' +
+                tagsRow +
               '</div>'
             );
           }).join("");
@@ -550,15 +617,15 @@
         : '<span class="list-item-meta">No previous sets logged for this exercise yet.</span>';
       const lastSet = se.sets.length ? se.sets[se.sets.length - 1] : null;
       const routineTarget = routineTargetForSet(se.exerciseId, se.sets.length);
-      const prefillWeight = lastSet ? lastSet.weight : "";
-      const prefillReps = routineTarget ? routineTarget.reps : (lastSet ? lastSet.reps : "");
+      const prefillWeight = (lastSet && lastSet.weight !== "" && lastSet.weight != null) ? lastSet.weight : "";
+      const prefillReps = routineTarget ? routineTarget.reps : "";
       const prefillType = routineTarget ? routineTarget.type : "normal";
       const supersetBadge = se.supersetGroup ? ' <span class="badge badge-yellow">Superset</span>' : '';
       return (
         '<div class="list-item session-exercise-block" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
-              '<span class="list-item-title">' + core.escapeHtml(exName) + ' <span class="badge badge-neutral">' + core.escapeHtml(muscle) + '</span>' + supersetBadge + '</span>' +
+              '<span class="list-item-title">' + repBadge + core.escapeHtml(exName) + ' <span class="badge badge-neutral">' + core.escapeHtml(muscle) + '</span>' + supersetBadge + '</span>' +
               prHint +
             '</div>' +
             '<div class="list-item-actions">' +
@@ -569,15 +636,16 @@
           restTimerHtml(se.sessionExId) +
           '<div class="add-set-row" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">' +
             '<div class="stepper-row">' +
-              '<button type="button" class="stepper-btn add-set-weight-minus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Decrease weight">&minus;</button>' +
-              '<input type="number" class="add-set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(prefillWeight) + '" aria-label="Weight for ' + core.escapeHtml(exName) + '">' +
-              '<button type="button" class="stepper-btn add-set-weight-plus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Increase weight">+</button>' +
-            '</div>' +
-            '<div class="stepper-row">' +
               '<button type="button" class="stepper-btn add-set-reps-minus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Decrease reps">&minus;</button>' +
               '<input type="number" class="add-set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(prefillReps) + '" aria-label="Reps for ' + core.escapeHtml(exName) + '">' +
               '<button type="button" class="stepper-btn add-set-reps-plus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Increase reps">+</button>' +
             '</div>' +
+            '<div class="stepper-row">' +
+              '<button type="button" class="stepper-btn add-set-weight-minus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Decrease weight">&minus;</button>' +
+              '<input type="number" class="add-set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(prefillWeight) + '" aria-label="Weight for ' + core.escapeHtml(exName) + '">' +
+              '<button type="button" class="stepper-btn add-set-weight-plus" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" aria-label="Increase weight">+</button>' +
+            '</div>' +
+            '<input type="number" class="add-set-rpe-input" min="1" max="10" step="0.5" placeholder="RPE" aria-label="RPE for ' + core.escapeHtml(exName) + '">' +
             '<select class="add-set-type-select" aria-label="Set type for ' + core.escapeHtml(exName) + '">' + setTypeOptionsHtml(prefillType) + '</select>' +
             '<button type="button" class="btn btn-secondary add-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '">Add Set</button>' +
           '</div>' +
@@ -685,15 +753,17 @@
 
   // Auto-builds the session's set list for an exercise straight from the
   // active routine's plan (reps + type per set), so logging a routine
-  // doesn't require pressing "Add Set" once per planned set. Weight is
-  // pre-filled from the same set index the last time this exercise was
-  // logged, if there's history for it, and left blank otherwise — a blank
-  // weight means "not yet done" and is dropped when the workout is saved.
-  // Returns [] when this exercise isn't part of the active routine (or no
-  // routine is loaded), leaving freeform-added exercises exactly as before.
-  // routineId defaults to the draft's current one; loadRoutineIntoDraft
-  // passes it explicitly since it hasn't written it to the draft yet at the
-  // point it needs this.
+  // doesn't require pressing "Add Set" once per planned set. Reps starts
+  // pre-filled with the plan's TARGET (a goal, not a logged result); weight,
+  // RPE, and the explicit "completed" flag always start blank/false — last
+  // time's actual numbers are a separate "suggestion" shown read-only via
+  // the Previous column (mostRecentLoggedSets/previousSetText), never
+  // injected into an editable field, so a freshly (re)loaded session can
+  // never look like it already has completed sets. Returns [] when this
+  // exercise isn't part of the active routine (or no routine is loaded),
+  // leaving freeform-added exercises exactly as before. routineId defaults
+  // to the draft's current one; loadRoutineIntoDraft passes it explicitly
+  // since it hasn't written it to the draft yet at the point it needs this.
   function buildSetsFromRoutinePlan(exerciseId, routineId) {
     const rid = routineId || draft.routineId;
     if (!rid) return [];
@@ -702,11 +772,36 @@
     const re = routine.exercises.find(function (e) { return e.exerciseId === exerciseId; });
     if (!re) return [];
     const plannedSets = getPlannedSets(re);
-    const priorSets = mostRecentLoggedSets(exerciseId);
-    return plannedSets.map(function (p, i) {
-      const priorWeight = priorSets && priorSets[i] ? priorSets[i].weight : "";
-      return { weight: priorWeight, reps: p.reps, warmup: p.type === "warmup", dropset: p.type === "dropset" };
+    return plannedSets.map(function (p) {
+      return { weight: "", reps: p.reps, rpe: "", completed: false, warmup: p.type === "warmup", dropset: p.type === "dropset" };
     });
+  }
+
+  // Target rep count (or range, when planned sets differ) for an exercise's
+  // normal working sets in the active routine — shown as a compact badge
+  // next to the exercise name. Warm-up/drop sets are excluded since they're
+  // not part of the "target" the badge communicates. null when freestyle.
+  function exerciseRepRangeLabel(exerciseId) {
+    if (!draft.routineId) return null;
+    const routine = routines.find(function (r) { return r.id === draft.routineId; });
+    if (!routine) return null;
+    const re = routine.exercises.find(function (e) { return e.exerciseId === exerciseId; });
+    if (!re) return null;
+    const planned = getPlannedSets(re).filter(function (p) { return p.type === "normal"; });
+    if (planned.length === 0) return null;
+    const reps = planned.map(function (p) { return p.reps; });
+    const min = Math.min.apply(null, reps), max = Math.max.apply(null, reps);
+    return min === max ? String(min) : (min + "–" + max);
+  }
+
+  // Plain-language "last time" text for one set index of an exercise, e.g.
+  // "12 × 110 lb" — read-only reference, never written into an
+  // editable field (see buildSetsFromRoutinePlan above).
+  function previousSetText(exerciseId, setIndex) {
+    const prior = mostRecentLoggedSets(exerciseId);
+    if (!prior || !prior[setIndex]) return "—";
+    const s = prior[setIndex];
+    return s.reps + " × " + s.weight + " lb";
   }
 
   function loadRoutineIntoDraft(routineId, programContext) {
@@ -734,8 +829,10 @@
     draft.programId = programContext ? programContext.programId : "";
     draft.programDayId = programContext ? programContext.programDayId : "";
     draft.activeIndex = 0;
+    if (!draft.startedAt) draft.startedAt = Date.now();
     saveDraft();
     renderSessionExerciseList();
+    renderSessionStatsBar();
   }
 
   function handleAddExerciseToSession() {
@@ -744,8 +841,10 @@
     if (!exerciseId) { core.showToast("Choose an exercise first."); return; }
     draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: exerciseId, sets: buildSetsFromRoutinePlan(exerciseId) });
     draft.activeIndex = draft.exercises.length - 1;
+    if (!draft.startedAt) draft.startedAt = Date.now();
     saveDraft();
     renderSessionExerciseList();
+    renderSessionStatsBar();
   }
 
   function handleSessionExerciseListClick(e) {
@@ -756,9 +855,11 @@
       const row = addSetBtn.closest(".add-set-row");
       const weightInput = row.querySelector(".add-set-weight-input");
       const repsInput = row.querySelector(".add-set-reps-input");
+      const rpeInput = row.querySelector(".add-set-rpe-input");
       const typeSelect = row.querySelector(".add-set-type-select");
       const weight = Number(weightInput.value);
       const reps = Number(repsInput.value);
+      const rpeRaw = rpeInput ? rpeInput.value.trim() : "";
       const setType = typeSelect ? typeSelect.value : "normal";
       if (!isNonNegativeNumber(weight)) { core.showToast("Weight can't be negative."); return; }
       if (!core.isPositiveNumber(reps)) { core.showToast("Reps must be a positive number."); return; }
@@ -775,9 +876,13 @@
         return e1rm > max ? e1rm : max;
       }, 0);
       const combinedBestE1rm = Math.max(priorBest.bestE1rm, sessionBestE1rmSoFar);
-      se.sets.push({ weight: weight, reps: roundedReps, warmup: setType === "warmup", dropset: setType === "dropset" });
+      se.sets.push({
+        weight: weight, reps: roundedReps, rpe: (rpeRaw === "" || !isFinite(Number(rpeRaw))) ? "" : Number(rpeRaw),
+        completed: true, warmup: setType === "warmup", dropset: setType === "dropset"
+      });
       saveDraft();
       renderSessionExerciseList();
+      renderSessionStatsBar();
       startRestTimer(sessionExId, REST_TIMER_DEFAULT_SECONDS);
       if (combinedBestE1rm > 0) {
         const newE1rm = JE.estimateOneRepMax(weight, roundedReps);
@@ -825,10 +930,11 @@
       const ramp = [{ pct: 0.4, reps: 10 }, { pct: 0.6, reps: 6 }, { pct: 0.8, reps: 3 }];
       ramp.forEach(function (r) {
         const weight = Math.round((target * r.pct) / 5) * 5;
-        se.sets.push({ weight: weight, reps: r.reps, warmup: true });
+        se.sets.push({ weight: weight, reps: r.reps, rpe: "", completed: true, warmup: true, dropset: false });
       });
       saveDraft();
       renderSessionExerciseList();
+      renderSessionStatsBar();
       core.showToast("Added 3 warm-up sets ramping to " + target + ".");
       return;
     }
@@ -856,6 +962,7 @@
       se.sets.splice(setIndex, 1);
       saveDraft();
       renderSessionExerciseList();
+      renderSessionStatsBar();
       return;
     }
 
@@ -866,18 +973,39 @@
       draft.exercises = draft.exercises.filter(function (x) { return x.sessionExId !== sessionExId; });
       saveDraft();
       renderSessionExerciseList();
+      renderSessionStatsBar();
     }
   }
 
-  // Editing an auto-populated (or manually added) set's weight/reps inline.
-  // Deliberately doesn't re-render the list on every change (would blow away
-  // focus mid-typing) — it just persists the draft on blur/enter, same as
-  // any other plain input field elsewhere in the app.
+  // Editing an auto-populated (or manually added) set's weight/reps/RPE
+  // inline, or toggling its explicit Complete checkbox. Deliberately doesn't
+  // re-render the whole list on every keystroke (would blow away focus
+  // mid-typing) — it just persists the draft, same as any other plain input
+  // field elsewhere in the app.
   function handleSessionExerciseListChange(e) {
+    const completeChk = e.target.closest(".set-complete-chk");
+    if (completeChk) {
+      const sessionExId = completeChk.getAttribute("data-session-ex-id");
+      const setIndex = Number(completeChk.getAttribute("data-set-index"));
+      const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
+      if (!se || !se.sets[setIndex]) return;
+      if (completeChk.checked && !hasValidSetValues(se.sets[setIndex])) {
+        completeChk.checked = false;
+        window.JarvisCore.showToast("Enter weight and reps before marking this set complete.");
+        return;
+      }
+      se.sets[setIndex].completed = completeChk.checked;
+      completeChk.closest(".set-row").classList.toggle("is-complete", completeChk.checked);
+      saveDraft();
+      updatePillDoneState(se);
+      renderSessionStatsBar();
+      return;
+    }
     const weightInput = e.target.closest(".set-weight-input");
     const repsInput = e.target.closest(".set-reps-input");
-    if (!weightInput && !repsInput) return;
-    const input = weightInput || repsInput;
+    const rpeInput = e.target.closest(".set-rpe-input");
+    if (!weightInput && !repsInput && !rpeInput) return;
+    const input = weightInput || repsInput || rpeInput;
     const sessionExId = input.getAttribute("data-session-ex-id");
     const setIndex = Number(input.getAttribute("data-set-index"));
     const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
@@ -885,11 +1013,14 @@
     const raw = input.value.trim();
     if (weightInput) {
       se.sets[setIndex].weight = raw === "" ? "" : Number(raw);
-    } else {
+    } else if (repsInput) {
       se.sets[setIndex].reps = raw === "" ? "" : Math.round(Number(raw));
+    } else {
+      se.sets[setIndex].rpe = raw === "" ? "" : Number(raw);
     }
     saveDraft();
     updatePillDoneState(se);
+    renderSessionStatsBar();
   }
 
   // Patches just the one pill's "done" checkmark in place rather than a full
@@ -913,14 +1044,47 @@
     }
   }
 
+  // Full wipe, used only by "Discard Draft" — unlike resetSessionAfterFinish
+  // below, this deliberately forgets the routine selection too.
   function resetDraft() {
     stopAllRestTimers();
-    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0 };
+    pendingFailedSession = null;
+    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0, startedAt: null };
     saveDraft();
     document.getElementById("sessionRoutineSelect").value = "";
     document.getElementById("sessionDateTime").value = draft.dateTime;
     document.getElementById("sessionNotes").value = "";
+    hideSaveRetryBanner();
     renderSessionExerciseList();
+    renderSessionStatsBar();
+  }
+
+  // Runs after a successful Finish Workout: clears session PROGRESS only
+  // (checkmarks/timer/totals all reset because every set starts fresh via
+  // buildSetsFromRoutinePlan) while reloading the same routine so its
+  // exercises, order, planned sets, and target rep ranges are ready to go
+  // again immediately — next week's (or tomorrow's) session starts clean
+  // without the user having to reselect anything. Freestyle sessions (no
+  // routine) have no plan to reload, so they fall back to a full reset.
+  function resetSessionAfterFinish() {
+    stopAllRestTimers();
+    const routineId = draft.routineId;
+    const programContext = (draft.programId && draft.programDayId) ? { programId: draft.programId, programDayId: draft.programDayId } : null;
+    draft = { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0, startedAt: null };
+    document.getElementById("sessionDateTime").value = draft.dateTime;
+    document.getElementById("sessionNotes").value = "";
+    document.getElementById("sessionRoutineSelect").value = "";
+    if (routineId && routines.some(function (r) { return r.id === routineId; })) {
+      loadRoutineIntoDraft(routineId, programContext);
+      document.getElementById("sessionRoutineSelect").value = routineId;
+      draft.startedAt = null; // loadRoutineIntoDraft stamps it as "started" — undo that, the clock starts on the NEXT action
+      saveDraft();
+    } else {
+      saveDraft();
+      renderSessionExerciseList();
+    }
+    hideSaveRetryBanner();
+    renderSessionStatsBar();
   }
 
   function advanceProgramIfApplicable() {
@@ -933,26 +1097,34 @@
     savePrograms();
   }
 
-  // A set counts as actually performed once it has a real weight and reps.
-  // Sets auto-populated from a routine plan start with a blank weight (and
-  // possibly a blank reps if the user cleared it) — those are "not done yet"
-  // and get quietly dropped here rather than saved as a fake 0 x reps set.
+  // A set counts as actually performed only once the user has explicitly
+  // ticked its Complete checkbox — filling in weight/reps alone (e.g. from
+  // a routine's suggested target) is not enough, so a freshly loaded or
+  // reloaded session always starts with zero completed sets.
   function isCompletedSet(s) {
+    return !!s.completed;
+  }
+
+  // Minimum bar for a set to be allowed to be marked complete, or to be
+  // saved into history even if `completed` somehow got set without this
+  // holding (defensive double-check at save time).
+  function hasValidSetValues(s) {
     return isNonNegativeNumber(Number(s.weight)) && s.weight !== "" &&
       window.JarvisCore.isPositiveNumber(Number(s.reps)) && s.reps !== "";
   }
 
-  function handleSaveWorkout() {
+  let savingWorkout = false;
+  let pendingFailedSession = null;
+
+  function buildSessionFromDraft() {
     const core = window.JarvisCore;
     const withSets = draft.exercises
-      .map(function (se) { return { se: se, completedSets: se.sets.filter(isCompletedSet) }; })
+      .map(function (se) { return { se: se, completedSets: se.sets.filter(function (s) { return isCompletedSet(s) && hasValidSetValues(s); }) }; })
       .filter(function (x) { return x.completedSets.length > 0; });
-    if (withSets.length === 0) {
-      core.showToast("Add at least one set (with a weight and reps filled in) before saving.");
-      return;
-    }
+    if (withSets.length === 0) return null;
     const dateTime = document.getElementById("sessionDateTime").value || core.nowLocalDateTimeInputValue();
-    const session = {
+    const elapsedMs = draft.startedAt ? Math.max(0, Date.now() - draft.startedAt) : 0;
+    return {
       id: core.uid("workout"),
       schema: 2,
       dateTime: dateTime,
@@ -961,21 +1133,64 @@
       programId: draft.programId || null,
       programDayId: draft.programDayId || null,
       notes: document.getElementById("sessionNotes").value.trim(),
+      duration: elapsedMs > 0 ? Math.max(1, Math.round(elapsedMs / 60000)) : null,
       exercises: withSets.map(function (x) {
         return {
           exerciseId: x.se.exerciseId,
           sets: x.completedSets.map(function (s) {
-            return { weight: Number(s.weight), reps: Math.round(Number(s.reps)), warmup: !!s.warmup, dropset: !!s.dropset };
+            const out = { weight: Number(s.weight), reps: Math.round(Number(s.reps)), warmup: !!s.warmup, dropset: !!s.dropset };
+            if (s.rpe !== "" && s.rpe !== null && s.rpe !== undefined && isFinite(Number(s.rpe))) out.rpe = Number(s.rpe);
+            return out;
           })
         };
       }),
       createdAt: Date.now()
     };
-    workouts.push(session);
-    saveWorkouts();
+  }
+
+  function showSaveRetryBanner() {
+    const el = document.getElementById("workoutSaveRetryBanner");
+    if (el) el.classList.remove("hidden");
+  }
+
+  function hideSaveRetryBanner() {
+    const el = document.getElementById("workoutSaveRetryBanner");
+    if (el) el.classList.add("hidden");
+  }
+
+  // Finish Workout. Builds the session once, then (re)attempts to save it
+  // without ever rebuilding it from the live draft again — so a failed save
+  // followed by Retry (or an accidental double-tap of Finish itself) can
+  // never create two history entries for the same session, and a failure
+  // never loses the in-progress session: the draft is left completely
+  // untouched until saveWorkouts() actually succeeds.
+  function handleSaveWorkout() {
+    const core = window.JarvisCore;
+    if (savingWorkout) return;
+    const session = pendingFailedSession || buildSessionFromDraft();
+    if (!session) {
+      core.showToast("Complete at least one set (weight, reps, and the Done checkbox) before saving.");
+      return;
+    }
+    savingWorkout = true;
+    const alreadyInHistory = workouts.some(function (w) { return w.id === session.id; });
+    if (!alreadyInHistory) workouts.push(session);
+    const saved = saveWorkouts();
+    if (!saved) {
+      if (!alreadyInHistory) workouts.pop();
+      pendingFailedSession = session;
+      savingWorkout = false;
+      showSaveRetryBanner();
+      core.showToast("Couldn't save your workout — check your device's storage and try again.");
+      return;
+    }
+    pendingFailedSession = null;
+    draft.programId = session.programId || "";
+    draft.programDayId = session.programDayId || "";
     advanceProgramIfApplicable();
-    resetDraft();
+    resetSessionAfterFinish();
     renderAll();
+    savingWorkout = false;
     core.showToast("Workout saved.");
   }
 
@@ -1049,6 +1264,20 @@
           '<span class="quick-start-meta">' + meta + '</span>' +
         '</button>'
       );
+    }
+
+    const scheduledCard = document.getElementById("homeScheduledTodayCard");
+    if (scheduledCard) {
+      const todaysRoutine = routines.find(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; });
+      if (todaysRoutine) {
+        scheduledCard.classList.remove("hidden");
+        const musclesTrained = getMuscleGroupsForExerciseIds(todaysRoutine.exercises.map(function (re) { return re.exerciseId; }));
+        const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
+        document.getElementById("homeScheduledTodayList").innerHTML =
+          quickStartCardHtml("home-routine-start-btn", todaysRoutine.id, icon, todaysRoutine.name, "Scheduled for today");
+      } else {
+        scheduledCard.classList.add("hidden");
+      }
     }
 
     const todayCard = document.getElementById("homeTodayCard");
@@ -1226,7 +1455,7 @@
 
   /* ---------------- routines ---------------- */
 
-  let routineBuilder = { editId: null, exercises: [] };
+  let routineBuilder = { editId: null, exercises: [], scheduledDays: [] };
   let routineBuilderSelected = []; // indices into routineBuilder.exercises, checked for "group as superset"
 
   // Set-editor state for whichever exercise is currently being configured
@@ -1458,7 +1687,7 @@
   }
 
   function exitRoutineEditMode() {
-    routineBuilder = { editId: null, exercises: [] };
+    routineBuilder = { editId: null, exercises: [], scheduledDays: [] };
     routineBuilderSelected = [];
     document.getElementById("routineEditId").value = "";
     document.getElementById("routineNameInput").value = "";
@@ -1467,6 +1696,7 @@
     document.getElementById("routineCancelEditBtn").classList.add("hidden");
     resetSetEditor();
     renderRoutineBuilderList();
+    renderRoutineScheduleDaysRow();
   }
 
   function enterRoutineEditMode(routine) {
@@ -1474,7 +1704,8 @@
       editId: routine.id,
       exercises: routine.exercises.map(function (e) {
         return { exerciseId: e.exerciseId, supersetGroup: e.supersetGroup || null, plannedSets: getPlannedSets(e).map(function (s) { return Object.assign({}, s); }) };
-      })
+      }),
+      scheduledDays: (routine.scheduledDays || []).slice()
     };
     routineBuilderSelected = [];
     document.getElementById("routineEditId").value = routine.id;
@@ -1484,7 +1715,32 @@
     document.getElementById("routineCancelEditBtn").classList.remove("hidden");
     resetSetEditor();
     renderRoutineBuilderList();
+    renderRoutineScheduleDaysRow();
     document.getElementById("routineFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // The Schedule Workout day-picker inside the Create/Edit Routine form —
+  // reuses the same .day-picker-row/.day-picker-btn visual pattern as the
+  // routine generator's Training Days picker. A day can belong to at most
+  // one routine; handleSaveRoutine resolves conflicts by "replacing" (the
+  // routine being saved wins any day it claims).
+  function renderRoutineScheduleDaysRow() {
+    const container = document.getElementById("routineScheduleDaysRow");
+    if (!container) return;
+    container.innerHTML = WEEKDAY_SHORT.map(function (label, i) {
+      const selectedCls = routineBuilder.scheduledDays.indexOf(i) !== -1 ? " selected" : "";
+      return '<button type="button" class="day-picker-btn' + selectedCls + '" data-day="' + i + '" aria-label="' + WEEKDAY_LABELS[i] + '" title="' + WEEKDAY_LABELS[i] + '">' + label + '</button>';
+    }).join("");
+  }
+
+  function handleRoutineScheduleDayClick(e) {
+    const btn = e.target.closest(".day-picker-btn");
+    if (!btn) return;
+    const day = Number(btn.getAttribute("data-day"));
+    const idx = routineBuilder.scheduledDays.indexOf(day);
+    if (idx !== -1) routineBuilder.scheduledDays.splice(idx, 1);
+    else routineBuilder.scheduledDays.push(day);
+    renderRoutineScheduleDaysRow();
   }
 
   function handleSaveRoutine() {
@@ -1493,20 +1749,39 @@
     if (!name) { core.showToast("Give this routine a name."); return; }
     if (routineBuilder.exercises.length === 0) { core.showToast("Add at least one exercise."); return; }
 
+    const scheduledDays = routineBuilder.scheduledDays.slice();
+    let savedRoutine = null;
     if (routineBuilder.editId) {
       const existing = routines.find(function (r) { return r.id === routineBuilder.editId; });
       if (existing) {
         existing.name = name;
         existing.exercises = routineBuilder.exercises.slice();
+        existing.scheduledDays = scheduledDays;
+        savedRoutine = existing;
       }
       core.showToast("Routine updated.");
     } else {
-      routines.push({ id: core.uid("routine"), name: name, exercises: routineBuilder.exercises.slice(), createdAt: Date.now() });
+      savedRoutine = { id: core.uid("routine"), name: name, exercises: routineBuilder.exercises.slice(), scheduledDays: scheduledDays, createdAt: Date.now() };
+      routines.push(savedRoutine);
       core.showToast("Routine saved.");
+    }
+    // A day picked for this routine is taken away from whichever other
+    // routine previously held it — "replace," not "duplicate," per the
+    // weekly schedule being one routine (or rest) per day.
+    if (savedRoutine) {
+      scheduledDays.forEach(function (day) {
+        routines.forEach(function (r) {
+          if (r.id !== savedRoutine.id && r.scheduledDays) {
+            const idx = r.scheduledDays.indexOf(day);
+            if (idx !== -1) r.scheduledDays.splice(idx, 1);
+          }
+        });
+      });
     }
     saveRoutines();
     exitRoutineEditMode();
     renderRoutineList();
+    renderWeeklySchedule();
     populateRoutineSelect();
     populateProgramDayRoutineSelect();
     renderProgramList();
@@ -1701,11 +1976,15 @@
         return '<span class="list-item-meta">' + core.escapeHtml(exName) + groupTag + ": " + core.escapeHtml(formatPlannedSetsSummary(re)) + '</span>';
       }).join("");
       const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
+      const scheduleText = (r.scheduledDays && r.scheduledDays.length)
+        ? r.scheduledDays.slice().sort(function (a, b) { return a - b; }).map(function (d) { return WEEKDAY_SHORT[d]; }).join(", ")
+        : "";
+      const scheduleBadge = scheduleText ? ' <span class="badge badge-accent">' + core.escapeHtml(scheduleText) + '</span>' : "";
       return (
         '<div class="list-item" data-id="' + core.escapeHtml(r.id) + '">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
-              '<span class="list-item-title">' + core.escapeHtml(r.name) + ' <span class="badge badge-neutral">' + r.exercises.length + ' exercise' + (r.exercises.length === 1 ? "" : "s") + '</span></span>' +
+              '<span class="list-item-title">' + core.escapeHtml(r.name) + ' <span class="badge badge-neutral">' + r.exercises.length + ' exercise' + (r.exercises.length === 1 ? "" : "s") + '</span>' + scheduleBadge + '</span>' +
               '<div class="badge-row">' + muscleGroupBadgesHtml(musclesTrained) + '</div>' +
               exLines +
             '</div>' +
@@ -1758,10 +2037,69 @@
       routines = routines.filter(function (r) { return r.id !== id; });
       saveRoutines();
       renderRoutineList();
+      renderWeeklySchedule();
       populateRoutineSelect();
       populateProgramDayRoutineSelect();
       renderProgramList();
     }
+  }
+
+  // The Weekly Schedule card: one row per day of the week, each with a
+  // dropdown of every routine plus "Rest day" — selecting a routine there
+  // "moves"/"replaces" that day's assignment directly (taking it away from
+  // whichever routine previously held it), without needing to open that
+  // routine's own edit form. Kept in sync with the per-routine day-picker
+  // in the Create/Edit Routine form since both just read/write
+  // routine.scheduledDays.
+  function renderWeeklySchedule() {
+    const core = window.JarvisCore;
+    const container = document.getElementById("weeklyScheduleList");
+    if (!container) return;
+    container.innerHTML = WEEKDAY_LABELS.map(function (label, i) {
+      const assigned = routines.find(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(i) !== -1; });
+      const options = '<option value="">Rest day</option>' + routines.map(function (r) {
+        return '<option value="' + core.escapeHtml(r.id) + '"' + (assigned && assigned.id === r.id ? " selected" : "") + '>' + core.escapeHtml(r.name) + '</option>';
+      }).join("");
+      return (
+        '<div class="list-item weekly-schedule-row">' +
+          '<div class="list-item-row">' +
+            '<div class="list-item-main">' +
+              '<span class="list-item-title">' + label + '</span>' +
+              (assigned ? '' : '<span class="list-item-meta">Rest day</span>') +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<select class="weekly-day-select" data-day="' + i + '" aria-label="Routine for ' + label + '">' + options + '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleWeeklyScheduleChange(e) {
+    const select = e.target.closest(".weekly-day-select");
+    if (!select) return;
+    const day = Number(select.getAttribute("data-day"));
+    const newRoutineId = select.value;
+    routines.forEach(function (r) {
+      if (!r.scheduledDays) r.scheduledDays = [];
+      const idx = r.scheduledDays.indexOf(day);
+      if (r.id === newRoutineId) {
+        if (idx === -1) r.scheduledDays.push(day);
+      } else if (idx !== -1) {
+        r.scheduledDays.splice(idx, 1);
+      }
+    });
+    saveRoutines();
+    renderWeeklySchedule();
+    renderRoutineList();
+    window.JarvisCore.showToast("Weekly schedule updated.");
+  }
+
+  // Monday-first index (0=Mon..6=Sun) matching WEEKDAY_LABELS/scheduledDays,
+  // converted from JS's native Sunday-first Date#getDay().
+  function todayWeekdayIndex() {
+    return (new Date().getDay() + 6) % 7;
   }
 
   /* ---------------- programs ---------------- */
@@ -3400,8 +3738,10 @@
     if (existing) { core.showToast("Already in your current session."); return; }
     draft.exercises.push({ sessionExId: core.uid("sesx"), exerciseId: exerciseId, sets: buildSetsFromRoutinePlan(exerciseId) });
     draft.activeIndex = draft.exercises.length - 1;
+    if (!draft.startedAt) draft.startedAt = Date.now();
     saveDraft();
     renderSessionExerciseList();
+    renderSessionStatsBar();
     const ex = window.JarvisExercises.getExerciseById(exerciseId);
     core.showToast((ex ? ex.name : "Exercise") + " added to your current session.");
   }
@@ -3563,6 +3903,7 @@
     renderWorkoutHome();
     renderWorkoutList();
     renderRoutineList();
+    renderWeeklySchedule();
     populateRoutineSelect();
     populateProgramDayRoutineSelect();
     renderProgramList();
@@ -3632,6 +3973,7 @@
     document.getElementById("sessionDateTime").addEventListener("change", function () { draft.dateTime = this.value; saveDraft(); });
     document.getElementById("saveWorkoutBtn").addEventListener("click", handleSaveWorkout);
     document.getElementById("discardDraftBtn").addEventListener("click", handleDiscardDraft);
+    document.getElementById("workoutSaveRetryBtn").addEventListener("click", handleSaveWorkout);
     document.getElementById("workoutList").addEventListener("click", handleWorkoutListClick);
     document.getElementById("workout-home").addEventListener("click", handleHomeClick);
 
@@ -3647,8 +3989,11 @@
     document.getElementById("routineGroupSupersetBtn").addEventListener("click", handleGroupSuperset);
     document.getElementById("saveRoutineBtn").addEventListener("click", handleSaveRoutine);
     document.getElementById("routineCancelEditBtn").addEventListener("click", exitRoutineEditMode);
+    document.getElementById("routineScheduleDaysRow").addEventListener("click", handleRoutineScheduleDayClick);
     resetSetEditor();
+    renderRoutineScheduleDaysRow();
     document.getElementById("routineList").addEventListener("click", handleRoutineListClick);
+    document.getElementById("weeklyScheduleList").addEventListener("change", handleWeeklyScheduleChange);
     initRoutineGenerator();
     document.getElementById("generatorToggleBtn").addEventListener("click", handleGeneratorToggle);
     document.getElementById("generatorGoalGrid").addEventListener("click", handleGeneratorGoalClick);
@@ -3703,7 +4048,10 @@
     });
 
     renderSessionExerciseList();
+    renderSessionStatsBar();
+    startSessionTimerTick();
     renderAll();
+    if (draft.routineId) document.getElementById("sessionRoutineSelect").value = draft.routineId;
   }
 
   window.JarvisWorkout = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
