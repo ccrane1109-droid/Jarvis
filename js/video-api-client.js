@@ -20,9 +20,22 @@
       const bare = "{{" + key + "}}";
       if (out.indexOf(bare) === -1) return;
       const value = vars[key];
-      const replacement = (typeof value === "number" || typeof value === "boolean")
-        ? String(value)
-        : JSON.stringify(value);
+      let replacement;
+      if (typeof value === "number" || typeof value === "boolean") {
+        replacement = String(value);
+      } else {
+        // A bare (unquoted-in-the-template) string placeholder is always
+        // sitting INLINE inside a larger string the template already opened
+        // with its own quotes (e.g. "...Items:\n{{ingredientsText}}" as part
+        // of one long prompt) — any placeholder meant to be its OWN full
+        // JSON string value is already caught by the quoted pass above. So
+        // this only needs the value's characters escaped for safe embedding
+        // (quotes, backslashes, newlines), not wrapped in a second pair of
+        // quotes — JSON.stringify does exactly that escaping; strip the
+        // wrapping quotes it adds back off.
+        const stringified = JSON.stringify(value);
+        replacement = stringified.slice(1, -1);
+      }
       out = out.split(bare).join(replacement);
     });
     return out;
@@ -55,6 +68,14 @@
   // Returns a Promise resolving to { ok, status, bodyText, bodyBytes (ArrayBuffer), contentType, errorMessage }
   function postRequest(connection, jsonBody, expectBinary) {
     const headers = { "Content-Type": "application/json" };
+    // A few providers (Anthropic's Messages API included) need a second
+    // fixed header beyond the one auth header this form already supports —
+    // e.g. anthropic-version, or a flag opting into direct browser calls.
+    if (connection.extraHeaders && typeof connection.extraHeaders === "object") {
+      Object.keys(connection.extraHeaders).forEach(function (key) {
+        if (key) headers[key] = connection.extraHeaders[key];
+      });
+    }
     if (connection.apiKey && connection.apiKey.trim()) {
       // Not every provider uses "Bearer <key>" (e.g. some send the raw key
       // in a custom header like x-api-key) — authStyle defaults to "bearer"
