@@ -15,31 +15,31 @@
    fresh index.html, leaving brand-new CSS classes completely unstyled.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v22";
+const CACHE_NAME = "jarvis-cache-v23";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=22",
+  "./style.css?v=23",
   "./manifest.json",
   "./icon.svg",
   "./js/vendor/qrcode/qrcode.js",
   "./js/vendor/qrcode/qrcode_UTF8.js",
-  "./js/firebase-config.js?v=22",
-  "./js/auth.js?v=22",
-  "./js/app.js?v=22",
-  "./js/exercises.js?v=22",
-  "./js/workout.js?v=22",
-  "./js/form-check.js?v=22",
-  "./js/nutrition.js?v=22",
-  "./js/groceries.js?v=22",
-  "./js/habits.js?v=22",
-  "./js/business.js?v=22",
-  "./js/trading.js?v=22",
-  "./js/blobstore.js?v=22",
-  "./js/video-api-client.js?v=22",
-  "./js/video-connections.js?v=22",
-  "./js/video.js?v=22",
-  "./js/video-studio.js?v=22"
+  "./js/firebase-config.js?v=23",
+  "./js/auth.js?v=23",
+  "./js/app.js?v=23",
+  "./js/exercises.js?v=23",
+  "./js/workout.js?v=23",
+  "./js/form-check.js?v=23",
+  "./js/nutrition.js?v=23",
+  "./js/groceries.js?v=23",
+  "./js/habits.js?v=23",
+  "./js/business.js?v=23",
+  "./js/trading.js?v=23",
+  "./js/blobstore.js?v=23",
+  "./js/video-api-client.js?v=23",
+  "./js/video-connections.js?v=23",
+  "./js/video.js?v=23",
+  "./js/video-studio.js?v=23"
 ];
 
 self.addEventListener("install", function (event) {

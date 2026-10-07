@@ -2,7 +2,10 @@
    JARVIS — AI connections (shared by AI Video and Nutrition's recipe
    nutrition calculator)
    localStorage key: jarvisVideoConnections -> [{ id, name, kind, endpointUrl,
-     authHeader, apiKey, bodyTemplate, responseKind, responsePath }, ...]
+     authHeader, apiKey, authStyle, bodyTemplate, responseKind, responsePath,
+     extraHeaders }, ...] — extraHeaders is a plain {name: value} object for
+     the rare provider (Anthropic's Messages API included) that needs a
+     second fixed header beyond the one auth header this form exposes.
 
    JARVIS doesn't bundle any AI provider. Every AI-powered step (script,
    voiceover, images, video clips, and now estimating a recipe's nutrition
@@ -63,6 +66,25 @@
     }
   ];
 
+  // One-click starting point for Claude (Anthropic) specifically, since its
+  // Messages API needs a request shape and an extra fixed header this
+  // form's generic defaults don't guess at. Still fully BYO — Jarvis never
+  // stores or pays for the API key; the user pastes their own after this
+  // fills in everything else. Haiku is the default model since nutrient
+  // estimation is a small, frequent, structured task — swap the "model"
+  // field in the body template for a different Claude model if preferred.
+  const CLAUDE_PRESETS = {
+    nutrition: {
+      name: "Claude (Anthropic)",
+      endpointUrl: "https://api.anthropic.com/v1/messages",
+      authHeader: "x-api-key",
+      authStyle: "raw",
+      extraHeaders: { "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      bodyTemplate: '{\n  "model": "claude-haiku-4-5-20251001",\n  "max_tokens": 2048,\n  "messages": [\n    {\n      "role": "user",\n      "content": "For each food item below, estimate calories, protein (g), carbohydrates (g), fat (g), and fiber (g) for the quantity given. If you can also reasonably estimate sodium (mg), calcium (mg), iron (mg), potassium (mg), vitamin C (mg), and vitamin D (mcg), include those fields too — otherwise omit them. These are estimates, not lab measurements. Respond with ONLY a JSON array, one object per item in the same order, shaped like [{\\"name\\":\\"...\\",\\"calories\\":0,\\"protein\\":0,\\"carbs\\":0,\\"fat\\":0,\\"fiber\\":0}]. No other text before or after the array.\\n\\nItems:\\n{{ingredientsText}}"\n    }\n  ]\n}',
+      responsePath: "content.0.text"
+    }
+  };
+
   let connections = [];
 
   function load() {
@@ -103,12 +125,18 @@
               '</div>'
             );
           }).join("");
+      const claudeBtn = CLAUDE_PRESETS[k.key]
+        ? '<button type="button" class="btn btn-secondary vc-use-claude-btn" data-kind="' + core.escapeHtml(k.key) + '">Use Claude</button>'
+        : "";
       return (
         '<div class="card">' +
           '<h2 class="card-title">' + core.escapeHtml(k.label) + '</h2>' +
           '<p class="field-hint">' + core.escapeHtml(k.whatToLookFor) + '</p>' +
           rows +
-          '<div class="form-actions"><button type="button" class="btn btn-secondary vc-add-btn" data-kind="' + core.escapeHtml(k.key) + '">Add connection</button></div>' +
+          '<div class="form-actions">' +
+            '<button type="button" class="btn btn-secondary vc-add-btn" data-kind="' + core.escapeHtml(k.key) + '">Add connection</button>' +
+            claudeBtn +
+          '</div>' +
         '</div>'
       );
     }).join("");
@@ -124,19 +152,20 @@
     }).join("");
   }
 
-  function openModal(kind, existing) {
+  function openModal(kind, existing, preset) {
     const info = kindInfo(kind);
     document.getElementById("vcId").value = existing ? existing.id : "";
     document.getElementById("vcKind").value = kind;
     document.getElementById("videoConnectionModalTitle").textContent = existing ? "Edit connection" : "New " + info.label + " connection";
-    document.getElementById("vcName").value = existing ? existing.name : info.label;
-    document.getElementById("vcEndpoint").value = existing ? existing.endpointUrl : "";
-    document.getElementById("vcAuthHeader").value = existing ? existing.authHeader : "Authorization";
+    document.getElementById("vcName").value = existing ? existing.name : (preset ? preset.name : info.label);
+    document.getElementById("vcEndpoint").value = existing ? existing.endpointUrl : (preset ? preset.endpointUrl : "");
+    document.getElementById("vcAuthHeader").value = existing ? existing.authHeader : (preset ? preset.authHeader : "Authorization");
     document.getElementById("vcApiKey").value = existing ? existing.apiKey : "";
-    document.getElementById("vcAuthStyle").value = existing && existing.authStyle === "raw" ? "raw" : "bearer";
-    document.getElementById("vcBodyTemplate").value = existing ? existing.bodyTemplate : info.defaultTemplate;
+    document.getElementById("vcAuthStyle").value = existing ? (existing.authStyle === "raw" ? "raw" : "bearer") : (preset && preset.authStyle === "raw" ? "raw" : "bearer");
+    document.getElementById("vcBodyTemplate").value = existing ? existing.bodyTemplate : (preset ? preset.bodyTemplate : info.defaultTemplate);
+    document.getElementById("vcExtraHeaders").value = existing && existing.extraHeaders ? JSON.stringify(existing.extraHeaders, null, 2) : (preset && preset.extraHeaders ? JSON.stringify(preset.extraHeaders, null, 2) : "");
     document.getElementById("vcResponseKind").value = existing ? existing.responseKind : "json";
-    document.getElementById("vcResponsePath").value = existing ? existing.responsePath : "";
+    document.getElementById("vcResponsePath").value = existing ? existing.responsePath : (preset ? preset.responsePath : "");
     document.getElementById("vcPlaceholderHint").textContent = info.placeholderHint;
     document.getElementById("vcResponseHint").textContent = info.resultHint;
     const referenceVideoHint = document.getElementById("vcReferenceVideoHint");
@@ -155,6 +184,18 @@
     const core = window.JarvisCore;
     const id = document.getElementById("vcId").value || core.uid("conn");
     const kind = document.getElementById("vcKind").value;
+    const extraHeadersRaw = document.getElementById("vcExtraHeaders").value.trim();
+    let extraHeaders = {};
+    if (extraHeadersRaw) {
+      try {
+        const parsed = JSON.parse(extraHeadersRaw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) extraHeaders = parsed;
+        else throw new Error("not an object");
+      } catch (err) {
+        core.showToast('Extra headers must be a JSON object like {"header-name": "value"} — not saved.');
+        return;
+      }
+    }
     const record = {
       id: id,
       kind: kind,
@@ -165,7 +206,8 @@
       authStyle: document.getElementById("vcAuthStyle").value === "raw" ? "raw" : "bearer",
       bodyTemplate: document.getElementById("vcBodyTemplate").value.trim() || kindInfo(kind).defaultTemplate,
       responseKind: document.getElementById("vcResponseKind").value,
-      responsePath: document.getElementById("vcResponsePath").value.trim()
+      responsePath: document.getElementById("vcResponsePath").value.trim(),
+      extraHeaders: extraHeaders
     };
     const index = connections.findIndex(function (c) { return c.id === id; });
     if (index === -1) connections.push(record); else connections[index] = record;
@@ -191,6 +233,12 @@
     const addBtn = e.target.closest(".vc-add-btn");
     if (addBtn) {
       openModal(addBtn.getAttribute("data-kind"), null);
+      return;
+    }
+    const claudeBtn = e.target.closest(".vc-use-claude-btn");
+    if (claudeBtn) {
+      const kind = claudeBtn.getAttribute("data-kind");
+      openModal(kind, null, CLAUDE_PRESETS[kind]);
       return;
     }
     const editBtn = e.target.closest(".vc-edit-btn");

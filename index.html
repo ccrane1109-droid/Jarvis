@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
 
@@ -3319,6 +3319,11 @@
       </div>
       <p class="field-hint" id="vcPlaceholderHint"></p>
       <p class="field-hint hidden" id="vcReferenceVideoHint"></p>
+      <div class="form-row">
+        <label for="vcExtraHeaders">Extra headers (JSON, optional)</label>
+        <textarea id="vcExtraHeaders" rows="3" style="font-family:monospace;font-size:13px;" placeholder='{"header-name": "value"}'></textarea>
+      </div>
+      <p class="field-hint">Only needed if your provider requires more than one fixed header — e.g. Claude's "anthropic-version". Leave blank otherwise.</p>
       <div class="form-row two-col">
         <div>
           <label for="vcResponseKind">Response type</label>
@@ -3581,21 +3586,21 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=22"></script>
-<script type="module" src="js/auth.js?v=22"></script>
-<script src="js/app.js?v=22"></script>
-<script src="js/exercises.js?v=22"></script>
-<script src="js/workout.js?v=22"></script>
-<script src="js/nutrition.js?v=22"></script>
-<script src="js/groceries.js?v=22"></script>
-<script src="js/habits.js?v=22"></script>
-<script src="js/business.js?v=22"></script>
-<script src="js/trading.js?v=22"></script>
-<script src="js/blobstore.js?v=22"></script>
-<script src="js/video-api-client.js?v=22"></script>
-<script src="js/video-connections.js?v=22"></script>
-<script src="js/video.js?v=22"></script>
-<script src="js/video-studio.js?v=22"></script>
-<script src="js/form-check.js?v=22"></script>
+<script src="js/firebase-config.js?v=23"></script>
+<script type="module" src="js/auth.js?v=23"></script>
+<script src="js/app.js?v=23"></script>
+<script src="js/exercises.js?v=23"></script>
+<script src="js/workout.js?v=23"></script>
+<script src="js/nutrition.js?v=23"></script>
+<script src="js/groceries.js?v=23"></script>
+<script src="js/habits.js?v=23"></script>
+<script src="js/business.js?v=23"></script>
+<script src="js/trading.js?v=23"></script>
+<script src="js/blobstore.js?v=23"></script>
+<script src="js/video-api-client.js?v=23"></script>
+<script src="js/video-connections.js?v=23"></script>
+<script src="js/video.js?v=23"></script>
+<script src="js/video-studio.js?v=23"></script>
+<script src="js/form-check.js?v=23"></script>
 </body>
 </html>
