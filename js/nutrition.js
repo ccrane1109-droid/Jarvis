@@ -1650,6 +1650,83 @@
     if (connectionsTabBtn) connectionsTabBtn.click();
   }
 
+  // Shared by the Food Log and Saved Foods "Scan Label" buttons: runs the
+  // on-device OCR scan (js/nutrition-label-scan.js — no AI connection or
+  // API key needed) and fills in whichever of the same editable macro/micro
+  // fields the AI estimate path fills got confidently read off the label.
+  // namePrefix is "food" or "savedFood", matching each field's id prefix.
+  function handleScanLabel(namePrefix, file) {
+    const core = window.JarvisCore;
+    const statusId = namePrefix + "ScanStatus";
+    const btnId = namePrefix + "ScanLabelBtn";
+    if (!window.JarvisLabelScan) {
+      setAiStatus(statusId, "Label scanning isn't available right now.", true);
+      return;
+    }
+    const btn = $(btnId);
+    if (btn) btn.disabled = true;
+    setAiStatus(statusId, "Reading the label…");
+    window.JarvisLabelScan.scanNutritionLabel(file, function (statusText) {
+      setAiStatus(statusId, statusText);
+    }).then(function (result) {
+      if (btn) btn.disabled = false;
+      if (!result.ok) {
+        setAiStatus(statusId, result.error, true);
+        return;
+      }
+      MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
+        if (isNonNegativeNumber(result.fields[f])) $(namePrefix + capitalize(f)).value = result.fields[f];
+      });
+      const servingInput = $(namePrefix + "Serving");
+      if (result.servingSize && servingInput && !servingInput.value.trim()) servingInput.value = result.servingSize.slice(0, 40);
+      const foundList = Object.keys(result.fields);
+      setAiStatus(statusId, "Found " + foundList.length + " value" + (foundList.length === 1 ? "" : "s") + " on the label (" + foundList.join(", ") + ") — this is OCR, not guaranteed accurate, so double-check against the photo before saving.");
+    });
+  }
+
+  function handleScanFoodLabelInput(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // allow re-selecting the same file next time
+    if (file) handleScanLabel("food", file);
+  }
+
+  function handleScanSavedFoodLabelInput(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (file) handleScanLabel("savedFood", file);
+  }
+
+  // "Recognizes it": as the user types a food name into the Food Log's
+  // manual entry form, checks for an exact (case-insensitive) match in
+  // Saved Foods and offers a one-tap fill from it — the same macro/micro
+  // fields the AI estimate and label scan paths fill, just sourced from a
+  // food already saved instead of estimated fresh each time. Never fills
+  // automatically; always a confirmed tap, same "nothing silently
+  // overwritten" rule as the rest of the form.
+  let foodNameMatchedSaved = null;
+  function handleFoodNameInputForMatch() {
+    const typed = $("foodName").value.trim();
+    const hint = $("foodNameMatchHint");
+    if (!typed) { hint.classList.add("hidden"); foodNameMatchedSaved = null; return; }
+    const match = savedFoods.find(function (f) { return f.name.trim().toLowerCase() === typed.toLowerCase(); });
+    if (!match) { hint.classList.add("hidden"); foodNameMatchedSaved = null; return; }
+    foodNameMatchedSaved = match;
+    $("foodNameMatchText").textContent = 'Match found in Saved Foods: "' + match.name + '" —';
+    hint.classList.remove("hidden");
+  }
+
+  function handleFoodNameMatchUse() {
+    if (!foodNameMatchedSaved) return;
+    const match = foodNameMatchedSaved;
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
+      if (isNonNegativeNumber(match[f])) $("food" + capitalize(f)).value = match[f];
+    });
+    const servingInput = $("foodServing");
+    if (match.serving && servingInput && !servingInput.value.trim()) servingInput.value = match.serving;
+    $("foodNameMatchHint").classList.add("hidden");
+    window.JarvisCore.showToast('Filled in nutrients saved for "' + match.name + '".');
+  }
+
   function resetRecipeForm() {
     recipeBuilder = { editId: null, ingredients: [{ name: "", quantity: "", calories: "", protein: "", carbs: "", fat: "", fiber: "" }] };
     $("recipeName").value = "";
@@ -2281,6 +2358,10 @@
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
     $("foodAiEstimateBtn").addEventListener("click", handleEstimateFoodWithAI);
     $("foodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
+    $("foodScanLabelBtn").addEventListener("click", function () { $("foodScanLabelInput").click(); });
+    $("foodScanLabelInput").addEventListener("change", handleScanFoodLabelInput);
+    $("foodName").addEventListener("input", handleFoodNameInputForMatch);
+    $("foodNameMatchUseBtn").addEventListener("click", handleFoodNameMatchUse);
     MEALS.forEach(function (meal) {
       const el = $("foodMeal_" + meal);
       if (el) el.addEventListener("click", handleFoodLogClick);
@@ -2298,6 +2379,8 @@
     $("savedFoodCancelBtn").addEventListener("click", resetSavedFoodForm);
     $("savedFoodAiEstimateBtn").addEventListener("click", handleEstimateSavedFoodWithAI);
     $("savedFoodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
+    $("savedFoodScanLabelBtn").addEventListener("click", function () { $("savedFoodScanLabelInput").click(); });
+    $("savedFoodScanLabelInput").addEventListener("change", handleScanSavedFoodLabelInput);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
     $("savedFoodSearchInput").addEventListener("input", function (e) { savedFoodSearch = e.target.value; renderSavedFoods(); });
     $("savedFoodSortSelect").addEventListener("change", function (e) { savedFoodSort = e.target.value; renderSavedFoods(); });
