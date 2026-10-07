@@ -364,6 +364,7 @@ textarea { resize: vertical; min-height: 44px; }
 .badge-red { background: var(--red-dim); color: var(--red); }
 .badge-yellow { background: var(--yellow-dim); color: var(--yellow); }
 .badge-neutral { background: var(--card-hover); color: var(--text-dim); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
 
 /* ---------------- Habits ---------------- */
 
@@ -603,27 +604,94 @@ textarea { resize: vertical; min-height: 44px; }
   font-size: 13px;
 }
 
-.set-row-editable {
-  justify-content: flex-start;
-  flex-wrap: wrap;
+/* Set | Previous | Reps | Weight | RPE | Complete | Remove — one grid shared
+   by the header row and every editable set row so columns stay aligned. */
+.set-row-editable,
+.set-row-header {
+  display: grid;
+  grid-template-columns: 20px 56px 1fr 1fr 44px 32px 28px;
   gap: 6px;
+  align-items: center;
 }
-.set-row-editable .set-row-label { font-weight: 600; white-space: nowrap; }
+.set-row-header {
+  background: none;
+  border: none;
+  padding: 2px 10px;
+  margin-bottom: 2px;
+}
+.set-row-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  text-align: center;
+}
+.set-row-editable .set-row-label { font-weight: 600; text-align: center; }
+.set-row-previous {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .set-row-editable .set-weight-input,
-.set-row-editable .set-reps-input {
-  width: 76px;
-  padding: 6px 6px;
+.set-row-editable .set-reps-input,
+.set-row-editable .set-rpe-input {
+  width: 100%;
+  padding: 6px 4px;
   font-size: 13px;
+  text-align: center;
 }
-.set-row-editable .remove-set-btn { margin-left: auto; }
+.set-complete-label { display: flex; justify-content: center; margin: 0; padding: 0; }
+.set-complete-chk { width: 20px; height: 20px; margin: 0; cursor: pointer; }
+.set-row-editable.is-complete { border-color: var(--green); background: var(--green-dim); }
+.set-row-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
 
 .add-set-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: 8px;
   align-items: center;
 }
 .add-set-row input { padding: 8px 10px; }
+
+.session-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.session-stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 4px;
+}
+.session-stat-value { font-size: 18px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.session-stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+
+.save-retry-banner {
+  background: var(--red-dim);
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.save-retry-banner .field-hint { margin: 0; }
+
+.weekly-schedule-row .weekly-day-select { min-width: 140px; }
 
 .picker-row-with-star {
   display: flex;
@@ -1902,6 +1970,12 @@ textarea { resize: vertical; min-height: 44px; }
   .calorie-ring { width: 140px; height: 140px; }
   .calorie-ring-inner { width: 112px; height: 112px; }
   .sheet-box { max-width: 100%; padding-left: 14px; padding-right: 14px; }
+  .set-row-editable,
+  .set-row-header {
+    grid-template-columns: 16px 40px 1fr 1fr 38px 28px 24px;
+    gap: 4px;
+  }
+  .set-row-previous { font-size: 11px; }
   .today-overview-body { flex-direction: column; align-items: stretch; }
   .today-progress-ring { align-self: center; }
   .habit-card-grid { grid-template-columns: 1fr 1fr; }

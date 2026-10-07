@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 
@@ -175,6 +175,11 @@
         </div>
       </div>
 
+      <div id="homeScheduledTodayCard" class="hidden">
+        <h2 class="section-heading">Today's Workout</h2>
+        <div id="homeScheduledTodayList" class="quick-start-grid"></div>
+      </div>
+
       <div id="homeTodayCard" class="hidden">
         <h2 class="section-heading">Today</h2>
         <div id="homeTodayList" class="quick-start-grid"></div>
@@ -276,6 +281,11 @@
 
       <div class="card">
         <h2 class="card-title">Current Session</h2>
+        <div class="session-stats-bar">
+          <div class="session-stat-box"><span class="session-stat-value" id="sessionTimerValue">0:00</span><span class="session-stat-label">Time</span></div>
+          <div class="session-stat-box"><span class="session-stat-value" id="sessionTotalSets">0</span><span class="session-stat-label">Sets done</span></div>
+          <div class="session-stat-box"><span class="session-stat-value" id="sessionTotalVolume">0</span><span class="session-stat-label">Volume</span></div>
+        </div>
         <div class="badge-row" id="sessionMuscleGroups"></div>
         <div class="exercise-pill-nav" id="sessionExercisePillNav"></div>
         <div class="session-nav-row hidden" id="sessionNavRow">
@@ -289,6 +299,10 @@
         <div class="form-row" style="margin-top:14px;">
           <label for="sessionNotes">Session notes</label>
           <textarea id="sessionNotes" rows="2" placeholder="Optional notes about this workout"></textarea>
+        </div>
+        <div id="workoutSaveRetryBanner" class="save-retry-banner hidden">
+          <p class="field-hint text-negative">Your workout couldn't be saved. Nothing has been lost — try again when ready.</p>
+          <button type="button" class="btn btn-secondary" id="workoutSaveRetryBtn">Retry Save</button>
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-primary btn-lg" id="saveWorkoutBtn">Finish Workout</button>
@@ -306,6 +320,12 @@
 
     <!-- ---------- Sub-panel: Routines ---------- -->
     <div id="workout-routines" class="workout-sub-panel" role="tabpanel" aria-labelledby="workoutSubNavRoutines">
+      <div class="card">
+        <h2 class="card-title">Weekly Schedule</h2>
+        <p class="field-hint">Assign a routine to each day — it repeats every week until you change it. Completing a routine on a different day never changes this schedule.</p>
+        <div id="weeklyScheduleList" class="item-list"></div>
+      </div>
+
       <div class="card">
         <div class="card-title-row">
           <h2 class="card-title">Generate a Routine</h2>
@@ -344,6 +364,10 @@
           <label for="routineNameInput">Routine name</label>
           <input type="text" id="routineNameInput" placeholder="e.g. Push Day" maxlength="60">
         </div>
+
+        <h3 class="checklist-title">Schedule Workout</h3>
+        <p class="field-hint">Pick which days this routine repeats on. Choosing a day here moves it off any other routine it's currently assigned to.</p>
+        <div class="day-picker-row" id="routineScheduleDaysRow"></div>
 
         <h3 class="checklist-title">Add Exercises</h3>
         <div class="form-row">
@@ -3557,21 +3581,21 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=21"></script>
-<script type="module" src="js/auth.js?v=21"></script>
-<script src="js/app.js?v=21"></script>
-<script src="js/exercises.js?v=21"></script>
-<script src="js/workout.js?v=21"></script>
-<script src="js/nutrition.js?v=21"></script>
-<script src="js/groceries.js?v=21"></script>
-<script src="js/habits.js?v=21"></script>
-<script src="js/business.js?v=21"></script>
-<script src="js/trading.js?v=21"></script>
-<script src="js/blobstore.js?v=21"></script>
-<script src="js/video-api-client.js?v=21"></script>
-<script src="js/video-connections.js?v=21"></script>
-<script src="js/video.js?v=21"></script>
-<script src="js/video-studio.js?v=21"></script>
-<script src="js/form-check.js?v=21"></script>
+<script src="js/firebase-config.js?v=22"></script>
+<script type="module" src="js/auth.js?v=22"></script>
+<script src="js/app.js?v=22"></script>
+<script src="js/exercises.js?v=22"></script>
+<script src="js/workout.js?v=22"></script>
+<script src="js/nutrition.js?v=22"></script>
+<script src="js/groceries.js?v=22"></script>
+<script src="js/habits.js?v=22"></script>
+<script src="js/business.js?v=22"></script>
+<script src="js/trading.js?v=22"></script>
+<script src="js/blobstore.js?v=22"></script>
+<script src="js/video-api-client.js?v=22"></script>
+<script src="js/video-connections.js?v=22"></script>
+<script src="js/video.js?v=22"></script>
+<script src="js/video-studio.js?v=22"></script>
+<script src="js/form-check.js?v=22"></script>
 </body>
 </html>
