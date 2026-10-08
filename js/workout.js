@@ -598,7 +598,16 @@
             return (
               '<div class="set-row set-row-editable' + (s.completed ? " is-complete" : "") + '">' +
                 '<span class="set-row-label">' + (i + 1) + '</span>' +
-                '<span class="set-row-previous">' + core.escapeHtml(previousSetText(se.exerciseId, i)) + '</span>' +
+                (function () {
+                  const prior = previousSetValue(se.exerciseId, i);
+                  const label = previousSetText(se.exerciseId, i);
+                  const html = prior
+                    ? core.escapeHtml(prior.reps + "×") + "<br>" + core.escapeHtml(prior.weight + " lb")
+                    : "—";
+                  return '<button type="button" class="set-row-previous" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '"' +
+                    (prior ? ' aria-label="Use previous value for set ' + (i + 1) + ': ' + core.escapeHtml(label) + '"' : ' disabled aria-label="No previous value"') +
+                    '>' + html + '</button>';
+                })() +
                 '<input type="number" class="set-reps-input" min="1" step="1" placeholder="Reps" value="' + core.escapeHtml(repsVal) + '" ' +
                   'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Reps for set ' + (i + 1) + '">' +
                 '<input type="number" class="set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(weightVal) + '" ' +
@@ -794,13 +803,21 @@
     return min === max ? String(min) : (min + "–" + max);
   }
 
-  // Plain-language "last time" text for one set index of an exercise, e.g.
-  // "12 × 110 lb" — read-only reference, never written into an
-  // editable field (see buildSetsFromRoutinePlan above).
-  function previousSetText(exerciseId, setIndex) {
+  // The raw {reps, weight} last logged at this exact set index for this
+  // exercise, or null — shared by the Previous column's display text and
+  // its tap-to-fill action below.
+  function previousSetValue(exerciseId, setIndex) {
     const prior = mostRecentLoggedSets(exerciseId);
-    if (!prior || !prior[setIndex]) return "—";
-    const s = prior[setIndex];
+    return (prior && prior[setIndex]) ? prior[setIndex] : null;
+  }
+
+  // Plain-language "last time" text for one set index of an exercise, e.g.
+  // "12 × 110 lb" — shown on a tappable button (see .set-row-previous in
+  // renderExerciseCard) that copies these numbers into the editable Reps/
+  // Weight inputs for this set when tapped; never written in on its own.
+  function previousSetText(exerciseId, setIndex) {
+    const s = previousSetValue(exerciseId, setIndex);
+    if (!s) return "—";
     return s.reps + " × " + s.weight + " lb";
   }
 
@@ -849,6 +866,22 @@
 
   function handleSessionExerciseListClick(e) {
     const core = window.JarvisCore;
+
+    const prevBtn = e.target.closest(".set-row-previous");
+    if (prevBtn) {
+      const sessionExId = prevBtn.getAttribute("data-session-ex-id");
+      const setIndex = Number(prevBtn.getAttribute("data-set-index"));
+      const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
+      if (!se || !se.sets[setIndex]) return;
+      const prior = previousSetValue(se.exerciseId, setIndex);
+      if (!prior) return;
+      se.sets[setIndex].weight = prior.weight;
+      se.sets[setIndex].reps = prior.reps;
+      saveDraft();
+      renderSessionExerciseList();
+      renderSessionStatsBar();
+      return;
+    }
 
     const addSetBtn = e.target.closest(".add-set-btn");
     if (addSetBtn) {
@@ -959,6 +992,7 @@
       const setIndex = Number(removeSetBtn.getAttribute("data-set-index"));
       const se = draft.exercises.find(function (x) { return x.sessionExId === sessionExId; });
       if (!se) return;
+      if (!window.confirm("Remove set " + (setIndex + 1) + "? This can't be undone.")) return;
       se.sets.splice(setIndex, 1);
       saveDraft();
       renderSessionExerciseList();

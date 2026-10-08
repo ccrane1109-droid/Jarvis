@@ -622,8 +622,8 @@ textarea { resize: vertical; min-height: 44px; }
 .set-row-editable,
 .set-row-header {
   display: grid;
-  grid-template-columns: 20px 56px 1fr 1fr 44px 32px 28px;
-  gap: 6px;
+  grid-template-columns: 18px 64px 1fr 1fr 40px 30px 26px;
+  gap: 5px;
   align-items: center;
 }
 .set-row-header {
@@ -642,11 +642,24 @@ textarea { resize: vertical; min-height: 44px; }
 }
 .set-row-editable .set-row-label { font-weight: 600; text-align: center; }
 .set-row-previous {
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 2px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: normal;
+}
+.set-row-previous:hover { border-color: var(--accent); }
+.set-row-previous:disabled {
   color: var(--text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: none;
+  border-color: transparent;
+  cursor: default;
 }
 .set-row-editable .set-weight-input,
 .set-row-editable .set-reps-input,
@@ -1985,10 +1998,10 @@ textarea { resize: vertical; min-height: 44px; }
   .sheet-box { max-width: 100%; padding-left: 14px; padding-right: 14px; }
   .set-row-editable,
   .set-row-header {
-    grid-template-columns: 16px 40px 1fr 1fr 38px 28px 24px;
+    grid-template-columns: 15px 54px 1fr 1fr 34px 26px 22px;
     gap: 4px;
   }
-  .set-row-previous { font-size: 11px; }
+  .set-row-previous { font-size: 10px; padding: 3px 1px; }
   .today-overview-body { flex-direction: column; align-items: stretch; }
   .today-progress-ring { align-self: center; }
   .habit-card-grid { grid-template-columns: 1fr 1fr; }
