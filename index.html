@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=25">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 
@@ -883,6 +883,7 @@
 
       <div class="quick-actions-row">
         <button type="button" class="quick-action-btn" id="qaAddFoodBtn"><span class="quick-action-icon" aria-hidden="true">＋</span><span>Food</span></button>
+        <button type="button" class="quick-action-btn" id="qaScanLabelBtn"><span class="quick-action-icon" aria-hidden="true">📷</span><span>Scan Label</span></button>
         <button type="button" class="quick-action-btn" id="qaAddWaterBtn"><span class="quick-action-icon" aria-hidden="true">💧</span><span>Water</span></button>
         <button type="button" class="quick-action-btn" id="qaLogRecentBtn"><span class="quick-action-icon" aria-hidden="true">↻</span><span>Recent</span></button>
         <button type="button" class="quick-action-btn" id="qaAddRecipeBtn"><span class="quick-action-icon" aria-hidden="true">🍲</span><span>Recipe</span></button>
@@ -1211,16 +1212,11 @@
             </div>
           </div>
           <div class="form-actions">
-            <button type="button" class="btn btn-secondary" id="savedFoodAiEstimateBtn">Estimate with AI</button>
-            <button type="button" class="btn btn-secondary" id="savedFoodScanLabelBtn">Scan Label</button>
+            <button type="button" class="btn btn-primary" id="savedFoodScanLabelBtn">📷 Scan Nutrition Label</button>
             <input type="file" id="savedFoodScanLabelInput" accept="image/*" capture="environment" class="hidden">
           </div>
-          <p class="field-hint" id="savedFoodAiStatus"></p>
+          <p class="field-hint">Snap a photo of the Nutrition Facts panel — reads it right on your device, no account or setup needed.</p>
           <p class="field-hint" id="savedFoodScanStatus"></p>
-          <p class="field-hint">
-            AI estimates are not verified nutrition facts — always spot-check anything that matters.
-            <button type="button" class="btn-icon" id="savedFoodGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
-          </p>
           <div class="form-row two-col">
             <div>
               <label for="savedFoodCalories">Calories</label>
@@ -3481,16 +3477,11 @@
           <button type="button" class="btn-icon" id="foodNameMatchUseBtn">Use Saved Nutrients</button>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn btn-secondary" id="foodAiEstimateBtn">Estimate with AI</button>
-          <button type="button" class="btn btn-secondary" id="foodScanLabelBtn">Scan Label</button>
+          <button type="button" class="btn btn-primary" id="foodScanLabelBtn">📷 Scan Nutrition Label</button>
           <input type="file" id="foodScanLabelInput" accept="image/*" capture="environment" class="hidden">
         </div>
-        <p class="field-hint" id="foodAiStatus"></p>
+        <p class="field-hint">Snap a photo of the Nutrition Facts panel — reads it right on your device, no account or setup needed.</p>
         <p class="field-hint" id="foodScanStatus"></p>
-        <p class="field-hint">
-          AI estimates are not verified nutrition facts — always spot-check anything that matters.
-          <button type="button" class="btn-icon" id="foodGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
-        </p>
         <div class="form-row two-col">
           <div>
             <label for="foodCalories">Calories</label>
@@ -3596,22 +3587,22 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=25"></script>
-<script type="module" src="js/auth.js?v=25"></script>
-<script src="js/app.js?v=25"></script>
-<script src="js/exercises.js?v=25"></script>
-<script src="js/workout.js?v=25"></script>
-<script src="js/nutrition.js?v=25"></script>
-<script src="js/nutrition-label-scan.js?v=25"></script>
-<script src="js/groceries.js?v=25"></script>
-<script src="js/habits.js?v=25"></script>
-<script src="js/business.js?v=25"></script>
-<script src="js/trading.js?v=25"></script>
-<script src="js/blobstore.js?v=25"></script>
-<script src="js/video-api-client.js?v=25"></script>
-<script src="js/video-connections.js?v=25"></script>
-<script src="js/video.js?v=25"></script>
-<script src="js/video-studio.js?v=25"></script>
-<script src="js/form-check.js?v=25"></script>
+<script src="js/firebase-config.js?v=26"></script>
+<script type="module" src="js/auth.js?v=26"></script>
+<script src="js/app.js?v=26"></script>
+<script src="js/exercises.js?v=26"></script>
+<script src="js/workout.js?v=26"></script>
+<script src="js/nutrition.js?v=26"></script>
+<script src="js/nutrition-label-scan.js?v=26"></script>
+<script src="js/groceries.js?v=26"></script>
+<script src="js/habits.js?v=26"></script>
+<script src="js/business.js?v=26"></script>
+<script src="js/trading.js?v=26"></script>
+<script src="js/blobstore.js?v=26"></script>
+<script src="js/video-api-client.js?v=26"></script>
+<script src="js/video-connections.js?v=26"></script>
+<script src="js/video.js?v=26"></script>
+<script src="js/video-studio.js?v=26"></script>
+<script src="js/form-check.js?v=26"></script>
 </body>
 </html>
