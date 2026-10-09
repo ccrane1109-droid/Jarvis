@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
 
@@ -796,20 +796,25 @@
           that matters (e.g. the bottom of the squat) is picked out automatically — that's more useful than a photo
           since it isn't just one frozen instant, but it still can't judge things like bar control between reps.
           Neither is a substitute for a coach, and each check below only works well from the camera angle it names.
-          Range-of-motion and body-swing checks (Preacher Curl, Row) need a video — a photo can only show context for those.
-          Covers Squat, Deadlift, Push-Up, Bench Press, Lat Pulldown, Overhead Tricep Extension, Preacher Curl, and Row for now; more to come.
+          Range-of-motion and body-swing checks (Preacher Curl, Bicep Curl, Row, Plank) need a video — a photo can only show context for those.
+          Covers Squat, Deadlift, Lunge, Push-Up, Bench Press, Overhead Press, Lat Pulldown, Row, Bicep Curl, Preacher Curl, Overhead Tricep Extension, and Plank for now; more to come.
+          Every check you run is saved below (with the skeleton overlay, not the original photo/video) so you can look back over time.
         </p>
         <div class="form-row">
           <label for="formCheckExerciseSelect">Exercise</label>
           <select id="formCheckExerciseSelect">
             <option value="squat">Squat (side view works best)</option>
             <option value="deadlift">Deadlift (side view works best)</option>
+            <option value="lunge">Lunge (side view works best)</option>
             <option value="pushup">Push-Up (side view works best)</option>
             <option value="benchpress">Bench Press (shot from the feet looking up works best)</option>
+            <option value="overheadpress">Overhead Press (side view works best)</option>
             <option value="latpulldown">Lat Pulldown (side view works best)</option>
-            <option value="tricepextension">Overhead Tricep Extension (side view works best)</option>
-            <option value="preachercurl">Preacher Curl (side view works best)</option>
             <option value="row">Row (side view works best)</option>
+            <option value="bicepcurl">Bicep Curl (side view works best)</option>
+            <option value="preachercurl">Preacher Curl (side view works best)</option>
+            <option value="tricepextension">Overhead Tricep Extension (side view works best)</option>
+            <option value="plank">Plank (side view works best)</option>
           </select>
         </div>
         <div class="form-row">
@@ -825,6 +830,13 @@
           <canvas id="formCheckCanvas" style="max-width:100%;border-radius:8px;"></canvas>
         </div>
         <div id="formCheckResults" style="margin-top:14px;"></div>
+      </div>
+      <div class="card">
+        <div class="list-item-row" style="margin-bottom:10px;">
+          <h2 class="card-title" style="margin:0;">Recent Checks</h2>
+          <button type="button" class="btn-icon danger hidden" id="formCheckClearHistoryBtn">Clear History</button>
+        </div>
+        <div id="formCheckHistoryList" class="item-list"></div>
       </div>
     </div>
   </section>
@@ -3587,22 +3599,22 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=26"></script>
-<script type="module" src="js/auth.js?v=26"></script>
-<script src="js/app.js?v=26"></script>
-<script src="js/exercises.js?v=26"></script>
-<script src="js/workout.js?v=26"></script>
-<script src="js/nutrition.js?v=26"></script>
-<script src="js/nutrition-label-scan.js?v=26"></script>
-<script src="js/groceries.js?v=26"></script>
-<script src="js/habits.js?v=26"></script>
-<script src="js/business.js?v=26"></script>
-<script src="js/trading.js?v=26"></script>
-<script src="js/blobstore.js?v=26"></script>
-<script src="js/video-api-client.js?v=26"></script>
-<script src="js/video-connections.js?v=26"></script>
-<script src="js/video.js?v=26"></script>
-<script src="js/video-studio.js?v=26"></script>
-<script src="js/form-check.js?v=26"></script>
+<script src="js/firebase-config.js?v=27"></script>
+<script type="module" src="js/auth.js?v=27"></script>
+<script src="js/app.js?v=27"></script>
+<script src="js/exercises.js?v=27"></script>
+<script src="js/workout.js?v=27"></script>
+<script src="js/nutrition.js?v=27"></script>
+<script src="js/nutrition-label-scan.js?v=27"></script>
+<script src="js/groceries.js?v=27"></script>
+<script src="js/habits.js?v=27"></script>
+<script src="js/business.js?v=27"></script>
+<script src="js/trading.js?v=27"></script>
+<script src="js/blobstore.js?v=27"></script>
+<script src="js/video-api-client.js?v=27"></script>
+<script src="js/video-connections.js?v=27"></script>
+<script src="js/video.js?v=27"></script>
+<script src="js/video-studio.js?v=27"></script>
+<script src="js/form-check.js?v=27"></script>
 </body>
 </html>

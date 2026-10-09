@@ -451,10 +451,209 @@
     return results;
   }
 
+  function analyzeOverheadPress(keypoints) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+
+    if (!armSide) {
+      results.push(finding("warn", "Couldn't get a clear side-on reading", "Try a side-on shot with your shoulder, elbow, and wrist all visible overhead."));
+      return results;
+    }
+
+    const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+    if (elbowAngle !== null) {
+      results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Measured at the elbow (180° = arm straight overhead, lockout)."));
+    }
+
+    const hip = map[armSide.side + "_hip"];
+    if (hip && hip.score >= MIN_KEYPOINT_SCORE) {
+      const torsoLean = angleFromVertical(hip, armSide.shoulder);
+      if (torsoLean !== null) {
+        if (torsoLean > 20) {
+          results.push(finding("warn", "Torso may be leaning or arching back", "A big lean or an arched lower back often means the bar is drifting forward and your back is compensating instead of pressing straight overhead. A common cue is to brace your core and keep the bar path close to your face."));
+        } else if (torsoLean > 10) {
+          results.push(finding("info", "Slight lean or arch", "A small lean is common — just worth double-checking it's not turning into a bigger arch."));
+        } else {
+          results.push(finding("good", "Torso staying fairly upright", "Torso looks close to vertical in this frame."));
+        }
+      }
+
+      const torsoLength = dist(armSide.shoulder, hip);
+      if (torsoLength > 0) {
+        const barOffset = Math.abs(armSide.wrist.x - armSide.shoulder.x) / torsoLength;
+        if (barOffset > 0.35) {
+          results.push(finding("warn", "Bar/hand looks like it's drifted forward of your shoulder", "A common cue is to keep the bar path close, stacking over your shoulder rather than drifting out in front, which can stress the shoulder more."));
+        } else {
+          results.push(finding("good", "Hand position looks fairly stacked over your shoulder", "Wrist looks close to directly above your shoulder in this frame."));
+        }
+      }
+    } else {
+      results.push(finding("info", "Couldn't measure torso lean or bar path precisely", "Need a confident reading on the hip on the same side — try a clearer full-torso shot."));
+    }
+
+    return results;
+  }
+
+  function analyzeBicepCurl(keypoints, allFrames) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+
+    if (!armSide) {
+      results.push(finding("warn", "Couldn't get a clear reading on your arm", "Try a side-on shot with your working arm fully visible from shoulder to wrist."));
+      return results;
+    }
+
+    const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+    if (elbowAngle !== null) {
+      results.push(finding("info", "Elbow bend: " + Math.round(elbowAngle) + "°", "Measured at the elbow (180° = fully extended)."));
+    }
+
+    const hip = map[armSide.side + "_hip"];
+    if (hip && hip.score >= MIN_KEYPOINT_SCORE) {
+      // Angle at the shoulder between the shoulder->hip direction and the
+      // shoulder->elbow direction: near 0° when the upper arm continues
+      // straight down in line with the torso (elbow pinned at the side),
+      // growing toward 90°+ as the elbow swings forward away from the body.
+      const elbowToSideAngle = angleAt(hip, armSide.shoulder, armSide.elbow);
+      if (elbowToSideAngle !== null) {
+        if (elbowToSideAngle > 55) {
+          results.push(finding("warn", "Elbow may be swinging forward", "Your upper arm looks like it's moving away from your torso rather than staying pinned at your side — a common cue for standing curls is to keep your elbow still and close to your ribs, letting only your forearm move."));
+        } else {
+          results.push(finding("good", "Elbow looks like it's staying close to your side", "Your upper arm looks fairly still relative to your torso in this frame."));
+        }
+      }
+    } else {
+      results.push(finding("info", "Couldn't measure elbow drift precisely", "Need a confident reading on the hip on the same side to check whether your elbow is staying pinned — try a clearer full-torso shot."));
+    }
+
+    // A single frame can't show whether a rep went through its full range —
+    // that needs the whole clip, so this only runs when a video was given.
+    if (allFrames && allFrames.length > 1) {
+      const series = jointSeries(allFrames, armSide.side, ["shoulder", "elbow", "wrist"]);
+      const angles = series
+        .map(function (j) { return angleAt(j.shoulder, j.elbow, j.wrist); })
+        .filter(function (a) { return a !== null; });
+      if (angles.length >= 2) {
+        const min = Math.min.apply(null, angles), max = Math.max.apply(null, angles);
+        const rom = max - min;
+        if (rom < 70) {
+          results.push(finding("warn", "Range of motion looks limited", "Elbow angle only moved from about " + Math.round(min) + "° to " + Math.round(max) + "° across the clip. A common cue is to fully extend at the bottom and fully curl at the top — worth checking whether you're stopping short."));
+        } else {
+          results.push(finding("good", "Looks like a solid range of motion", "Elbow angle moved from about " + Math.round(min) + "° to " + Math.round(max) + "° across the clip."));
+        }
+      } else {
+        results.push(finding("info", "Couldn't track enough of the rep to check range of motion", "Try a clip with your whole arm visible for the entire movement."));
+      }
+    } else {
+      results.push(finding("info", "Take a video (not just a photo) to check your range of motion", "A single photo can't show whether you're going through the full range of the rep."));
+    }
+
+    return results;
+  }
+
+  function analyzeLunge(keypoints) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const side = pickSide(map);
+
+    if (!side) {
+      results.push(finding("warn", "Couldn't get a clear side-on reading", "Try a full-body photo from directly to the side, with good lighting and nothing blocking your hips/knees/ankles."));
+      return results;
+    }
+
+    const kneeAngle = angleAt(side.hip, side.knee, side.ankle);
+    if (kneeAngle !== null) {
+      if (kneeAngle <= 100) {
+        results.push(finding("good", "Front knee: solid depth", "Your front knee looks bent to around a right angle or deeper in this frame, which is the usual target for a lunge."));
+      } else if (kneeAngle <= 120) {
+        results.push(finding("info", "Front knee: close to a right angle", "Getting there — a bit more depth would bring your front knee closer to a 90° bend."));
+      } else {
+        results.push(finding("warn", "Front knee: looks fairly shallow", "Your front knee doesn't look very bent in this frame. If depth fits your goals and mobility, there may be room to lower your back knee further toward the floor."));
+      }
+    }
+
+    const shinLength = dist(side.knee, side.ankle);
+    if (shinLength > 0) {
+      const forwardOffset = Math.abs(side.knee.x - side.ankle.x) / shinLength;
+      if (forwardOffset > 0.6) {
+        results.push(finding("info", "Front knee is traveling noticeably past your toes", "Not automatically wrong — plenty of lunge styles allow this — but worth double-checking it's intentional and your heel isn't lifting off the ground."));
+      } else {
+        results.push(finding("good", "Front knee stays close to over your ankle", "Knee looks roughly stacked over your ankle rather than traveling well past your toes."));
+      }
+    }
+
+    const torsoLean = angleFromVertical(side.hip, side.shoulder);
+    if (torsoLean !== null) {
+      if (torsoLean > 25) {
+        results.push(finding("info", "Torso leaning forward noticeably", "Most lunge variations cue an upright torso, though some (like a forward-reaching split squat) intentionally lean — just noting it in case it wasn't intended."));
+      } else {
+        results.push(finding("good", "Torso staying fairly upright", "Torso looks close to vertical in this frame."));
+      }
+    }
+
+    return results;
+  }
+
+  // Shared by the live Plank check and its own best-frame scoring below:
+  // how far the hip sits off the straight line expected between shoulder and
+  // ankle, normalized by body length. >0 = hip sagging down, <0 = piked up.
+  function plankHipDeviation(shoulder, hip, ankle) {
+    const bodyLength = dist(shoulder, ankle);
+    const dx = ankle.x - shoulder.x;
+    if (bodyLength === 0 || dx === 0) return 0;
+    const t = (hip.x - shoulder.x) / dx;
+    const expectedHipY = shoulder.y + t * (ankle.y - shoulder.y);
+    return (hip.y - expectedHipY) / bodyLength;
+  }
+
+  function analyzePlank(keypoints, allFrames) {
+    const map = keypointMap(keypoints);
+    const results = [];
+    const side = pickSide(map, ["shoulder", "hip", "ankle"]);
+
+    if (!side) {
+      results.push(finding("warn", "Couldn't get a clear side-on reading", "Try a full-body shot from directly to the side, with your shoulder, hip, and ankle all visible."));
+      return results;
+    }
+
+    const deviation = plankHipDeviation(side.shoulder, side.hip, side.ankle);
+    if (deviation > 0.08) {
+      results.push(finding("warn", "Hips look like they're sagging", "Your hips look lower than a straight line from shoulder to ankle — try bracing your core and squeezing your glutes to flatten out the line."));
+    } else if (deviation < -0.08) {
+      results.push(finding("warn", "Hips look piked up", "Your hips look higher than a straight shoulder-to-ankle line — try lowering them so your body forms one straight line."));
+    } else {
+      results.push(finding("good", "Body forms a fairly straight line", "Shoulder, hip, and ankle look close to a straight line in this frame."));
+    }
+
+    // Drift over the course of a hold only shows up across a clip, not one frame.
+    if (allFrames && allFrames.length > 1) {
+      const series = jointSeries(allFrames, side.side, ["shoulder", "hip", "ankle"]);
+      const deviations = series.map(function (j) { return plankHipDeviation(j.shoulder, j.hip, j.ankle); });
+      if (deviations.length >= 2) {
+        const min = Math.min.apply(null, deviations), max = Math.max.apply(null, deviations);
+        const drift = max - min;
+        if (drift > 0.12) {
+          results.push(finding("warn", "Hip position looks like it drifted during the hold", "Your line changed noticeably over the clip — often a sign of fatigue setting in. Might be worth holding for a bit less time with better form rather than longer with more sag."));
+        } else {
+          results.push(finding("good", "Hip position looks stable through the hold", "Your line didn't change much across the clip."));
+        }
+      } else {
+        results.push(finding("info", "Couldn't track your line through enough of the clip to check for drift", "Try a clip with your shoulder, hip, and ankle visible for the whole hold."));
+      }
+    } else {
+      results.push(finding("info", "Take a video (not just a photo) to check whether your hold stays stable", "A single photo can't show whether your hips drift as the hold goes on."));
+    }
+
+    return results;
+  }
+
   const ANALYZERS = {
     squat: analyzeSquat, deadlift: analyzeDeadlift, pushup: analyzePushup, benchpress: analyzeBenchPress,
     latpulldown: analyzeLatPulldown, tricepextension: analyzeOverheadTricepExtension,
-    preachercurl: analyzePreacherCurl, row: analyzeRow
+    preachercurl: analyzePreacherCurl, row: analyzeRow,
+    overheadpress: analyzeOverheadPress, bicepcurl: analyzeBicepCurl, lunge: analyzeLunge, plank: analyzePlank
   };
 
   /* ---------------- video: picking the moment to analyze ----------------
@@ -485,7 +684,7 @@
       const elbowAngle = angleAt(side.shoulder, elbow, wrist);
       return elbowAngle === null ? null : -elbowAngle;
     }
-    if (exercise === "benchpress" || exercise === "tricepextension" || exercise === "preachercurl" || exercise === "row") {
+    if (exercise === "benchpress" || exercise === "tricepextension" || exercise === "preachercurl" || exercise === "row" || exercise === "bicepcurl") {
       const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
       if (!armSide) return null;
       const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
@@ -496,6 +695,29 @@
       if (!side) return null;
       const lean = angleFromVertical(side.hip, side.shoulder);
       return lean === null ? null : lean;
+    }
+    // Overhead press: prefer the top of the press (straightest elbow,
+    // closest to lockout) — that's where forward bar drift and back-arching
+    // compensation are most visible.
+    if (exercise === "overheadpress") {
+      const armSide = pickSide(map, ["shoulder", "elbow", "wrist"]);
+      if (!armSide) return null;
+      const elbowAngle = angleAt(armSide.shoulder, armSide.elbow, armSide.wrist);
+      return elbowAngle;
+    }
+    // Lunge: prefer the deepest point (most-bent front knee).
+    if (exercise === "lunge") {
+      const side = pickSide(map);
+      if (!side) return null;
+      const kneeAngle = angleAt(side.hip, side.knee, side.ankle);
+      return kneeAngle === null ? null : -kneeAngle;
+    }
+    // Plank: prefer the frame with the most hip sag/pike — the most
+    // actionable moment to flag, same logic as scoring a squat's depth.
+    if (exercise === "plank") {
+      const side = pickSide(map, ["shoulder", "hip", "ankle"]);
+      if (!side) return null;
+      return Math.abs(plankHipDeviation(side.shoulder, side.hip, side.ankle));
     }
     const side = pickSide(map);
     return side ? 0 : null;
@@ -510,7 +732,10 @@
       if (score !== null) scored.push({ time: s.time, keypoints: s.keypoints, score: score });
     });
     if (scored.length === 0) return null;
-    const pickHighestScore = ["squat", "pushup", "benchpress", "latpulldown", "tricepextension", "preachercurl", "row"];
+    const pickHighestScore = [
+      "squat", "pushup", "benchpress", "latpulldown", "tricepextension", "preachercurl", "row",
+      "overheadpress", "bicepcurl", "lunge", "plank"
+    ];
     if (pickHighestScore.indexOf(exercise) !== -1) {
       return scored.reduce(function (best, s) { return s.score > best.score ? s : best; });
     }
@@ -723,6 +948,145 @@
     return sampleVideoFramesBySeeking(video, exercise, det, onStatus);
   }
 
+  /* ---------------- history (saved past checks) ----------------
+     Each completed check (with at least one finding) is saved locally so
+     progress and recurring issues are visible over time, not just in the
+     moment. Only a small resized thumbnail (with the skeleton overlay
+     already drawn on it) is kept, not the original photo/video, to keep
+     localStorage usage bounded; entries are also capped at
+     MAX_HISTORY_ENTRIES, oldest first out. */
+
+  const HISTORY_KEY = "jarvisFormCheckHistory";
+  const MAX_HISTORY_ENTRIES = 20;
+  const THUMBNAIL_MAX_WIDTH = 160;
+  let openHistoryId = null;
+
+  function loadHistory() {
+    return window.JarvisCore.loadJSON(HISTORY_KEY, []);
+  }
+
+  function saveHistoryList(list) {
+    window.JarvisCore.saveJSON(HISTORY_KEY, list);
+  }
+
+  function addHistoryEntry(entry) {
+    const list = loadHistory();
+    list.unshift(entry);
+    if (list.length > MAX_HISTORY_ENTRIES) list.length = MAX_HISTORY_ENTRIES;
+    saveHistoryList(list);
+    renderHistory();
+  }
+
+  function deleteHistoryEntry(id) {
+    saveHistoryList(loadHistory().filter(function (e) { return e.id !== id; }));
+    if (openHistoryId === id) openHistoryId = null;
+    renderHistory();
+  }
+
+  function clearHistory() {
+    saveHistoryList([]);
+    openHistoryId = null;
+    renderHistory();
+  }
+
+  function makeThumbnail(canvas) {
+    const scale = Math.min(1, THUMBNAIL_MAX_WIDTH / canvas.width);
+    const w = Math.max(1, Math.round(canvas.width * scale));
+    const h = Math.max(1, Math.round(canvas.height * scale));
+    const thumb = document.createElement("canvas");
+    thumb.width = w;
+    thumb.height = h;
+    thumb.getContext("2d").drawImage(canvas, 0, 0, w, h);
+    return thumb.toDataURL("image/jpeg", 0.6);
+  }
+
+  function buildSummaryLine(results) {
+    if (!results || !results.length) return "";
+    let good = 0, warn = 0, info = 0;
+    results.forEach(function (r) {
+      if (r.status === "good") good++;
+      else if (r.status === "warn") warn++;
+      else info++;
+    });
+    const parts = [];
+    if (good) parts.push(good + " good");
+    if (warn) parts.push(warn + " to look at");
+    if (info) parts.push(info + " for context");
+    return parts.join(" · ");
+  }
+
+  function renderHistoryDetail(entry) {
+    const core = window.JarvisCore;
+    const summary = buildSummaryLine(entry.results);
+    const findingsHtml = (entry.results || []).map(function (r) {
+      const cls = r.status === "good" ? "badge-green" : r.status === "warn" ? "badge-yellow" : "badge-neutral";
+      return (
+        '<div class="list-item" style="margin-top:8px;">' +
+          '<span class="badge ' + cls + '">' + core.escapeHtml(r.label) + '</span>' +
+          '<p class="field-hint" style="margin-top:6px;">' + core.escapeHtml(r.detail) + '</p>' +
+        '</div>'
+      );
+    }).join("");
+    return (
+      '<div class="form-check-history-detail">' +
+        '<img src="' + entry.thumbnail + '" alt="" style="max-width:100%;border-radius:8px;">' +
+        (entry.note ? '<p class="field-hint" style="margin-top:8px;">' + core.escapeHtml(entry.note) + '</p>' : "") +
+        (summary ? '<p class="list-item-meta" style="margin-top:8px;">' + core.escapeHtml(summary) + '</p>' : "") +
+        findingsHtml +
+      '</div>'
+    );
+  }
+
+  function renderHistory() {
+    const container = $("formCheckHistoryList");
+    if (!container) return;
+    const core = window.JarvisCore;
+    const list = loadHistory();
+    const clearBtn = $("formCheckClearHistoryBtn");
+    if (clearBtn) clearBtn.classList.toggle("hidden", list.length === 0);
+    if (list.length === 0) {
+      container.innerHTML = '<div class="empty-state">No checks saved yet — run an analysis above and it will show up here.</div>';
+      return;
+    }
+    container.innerHTML = list.map(function (entry) {
+      const summary = buildSummaryLine(entry.results);
+      return (
+        '<div class="list-item">' +
+          '<div class="list-item-row">' +
+            '<img class="form-check-history-thumb history-toggle-btn" data-id="' + core.escapeHtml(entry.id) + '" src="' + entry.thumbnail + '" alt="">' +
+            '<div class="list-item-main history-toggle-btn" data-id="' + core.escapeHtml(entry.id) + '" style="cursor:pointer;">' +
+              '<span class="list-item-title">' + core.escapeHtml(entry.exerciseLabel) + '</span>' +
+              '<span class="list-item-meta">' + core.escapeHtml(core.formatDateTime(entry.timestamp)) + '</span>' +
+              (summary ? '<span class="list-item-meta">' + core.escapeHtml(summary) + '</span>' : "") +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon danger history-delete-btn" data-id="' + core.escapeHtml(entry.id) + '">Delete</button>' +
+            '</div>' +
+          '</div>' +
+          (openHistoryId === entry.id ? renderHistoryDetail(entry) : "") +
+        '</div>'
+      );
+    }).join("");
+  }
+
+  function handleHistoryListClick(e) {
+    const delBtn = e.target.closest(".history-delete-btn");
+    if (delBtn) {
+      if (window.confirm("Delete this saved check?")) deleteHistoryEntry(delBtn.getAttribute("data-id"));
+      return;
+    }
+    const toggle = e.target.closest(".history-toggle-btn");
+    if (toggle) {
+      const id = toggle.getAttribute("data-id");
+      openHistoryId = openHistoryId === id ? null : id;
+      renderHistory();
+    }
+  }
+
+  function handleClearHistoryClick() {
+    if (window.confirm("Clear all saved Form Check history?")) clearHistory();
+  }
+
   /* ---------------- UI wiring ---------------- */
 
   function $(id) { return document.getElementById(id); }
@@ -738,7 +1102,8 @@
       return;
     }
     const core = window.JarvisCore;
-    container.innerHTML = results.map(function (r) {
+    const summary = buildSummaryLine(results);
+    const items = results.map(function (r) {
       const cls = r.status === "good" ? "badge-green" : r.status === "warn" ? "badge-yellow" : "badge-neutral";
       return (
         '<div class="list-item">' +
@@ -747,6 +1112,7 @@
         '</div>'
       );
     }).join("");
+    container.innerHTML = (summary ? '<p class="list-item-meta" style="margin-bottom:8px;">' + core.escapeHtml(summary) + '</p>' : "") + items;
   }
 
   function handleFileChange(e) {
@@ -814,6 +1180,20 @@
       renderResults(results);
       const baseStatus = results.length ? "" : "Detected a person, but couldn't get confident readings for this check — try a clearer angle.";
       setStatus([analysis.note, baseStatus].filter(Boolean).join(" "));
+
+      if (results.length) {
+        const select = $("formCheckExerciseSelect");
+        const exerciseLabel = (select && select.selectedOptions[0] && select.selectedOptions[0].textContent) || exercise;
+        addHistoryEntry({
+          id: window.JarvisCore.uid("formcheck"),
+          exercise: exercise,
+          exerciseLabel: exerciseLabel,
+          timestamp: new Date().toISOString(),
+          thumbnail: makeThumbnail($("formCheckCanvas")),
+          note: analysis.note || null,
+          results: results
+        });
+      }
     }).catch(function (err) {
       btn.disabled = false;
       const message = err && err.message ? err.message : "";
@@ -831,6 +1211,11 @@
     if (!photoInput || !analyzeBtn) return;
     photoInput.addEventListener("change", handleFileChange);
     analyzeBtn.addEventListener("click", handleAnalyzeClick);
+    const historyList = $("formCheckHistoryList");
+    if (historyList) historyList.addEventListener("click", handleHistoryListClick);
+    const clearHistoryBtn = $("formCheckClearHistoryBtn");
+    if (clearHistoryBtn) clearHistoryBtn.addEventListener("click", handleClearHistoryClick);
+    renderHistory();
   }
 
   window.JarvisFormCheck = {
@@ -842,10 +1227,14 @@
       analyzePushup: analyzePushup, analyzeBenchPress: analyzeBenchPress,
       analyzeLatPulldown: analyzeLatPulldown, analyzeOverheadTricepExtension: analyzeOverheadTricepExtension,
       analyzePreacherCurl: analyzePreacherCurl, analyzeRow: analyzeRow,
+      analyzeOverheadPress: analyzeOverheadPress, analyzeBicepCurl: analyzeBicepCurl,
+      analyzeLunge: analyzeLunge, analyzePlank: analyzePlank, plankHipDeviation: plankHipDeviation,
       pickSide: pickSide, keypointMap: keypointMap,
       scoreFrameForExercise: scoreFrameForExercise, pickBestFrame: pickBestFrame,
       sampleVideoFrames: sampleVideoFrames, sampleVideoFramesByPlayback: sampleVideoFramesByPlayback,
-      sampleVideoFramesBySeeking: sampleVideoFramesBySeeking
+      sampleVideoFramesBySeeking: sampleVideoFramesBySeeking,
+      buildSummaryLine: buildSummaryLine, loadHistory: loadHistory, addHistoryEntry: addHistoryEntry,
+      deleteHistoryEntry: deleteHistoryEntry, clearHistory: clearHistory
     }
   };
 })();
