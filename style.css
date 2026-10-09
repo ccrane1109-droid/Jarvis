@@ -379,6 +379,24 @@ textarea { resize: vertical; min-height: 44px; }
 .badge-neutral { background: var(--card-hover); color: var(--text-dim); }
 .badge-accent { background: var(--accent-dim); color: var(--accent); }
 
+/* ---------------- Form Check (saved history) ---------------- */
+
+.form-check-history-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.form-check-history-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+
 /* ---------------- Habits ---------------- */
 
 .habit-check-btn {
