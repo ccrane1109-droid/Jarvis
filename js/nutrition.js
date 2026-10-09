@@ -1013,7 +1013,8 @@
       const el = $(id); if (el) el.value = "";
     });
     $("foodIsFruitVeg").checked = false;
-    setAiStatus("foodAiStatus", "");
+    setAiStatus("foodScanStatus", "");
+    $("foodNameMatchHint").classList.add("hidden");
     renderFoodForm();
   }
 
@@ -1261,7 +1262,7 @@
       "savedFoodSodium", "savedFoodCalcium", "savedFoodIron", "savedFoodPotassium", "savedFoodVitaminC", "savedFoodVitaminD"].forEach(function (id) {
       const el = $(id); if (el) el.value = "";
     });
-    setAiStatus("savedFoodAiStatus", "");
+    setAiStatus("savedFoodScanStatus", "");
     renderSavedFoodForm();
   }
 
@@ -1576,70 +1577,6 @@
       } else {
         setRecipeAiStatus("Filled in " + filled + " ingredient" + (filled === 1 ? "" : "s") + " with AI estimates — these are estimates, not verified nutrition facts, so double-check anything that matters.");
       }
-    });
-  }
-
-  // Estimates a single food's nutrition (macros, and for the Food Log,
-  // micronutrients too) from its name + serving amount, via the same shared
-  // "nutrition" AI connection — filling in fields that stay normal, editable
-  // numbers the user can still correct by hand.
-  function handleEstimateFoodWithAI() {
-    const core = window.JarvisCore;
-    const name = $("foodName").value.trim();
-    if (!name) {
-      core.showToast("Enter a food name first.");
-      return;
-    }
-    const quantity = $("foodServing").value.trim();
-    setAiStatus("foodAiStatus", "Asking AI to estimate nutrition for " + name + "…");
-    const btn = $("foodAiEstimateBtn");
-    if (btn) btn.disabled = true;
-
-    requestNutritionEstimates([{ name: name, quantity: quantity }]).then(function (result) {
-      if (btn) btn.disabled = false;
-      if (!result.ok) {
-        setAiStatus("foodAiStatus", result.error, true);
-        return;
-      }
-      const est = result.estimates[0];
-      if (!est || typeof est !== "object") {
-        setAiStatus("foodAiStatus", "The model replied, but didn't return an estimate for this food.", true);
-        return;
-      }
-      MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
-        if (isNonNegativeNumber(est[f])) $("food" + capitalize(f)).value = est[f];
-      });
-      setAiStatus("foodAiStatus", "Filled in an AI estimate for " + name + " — this is an estimate, not a verified nutrition fact, so double-check anything that matters.");
-    });
-  }
-
-  function handleEstimateSavedFoodWithAI() {
-    const core = window.JarvisCore;
-    const name = $("savedFoodName").value.trim();
-    if (!name) {
-      core.showToast("Enter a food name first.");
-      return;
-    }
-    const quantity = $("savedFoodServing").value.trim();
-    setAiStatus("savedFoodAiStatus", "Asking AI to estimate nutrition for " + name + "…");
-    const btn = $("savedFoodAiEstimateBtn");
-    if (btn) btn.disabled = true;
-
-    requestNutritionEstimates([{ name: name, quantity: quantity }]).then(function (result) {
-      if (btn) btn.disabled = false;
-      if (!result.ok) {
-        setAiStatus("savedFoodAiStatus", result.error, true);
-        return;
-      }
-      const est = result.estimates[0];
-      if (!est || typeof est !== "object") {
-        setAiStatus("savedFoodAiStatus", "The model replied, but didn't return an estimate for this food.", true);
-        return;
-      }
-      MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
-        if (isNonNegativeNumber(est[f])) $("savedFood" + capitalize(f)).value = est[f];
-      });
-      setAiStatus("savedFoodAiStatus", "Filled in an AI estimate for " + name + " — this is an estimate, not a verified nutrition fact, so double-check anything that matters.");
     });
   }
 
@@ -2329,6 +2266,7 @@
     $("nutritionWaterRemoveBtn").addEventListener("click", function () { handleWaterAdjust(-1); });
 
     $("qaAddFoodBtn").addEventListener("click", function () { openAddFoodModal(); });
+    $("qaScanLabelBtn").addEventListener("click", function () { openAddFoodModal("create"); });
     $("qaAddWaterBtn").addEventListener("click", function () { handleWaterAdjust(1); });
     $("qaLogRecentBtn").addEventListener("click", function () { openAddFoodModal("recent"); });
     $("qaAddRecipeBtn").addEventListener("click", function () { openAddFoodModal("recipe"); });
@@ -2356,8 +2294,6 @@
 
     $("foodForm").addEventListener("submit", handleFoodFormSubmit);
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
-    $("foodAiEstimateBtn").addEventListener("click", handleEstimateFoodWithAI);
-    $("foodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
     $("foodScanLabelBtn").addEventListener("click", function () { $("foodScanLabelInput").click(); });
     $("foodScanLabelInput").addEventListener("change", handleScanFoodLabelInput);
     $("foodName").addEventListener("input", handleFoodNameInputForMatch);
@@ -2377,8 +2313,6 @@
 
     $("savedFoodForm").addEventListener("submit", handleSavedFoodFormSubmit);
     $("savedFoodCancelBtn").addEventListener("click", resetSavedFoodForm);
-    $("savedFoodAiEstimateBtn").addEventListener("click", handleEstimateSavedFoodWithAI);
-    $("savedFoodGoToAiConnectionsBtn").addEventListener("click", handleGoToAiConnections);
     $("savedFoodScanLabelBtn").addEventListener("click", function () { $("savedFoodScanLabelInput").click(); });
     $("savedFoodScanLabelInput").addEventListener("change", handleScanSavedFoodLabelInput);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
