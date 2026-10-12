@@ -1014,6 +1014,8 @@
     });
     $("foodIsFruitVeg").checked = false;
     setAiStatus("foodScanStatus", "");
+    setAiStatus("foodRememberStatus", "");
+    $("foodRememberRow").classList.add("hidden");
     $("foodNameMatchHint").classList.add("hidden");
     renderFoodForm();
   }
@@ -1603,6 +1605,12 @@
     const btn = $(btnId);
     if (btn) btn.disabled = true;
     setAiStatus(statusId, "Reading the label…");
+    // A fresh scan attempt invalidates whatever "Remember This Food" state
+    // was left over from a previous photo on the Food Log form.
+    if (namePrefix === "food") {
+      $("foodRememberRow").classList.add("hidden");
+      setAiStatus("foodRememberStatus", "");
+    }
     window.JarvisLabelScan.scanNutritionLabel(file, function (statusText) {
       setAiStatus(statusId, statusText);
     }).then(function (result) {
@@ -1618,7 +1626,49 @@
       if (result.servingSize && servingInput && !servingInput.value.trim()) servingInput.value = result.servingSize.slice(0, 40);
       const foundList = Object.keys(result.fields);
       setAiStatus(statusId, "Found " + foundList.length + " value" + (foundList.length === 1 ? "" : "s") + " on the label (" + foundList.join(", ") + ") — this is OCR, not guaranteed accurate, so double-check against the photo before saving.");
+      // The Saved Foods form's own "Save Food" button already remembers
+      // whatever it scans — but the Food Log form only logs today's meal,
+      // so offer a one-tap way to also remember this food for next time.
+      if (namePrefix === "food") $("foodRememberRow").classList.remove("hidden");
     });
+  }
+
+  // Upserts the Food Log Create form's current name + macro/micro fields
+  // into Saved Foods, by exact (case-insensitive) name match — so scanning
+  // the same product again later re-recognizes it (handleFoodNameInputForMatch)
+  // instead of needing a rescan. Matches "Save as Saved Food" on a logged
+  // item: an explicit tap, never automatic, and never silently overwritten.
+  function handleRememberFoodClick() {
+    const core = window.JarvisCore;
+    const name = $("foodName").value.trim();
+    if (!name) {
+      core.showToast("Give the food a name first.");
+      $("foodName").focus();
+      return;
+    }
+    if (!isNonNegativeNumber($("foodCalories").value)) {
+      core.showToast("Calories must be zero or a positive number.");
+      return;
+    }
+    const raw = {
+      name: name, serving: $("foodServing").value.trim(),
+      calories: $("foodCalories").value, protein: $("foodProtein").value,
+      carbs: $("foodCarbs").value, fat: $("foodFat").value, fiber: $("foodFiber").value,
+      sodium: $("foodSodium").value, calcium: $("foodCalcium").value, iron: $("foodIron").value,
+      potassium: $("foodPotassium").value, vitaminC: $("foodVitaminC").value, vitaminD: $("foodVitaminD").value
+    };
+    const existingIdx = savedFoods.findIndex(function (f) { return f.name.trim().toLowerCase() === name.toLowerCase(); });
+    if (existingIdx !== -1) {
+      raw.id = savedFoods[existingIdx].id;
+      raw.createdAt = savedFoods[existingIdx].createdAt;
+      savedFoods[existingIdx] = sanitizeFoodItem(raw);
+    } else {
+      savedFoods.push(sanitizeFoodItem(raw));
+    }
+    saveSavedFoods();
+    renderSavedFoods();
+    setAiStatus("foodRememberStatus", "Remembered “" + name + "” — typing this name again will offer to fill these nutrients automatically.");
+    core.showToast('Remembered "' + name + '".');
   }
 
   function handleScanFoodLabelInput(e) {
@@ -2296,6 +2346,7 @@
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
     $("foodScanLabelBtn").addEventListener("click", function () { $("foodScanLabelInput").click(); });
     $("foodScanLabelInput").addEventListener("change", handleScanFoodLabelInput);
+    $("foodRememberBtn").addEventListener("click", handleRememberFoodClick);
     $("foodName").addEventListener("input", handleFoodNameInputForMatch);
     $("foodNameMatchUseBtn").addEventListener("click", handleFoodNameMatchUse);
     MEALS.forEach(function (meal) {
