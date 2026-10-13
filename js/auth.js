@@ -525,14 +525,30 @@
     // Calls JARVIS's own Cloud Functions as the signed-in user. The
     // functions SDK only loads the first time something actually calls.
     let functionsClient = null;
+    function signedOutError() {
+      const err = new Error("Sign in to JARVIS to use this feature.");
+      err.code = "functions/unauthenticated";
+      return err;
+    }
+    // Private per-user documents outside the synced users/{uid} doc (which
+    // has a 1MB limit). Only these subcollections are reachable, always
+    // under the signed-in user's own path; firestore.rules enforces the
+    // same, and makes the server-written ones read-only.
+    const DATA_COLLECTIONS = ["marketing", "marketingIdeas", "marketingFindings", "marketingSnapshots", "marketingState", "marketingUsage"];
+    function dataSegments(path) {
+      if (!auth.currentUser) throw signedOutError();
+      const parts = String(path || "").split("/").filter(Boolean);
+      if (!parts.length || DATA_COLLECTIONS.indexOf(parts[0]) === -1) throw new Error("Unsupported data path: " + path);
+      return ["users", auth.currentUser.uid].concat(parts);
+    }
+    function dataCall(fn) {
+      try { return Promise.resolve(fn()); } catch (err) { return Promise.reject(err); }
+    }
     window.JarvisCloud = {
       isSignedIn: function () { return !!(auth && auth.currentUser); },
-      call: function (name, data) {
-        if (!auth.currentUser) {
-          const err = new Error("Sign in to JARVIS to use this feature.");
-          err.code = "functions/unauthenticated";
-          return Promise.reject(err);
-        }
+      // options.timeout (ms) for slow functions such as idea generation.
+      call: function (name, data, options) {
+        if (!auth.currentUser) return Promise.reject(signedOutError());
         const ready = functionsClient
           ? Promise.resolve(functionsClient)
           : import(FIREBASE_FUNCTIONS_URL).then(function (mod) {
@@ -540,8 +556,34 @@
             return functionsClient;
           });
         return ready.then(function (client) {
-          return client.mod.httpsCallable(client.instance, name)(data || {});
+          return client.mod.httpsCallable(client.instance, name, options || undefined)(data || {});
         }).then(function (result) { return result.data; });
+      },
+      data: {
+        get: function (path) {
+          return dataCall(function () {
+            return fb.getDoc(fb.doc.apply(null, [db].concat(dataSegments(path)))).then(function (snap) {
+              return snap.exists() ? snap.data() : null;
+            });
+          });
+        },
+        set: function (path, value, merge) {
+          return dataCall(function () {
+            return fb.setDoc(fb.doc.apply(null, [db].concat(dataSegments(path))), value, { merge: !!merge });
+          });
+        },
+        remove: function (path) {
+          return dataCall(function () {
+            return fb.deleteDoc(fb.doc.apply(null, [db].concat(dataSegments(path))));
+          });
+        },
+        list: function (collectionPath) {
+          return dataCall(function () {
+            return fb.getDocs(fb.collection.apply(null, [db].concat(dataSegments(collectionPath)))).then(function (snap) {
+              return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+            });
+          });
+        }
       }
     };
 

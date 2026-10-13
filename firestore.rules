@@ -8,18 +8,34 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      // Marketing settings the owner can change (e.g. monthly credit cap).
+      // Owner-editable marketing data: settings (budget, caps, watchlist,
+      // brand profile), the content idea library and audience notes.
       match /marketing/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /marketingIdeas/{ideaId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /marketingFindings/{findingId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
       // Written only by the server (Cloud Functions bypass these rules), so
-      // usage records and cached results can't be edited from a browser.
+      // usage records, cached results and research history can't be edited
+      // from a browser.
       match /marketingUsage/{month} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
       match /marketingCache/{entry} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      match /marketingSnapshots/{handle} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      match /marketingState/{docId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
