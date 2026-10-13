@@ -390,6 +390,7 @@
       if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
       if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
       if (window.JarvisFormCheck && typeof window.JarvisFormCheck.init === "function") window.JarvisFormCheck.init();
+      if (window.JarvisContentIntel && typeof window.JarvisContentIntel.init === "function") window.JarvisContentIntel.init();
       maybeAutoShowBriefing();
     }
 
