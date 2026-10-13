@@ -1,0 +1,67 @@
+name: Marketing Research
+
+# Daily InsightSocial research for the Marketing tab. Read-only: it never
+# posts or messages anything. Credit spending is capped by
+# data/marketing-research-config.json (dailyCreditCap).
+#
+# Scheduled runs only fire from the repository's default branch, so the
+# default branch must be main for the daily schedule to run.
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # daily at 12:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: marketing-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run research
+        env:
+          INSIGHTSOCIAL_API_KEY: ${{ secrets.INSIGHTSOCIAL_API_KEY }}
+        run: node scripts/marketing-research.mjs
+
+      # Runs even if the research step failed, so a recorded failure (for
+      # example a rejected key) still shows up in the Marketing tab.
+      - name: Commit results
+        id: commit
+        if: always()
+        run: |
+          git add data/marketing-research.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No new research data to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update marketing research data"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Pushes made with the workflow token don't trigger other workflows,
+      # so start the Pages deploy explicitly.
+      - name: Redeploy site
+        if: always() && steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-pages.yml --ref main --repo "$GITHUB_REPOSITORY"

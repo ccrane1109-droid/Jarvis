@@ -129,7 +129,81 @@
     });
   }
 
+  /* ---------------- automatic research (written daily by GitHub Actions) ---------------- */
+
+  const AUTO_DATA_URL = "data/marketing-research.json";
+
+  function autoResultItem(r) {
+    const item = document.createElement("div");
+    item.className = "list-item";
+    const title = document.createElement("div");
+    title.className = "list-item-title";
+    title.textContent = (r.label || r.path || "Request") + " ";
+    const badge = document.createElement("span");
+    badge.className = "badge " + (r.skipped ? "badge-neutral" : r.ok ? "badge-green" : "badge-yellow");
+    badge.textContent = r.skipped ? "Skipped" : r.ok ? "OK" : "Failed";
+    title.appendChild(badge);
+    item.appendChild(title);
+
+    const meta = document.createElement("p");
+    meta.className = "field-hint";
+    if (r.skipped) {
+      meta.textContent = r.skipped;
+    } else {
+      const parts = [r.ok ? "HTTP " + r.status : (r.error || "HTTP " + r.status)];
+      if (r.attempts > 1) parts.push("after " + r.attempts + " attempts");
+      parts.push(typeof r.creditsUsed === "number" ? r.creditsUsed + " credits" : "credit cost not reported");
+      meta.textContent = parts.join(" · ");
+    }
+    item.appendChild(meta);
+
+    if (r.data !== undefined && r.data !== null) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Raw response";
+      const pre = document.createElement("pre");
+      pre.className = "video-raw-response";
+      pre.textContent = JSON.stringify(r.data, null, 2);
+      details.appendChild(summary);
+      details.appendChild(pre);
+      item.appendChild(details);
+    }
+    return item;
+  }
+
+  function renderAutoResearch() {
+    const statusEl = $("ciAutoStatus");
+    const listEl = $("ciAutoResults");
+    if (!statusEl || !listEl) return;
+    fetch(AUTO_DATA_URL, { cache: "no-store" }).then(function (res) {
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    }).then(function (data) {
+      listEl.textContent = "";
+      const run = data && data.latest;
+      if (!run || !Array.isArray(run.results)) {
+        statusEl.textContent = "No automatic research has run yet.";
+        return;
+      }
+      const parts = ["Last run " + window.JarvisCore.formatDateTime(run.finishedAt || run.startedAt)];
+      if (typeof run.creditsUsed === "number") parts.push(run.creditsUsed + " credits used");
+      if (typeof run.creditsRemaining === "number") parts.push(run.creditsRemaining.toLocaleString() + " remaining");
+      statusEl.textContent = parts.join(" · ") + ".";
+      (run.notes || []).forEach(function (note) {
+        const p = document.createElement("p");
+        p.className = "field-hint";
+        p.textContent = note;
+        listEl.appendChild(p);
+      });
+      run.results.forEach(function (r) { listEl.appendChild(autoResultItem(r)); });
+    }).catch(function (err) {
+      statusEl.textContent = "Couldn't load automatic research results: " + (err && err.message ? err.message : "unknown error") + ".";
+    });
+  }
+
   function init() {
+    renderAutoResearch();
     const connectForm = $("ciConnectForm");
     const lookupForm = $("ciLookupForm");
     if (!connectForm || !lookupForm) return;

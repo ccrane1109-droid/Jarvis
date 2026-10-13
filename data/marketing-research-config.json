@@ -1,0 +1,12 @@
+{
+  "dailyCreditCap": 50,
+  "maxRequestsPerRun": 10,
+  "historyDays": 30,
+  "requests": [
+    {
+      "label": "Gratiel Instagram profile",
+      "path": "/instagram/profile",
+      "params": { "handle": "gratiel" }
+    }
+  ]
+}
