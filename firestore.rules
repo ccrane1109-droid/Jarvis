@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Deploying this file replaces the rules currently set in the Firebase
+// console. The users/{userId} rule matches the one JARVIS's cloud sync
+// already requires (see js/auth.js).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Marketing settings the owner can change (e.g. monthly credit cap).
+      match /marketing/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Written only by the server (Cloud Functions bypass these rules), so
+      // usage records and cached results can't be edited from a browser.
+      match /marketingUsage/{month} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      match /marketingCache/{entry} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+  }
+}

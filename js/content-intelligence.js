@@ -1,216 +1,167 @@
 /* ==========================================================================
-   JARVIS — Content Intelligence (seed)
+   JARVIS — Marketing (Content Intelligence)
 
-   This is the first small piece of what's planned to grow into a larger
-   marketing-intelligence module for Gratiel. For now it's deliberately
-   minimal: a BYO-key connection to InsightSocial (a third-party API the
-   user signed up and pays for separately — Jarvis never sees or stores
-   the key anywhere but this browser, same pattern as Video Connections
-   and the Nutrition AI estimate) plus one test lookup to prove the wiring
-   works. Every call goes straight from this device to InsightSocial's
-   API using the user's own key and credits — nothing routes through or
-   is paid for by Jarvis.
+   Every InsightSocial request goes through JARVIS's own Firebase Cloud
+   Functions (functions/), which hold the API key as a server secret, accept
+   only the owner's signed-in account, cache results, and enforce a monthly
+   credit cap. The browser never sees the key.
 
-   Only one endpoint is wired up (GET /v1/instagram/profile) because it's
-   the only one confirmed so far. The response is shown as raw JSON
-   rather than mapped to named fields, since the exact response schema
-   hasn't been confirmed — guessing field names here would risk silently
-   mis-displaying real data as something it isn't.
+   Earlier versions stored the key in this browser's localStorage; that copy
+   is deleted on load since the server now holds the only one.
    ========================================================================== */
 
 (function () {
   "use strict";
 
-  const LS_KEY = "jarvisInsightSocialKey";
-  const API_BASE = "https://api.insightsocial.app/v1";
-  // Every InsightSocial key seen so far starts with this (isk_live_...).
-  const KEY_PREFIX = "isk_";
+  const LEGACY_KEY_STORAGE = "jarvisInsightSocialKey";
 
   function $(id) { return document.getElementById(id); }
 
-  function loadKey() {
-    try { return localStorage.getItem(LS_KEY) || ""; } catch (e) { return ""; }
-  }
-  // Reads the value back so a browser that silently refuses storage is
-  // reported as a failure instead of a fake success.
-  function saveKey(key) {
+  function removeLegacyBrowserKey() {
     try {
-      localStorage.setItem(LS_KEY, key);
-      return localStorage.getItem(LS_KEY) === key;
+      if (localStorage.getItem(LEGACY_KEY_STORAGE) === null) return false;
+      localStorage.removeItem(LEGACY_KEY_STORAGE);
+      return true;
     } catch (e) {
       return false;
     }
   }
-  function clearKey() {
-    try { localStorage.removeItem(LS_KEY); } catch (e) { /* ignore */ }
-  }
-  function looksLikeKey(key) { return key.indexOf(KEY_PREFIX) === 0; }
 
-  function renderConnectionStatus() {
-    const key = loadKey();
+  function cloud() { return window.JarvisCloud || null; }
+
+  // Turns a Cloud Functions error into something actionable.
+  function describeCallError(err) {
+    const code = (err && err.code) || "";
+    const message = (err && err.message) || "";
+    if (code === "functions/unauthenticated") return "Sign in to JARVIS to use Marketing research.";
+    if (code === "functions/permission-denied") return "This account isn't allowed to use Marketing research.";
+    if (code === "functions/not-found") return "The Marketing server isn't deployed yet.";
+    if (code === "functions/failed-precondition" || code === "functions/resource-exhausted" || code === "functions/invalid-argument") return message;
+    if (code === "functions/unavailable" || code === "functions/deadline-exceeded") return "Couldn't reach the Marketing server. Check your connection and try again.";
+    return "Something went wrong talking to the Marketing server" + (message ? ": " + message : ".");
+  }
+
+  function formatNumber(n) { return typeof n === "number" ? n.toLocaleString() : "—"; }
+
+  /* ---------------- server connection status (spends no credits) ---------------- */
+
+  function renderStatus(notice) {
     const statusEl = $("ciConnectionStatus");
-    const disconnectBtn = $("ciDisconnectBtn");
-    const input = $("ciApiKeyInput");
+    const usageEl = $("ciUsageSummary");
     if (!statusEl) return;
-    const badKey = !!key && !looksLikeKey(key);
-    if (!key) {
-      statusEl.textContent = "Not connected yet.";
-    } else if (badKey) {
-      statusEl.textContent = "The saved value (ending in " + key.slice(-4) + ") isn't an InsightSocial key — they start with \"" + KEY_PREFIX + "\". Paste your key from the InsightSocial dashboard and save again.";
+    statusEl.classList.remove("text-negative");
+    usageEl.textContent = notice || "";
+
+    const c = cloud();
+    if (!c) {
+      statusEl.textContent = "Marketing research needs JARVIS's sign-in service, which didn't load. Your other data is unaffected.";
+      return;
+    }
+    if (!c.isSignedIn()) {
+      statusEl.textContent = "Sign in to JARVIS to use Marketing research. Requests run on your private server, not in this browser.";
+      return;
+    }
+    statusEl.textContent = "Checking your Marketing server…";
+    c.call("marketingStatus").then(function (s) {
+      if (!s.keyConfigured) {
+        statusEl.textContent = "Server reached, but your InsightSocial key isn't set on it yet.";
+        statusEl.classList.add("text-negative");
+        return;
+      }
+      statusEl.textContent = "Connected to your Marketing server. Your InsightSocial key is stored there, never in this browser.";
+      const u = s.usage || {};
+      const parts = [formatNumber(u.creditsUsed) + " of " + formatNumber(s.monthlyCreditCap) + " credits used this month (" + formatNumber(u.requests) + " requests)"];
+      if (typeof u.lastCreditsRemaining === "number") parts.push(formatNumber(u.lastCreditsRemaining) + " credits left on your InsightSocial plan (last reported)");
+      if (u.unknownCostRequests) parts.push(u.unknownCostRequests + " request(s) didn't report a cost");
+      usageEl.textContent = (notice ? notice + " " : "") + parts.join(" · ") + ".";
+    }).catch(function (err) {
+      statusEl.textContent = describeCallError(err);
+      statusEl.classList.add("text-negative");
+    });
+  }
+
+  /* ---------------- profile lookup ---------------- */
+
+  let lastHandle = "";
+
+  function showResult(res) {
+    const statusEl = $("ciLookupStatus");
+    const resultEl = $("ciLookupResult");
+    const refreshBtn = $("ciRefreshBtn");
+    resultEl.textContent = "";
+    refreshBtn.classList.toggle("hidden", !(res.ok && res.cached));
+
+    if (res.ok) {
+      const parts = [];
+      if (res.cached) {
+        parts.push("Saved result from " + window.JarvisCore.formatDateTime(res.fetchedAt) + " — no credits used");
+      } else {
+        parts.push("Fresh result from InsightSocial");
+        parts.push(typeof res.creditsUsed === "number" ? res.creditsUsed + " credit(s) used" : "credit cost not reported");
+      }
+      if (res.note) parts.push(res.note.replace(/\.$/, ""));
+      statusEl.textContent = parts.join(" · ") + ".";
     } else {
-      statusEl.textContent = "Saved — key ending in " + key.slice(-4) + ". The box stays empty on purpose; paste a new key only to replace it.";
+      const parts = ["InsightSocial request failed" + (res.status ? " (HTTP " + res.status + ")" : "") + ": " + res.error];
+      if (typeof res.creditsUsed === "number") parts.push(res.creditsUsed + " credit(s) charged");
+      statusEl.textContent = parts.join(" · ");
     }
-    statusEl.classList.toggle("text-negative", badKey);
-    if (input) input.placeholder = key && !badKey ? "Saved (ending in " + key.slice(-4) + ")" : "isk_live_...";
-    if (disconnectBtn) disconnectBtn.classList.toggle("hidden", !key);
+    if (res.body) {
+      const details = document.createElement("details");
+      details.open = !!res.ok;
+      const summary = document.createElement("summary");
+      summary.textContent = "Response data (shown as received)";
+      const pre = document.createElement("pre");
+      pre.className = "video-raw-response";
+      pre.textContent = JSON.stringify(res.body, null, 2);
+      details.appendChild(summary);
+      details.appendChild(pre);
+      resultEl.appendChild(details);
+    }
   }
 
-  function handleSaveKey(e) {
-    e.preventDefault();
+  function runLookup(handle, refresh) {
     const core = window.JarvisCore;
-    const input = $("ciApiKeyInput");
-    // Keys never contain whitespace; copying from a dashboard can pick up
-    // spaces or line breaks.
-    const key = input.value.replace(/\s+/g, "");
-    if (!key) { core.showToast("Paste your InsightSocial API key first."); return; }
-    if (!looksLikeKey(key)) {
-      core.showToast("That isn't an InsightSocial key — they start with \"" + KEY_PREFIX + "\". Copy it from your InsightSocial dashboard.");
-      return;
-    }
-    if (!saveKey(key)) {
-      core.showToast("Your browser blocked saving the key (private browsing or storage turned off?). Nothing was saved.");
-      renderConnectionStatus();
-      return;
-    }
-    input.value = "";
-    renderConnectionStatus();
-    core.showToast("Key saved (ending in " + key.slice(-4) + ").");
-  }
-
-  function handleDisconnect() {
-    if (!window.confirm("Disconnect InsightSocial? This removes the saved key from this device.")) return;
-    clearKey();
-    renderConnectionStatus();
-    window.JarvisCore.showToast("Disconnected.");
+    const c = cloud();
+    if (!c || !c.isSignedIn()) { core.showToast("Sign in to JARVIS to use Marketing research."); return; }
+    const btn = $("ciLookupBtn");
+    const refreshBtn = $("ciRefreshBtn");
+    const statusEl = $("ciLookupStatus");
+    btn.disabled = true;
+    refreshBtn.disabled = true;
+    statusEl.textContent = (refresh ? "Refreshing" : "Looking up") + " @" + handle + "…";
+    $("ciLookupResult").textContent = "";
+    c.call("insightRequest", { endpoint: "instagram.profile", params: { handle: handle }, refresh: !!refresh }).then(function (res) {
+      showResult(res);
+      if (!res.cached) renderStatus();
+    }).catch(function (err) {
+      statusEl.textContent = describeCallError(err);
+    }).then(function () {
+      btn.disabled = false;
+      refreshBtn.disabled = false;
+    });
   }
 
   function handleLookup(e) {
     e.preventDefault();
-    const core = window.JarvisCore;
-    const key = loadKey();
-    if (!key) { core.showToast("Connect your InsightSocial API key first."); return; }
-    if (!looksLikeKey(key)) { core.showToast("The saved key isn't valid — re-paste your InsightSocial key above first."); return; }
     const handle = $("ciLookupHandle").value.trim().replace(/^@/, "");
-    if (!handle) { core.showToast("Enter an Instagram handle."); return; }
-
-    const btn = $("ciLookupBtn");
-    const statusEl = $("ciLookupStatus");
-    const resultEl = $("ciLookupResult");
-    btn.disabled = true;
-    statusEl.textContent = "Looking up @" + handle + "… (this uses your InsightSocial credits)";
-    resultEl.innerHTML = "";
-
-    fetch(API_BASE + "/instagram/profile?handle=" + encodeURIComponent(handle), {
-      headers: { "x-api-key": key }
-    }).then(function (res) {
-      return res.json().catch(function () { return null; }).then(function (data) {
-        return { ok: res.ok, status: res.status, data: data };
-      });
-    }).then(function (result) {
-      btn.disabled = false;
-      resultEl.innerHTML = '<pre class="video-raw-response"></pre>';
-      resultEl.firstChild.textContent = JSON.stringify(result.data, null, 2);
-      statusEl.textContent = result.ok
-        ? "Response received — raw data below (shown as-is; field names aren't mapped yet since the response schema isn't confirmed)."
-        : "Request failed (HTTP " + result.status + ") — details below.";
-    }).catch(function (err) {
-      btn.disabled = false;
-      statusEl.textContent = "Couldn't reach InsightSocial: " + (err && err.message ? err.message : "network error.");
-    });
+    if (!handle) { window.JarvisCore.showToast("Enter an Instagram handle."); return; }
+    lastHandle = handle;
+    runLookup(handle, false);
   }
 
-  /* ---------------- automatic research (written daily by GitHub Actions) ---------------- */
-
-  const AUTO_DATA_URL = "data/marketing-research.json";
-
-  function autoResultItem(r) {
-    const item = document.createElement("div");
-    item.className = "list-item";
-    const title = document.createElement("div");
-    title.className = "list-item-title";
-    title.textContent = (r.label || r.path || "Request") + " ";
-    const badge = document.createElement("span");
-    badge.className = "badge " + (r.skipped ? "badge-neutral" : r.ok ? "badge-green" : "badge-yellow");
-    badge.textContent = r.skipped ? "Skipped" : r.ok ? "OK" : "Failed";
-    title.appendChild(badge);
-    item.appendChild(title);
-
-    const meta = document.createElement("p");
-    meta.className = "field-hint";
-    if (r.skipped) {
-      meta.textContent = r.skipped;
-    } else {
-      const parts = [r.ok ? "HTTP " + r.status : (r.error || "HTTP " + r.status)];
-      if (r.attempts > 1) parts.push("after " + r.attempts + " attempts");
-      parts.push(typeof r.creditsUsed === "number" ? r.creditsUsed + " credits" : "credit cost not reported");
-      meta.textContent = parts.join(" · ");
-    }
-    item.appendChild(meta);
-
-    if (r.data !== undefined && r.data !== null) {
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = "Raw response";
-      const pre = document.createElement("pre");
-      pre.className = "video-raw-response";
-      pre.textContent = JSON.stringify(r.data, null, 2);
-      details.appendChild(summary);
-      details.appendChild(pre);
-      item.appendChild(details);
-    }
-    return item;
-  }
-
-  function renderAutoResearch() {
-    const statusEl = $("ciAutoStatus");
-    const listEl = $("ciAutoResults");
-    if (!statusEl || !listEl) return;
-    fetch(AUTO_DATA_URL, { cache: "no-store" }).then(function (res) {
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    }).then(function (data) {
-      listEl.textContent = "";
-      const run = data && data.latest;
-      if (!run || !Array.isArray(run.results)) {
-        statusEl.textContent = "No automatic research has run yet.";
-        return;
-      }
-      const parts = ["Last run " + window.JarvisCore.formatDateTime(run.finishedAt || run.startedAt)];
-      if (typeof run.creditsUsed === "number") parts.push(run.creditsUsed + " credits used");
-      if (typeof run.creditsRemaining === "number") parts.push(run.creditsRemaining.toLocaleString() + " remaining");
-      statusEl.textContent = parts.join(" · ") + ".";
-      (run.notes || []).forEach(function (note) {
-        const p = document.createElement("p");
-        p.className = "field-hint";
-        p.textContent = note;
-        listEl.appendChild(p);
-      });
-      run.results.forEach(function (r) { listEl.appendChild(autoResultItem(r)); });
-    }).catch(function (err) {
-      statusEl.textContent = "Couldn't load automatic research results: " + (err && err.message ? err.message : "unknown error") + ".";
-    });
+  function handleRefresh() {
+    if (lastHandle) runLookup(lastHandle, true);
   }
 
   function init() {
-    renderAutoResearch();
-    const connectForm = $("ciConnectForm");
     const lookupForm = $("ciLookupForm");
-    if (!connectForm || !lookupForm) return;
-    connectForm.addEventListener("submit", handleSaveKey);
-    $("ciDisconnectBtn").addEventListener("click", handleDisconnect);
+    if (!lookupForm) return;
     lookupForm.addEventListener("submit", handleLookup);
-    renderConnectionStatus();
+    $("ciRefreshBtn").addEventListener("click", handleRefresh);
+    $("ciStatusRefreshBtn").addEventListener("click", function () { renderStatus(); });
+    const removed = removeLegacyBrowserKey();
+    renderStatus(removed ? "The InsightSocial key previously saved in this browser was deleted; your server holds the only copy now." : "");
   }
 
   window.JarvisContentIntel = { init: init };

@@ -1,0 +1,16 @@
+{
+  "name": "jarvis-functions",
+  "private": true,
+  "description": "Server-side functions for JARVIS (Marketing research). Holds API keys as Firebase secrets so they never reach the browser.",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0"
+  }
+}

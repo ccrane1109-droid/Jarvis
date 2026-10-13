@@ -67,6 +67,8 @@
   const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   const FIREBASE_FIRESTORE_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const FIREBASE_FUNCTIONS_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+  const FUNCTIONS_REGION = "us-central1";
 
   // Every localStorage key Jarvis uses, EXCEPT jarvisVideoConnections
   // (holds raw AI provider API keys — stays device-local by default) and
@@ -519,6 +521,29 @@
     auth = fb.getAuth(app);
     db = fb.getFirestore(app);
     installSyncedSaveJSON();
+
+    // Calls JARVIS's own Cloud Functions as the signed-in user. The
+    // functions SDK only loads the first time something actually calls.
+    let functionsClient = null;
+    window.JarvisCloud = {
+      isSignedIn: function () { return !!(auth && auth.currentUser); },
+      call: function (name, data) {
+        if (!auth.currentUser) {
+          const err = new Error("Sign in to JARVIS to use this feature.");
+          err.code = "functions/unauthenticated";
+          return Promise.reject(err);
+        }
+        const ready = functionsClient
+          ? Promise.resolve(functionsClient)
+          : import(FIREBASE_FUNCTIONS_URL).then(function (mod) {
+            functionsClient = { mod: mod, instance: mod.getFunctions(app, FUNCTIONS_REGION) };
+            return functionsClient;
+          });
+        return ready.then(function (client) {
+          return client.mod.httpsCallable(client.instance, name)(data || {});
+        }).then(function (result) { return result.data; });
+      }
+    };
 
     wireForm("authLoginForm", handleLoginSubmit);
     wireForm("authSignupForm", handleSignupSubmit);

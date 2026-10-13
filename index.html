@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=33">
+<link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 
@@ -3277,45 +3277,33 @@
     </div>
 
     <div class="disclaimer-strip">
-      Nothing here is run or paid for by Jarvis. InsightSocial is a third-party service you signed up and pay for yourself; your API key is stored only in this browser (localStorage), and every call goes straight from this device to their API using your own key and credits — never through any JARVIS server, since there isn't one.
+      InsightSocial requests run on your private JARVIS server (Firebase Cloud Functions), which holds your API key as a secret and only answers your signed-in account. Results are saved privately to your account and reused for 12 hours to avoid paying twice; a monthly credit cap stops new requests once it's reached.
     </div>
 
     <div class="card">
-      <h2 class="card-title">InsightSocial Connection</h2>
-      <p class="field-hint" id="ciConnectionStatus">Not connected yet.</p>
-      <form id="ciConnectForm" class="stacked-form" novalidate>
-        <div class="form-row">
-          <label for="ciApiKeyInput">API key</label>
-          <input type="text" id="ciApiKeyInput" class="secret-input" maxlength="200" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" placeholder="isk_live_...">
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Save Key</button>
-          <button type="button" class="btn-icon danger hidden" id="ciDisconnectBtn">Disconnect</button>
-        </div>
-      </form>
+      <div class="list-item-row">
+        <h2 class="card-title">Marketing Server</h2>
+        <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
+      </div>
+      <p class="field-hint" id="ciConnectionStatus">Checking…</p>
+      <p class="field-hint" id="ciUsageSummary"></p>
     </div>
 
     <div class="card">
-      <h2 class="card-title">Test Lookup — Instagram Profile</h2>
-      <p class="field-hint">Confirms the connection works. Each lookup spends InsightSocial credits on your account.</p>
+      <h2 class="card-title">Instagram Profile Lookup</h2>
+      <p class="field-hint">Uses InsightSocial credits the first time; repeat lookups within 12 hours reuse the saved result for free.</p>
       <form id="ciLookupForm" class="stacked-form" novalidate>
         <div class="form-row">
           <label for="ciLookupHandle">Instagram handle</label>
-          <input type="text" id="ciLookupHandle" placeholder="e.g. gratiel" maxlength="60">
+          <input type="text" id="ciLookupHandle" placeholder="e.g. gratiel" maxlength="60" autocapitalize="off" autocorrect="off" spellcheck="false">
         </div>
         <div class="form-actions">
           <button type="submit" class="btn btn-secondary" id="ciLookupBtn">Look Up</button>
+          <button type="button" class="btn-icon hidden" id="ciRefreshBtn">Refresh (uses credits)</button>
         </div>
       </form>
       <p class="field-hint" id="ciLookupStatus"></p>
       <div id="ciLookupResult"></div>
-    </div>
-
-    <div class="card">
-      <h2 class="card-title">Automatic Research</h2>
-      <p class="field-hint">Runs once a day on GitHub using your key stored as a hidden GitHub secret (separate from the key saved above). Results are saved in your public repo with the rest of the site.</p>
-      <p class="field-hint" id="ciAutoStatus">Loading…</p>
-      <div id="ciAutoResults" class="item-list"></div>
     </div>
   </section>
 
@@ -3654,23 +3642,23 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=33"></script>
-<script type="module" src="js/auth.js?v=33"></script>
-<script src="js/app.js?v=33"></script>
-<script src="js/exercises.js?v=33"></script>
-<script src="js/workout.js?v=33"></script>
-<script src="js/nutrition.js?v=33"></script>
-<script src="js/nutrition-label-scan.js?v=33"></script>
-<script src="js/groceries.js?v=33"></script>
-<script src="js/habits.js?v=33"></script>
-<script src="js/business.js?v=33"></script>
-<script src="js/trading.js?v=33"></script>
-<script src="js/blobstore.js?v=33"></script>
-<script src="js/video-api-client.js?v=33"></script>
-<script src="js/video-connections.js?v=33"></script>
-<script src="js/video.js?v=33"></script>
-<script src="js/video-studio.js?v=33"></script>
-<script src="js/content-intelligence.js?v=33"></script>
-<script src="js/form-check.js?v=33"></script>
+<script src="js/firebase-config.js?v=34"></script>
+<script type="module" src="js/auth.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
+<script src="js/exercises.js?v=34"></script>
+<script src="js/workout.js?v=34"></script>
+<script src="js/nutrition.js?v=34"></script>
+<script src="js/nutrition-label-scan.js?v=34"></script>
+<script src="js/groceries.js?v=34"></script>
+<script src="js/habits.js?v=34"></script>
+<script src="js/business.js?v=34"></script>
+<script src="js/trading.js?v=34"></script>
+<script src="js/blobstore.js?v=34"></script>
+<script src="js/video-api-client.js?v=34"></script>
+<script src="js/video-connections.js?v=34"></script>
+<script src="js/video.js?v=34"></script>
+<script src="js/video-studio.js?v=34"></script>
+<script src="js/content-intelligence.js?v=34"></script>
+<script src="js/form-check.js?v=34"></script>
 </body>
 </html>
