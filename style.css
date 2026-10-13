@@ -246,10 +246,6 @@ input:focus, select:focus, textarea:focus {
 
 textarea { resize: vertical; min-height: 44px; }
 
-/* Masks an API key typed into a plain text field. A real password field
-   would make iOS offer to autofill the user's saved site password. */
-.secret-input { -webkit-text-security: disc; }
-
 /* iOS Safari zooms the page into any field under 16px when it's focused and
    doesn't zoom back out, leaving the layout cropped. */
 @media (pointer: coarse) {
