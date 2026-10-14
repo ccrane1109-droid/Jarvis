@@ -113,7 +113,15 @@
     const message = (err && err.message) || "";
     if (code === "functions/unauthenticated") return "Sign in to JARVIS to use Marketing.";
     if (code === "functions/permission-denied") return "This account isn't allowed to use Marketing research.";
-    if (code === "functions/not-found") return "The Marketing server isn't deployed yet (see functions/README.md).";
+    if (code === "functions/not-found") return "The Marketing server isn't deployed yet. See \"How to fix setup problems\" under Server Health.";
+    if (code === "functions/internal") {
+      const ref = err.details && err.details.ref;
+      if (ref) return "The Marketing server hit an unexpected error (reference " + ref + "). Find that reference in Firebase console → Functions → Logs.";
+      // The Firebase SDK reports a bare "internal" when no usable response
+      // came back at all — most often because the function isn't deployed
+      // (the 404 lacks CORS headers, so the browser blocks it).
+      return "Couldn't get a response from the Marketing server. Usually its functions aren't deployed yet or the last deploy failed. See \"How to fix setup problems\" under Server Health.";
+    }
     if (code === "functions/failed-precondition" || code === "functions/resource-exhausted" || code === "functions/invalid-argument") return message;
     if (code === "functions/unavailable" && /Claude/.test(message)) return message;
     if (code === "functions/unavailable" || code === "functions/deadline-exceeded") return "Couldn't reach the Marketing server. Check your connection and try again.";
@@ -124,8 +132,9 @@
   function describeDataError(err) {
     const code = (err && err.code) || "";
     if (code === "functions/unauthenticated") return "Sign in to JARVIS to use Marketing.";
-    if (code === "permission-denied") return "Your Firestore rules don't allow this yet. Deploy the updated rules: npx firebase-tools deploy --only functions,firestore:rules (see functions/README.md).";
+    if (code === "permission-denied") return "Firestore blocked this: the Marketing rules haven't been published to your Firebase project yet. Overview → Server Health → \"How to fix setup problems\" shows the 2-minute fix.";
     if (code === "unavailable") return "Couldn't reach your cloud storage. Check your connection and try again.";
+    if (code === "deadline-exceeded") return "Loading your marketing data took too long. Check your connection and try again.";
     return "Couldn't load or save your marketing data" + (err && err.message ? ": " + err.message : ".");
   }
 
@@ -167,6 +176,24 @@
     });
   }
 
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      const t = setTimeout(function () { reject(Object.assign(new Error("timed out"), { code: "deadline-exceeded" })); }, ms);
+      promise.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+    });
+  }
+
+  // Per-device "last worked" times, shown in Server Health. Convenience only.
+  const SYNC_KEY = "jarvisMarketingLastSync";
+  function readSync() {
+    try { return JSON.parse(localStorage.getItem(SYNC_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function markSync(which) {
+    const s = readSync();
+    s[which] = new Date().toISOString();
+    try { localStorage.setItem(SYNC_KEY, JSON.stringify(s)); } catch (e) { /* storage unavailable: skip */ }
+  }
+
   /* ---------------- loading ---------------- */
 
   function loadAll() {
@@ -178,24 +205,30 @@
     state.loading = true;
     renderAll();
     const c = cloud();
-    const statusP = c.call("marketingStatus").then(function (s) { state.status = s; state.statusError = ""; })
-      .catch(function (err) { state.status = null; state.statusError = describeCallError(err); });
-    const dataP = Promise.all([
+    const statusP = c.call("marketingStatus", {}, { timeout: 20000 }).then(function (s) {
+      state.status = s;
+      state.statusError = "";
+      markSync("server");
+    }).catch(function (err) { state.status = null; state.statusError = describeCallError(err); });
+    const dataP = withTimeout(Promise.all([
       data().get("marketing/settings"),
       data().list("marketingSnapshots"),
       data().get("marketingState/research"),
       data().list("marketingIdeas"),
       data().list("marketingFindings")
-    ]).then(function (r) {
+    ]), 20000).then(function (r) {
       state.settings = sanitizeSettings(r[0]);
       state.snapshots = r[1] || [];
       state.research = r[2];
       state.ideas = r[3] || [];
       state.findings = r[4] || [];
       state.dataError = "";
+      state.dataErrorCode = "";
+      markSync("data");
     }).catch(function (err) {
       state.settings = state.settings || sanitizeSettings(null);
       state.dataError = describeDataError(err);
+      state.dataErrorCode = (err && err.code) || "error";
     });
     return Promise.all([statusP, dataP]).then(function () {
       state.loading = false;
@@ -206,7 +239,7 @@
 
   function refreshStatus() {
     if (!signedIn()) return Promise.resolve();
-    return cloud().call("marketingStatus").then(function (s) { state.status = s; state.statusError = ""; })
+    return cloud().call("marketingStatus", {}, { timeout: 20000 }).then(function (s) { state.status = s; state.statusError = ""; markSync("server"); })
       .catch(function (err) { state.statusError = describeCallError(err); })
       .then(function () { renderStatus(); renderBudget(); renderResearchSummary(); renderIdeaCostHint(); });
   }
@@ -239,47 +272,93 @@
     container.appendChild(el("p", "empty-state", text));
   }
 
-  function errorLine(container, text) {
-    container.textContent = "";
-    const p = el("p", "field-hint text-negative", text);
-    p.setAttribute("role", "alert");
-    container.appendChild(p);
+  /* ---------------- overview: server status ---------------- */
+
+  function healthRows() {
+    const c = cloud();
+    if (!c) return [{ label: "Sign-in service", level: "bad", text: "JARVIS's sign-in service didn't load, so Marketing can't connect. Your other data is unaffected." }];
+    if (!c.isSignedIn()) return [{ label: "Signed in", level: "bad", text: "Sign in to JARVIS to use Marketing." }];
+    const rows = [{ label: "Signed in", level: "ok", text: "Yes" }];
+    const pending = state.loading && !state.loaded;
+    if (pending) rows.push({ label: "Your saved data (Firestore)", level: "pending", text: "Checking…" });
+    else if (state.dataError) rows.push({ label: "Your saved data (Firestore)", level: "bad", text: state.dataErrorCode === "permission-denied" ? "Blocked by Firestore rules: the Marketing rules aren't published yet. Fix: step 1 below." : state.dataError });
+    else rows.push({ label: "Your saved data (Firestore)", level: "ok", text: "Loads and saves normally" });
+
+    if (pending && !state.status) rows.push({ label: "Marketing server", level: "pending", text: "Checking…" });
+    else if (state.statusError) rows.push({ label: "Marketing server", level: "bad", text: state.statusError });
+    else if (state.status) {
+      const s = state.status;
+      rows.push({ label: "Marketing server", level: "ok", text: "Reachable" });
+      rows.push({ label: "InsightSocial key", level: s.keyConfigured ? "ok" : "bad", text: s.keyConfigured ? "Stored on the server" : "Not set on the server yet (functions/README.md, step 3)" });
+      rows.push({ label: "Claude API key", level: s.aiKeyConfigured ? "ok" : "warn", text: s.aiKeyConfigured ? "Stored on the server" : "Not set, so AI ideas are unavailable" });
+    }
+    return rows;
   }
 
-  /* ---------------- overview: server status ---------------- */
+  const LEVEL_BADGE = { ok: ["badge-green", "OK"], bad: ["badge-red", "Problem"], warn: ["badge-yellow", "Warning"], pending: ["badge-neutral", "Checking"] };
 
   function renderStatus(notice) {
     const statusEl = $("ciConnectionStatus");
     const usageEl = $("ciUsageSummary");
+    const list = $("mktHealthList");
     if (!statusEl) return;
-    statusEl.classList.remove("text-negative");
-    usageEl.textContent = notice || state.notice || "";
+    const rows = healthRows();
+    list.textContent = "";
+    rows.forEach(function (r) {
+      const li = el("li", "mkt-health-row");
+      const head = el("div", "mkt-health-head");
+      head.appendChild(el("span", "mkt-health-label", r.label));
+      const b = LEVEL_BADGE[r.level];
+      head.appendChild(el("span", "badge " + b[0], b[1]));
+      li.appendChild(head);
+      li.appendChild(el("p", "field-hint mkt-health-text" + (r.level === "bad" ? " text-negative" : ""), r.text));
+      list.appendChild(li);
+    });
+    const problems = rows.filter(function (r) { return r.level === "bad"; }).length;
+    const checking = rows.some(function (r) { return r.level === "pending"; });
+    statusEl.classList.toggle("text-negative", problems > 0);
+    statusEl.textContent = checking ? "Checking your Marketing setup…"
+      : problems ? problems + " problem" + (problems === 1 ? "" : "s") + " found. Details below."
+      : "Everything is connected.";
+    const guide = $("mktSetupGuide");
+    if (guide && problems && !checking && signedIn()) guide.open = true;
 
-    const c = cloud();
-    if (!c) {
-      statusEl.textContent = "Marketing needs JARVIS's sign-in service, which didn't load. Your other data is unaffected.";
-      return;
-    }
-    if (!c.isSignedIn()) {
-      statusEl.textContent = "Sign in to JARVIS to use Marketing. Requests run on your private server, not in this browser.";
-      return;
-    }
-    if (state.loading && !state.status) { statusEl.textContent = "Checking your Marketing server…"; return; }
-    if (state.statusError) {
-      statusEl.textContent = state.statusError;
-      statusEl.classList.add("text-negative");
-      return;
-    }
+    const sync = readSync();
+    $("mktLastSync").textContent = signedIn()
+      ? "On this device: server last reached " + (sync.server ? core().formatDateTime(sync.server) : "never") + " · data last loaded " + (sync.data ? core().formatDateTime(sync.data) : "never") + "."
+      : "";
+
+    usageEl.textContent = notice || state.notice || "";
     const s = state.status;
-    if (!s) { statusEl.textContent = "Checking your Marketing server…"; return; }
-    const parts = [];
-    parts.push(s.keyConfigured ? "InsightSocial key: set on the server" : "InsightSocial key: not set on the server yet");
-    parts.push(s.aiKeyConfigured ? "Claude key: set on the server" : "Claude key: not set (AI ideas unavailable)");
-    statusEl.textContent = "Connected to your Marketing server. " + parts.join(" · ") + ".";
-    if (!s.keyConfigured) statusEl.classList.add("text-negative");
-    if (typeof (s.usage || {}).lastCreditsRemaining === "number") {
+    if (s && typeof (s.usage || {}).lastCreditsRemaining === "number") {
       usageEl.textContent = (usageEl.textContent ? usageEl.textContent + " " : "") + formatNumber(s.usage.lastCreditsRemaining) + " credits left on your InsightSocial plan (last reported by InsightSocial).";
     }
+  }
+
+  // A problem notice with Try again and a shortcut to Server Health.
+  function problemBox(container, text) {
+    container.textContent = "";
+    const box = el("div", "mkt-problem");
+    box.setAttribute("role", "alert");
+    box.appendChild(el("p", "field-hint text-negative", text));
+    const actions = el("div", "mkt-problem-actions");
+    const retry = el("button", "btn btn-secondary", "Try again");
+    retry.type = "button";
+    retry.addEventListener("click", function () { loadAll(); });
+    const health = el("button", "btn-icon", "Server Health");
+    health.type = "button";
+    health.addEventListener("click", openHealth);
+    actions.appendChild(retry);
+    actions.appendChild(health);
+    box.appendChild(actions);
+    container.appendChild(box);
+  }
+
+  function openHealth() {
+    const tab = $("mktSubNavOverview");
+    if (tab) tab.click();
+    const card = $("mktHealthCard");
+    if (card && card.scrollIntoView) card.scrollIntoView({ block: "start" });
   }
 
   /* ---------------- overview: budget ---------------- */
@@ -323,7 +402,7 @@
     if (!signedIn()) { emptyState(box, "Sign in to see this month's usage."); return; }
     if (state.loading && !state.status) { skeleton(box, 3); return; }
     const s = state.status;
-    if (!s) { errorLine(box, state.statusError || "Usage isn't available."); return; }
+    if (!s) { emptyState(box, "Budget numbers come from the Marketing server, which isn't responding. See Server Health above."); return; }
     const u = s.usage || {};
     box.textContent = "";
     box.appendChild(meter("InsightSocial credits", u.creditsUsed || 0, s.monthlyCreditCap, formatNumber(u.creditsUsed || 0) + " of " + formatNumber(s.monthlyCreditCap)));
@@ -361,7 +440,9 @@
     const s = state.status;
     const run = (s && s.lastRun) || (state.research && state.research.lastRun) || null;
     box.textContent = "";
-    if (!run) {
+    if (!run && state.statusError && state.dataError) {
+      emptyState(box, "Research history isn't available until the Marketing server and your saved data load. See Server Health above.");
+    } else if (!run) {
       emptyState(box, "No research has run yet. Add competitors, then tap Run now or wait for tomorrow's automatic run.");
     } else {
       const head = el("p", "field-hint");
@@ -584,7 +665,7 @@
     if (!box) return;
     if (!signedIn()) { emptyState(box, "Sign in to manage your competitor watchlist."); return; }
     if (state.loading && !state.loaded) { skeleton(box, 3); return; }
-    if (state.dataError) { errorLine(box, state.dataError); return; }
+    if (state.dataError) { problemBox(box, state.dataError); return; }
     const list = (state.settings || DEFAULT_SETTINGS).watchlist;
     if (!list.length) { emptyState(box, "No competitors yet. Add an Instagram handle above to start tracking it."); return; }
     box.textContent = "";
@@ -644,7 +725,7 @@
     h.textContent = "";
     if (!signedIn()) { v.appendChild(el("li", "empty-state", "Sign in to keep research notes.")); return; }
     if (state.loading && !state.loaded) { skeleton(v, 2); return; }
-    if (state.dataError) { errorLine(v, state.dataError); return; }
+    if (state.dataError) { problemBox(v, state.dataError); return; }
     const sorted = state.findings.slice().sort(function (a, b) { return String(b.createdAt || "").localeCompare(String(a.createdAt || "")); });
     const verified = sorted.filter(function (f) { return f.kind === "verified"; });
     const hyp = sorted.filter(function (f) { return f.kind !== "verified"; });
@@ -1002,7 +1083,7 @@
     if (!box) return;
     if (!signedIn()) { count.textContent = ""; emptyState(box, "Sign in to see your content idea library."); return; }
     if (state.loading && !state.loaded) { count.textContent = ""; skeleton(box, 4); return; }
-    if (state.dataError) { count.textContent = ""; errorLine(box, state.dataError); return; }
+    if (state.dataError) { count.textContent = ""; problemBox(box, state.dataError); return; }
     if (!state.ideas.length) { count.textContent = ""; emptyState(box, "No saved ideas yet. Generate some in AI Ideas, or tap New idea to add your own."); return; }
     const list = filteredIdeas();
     count.textContent = list.length === state.ideas.length ? state.ideas.length + " idea(s)" : list.length + " of " + state.ideas.length + " idea(s) match";

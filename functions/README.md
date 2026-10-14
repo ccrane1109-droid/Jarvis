@@ -14,13 +14,41 @@ functions; the keys never reach the browser or this repo.
 
 ## One-time setup
 
-1. **Blaze plan** (Firebase console → ⚙ → Usage and billing). Cloud Functions,
+There are two separate pieces. The app's **Server Health** card (Marketing →
+Overview) tells you which one is missing.
+
+### A. Firestore rules (free, no command line, about 2 minutes)
+
+Fixes "Firestore blocked this" / "Firestore rules don't allow this". Works on
+the free plan.
+
+1. Open `firestore.rules` in this GitHub repo and copy all of it.
+2. Firebase console → project **jarvis-f01e7** → Firestore Database → **Rules**.
+3. Replace everything in the editor with what you copied, then **Publish**.
+
+These rules keep the existing `users/{uid}` rule JARVIS's sync already uses
+and add the Marketing documents underneath it. Only your signed-in account can
+read your data; usage, cache, snapshots and run history can only be written by
+the server.
+
+### B. Marketing server (Cloud Functions)
+
+Fixes "Couldn't get a response from the Marketing server" (the Firebase SDK
+reports this as `internal` when no usable response comes back, which is what
+happens when the functions aren't deployed).
+
+1. **Blaze plan**: Firebase console → ⚙ → Usage and billing. Cloud Functions,
    scheduled functions and secrets require it. Set a budget alert in Google
-   Cloud Billing first.
-2. **Install Node.js 22**, then in this repo:
+   Cloud Billing first. These Google charges are separate from the $20 budget
+   the app tracks.
+2. **Open a terminal.** From any browser, including an iPhone or iPad, open
+   Google Cloud Shell at shell.cloud.google.com (or use a computer with
+   Node.js 22). Then:
    ```
-   npx firebase-tools login
-   cd functions && npm install && cd ..
+   git clone https://github.com/ccrane1109-droid/Jarvis.git
+   cd Jarvis/functions && npm ci && cd ..
+   npx firebase-tools login --no-localhost
+   npx firebase-tools use jarvis-f01e7
    ```
 3. **Store the keys as secrets** (paste each when prompted; it isn't echoed):
    ```
@@ -36,7 +64,18 @@ functions; the keys never reach the browser or this repo.
    ```
    npx firebase-tools deploy --only functions,firestore:rules
    ```
-   `firestore:rules` replaces the rules in the console with `../firestore.rules`.
+   The first deploy can take several minutes while Google turns on the
+   services it needs. `firestore:rules` publishes `../firestore.rules` (the
+   same thing as step A).
+
+### C. Check it worked
+
+- Firebase console → Functions should list `marketingStatus`,
+  `insightRequest`, `runResearch`, `dailyResearch` and `generateIdeas`.
+- In JARVIS: Marketing → Overview → Server Health → **Check again**. Every row
+  should say OK.
+- If a row shows "unexpected error (reference abc123ef)", search for that
+  reference in Firebase console → Functions → Logs.
 
 ## Changing things later
 

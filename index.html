@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=35">
+<link rel="stylesheet" href="style.css?v=36">
 </head>
 <body>
 
@@ -3287,13 +3287,26 @@
 
     <!-- ---------- Overview ---------- -->
     <div id="mkt-overview" class="marketing-sub-panel active" role="tabpanel" aria-labelledby="mktSubNavOverview">
-      <div class="card">
+      <div class="card" id="mktHealthCard">
         <div class="list-item-row">
-          <h2 class="card-title">Marketing Server</h2>
+          <h2 class="card-title">Server Health</h2>
           <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
         </div>
         <p class="field-hint" id="ciConnectionStatus" role="status">Checking…</p>
+        <ul class="mkt-health-list" id="mktHealthList" aria-live="polite"></ul>
+        <p class="field-hint" id="mktLastSync"></p>
         <p class="field-hint" id="ciUsageSummary"></p>
+        <details class="mkt-details" id="mktSetupGuide">
+          <summary>How to fix setup problems</summary>
+          <div class="mkt-guide">
+            <h3 class="mkt-idea-label">1. Firestore rules (free, about 2 minutes, no command line)</h3>
+            <p>Fixes "Firestore rules don't allow this". Firebase console → your project → Firestore Database → <strong>Rules</strong> tab. Replace everything with the contents of <code>firestore.rules</code> from your GitHub repo, then tap <strong>Publish</strong>. Only your own signed-in account can read or change your data under these rules.</p>
+            <h3 class="mkt-idea-label">2. Marketing server (Cloud Functions)</h3>
+            <p>Fixes "Couldn't get a response from the Marketing server". Needs the Blaze plan (set a budget alert first). You can do this from any browser with Google Cloud Shell (shell.cloud.google.com) — the full steps are in <code>functions/README.md</code>.</p>
+            <h3 class="mkt-idea-label">3. Check it worked</h3>
+            <p>Tap <strong>Check again</strong> above. Every row should say OK. If the server row shows an error reference, look it up in Firebase console → Functions → Logs.</p>
+          </div>
+        </details>
       </div>
 
       <div class="card">
@@ -3930,23 +3943,23 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=35"></script>
-<script type="module" src="js/auth.js?v=35"></script>
-<script src="js/app.js?v=35"></script>
-<script src="js/exercises.js?v=35"></script>
-<script src="js/workout.js?v=35"></script>
-<script src="js/nutrition.js?v=35"></script>
-<script src="js/nutrition-label-scan.js?v=35"></script>
-<script src="js/groceries.js?v=35"></script>
-<script src="js/habits.js?v=35"></script>
-<script src="js/business.js?v=35"></script>
-<script src="js/trading.js?v=35"></script>
-<script src="js/blobstore.js?v=35"></script>
-<script src="js/video-api-client.js?v=35"></script>
-<script src="js/video-connections.js?v=35"></script>
-<script src="js/video.js?v=35"></script>
-<script src="js/video-studio.js?v=35"></script>
-<script src="js/content-intelligence.js?v=35"></script>
-<script src="js/form-check.js?v=35"></script>
+<script src="js/firebase-config.js?v=36"></script>
+<script type="module" src="js/auth.js?v=36"></script>
+<script src="js/app.js?v=36"></script>
+<script src="js/exercises.js?v=36"></script>
+<script src="js/workout.js?v=36"></script>
+<script src="js/nutrition.js?v=36"></script>
+<script src="js/nutrition-label-scan.js?v=36"></script>
+<script src="js/groceries.js?v=36"></script>
+<script src="js/habits.js?v=36"></script>
+<script src="js/business.js?v=36"></script>
+<script src="js/trading.js?v=36"></script>
+<script src="js/blobstore.js?v=36"></script>
+<script src="js/video-api-client.js?v=36"></script>
+<script src="js/video-connections.js?v=36"></script>
+<script src="js/video.js?v=36"></script>
+<script src="js/video-studio.js?v=36"></script>
+<script src="js/content-intelligence.js?v=36"></script>
+<script src="js/form-check.js?v=36"></script>
 </body>
 </html>
