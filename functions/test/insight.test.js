@@ -163,7 +163,7 @@ test("status reports configuration and this month's usage without calling Insigh
   assert.deepEqual([s.usage.creditsUsed, s.usage.requests, s.usage.unknownCostRequests, s.usage.lastCreditsRemaining], [7, 3, 1, 9993]);
   assert.equal(s.usage.aiCostUsd, 0);
   assert.equal(s.monthlyBudgetUsd, 20);
-  assert.equal(s.aiAllowanceUsd, 20);
+  assert.equal(s.aiAllowanceUsd, 10, "$20 budget minus the $10 InsightSocial plan");
   assert.equal(s.aiKeyConfigured, false);
   assert.deepEqual(s.aiPrices["claude-opus-5-5"], { input: 4, output: 20 });
   assert.equal(s.aiMaxOutputTokens, 16000);

@@ -1,8 +1,10 @@
-# JARVIS server (Firebase Cloud Functions)
+# JARVIS server (Firebase Cloud Functions) — optional
 
-Holds the InsightSocial and Claude API keys as Firebase secrets and answers
-only the owner's signed-in account. The website (GitHub Pages) calls these
-functions; the keys never reach the browser or this repo.
+Marketing works without this server: competitors, hand-logged competitor
+numbers, research notes, the idea library and settings are saved in the
+`jarvisMarketing` key, which JARVIS's normal account sync already stores in
+`users/{uid}`. The server adds the features that need API keys, and holds
+those keys as Firebase secrets so they never reach a browser or this repo:
 
 | Function | What it does | Costs money? |
 |---|---|---|

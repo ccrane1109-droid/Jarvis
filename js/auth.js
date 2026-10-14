@@ -71,15 +71,17 @@
   const FUNCTIONS_REGION = "us-central1";
 
   // Every localStorage key Jarvis uses, EXCEPT jarvisVideoConnections
-  // (holds raw AI provider API keys — stays device-local by default) and
-  // jarvisLastBriefingDate (a purely local UI preference, not real data).
+  // (holds raw AI provider API keys — stays device-local by default),
+  // jarvisLastBriefingDate and jarvisMarketingLastSync (purely local UI
+  // state, not real data).
   const SYNCED_KEYS = [
     "jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight",
     "jarvisMeasurements", "jarvisStrengthSettings", "jarvisWorkoutDraft",
     "jarvisHabits", "jarvisBusiness", "jarvisCalories",
     "jarvisTradingWatchlist", "jarvisPaperTrades", "jarvisTradingJournal", "jarvisTradingSettings",
     "jarvisVideo", "jarvisVideoStudio",
-    "jarvisCustomExercises", "jarvisFavoriteExercises"
+    "jarvisCustomExercises", "jarvisFavoriteExercises",
+    "jarvisMarketing"
   ];
 
   const config = window.JARVIS_FIREBASE_CONFIG || {};
