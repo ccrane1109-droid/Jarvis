@@ -1,17 +1,19 @@
 /* ==========================================================================
    JARVIS — Marketing (Content Intelligence)
 
-   Paid requests (InsightSocial, Claude) only ever run on JARVIS's own
-   Firebase Cloud Functions (functions/), which hold the API keys as server
-   secrets, accept only the owner's signed-in account, and enforce the
-   monthly credit cap and AI budget. The browser never sees a key.
+   Works with no extra setup:
+   - All Marketing data (settings, competitor watchlist and the numbers you
+     log, research notes, the idea library, AI spend) lives in one
+     localStorage key, jarvisMarketing, which auth.js syncs into the
+     account's existing users/{uid} document like every other JARVIS tab.
+   - Paid requests (Claude ideas, InsightSocial lookups, automatic daily
+     research) only ever run on the optional Marketing server (Firebase
+     Cloud Functions), which holds the API keys as server secrets. Until it
+     is deployed those features say so, and competitor numbers can be
+     logged by hand.
 
-   Settings, the idea library and research notes are private Firestore
-   documents under users/{uid}/ (JarvisCloud.data). Usage, snapshots and run
-   history are written only by the server and are read-only here.
-
-   Earlier versions stored the InsightSocial key in this browser's
-   localStorage; that copy is deleted on load.
+   The prompt, schema and prices come from functions/lib/idea-spec.js,
+   shared with the server so both paths ask for the same thing.
    ========================================================================== */
 
 (function () {
@@ -24,7 +26,8 @@
   const DEFAULT_SETTINGS = {
     monthlyCreditCap: 1500,
     monthlyBudgetUsd: 20,
-    insightPlanMonthlyUsd: 0,
+    // The owner's InsightSocial plan, $10/month as they reported it.
+    insightPlanMonthlyUsd: 10,
     aiModel: "claude-opus-5-5",
     brandProfile: "",
     contentPillars: ["Faith", "Behind the brand", "Style & outfits", "Community", "Product drops"],
@@ -51,7 +54,16 @@
   const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
   const MODEL_LABELS = { "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5-5": "Claude Sonnet 5.5", "claude-haiku-5-5": "Claude Haiku 5.5" };
 
+  // All Marketing data, synced through the JARVIS account (see header).
+  // users/{uid} has a 1 MB limit shared with every JARVIS tab, so Marketing
+  // stays under this many characters of JSON.
+  const STORE_KEY = "jarvisMarketing";
+  const STORE_LIMIT_CHARS = 350000;
+
   const state = {
+    store: null,
+    checkingServer: false,
+    serverCheckedOnce: false,
     status: null,
     statusError: "",
     settings: null,
@@ -73,6 +85,7 @@
   function core() { return window.JarvisCore; }
   function cloud() { return window.JarvisCloud || null; }
   function signedIn() { const c = cloud(); return !!(c && c.isSignedIn()); }
+  function spec() { return window.JarvisIdeaSpec || null; }
   // Private document storage; rejects instead of throwing if it's missing.
   function data() {
     const c = cloud();
@@ -131,6 +144,7 @@
   // Firestore errors when reading/writing your private marketing documents.
   function describeDataError(err) {
     const code = (err && err.code) || "";
+    if (code === "store-full") return "Marketing storage is full (it shares your account's sync space with the rest of JARVIS). Delete some old ideas or notes, then try again.";
     if (code === "functions/unauthenticated") return "Sign in to JARVIS to use Marketing.";
     if (code === "permission-denied") return "Firestore blocked this: the Marketing rules haven't been published to your Firebase project yet. Overview → Server Health → \"How to fix setup problems\" shows the 2-minute fix.";
     if (code === "unavailable") return "Couldn't reach your cloud storage. Check your connection and try again.";
@@ -170,17 +184,70 @@
 
   function saveSettings(patch) {
     const next = sanitizeSettings(Object.assign({}, state.settings || DEFAULT_SETTINGS, patch));
-    return data().set("marketing/settings", next, true).then(function () {
-      state.settings = next;
+    return commit(function (st) { st.settings = next; }).then(function () {
+      mirrorSettingsToServer();
       return next;
     });
   }
 
-  function withTimeout(promise, ms) {
+  /* ---------------- local store ---------------- */
+
+  function normalizeStore(raw) {
+    const r = raw && typeof raw === "object" ? raw : {};
+    const byId = function (list) {
+      return (Array.isArray(list) ? list : []).filter(function (x) { return x && typeof x === "object" && typeof x.id === "string"; });
+    };
+    return {
+      version: 1,
+      settings: r.settings && typeof r.settings === "object" ? r.settings : null,
+      ideas: byId(r.ideas),
+      findings: byId(r.findings),
+      snapshots: r.snapshots && typeof r.snapshots === "object" ? r.snapshots : {},
+      importedCloud: !!r.importedCloud
+    };
+  }
+
+  function loadStore() {
+    state.store = normalizeStore(core().loadJSON(STORE_KEY, null));
+    syncStateFromStore();
+  }
+
+  function syncStateFromStore() {
+    state.settings = sanitizeSettings(state.store.settings);
+    state.ideas = state.store.ideas;
+    state.findings = state.store.findings;
+  }
+
+  function storeChars(st) { return JSON.stringify(st || state.store).length; }
+
+  // Applies a change to a copy of the store and saves it (which also syncs
+  // it to the account). Refuses changes that would grow the store past its
+  // limit.
+  function commit(mutate) {
     return new Promise(function (resolve, reject) {
-      const t = setTimeout(function () { reject(Object.assign(new Error("timed out"), { code: "deadline-exceeded" })); }, ms);
-      promise.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+      const next = normalizeStore(JSON.parse(JSON.stringify(state.store)));
+      const result = mutate(next);
+      const size = storeChars(next);
+      if (size > STORE_LIMIT_CHARS && size > storeChars(state.store)) {
+        reject(Object.assign(new Error("Marketing storage is full"), { code: "store-full" }));
+        return;
+      }
+      core().saveJSON(STORE_KEY, next);
+      state.store = next;
+      syncStateFromStore();
+      resolve(result);
     });
+  }
+
+  function upsertById(list, item) {
+    const i = list.findIndex(function (x) { return x.id === item.id; });
+    if (i === -1) list.push(item); else list[i] = item;
+  }
+
+  // The optional server reads settings from Firestore; keep its copy current.
+  function mirrorSettingsToServer() {
+    if (!state.status) return;
+    data().set("marketing/settings", state.settings, true).catch(function () { /* optional */ });
   }
 
   // Per-device "last worked" times, shown in Server Health. Convenience only.
@@ -197,54 +264,61 @@
   /* ---------------- loading ---------------- */
 
   function loadAll() {
+    loadStore();
+    state.loaded = true;
+    state.loading = false;
     if (!signedIn()) {
-      state.loaded = false;
+      state.status = null;
+      state.statusError = "";
       renderAll();
       return Promise.resolve();
     }
-    state.loading = true;
+    state.checkingServer = true;
+    state.serverCheckedOnce = true;
     renderAll();
-    const c = cloud();
-    const statusP = c.call("marketingStatus", {}, { timeout: 20000 }).then(function (s) {
+    return cloud().call("marketingStatus", {}, { timeout: 20000 }).then(function (s) {
       state.status = s;
       state.statusError = "";
       markSync("server");
-    }).catch(function (err) { state.status = null; state.statusError = describeCallError(err); });
-    const dataP = withTimeout(Promise.all([
-      data().get("marketing/settings"),
-      data().list("marketingSnapshots"),
-      data().get("marketingState/research"),
-      data().list("marketingIdeas"),
-      data().list("marketingFindings")
-    ]), 20000).then(function (r) {
-      state.settings = sanitizeSettings(r[0]);
-      state.snapshots = r[1] || [];
-      state.research = r[2];
-      state.ideas = r[3] || [];
-      state.findings = r[4] || [];
-      state.dataError = "";
-      state.dataErrorCode = "";
-      markSync("data");
+      return loadServerExtras();
     }).catch(function (err) {
-      state.settings = state.settings || sanitizeSettings(null);
-      state.dataError = describeDataError(err);
-      state.dataErrorCode = (err && err.code) || "error";
-    });
-    return Promise.all([statusP, dataP]).then(function () {
-      state.loading = false;
-      state.loaded = true;
+      state.status = null;
+      state.statusError = describeCallError(err);
+      state.statusErrorRef = !!(err && err.details && err.details.ref);
+    }).then(function () {
+      state.checkingServer = false;
       renderAll();
     });
   }
 
+  // Only reachable once the optional server (and its Firestore rules) are
+  // deployed: server-collected snapshots, research runs, and a one-time
+  // import of anything saved by the earlier server-only version.
+  function loadServerExtras() {
+    return Promise.all([data().list("marketingSnapshots"), data().get("marketingState/research")]).then(function (r) {
+      state.snapshots = r[0] || [];
+      state.research = r[1];
+      if (state.store.importedCloud) return null;
+      return Promise.all([data().get("marketing/settings"), data().list("marketingIdeas"), data().list("marketingFindings")]).then(function (c) {
+        return commit(function (st) {
+          if (!st.settings && c[0]) st.settings = c[0];
+          (c[1] || []).forEach(function (i) { if (!st.ideas.some(function (x) { return x.id === i.id; })) st.ideas.push(i); });
+          (c[2] || []).forEach(function (f) { if (!st.findings.some(function (x) { return x.id === f.id; })) st.findings.push(f); });
+          st.importedCloud = true;
+        });
+      });
+    }).catch(function () { /* optional extras */ });
+  }
+
   function refreshStatus() {
-    if (!signedIn()) return Promise.resolve();
+    if (!signedIn()) { renderAll(); return Promise.resolve(); }
     return cloud().call("marketingStatus", {}, { timeout: 20000 }).then(function (s) { state.status = s; state.statusError = ""; markSync("server"); })
-      .catch(function (err) { state.statusError = describeCallError(err); })
-      .then(function () { renderStatus(); renderBudget(); renderResearchSummary(); renderIdeaCostHint(); });
+      .catch(function () { /* keep the last known state */ })
+      .then(function () { renderStatus(); renderBudget(); renderResearchSummary(); renderIdeaCostHint(); renderServerOnlyControls(); });
   }
 
   function renderAll() {
+    renderServerOnlyControls();
     renderStatus();
     renderBudget();
     renderResearchSummary();
@@ -275,27 +349,27 @@
   /* ---------------- overview: server status ---------------- */
 
   function healthRows() {
-    const c = cloud();
-    if (!c) return [{ label: "Sign-in service", level: "bad", text: "JARVIS's sign-in service didn't load, so Marketing can't connect. Your other data is unaffected." }];
-    if (!c.isSignedIn()) return [{ label: "Signed in", level: "bad", text: "Sign in to JARVIS to use Marketing." }];
-    const rows = [{ label: "Signed in", level: "ok", text: "Yes" }];
-    const pending = state.loading && !state.loaded;
-    if (pending) rows.push({ label: "Your saved data (Firestore)", level: "pending", text: "Checking…" });
-    else if (state.dataError) rows.push({ label: "Your saved data (Firestore)", level: "bad", text: state.dataErrorCode === "permission-denied" ? "Blocked by Firestore rules: the Marketing rules aren't published yet. Fix: step 1 below." : state.dataError });
-    else rows.push({ label: "Your saved data (Firestore)", level: "ok", text: "Loads and saves normally" });
+    const rows = [];
+    const pct = Math.round(storeChars() / STORE_LIMIT_CHARS * 100);
+    rows.push(signedIn()
+      ? { label: "Your marketing data", level: "ok", text: "Saved on this device and synced with your JARVIS account (" + pct + "% of Marketing's space used)." }
+      : { label: "Your marketing data", level: "local", text: "Saved on this device only. Sign in to JARVIS to sync it to your other devices (" + pct + "% of Marketing's space used)." });
 
-    if (pending && !state.status) rows.push({ label: "Marketing server", level: "pending", text: "Checking…" });
-    else if (state.statusError) rows.push({ label: "Marketing server", level: "bad", text: state.statusError });
-    else if (state.status) {
-      const s = state.status;
-      rows.push({ label: "Marketing server", level: "ok", text: "Reachable" });
-      rows.push({ label: "InsightSocial key", level: s.keyConfigured ? "ok" : "bad", text: s.keyConfigured ? "Stored on the server" : "Not set on the server yet (functions/README.md, step 3)" });
-      rows.push({ label: "Claude API key", level: s.aiKeyConfigured ? "ok" : "warn", text: s.aiKeyConfigured ? "Stored on the server" : "Not set, so AI ideas are unavailable" });
-    }
+    const backend = aiBackend();
+    if (backend === "server") rows.push({ label: "AI content ideas", level: "ok", text: "Through your Marketing server." });
+    else if (state.checkingServer) rows.push({ label: "AI content ideas", level: "pending", text: "Checking…" });
+    else if (state.status) rows.push({ label: "AI content ideas", level: "warn", text: "Your Marketing server is up, but its Claude API key isn't set." });
+    else rows.push({ label: "AI content ideas", level: "optional", text: "Optional, not set up. It needs the Marketing server, which keeps your Claude key off your devices." });
+
+    if (state.checkingServer) rows.push({ label: "Automatic competitor research", level: "pending", text: "Checking…" });
+    else if (state.status && state.status.keyConfigured) rows.push({ label: "Automatic competitor research", level: "ok", text: "Through your Marketing server (InsightSocial)." });
+    else if (state.status) rows.push({ label: "Automatic competitor research", level: "warn", text: "Your Marketing server is up, but its InsightSocial key isn't set." });
+    else if (state.statusErrorRef) rows.push({ label: "Automatic competitor research", level: "bad", text: state.statusError });
+    else rows.push({ label: "Automatic competitor research", level: "optional", text: "Optional, not set up. It needs the Marketing server. Meanwhile you can log competitor numbers by hand in Competitors." });
     return rows;
   }
 
-  const LEVEL_BADGE = { ok: ["badge-green", "OK"], bad: ["badge-red", "Problem"], warn: ["badge-yellow", "Warning"], pending: ["badge-neutral", "Checking"] };
+  const LEVEL_BADGE = { ok: ["badge-green", "OK"], bad: ["badge-red", "Problem"], warn: ["badge-yellow", "Off"], optional: ["badge-neutral", "Optional"], local: ["badge-neutral", "This device"], pending: ["badge-neutral", "Checking"] };
 
   function renderStatus(notice) {
     const statusEl = $("ciConnectionStatus");
@@ -317,48 +391,17 @@
     const problems = rows.filter(function (r) { return r.level === "bad"; }).length;
     const checking = rows.some(function (r) { return r.level === "pending"; });
     statusEl.classList.toggle("text-negative", problems > 0);
-    statusEl.textContent = checking ? "Checking your Marketing setup…"
-      : problems ? problems + " problem" + (problems === 1 ? "" : "s") + " found. Details below."
-      : "Everything is connected.";
-    const guide = $("mktSetupGuide");
-    if (guide && problems && !checking && signedIn()) guide.open = true;
+    statusEl.textContent = problems ? problems + " problem" + (problems === 1 ? "" : "s") + " found. Details below."
+      : "Marketing is ready to use." + (checking ? " Checking optional extras…" : "");
 
     const sync = readSync();
-    $("mktLastSync").textContent = signedIn()
-      ? "On this device: server last reached " + (sync.server ? core().formatDateTime(sync.server) : "never") + " · data last loaded " + (sync.data ? core().formatDateTime(sync.data) : "never") + "."
-      : "";
+    $("mktLastSync").textContent = sync.server ? "Marketing server last reached from this device: " + core().formatDateTime(sync.server) + "." : "";
 
     usageEl.textContent = notice || state.notice || "";
     const s = state.status;
     if (s && typeof (s.usage || {}).lastCreditsRemaining === "number") {
       usageEl.textContent = (usageEl.textContent ? usageEl.textContent + " " : "") + formatNumber(s.usage.lastCreditsRemaining) + " credits left on your InsightSocial plan (last reported by InsightSocial).";
     }
-  }
-
-  // A problem notice with Try again and a shortcut to Server Health.
-  function problemBox(container, text) {
-    container.textContent = "";
-    const box = el("div", "mkt-problem");
-    box.setAttribute("role", "alert");
-    box.appendChild(el("p", "field-hint text-negative", text));
-    const actions = el("div", "mkt-problem-actions");
-    const retry = el("button", "btn btn-secondary", "Try again");
-    retry.type = "button";
-    retry.addEventListener("click", function () { loadAll(); });
-    const health = el("button", "btn-icon", "Server Health");
-    health.type = "button";
-    health.addEventListener("click", openHealth);
-    actions.appendChild(retry);
-    actions.appendChild(health);
-    box.appendChild(actions);
-    container.appendChild(box);
-  }
-
-  function openHealth() {
-    const tab = $("mktSubNavOverview");
-    if (tab) tab.click();
-    const card = $("mktHealthCard");
-    if (card && card.scrollIntoView) card.scrollIntoView({ block: "start" });
   }
 
   /* ---------------- overview: budget ---------------- */
@@ -389,44 +432,55 @@
   }
 
   function ideaWorstCaseUsd(model) {
-    const s = state.status;
-    if (!s || !s.aiPrices) return null;
-    const p = s.aiPrices[model || s.aiModel];
-    if (!p) return null;
-    return (TYPICAL_INPUT_TOKENS * p.input + (s.aiMaxOutputTokens || 16000) * p.output) / 1e6;
+    const sp = spec();
+    if (!sp) return null;
+    const m = model || (state.settings || DEFAULT_SETTINGS).aiModel;
+    return sp.worstCaseCostUsd(m, TYPICAL_INPUT_TOKENS, sp.AI_MAX_OUTPUT_TOKENS);
+  }
+
+  // This month's AI spend, as recorded by the server.
+  function aiSpend() {
+    const server = (state.status && state.status.usage) || {};
+    return { costUsd: server.aiCostUsd || 0, requests: server.aiRequests || 0 };
+  }
+
+  function aiAllowance() {
+    const st = state.settings || DEFAULT_SETTINGS;
+    return Math.max(0, st.monthlyBudgetUsd - st.insightPlanMonthlyUsd);
   }
 
   function renderBudget() {
     const box = $("mktBudget");
     if (!box) return;
-    if (!signedIn()) { emptyState(box, "Sign in to see this month's usage."); return; }
-    if (state.loading && !state.status) { skeleton(box, 3); return; }
+    const st = state.settings || DEFAULT_SETTINGS;
     const s = state.status;
-    if (!s) { emptyState(box, "Budget numbers come from the Marketing server, which isn't responding. See Server Health above."); return; }
-    const u = s.usage || {};
+    const spend = aiSpend();
+    const allowance = aiAllowance();
     box.textContent = "";
-    box.appendChild(meter("InsightSocial credits", u.creditsUsed || 0, s.monthlyCreditCap, formatNumber(u.creditsUsed || 0) + " of " + formatNumber(s.monthlyCreditCap)));
-    box.appendChild(meter("AI ideas (Claude)", u.aiCostUsd || 0, s.aiAllowanceUsd, money(u.aiCostUsd) + " of " + money(s.aiAllowanceUsd)));
-    const total = (s.insightPlanMonthlyUsd || 0) + (u.aiCostUsd || 0);
-    box.appendChild(meter("Total estimated", total, s.monthlyBudgetUsd, money(total) + " of " + money(s.monthlyBudgetUsd)));
+    box.appendChild(meter("AI ideas (Claude)", spend.costUsd, allowance, money(spend.costUsd) + " of " + money(allowance)));
+    const total = st.insightPlanMonthlyUsd + spend.costUsd;
+    box.appendChild(meter("Total estimated", total, st.monthlyBudgetUsd, money(total) + " of " + money(st.monthlyBudgetUsd)));
+    if (s) {
+      const u = s.usage || {};
+      box.appendChild(meter("InsightSocial credits", u.creditsUsed || 0, s.monthlyCreditCap, formatNumber(u.creditsUsed || 0) + " of " + formatNumber(s.monthlyCreditCap)));
+    }
 
     const list = el("ul", "mkt-cost-list");
-    const plan = el("li");
-    plan.textContent = s.insightPlanMonthlyUsd > 0
-      ? "InsightSocial plan: " + money(s.insightPlanMonthlyUsd) + "/month (as entered in Settings)."
-      : "InsightSocial plan price not entered yet. Add it in Settings so the total is accurate.";
-    list.appendChild(plan);
-    const credits = el("li");
-    credits.textContent = u.requests
-      ? "InsightSocial: " + formatNumber(u.requests) + " request(s) this month, averaging " + ((u.creditsUsed || 0) / u.requests).toFixed(1) + " credit(s) each as reported by InsightSocial." + (u.unknownCostRequests ? " " + u.unknownCostRequests + " didn't report a cost." : "")
-      : "InsightSocial: credit cost per request is reported by InsightSocial after each request; none yet this month.";
-    list.appendChild(credits);
+    list.appendChild(el("li", "", st.insightPlanMonthlyUsd > 0
+      ? "InsightSocial plan: " + money(st.insightPlanMonthlyUsd) + "/month (from Settings), leaving " + money(allowance) + " for AI."
+      : "InsightSocial plan price is set to $0 in Settings."));
     const worst = ideaWorstCaseUsd();
-    const ai = el("li");
-    ai.textContent = "AI ideas with " + (MODEL_LABELS[s.aiModel] || s.aiModel) + ": up to about " + money(worst) + " per generation (worst case)" +
-      (u.aiRequests ? "; your " + u.aiRequests + " generation(s) this month averaged " + money((u.aiCostUsd || 0) / u.aiRequests) + "." : ".") +
-      " Costs are estimated from token counts and published prices.";
-    list.appendChild(ai);
+    list.appendChild(el("li", "", "AI ideas with " + (MODEL_LABELS[st.aiModel] || st.aiModel) + ": up to about " + money(worst) + " per generation (worst case)" +
+      (spend.requests ? "; your " + spend.requests + " generation(s) this month averaged " + money(spend.costUsd / spend.requests) + "." : ".") +
+      " These are estimates from token counts and published prices, not Anthropic's invoice."));
+    if (s) {
+      const u = s.usage || {};
+      list.appendChild(el("li", "", u.requests
+        ? "InsightSocial: " + formatNumber(u.requests) + " request(s) this month, averaging " + ((u.creditsUsed || 0) / u.requests).toFixed(1) + " credit(s) each as reported by InsightSocial."
+        : "InsightSocial: no requests this month yet."));
+    } else {
+      list.appendChild(el("li", "", "InsightSocial credits are tracked by the optional Marketing server, which isn't set up."));
+    }
     box.appendChild(list);
   }
 
@@ -435,14 +489,16 @@
   function renderResearchSummary() {
     const box = $("mktResearchSummary");
     if (!box) return;
-    if (!signedIn()) { emptyState(box, "Sign in to see research runs."); return; }
-    if (state.loading && !state.status) { skeleton(box, 2); return; }
+    if (state.checkingServer && !state.status) { skeleton(box, 2); return; }
     const s = state.status;
-    const run = (s && s.lastRun) || (state.research && state.research.lastRun) || null;
+    if (!s) {
+      emptyState(box, "Automatic daily research needs the optional Marketing server, which isn't set up. Meanwhile, log competitor numbers by hand in Competitors; they're saved with your account.");
+      $("mktRunHistory").textContent = "";
+      return;
+    }
+    const run = s.lastRun || (state.research && state.research.lastRun) || null;
     box.textContent = "";
-    if (!run && state.statusError && state.dataError) {
-      emptyState(box, "Research history isn't available until the Marketing server and your saved data load. See Server Health above.");
-    } else if (!run) {
+    if (!run) {
       emptyState(box, "No research has run yet. Add competitors, then tap Run now or wait for tomorrow's automatic run.");
     } else {
       const head = el("p", "field-hint");
@@ -474,8 +530,21 @@
     }
   }
 
+  // Lookup and research buttons only work with the optional server.
+  function renderServerOnlyControls() {
+    const on = !!state.status;
+    const run = $("mktRunResearchBtn");
+    const look = $("ciLookupBtn");
+    if (run) run.disabled = !on;
+    if (look) look.disabled = !on;
+    const note = $("ciLookupStatus");
+    if (note && !on && !note.dataset.result) {
+      note.textContent = state.checkingServer ? "Checking for your Marketing server…" : "Lookups run through the optional Marketing server, which isn't set up. You can log a competitor's numbers by hand in Competitors.";
+    }
+  }
+
   function runResearchNow() {
-    if (!signedIn()) { core().showToast("Sign in to JARVIS to use Marketing."); return; }
+    if (!state.status) { core().showToast("Automatic research needs the optional Marketing server."); return; }
     const btn = $("mktRunResearchBtn");
     const box = $("mktResearchSummary");
     btn.disabled = true;
@@ -503,6 +572,7 @@
     const statusEl = $("ciLookupStatus");
     const resultEl = $("ciLookupResult");
     const refreshBtn = $("ciRefreshBtn");
+    statusEl.dataset.result = "1";
     resultEl.textContent = "";
     refreshBtn.classList.toggle("hidden", !(res.ok && res.cached));
 
@@ -532,7 +602,7 @@
   }
 
   function runLookup(handle, refresh) {
-    if (!signedIn()) { core().showToast("Sign in to JARVIS to use Marketing."); return; }
+    if (!state.status) { core().showToast("Lookups need the optional Marketing server."); return; }
     const btn = $("ciLookupBtn");
     const refreshBtn = $("ciRefreshBtn");
     const statusEl = $("ciLookupStatus");
@@ -597,6 +667,70 @@
     return svg;
   }
 
+  // Every snapshot we have for a handle, oldest first: ones the optional
+  // server collected from InsightSocial plus numbers logged by hand.
+  function competitorHistory(handle) {
+    const out = [];
+    const snap = state.snapshots.find(function (s) { return s.id === handle || s.handle === handle; });
+    if (snap && Array.isArray(snap.history)) {
+      snap.history.forEach(function (h) { if (h && h.metrics) out.push({ date: h.date, metrics: h.metrics, source: "insightsocial" }); });
+    }
+    (state.store.snapshots[handle] || []).forEach(function (h) {
+      if (h && h.metrics) out.push({ date: h.date, metrics: h.metrics, source: "manual" });
+    });
+    return out.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)) || (a.source === "manual" ? 1 : -1); });
+  }
+
+  function sourceLabel(src) { return src === "manual" ? "entered by you" : "InsightSocial profile"; }
+
+  function logNumbersForm(handle) {
+    const details = el("details", "mkt-details mkt-log");
+    details.appendChild(el("summary", "", "Log numbers by hand"));
+    const form = el("form", "mkt-log-form");
+    form.noValidate = true;
+    const mk = function (label, type, attrs) {
+      const wrap = el("label", "mkt-log-field");
+      wrap.appendChild(el("span", "", label));
+      const input = el("input");
+      input.type = type;
+      Object.keys(attrs || {}).forEach(function (k) { input.setAttribute(k, attrs[k]); });
+      wrap.appendChild(input);
+      form.appendChild(wrap);
+      return input;
+    };
+    const followers = mk("Followers", "number", { min: "0", step: "1", inputmode: "numeric", placeholder: "e.g. 1250" });
+    const posts = mk("Posts (optional)", "number", { min: "0", step: "1", inputmode: "numeric" });
+    const date = mk("Date", "date", {});
+    date.value = core().todayISODate();
+    const btn = el("button", "btn btn-secondary", "Save");
+    btn.type = "submit";
+    form.appendChild(btn);
+    const msg = el("p", "field-hint");
+    msg.setAttribute("role", "status");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const f = Number(followers.value);
+      const pv = posts.value === "" ? null : Number(posts.value);
+      if (followers.value === "" || !isFinite(f) || f < 0) { msg.textContent = "Enter the follower count shown on their profile."; return; }
+      if (pv !== null && (!isFinite(pv) || pv < 0)) { msg.textContent = "Posts must be a number, or leave it empty."; return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) { msg.textContent = "Pick a date."; return; }
+      const metrics = { followers: Math.round(f) };
+      if (pv !== null) metrics.posts = Math.round(pv);
+      commit(function (st) {
+        const list = (st.snapshots[handle] || []).filter(function (x) { return x.date !== date.value; });
+        list.push({ date: date.value, metrics: metrics, savedAt: new Date().toISOString() });
+        list.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+        st.snapshots[handle] = list.slice(-90);
+      }).then(function () {
+        core().showToast("Saved @" + handle + "'s numbers.");
+        renderCompetitors();
+      }).catch(function (err) { msg.textContent = describeDataError(err); });
+    });
+    details.appendChild(form);
+    details.appendChild(msg);
+    return details;
+  }
+
   function competitorCard(handle) {
     const card = el("div", "card mkt-competitor");
     const row = el("div", "list-item-row");
@@ -607,65 +741,69 @@
     remove.addEventListener("click", function () { removeWatch(handle); });
     row.appendChild(remove);
     card.appendChild(row);
+    const link = el("a", "mkt-profile-link", "instagram.com/" + handle);
+    link.href = "https://www.instagram.com/" + encodeURIComponent(handle) + "/";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    card.appendChild(link);
 
-    const snap = state.snapshots.find(function (s) { return s.id === handle || s.handle === handle; });
-    if (!snap || !snap.latest) {
-      card.appendChild(el("p", "field-hint", "No snapshot yet. It will be captured on the next research run."));
+    const history = competitorHistory(handle);
+    if (!history.length) {
+      card.appendChild(el("p", "field-hint", state.status
+        ? "No numbers yet. They'll be captured on the next research run, or log them by hand below."
+        : "No numbers yet. Open their profile, then log what you see below."));
+      card.appendChild(logNumbersForm(handle));
       return card;
     }
-    const history = Array.isArray(snap.history) ? snap.history.slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); }) : [];
+    const latest = history[history.length - 1];
     const prev = history.length > 1 ? history[history.length - 2] : null;
-    card.appendChild(el("p", "field-hint", "Latest snapshot " + snap.latest.date + (prev ? " · compared with " + prev.date : " · first snapshot") + " · source: InsightSocial profile"));
+    card.appendChild(el("p", "field-hint", "Latest " + latest.date + " (" + sourceLabel(latest.source) + ")" + (prev ? " · compared with " + prev.date + " (" + sourceLabel(prev.source) + ")" : " · first snapshot")));
 
-    const metrics = snap.latest.metrics || {};
-    const names = Object.keys(metrics);
-    if (!names.length) {
-      card.appendChild(el("p", "field-hint", "InsightSocial didn't return any numeric fields for this account."));
-      return card;
-    }
+    const metrics = latest.metrics || {};
+    const names = Object.keys(metrics).filter(function (n) { return typeof metrics[n] === "number"; });
     const sparkMetric = names.indexOf("followers") !== -1 ? "followers" : names[0];
-    const sparkPoints = history.filter(function (h) { return h.metrics && typeof h.metrics[sparkMetric] === "number"; })
-      .map(function (h) { return { date: h.date, value: h.metrics[sparkMetric] }; });
+    const sparkPoints = sparkMetric ? history.filter(function (h) { return typeof h.metrics[sparkMetric] === "number"; })
+      .map(function (h) { return { date: h.date, value: h.metrics[sparkMetric] }; }) : [];
     if (sparkPoints.length >= 2) {
       const sp = el("div", "mkt-spark-wrap");
       sp.appendChild(sparkline(sparkPoints, "@" + handle + " " + sparkMetric + " over time"));
       sp.appendChild(el("span", "field-hint", sparkMetric + ", " + sparkPoints.length + " snapshots"));
       card.appendChild(sp);
     }
-    const table = el("table", "mkt-metrics");
-    const thead = el("thead");
-    const hr = el("tr");
-    ["Field (as named by InsightSocial)", "Value", "Change"].forEach(function (t) { hr.appendChild(el("th", "", t)); });
-    thead.appendChild(hr);
-    table.appendChild(thead);
-    const tbody = el("tbody");
-    names.forEach(function (name) {
-      const tr = el("tr");
-      tr.appendChild(el("td", "", name));
-      tr.appendChild(el("td", "", formatNumber(metrics[name])));
-      let change = "—";
-      let cls = "";
-      if (prev && prev.metrics && typeof prev.metrics[name] === "number") {
-        const d = metrics[name] - prev.metrics[name];
-        change = d === 0 ? "no change" : (d > 0 ? "+" : "") + d.toLocaleString();
-        cls = d > 0 ? "text-positive" : d < 0 ? "text-negative" : "";
-      }
-      tr.appendChild(el("td", cls, change));
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    const scroll = el("div", "mkt-table-scroll");
-    scroll.appendChild(table);
-    card.appendChild(scroll);
+    if (names.length) {
+      const table = el("table", "mkt-metrics");
+      const thead = el("thead");
+      const hr = el("tr");
+      ["Field", "Value", "Change"].forEach(function (t) { hr.appendChild(el("th", "", t)); });
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      const tbody = el("tbody");
+      names.forEach(function (name) {
+        const tr = el("tr");
+        tr.appendChild(el("td", "", name));
+        tr.appendChild(el("td", "", formatNumber(metrics[name])));
+        let change = "—";
+        let cls = "";
+        if (prev && prev.metrics && typeof prev.metrics[name] === "number") {
+          const d = metrics[name] - prev.metrics[name];
+          change = d === 0 ? "no change" : (d > 0 ? "+" : "") + d.toLocaleString();
+          cls = d > 0 ? "text-positive" : d < 0 ? "text-negative" : "";
+        }
+        tr.appendChild(el("td", cls, change));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      const scroll = el("div", "mkt-table-scroll");
+      scroll.appendChild(table);
+      card.appendChild(scroll);
+    }
+    card.appendChild(logNumbersForm(handle));
     return card;
   }
 
   function renderCompetitors() {
     const box = $("mktCompetitorList");
     if (!box) return;
-    if (!signedIn()) { emptyState(box, "Sign in to manage your competitor watchlist."); return; }
-    if (state.loading && !state.loaded) { skeleton(box, 3); return; }
-    if (state.dataError) { problemBox(box, state.dataError); return; }
     const list = (state.settings || DEFAULT_SETTINGS).watchlist;
     if (!list.length) { emptyState(box, "No competitors yet. Add an Instagram handle above to start tracking it."); return; }
     box.textContent = "";
@@ -676,7 +814,6 @@
     e.preventDefault();
     const status = $("mktWatchStatus");
     const handle = normalizeHandle($("mktWatchHandle").value);
-    if (!signedIn()) { status.textContent = "Sign in to JARVIS first."; return; }
     if (!HANDLE_RE.test(handle)) { status.textContent = "Enter a valid Instagram handle (letters, numbers, dots, underscores; up to 30)."; return; }
     const current = (state.settings || DEFAULT_SETTINGS).watchlist;
     if (current.indexOf(handle) !== -1) { status.textContent = "@" + handle + " is already on your watchlist."; return; }
@@ -684,7 +821,7 @@
     $("mktWatchAddBtn").disabled = true;
     saveSettings({ watchlist: current.concat([handle]) }).then(function () {
       $("mktWatchHandle").value = "";
-      status.textContent = "Added @" + handle + ". It will be researched on the next run.";
+      status.textContent = "Added @" + handle + "." + (state.status ? " It will be researched on the next run." : " Log their numbers below whenever you check their profile.");
       renderCompetitors();
     }).catch(function (err) {
       status.textContent = describeDataError(err);
@@ -692,7 +829,7 @@
   }
 
   function removeWatch(handle) {
-    if (!window.confirm("Stop tracking @" + handle + "? Saved snapshots are kept.")) return;
+    if (!window.confirm("Stop tracking @" + handle + "? Numbers you logged are kept.")) return;
     const current = (state.settings || DEFAULT_SETTINGS).watchlist;
     saveSettings({ watchlist: current.filter(function (h) { return h !== handle; }) }).then(function () {
       $("mktWatchStatus").textContent = "Removed @" + handle + ".";
@@ -723,9 +860,6 @@
     if (!v) return;
     v.textContent = "";
     h.textContent = "";
-    if (!signedIn()) { v.appendChild(el("li", "empty-state", "Sign in to keep research notes.")); return; }
-    if (state.loading && !state.loaded) { skeleton(v, 2); return; }
-    if (state.dataError) { problemBox(v, state.dataError); return; }
     const sorted = state.findings.slice().sort(function (a, b) { return String(b.createdAt || "").localeCompare(String(a.createdAt || "")); });
     const verified = sorted.filter(function (f) { return f.kind === "verified"; });
     const hyp = sorted.filter(function (f) { return f.kind !== "verified"; });
@@ -741,14 +875,11 @@
     const text = $("mktFindingText").value.trim();
     const kind = $("mktFindingKind").value === "verified" ? "verified" : "hypothesis";
     const source = $("mktFindingSource").value.trim();
-    if (!signedIn()) { status.textContent = "Sign in to JARVIS first."; return; }
     if (!text) { status.textContent = "Write the finding first."; return; }
     if (kind === "verified" && !source) { status.textContent = "A verified finding needs a source. Add one, or save it as a hypothesis."; return; }
     const f = { id: core().uid(), text: text.slice(0, 400), kind: kind, source: source.slice(0, 200), createdAt: new Date().toISOString() };
     $("mktFindingAddBtn").disabled = true;
-    const doc = { text: f.text, kind: f.kind, source: f.source, createdAt: f.createdAt };
-    data().set("marketingFindings/" + f.id, doc).then(function () {
-      state.findings.push(f);
+    commit(function (st) { st.findings.push(f); }).then(function () {
       $("mktFindingForm").reset();
       status.textContent = "Saved.";
       renderFindings();
@@ -758,8 +889,7 @@
 
   function deleteFinding(f) {
     if (!window.confirm("Delete this research note?")) return;
-    data().remove("marketingFindings/" + f.id).then(function () {
-      state.findings = state.findings.filter(function (x) { return x.id !== f.id; });
+    commit(function (st) { st.findings = st.findings.filter(function (x) { return x.id !== f.id; }); }).then(function () {
       renderFindings();
     }).catch(function (err) { core().showToast(describeDataError(err)); });
   }
@@ -790,31 +920,46 @@
     }
   }
 
+  function aiBackend() {
+    return state.status && state.status.aiKeyConfigured ? "server" : null;
+  }
+
   function renderIdeaCostHint() {
     const hint = $("mktIdeaCostHint");
     const btn = $("mktIdeaGenerateBtn");
     if (!hint) return;
     hint.classList.remove("text-negative");
-    if (!signedIn()) { hint.textContent = "Sign in to generate ideas."; btn.disabled = true; return; }
-    const s = state.status;
-    if (!s) { hint.textContent = state.statusError || "Checking your AI budget…"; btn.disabled = !!state.statusError; return; }
-    if (!s.aiKeyConfigured) {
-      hint.textContent = "The Claude API key isn't set on your server yet, so ideas can't be generated. See functions/README.md, step 3.";
-      hint.classList.add("text-negative");
+    const backend = aiBackend();
+    const model = (state.settings || DEFAULT_SETTINGS).aiModel;
+    if (!backend) {
+      hint.textContent = state.checkingServer ? "Checking for your Marketing server…"
+        : state.status ? "Your Marketing server is up, but its Claude API key isn't set, so ideas can't be generated yet."
+        : "AI ideas run on the optional Marketing server, which keeps your Claude API key off your devices. It isn't set up yet. Everything else in Marketing works without it.";
       btn.disabled = true;
       return;
     }
     const worst = ideaWorstCaseUsd();
-    const used = (s.usage || {}).aiCostUsd || 0;
-    const left = Math.max(0, s.aiAllowanceUsd - used);
+    const left = Math.max(0, aiAllowance() - aiSpend().costUsd);
     if (worst !== null && worst > left) {
-      hint.textContent = "Blocked to protect your budget: " + money(left) + " of AI budget left this month, and one generation with " + (MODEL_LABELS[s.aiModel] || s.aiModel) + " can cost up to " + money(worst) + ". Switch to a cheaper model or raise the budget in Settings.";
+      hint.textContent = "Blocked to protect your budget: " + money(left) + " of AI budget left this month, and one generation with " + (MODEL_LABELS[model] || model) + " can cost up to " + money(worst) + ". Switch to a cheaper model or raise the budget in Settings.";
       hint.classList.add("text-negative");
       btn.disabled = true;
       return;
     }
-    hint.textContent = "Uses " + (MODEL_LABELS[s.aiModel] || s.aiModel) + ". Estimated cost: up to " + money(worst) + " per generation, usually less. " + money(left) + " of AI budget left this month. No InsightSocial credits are used.";
+    hint.textContent = "Uses " + (MODEL_LABELS[model] || model) + " through your Marketing server" +
+      ". Estimated cost: up to " + money(worst) + " per generation, usually less. " + money(left) + " of AI budget left this month.";
     btn.disabled = false;
+  }
+
+  // The server reads settings and notes from Firestore; send it the
+  // current ones first.
+  function mirrorForServer() {
+    if (!state.status) return Promise.resolve();
+    const writes = [data().set("marketing/settings", state.settings, true)];
+    state.findings.slice(-30).forEach(function (f) {
+      writes.push(data().set("marketingFindings/" + f.id, { text: f.text, kind: f.kind, source: f.source || "", createdAt: f.createdAt || "" }));
+    });
+    return Promise.all(writes).catch(function () { /* best effort */ });
   }
 
   function readBrief() {
@@ -828,7 +973,8 @@
   }
 
   function generate(brief) {
-    if (!signedIn()) { core().showToast("Sign in to JARVIS first."); return; }
+    const backend = aiBackend();
+    if (!backend) { renderIdeaCostHint(); return; }
     const status = $("mktIdeaStatus");
     const btn = $("mktIdeaGenerateBtn");
     const results = $("mktIdeaResults");
@@ -837,7 +983,7 @@
     status.textContent = "Writing ideas… this can take up to a minute or two.";
     skeleton(results, 4);
     state.lastBrief = brief;
-    cloud().call("generateIdeas", brief, { timeout: 240000 }).then(function (res) {
+    mirrorForServer().then(function () { return cloud().call("generateIdeas", brief, { timeout: 240000 }); }).then(function (res) {
       if (!res || !res.ok) {
         status.textContent = ((res && res.error) || "Claude didn't return ideas.") + (res && typeof res.costUsd === "number" ? " Estimated cost: " + money(res.costUsd) + "." : "");
         results.textContent = "";
@@ -965,12 +1111,8 @@
   }
 
   function persistIdea(id, record) {
-    return data().set("marketingIdeas/" + id, record).then(function () {
-      const withId = Object.assign({ id: id }, record);
-      const i = state.ideas.findIndex(function (x) { return x.id === id; });
-      if (i === -1) state.ideas.push(withId); else state.ideas[i] = withId;
-      return withId;
-    });
+    const withId = Object.assign({ id: id }, record);
+    return commit(function (st) { upsertById(st.ideas, withId); }).then(function () { return withId; });
   }
 
   function saveGenerated(index) {
@@ -1081,10 +1223,7 @@
     const box = $("mktLibList");
     const count = $("mktLibCount");
     if (!box) return;
-    if (!signedIn()) { count.textContent = ""; emptyState(box, "Sign in to see your content idea library."); return; }
-    if (state.loading && !state.loaded) { count.textContent = ""; skeleton(box, 4); return; }
-    if (state.dataError) { count.textContent = ""; problemBox(box, state.dataError); return; }
-    if (!state.ideas.length) { count.textContent = ""; emptyState(box, "No saved ideas yet. Generate some in AI Ideas, or tap New idea to add your own."); return; }
+    if (!state.ideas.length) { count.textContent = ""; emptyState(box, "No saved ideas yet. Tap New idea to add your own" + (aiBackend() ? ", or generate some in AI Ideas." : ".")); return; }
     const list = filteredIdeas();
     count.textContent = list.length === state.ideas.length ? state.ideas.length + " idea(s)" : list.length + " of " + state.ideas.length + " idea(s) match";
     box.textContent = "";
@@ -1103,8 +1242,7 @@
 
   function deleteIdea(idea) {
     if (!window.confirm('Delete "' + idea.title + '"? This can\'t be undone.')) return;
-    data().remove("marketingIdeas/" + idea.id).then(function () {
-      state.ideas = state.ideas.filter(function (x) { return x.id !== idea.id; });
+    commit(function (st) { st.ideas = st.ideas.filter(function (x) { return x.id !== idea.id; }); }).then(function () {
       renderLibrary();
     }).catch(function (err) { core().showToast(describeDataError(err)); });
   }
@@ -1119,7 +1257,6 @@
   ];
 
   function openEditor(id, draftIndex) {
-    if (!signedIn()) { core().showToast("Sign in to JARVIS first."); return; }
     state.editingId = id;
     state.editingDraftIndex = draftIndex;
     const idea = id ? state.ideas.find(function (x) { return x.id === id; }) : draftIndex >= 0 ? state.generated[draftIndex] : null;
@@ -1186,9 +1323,8 @@
     $("mktSetPillars").value = s.contentPillars.join("\n");
     renderModelHint();
     const status = $("mktSettingsStatus");
-    if (!signedIn()) status.textContent = "Sign in to change Marketing settings.";
-    else if (state.dataError) status.textContent = state.dataError;
-    else if (status.textContent.indexOf("Sign in") === 0) status.textContent = "";
+    $("mktStorageUse").textContent = "Marketing is using " + Math.round(storeChars() / STORE_LIMIT_CHARS * 100) + "% of its storage space" + (signedIn() ? " (synced with your JARVIS account)." : " (on this device; sign in to sync).");
+    if (status.textContent.indexOf("Sign in") === 0) status.textContent = "";
   }
 
   function renderModelHint() {
@@ -1196,14 +1332,13 @@
     if (!hint) return;
     const worst = ideaWorstCaseUsd($("mktSetModel").value);
     hint.textContent = worst === null
-      ? "Prices per model come from your server once it's connected."
-      : "Worst case per generation with this model: about " + money(worst) + ". Opus and Sonnet automatically fall back to another model if the first is overloaded.";
+      ? ""
+      : "Worst case per generation with this model: about " + money(worst) + ".";
   }
 
   function handleSettingsSave(e) {
     e.preventDefault();
     const status = $("mktSettingsStatus");
-    if (!signedIn()) { status.textContent = "Sign in to JARVIS first."; return; }
     const budget = Number($("mktSetBudget").value);
     const plan = Number($("mktSetPlan").value);
     if (!isFinite(budget) || budget < 0) { status.textContent = "Enter a monthly budget of $0 or more."; return; }
@@ -1226,7 +1361,8 @@
       status.textContent = "Saved." + warn;
       renderPillarOptions();
       renderCompetitors();
-      return refreshStatus();
+      renderBudget();
+      renderIdeaCostHint();
     }).catch(function (err) { status.textContent = describeDataError(err); })
       .then(function () { btn.disabled = false; });
   }
@@ -1273,7 +1409,10 @@
 
     // Load when Marketing is opened (sign-in can finish after start-up).
     const nav = $("navBtnMarketing");
-    if (nav) nav.addEventListener("click", function () { if (!state.loading && (!state.loaded || !state.status)) loadAll(); });
+    if (nav) nav.addEventListener("click", function () {
+      loadStore();
+      if (!state.serverCheckedOnce && !state.checkingServer) loadAll(); else renderAll();
+    });
 
     const removed = removeLegacyBrowserKey();
     state.notice = removed ? "The InsightSocial key previously saved in this browser was deleted; your server holds the only copy now." : "";

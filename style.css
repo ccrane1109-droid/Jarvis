@@ -2122,3 +2122,8 @@ textarea { resize: vertical; min-height: 44px; }
 .mkt-problem { border: 1px solid var(--red-dim); background: var(--red-dim); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; }
 .mkt-problem p { margin: 0 0 10px; }
 .mkt-problem-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mkt-profile-link { display: inline-block; font-size: 13px; color: var(--accent); margin: -4px 0 8px; overflow-wrap: anywhere; }
+.mkt-log-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-items: end; margin-top: 6px; }
+.mkt-log-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.mkt-log-field input { width: 100%; min-width: 0; }
+.mkt-log-form .btn { min-height: 44px; }

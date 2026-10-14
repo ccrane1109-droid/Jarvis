@@ -7,23 +7,15 @@
 
 "use strict";
 
-// Anthropic first-party prices in USD per 1M tokens (from Anthropic's model
-// table, cached 2026-10-06). Haiku's price applies to prompts up to 100K
-// tokens, which these prompts stay well under.
-const MODEL_PRICES = {
-  "claude-opus-5-5": { input: 4, output: 20 },
-  "claude-sonnet-5-5": { input: 2, output: 10 },
-  "claude-haiku-5-5": { input: 0.1, output: 0.5 }
-};
-const DEFAULT_MODEL = "claude-opus-5-5";
-// Output cap for one idea-generation request; also the worst-case basis for
-// the budget check and the cost estimate shown in the app.
-const AI_MAX_OUTPUT_TOKENS = 16000;
+const spec = require("./idea-spec");
+
+const { MODEL_PRICES, DEFAULT_MODEL, AI_MAX_OUTPUT_TOKENS } = spec;
 
 const DEFAULTS = {
   monthlyCreditCap: 1500,
   monthlyBudgetUsd: 20,
-  insightPlanMonthlyUsd: 0,
+  // The owner's InsightSocial plan ($10/month, as they reported it).
+  insightPlanMonthlyUsd: 10,
   aiModel: DEFAULT_MODEL,
   brandProfile: "",
   contentPillars: ["Faith", "Behind the brand", "Style & outfits", "Community", "Product drops"],
@@ -89,24 +81,8 @@ async function readUsage(db, uid, month) {
   };
 }
 
-function priceFor(model) { return MODEL_PRICES[model] || null; }
-
-// Estimated USD cost of one response from its reported token usage. Cache
-// write/read tokens (if any) are priced at the full input rate, which can
-// only overestimate.
-function estimateCostUsd(model, usage) {
-  const p = priceFor(model) || MODEL_PRICES[DEFAULT_MODEL];
-  const u = usage || {};
-  const input = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
-  const output = u.output_tokens || 0;
-  return (input * p.input + output * p.output) / 1e6;
-}
-
-// Most a single request could cost if it used every allowed output token.
-function worstCaseCostUsd(model, inputTokens, maxOutputTokens) {
-  const p = priceFor(model) || MODEL_PRICES[DEFAULT_MODEL];
-  return (inputTokens * p.input + maxOutputTokens * p.output) / 1e6;
-}
+// Cost helpers live in idea-spec.js so the browser prices requests the same way.
+const { estimateCostUsd, worstCaseCostUsd, priceFor } = spec;
 
 // What's left of the monthly budget for AI after the InsightSocial plan fee.
 function aiAllowanceUsd(settings) {

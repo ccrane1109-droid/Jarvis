@@ -47,7 +47,7 @@ function apiError(Cls, status) {
 test("settings are clamped and defaulted safely", () => {
   const s = settingsLib.sanitizeSettings({ monthlyBudgetUsd: -5, insightPlanMonthlyUsd: "abc", aiModel: "gpt-4", watchlist: ["@A", "a", "bad handle", 5], contentPillars: ["  Faith  ", ""], monthlyCreditCap: 1e9 });
   assert.equal(s.monthlyBudgetUsd, 0);
-  assert.equal(s.insightPlanMonthlyUsd, 0);
+  assert.equal(s.insightPlanMonthlyUsd, 10, "invalid value falls back to the $10 plan default");
   assert.equal(s.aiModel, "claude-opus-5-5");
   assert.deepEqual(s.watchlist, ["a"]);
   assert.deepEqual(s.contentPillars, ["Faith"]);
@@ -153,4 +153,15 @@ test("idea schema requires every field and allows no extras", () => {
   const item = ai.IDEA_SCHEMA.properties.ideas.items;
   assert.equal(item.additionalProperties, false);
   assert.deepEqual(item.required.slice().sort(), Object.keys(item.properties).sort());
+});
+
+test("the shared spec labels manual competitor numbers by their source", () => {
+  const spec = require("../lib/idea-spec");
+  const brief = spec.validateBrief({ count: 1 });
+  const msg = spec.buildUserMessage(brief, { contentPillars: ["Faith"], brandProfile: "" }, {
+    snapshots: [{ handle: "rival", date: "2026-10-14", metrics: { followers: 10 }, source: "entered by the owner" }],
+    findings: []
+  });
+  assert.match(msg, /@rival profile snapshot, 2026-10-14 \(entered by the owner\): \{"followers":10\}/);
+  assert.equal(spec.IDEA_SCHEMA, ai.IDEA_SCHEMA, "server uses the shared schema");
 });

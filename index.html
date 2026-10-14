@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=37">
 </head>
 <body>
 
@@ -3273,7 +3273,7 @@
   <section id="panel-marketing" class="tab-panel" role="tabpanel" aria-labelledby="navBtnMarketing">
     <div class="panel-header">
       <h1>Marketing</h1>
-      <p class="panel-subtitle">Research, competitors and AI content ideas for Gratiel. Everything runs on your private server and stays in your account.</p>
+      <p class="panel-subtitle">Research, competitors and content ideas for Gratiel, saved to your JARVIS account.</p>
     </div>
 
     <nav class="sub-nav marketing-sub-nav" role="tablist" aria-label="Marketing sections">
@@ -3289,7 +3289,7 @@
     <div id="mkt-overview" class="marketing-sub-panel active" role="tabpanel" aria-labelledby="mktSubNavOverview">
       <div class="card" id="mktHealthCard">
         <div class="list-item-row">
-          <h2 class="card-title">Server Health</h2>
+          <h2 class="card-title">Connections</h2>
           <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
         </div>
         <p class="field-hint" id="ciConnectionStatus" role="status">Checking…</p>
@@ -3297,14 +3297,10 @@
         <p class="field-hint" id="mktLastSync"></p>
         <p class="field-hint" id="ciUsageSummary"></p>
         <details class="mkt-details" id="mktSetupGuide">
-          <summary>How to fix setup problems</summary>
+          <summary>Optional extras</summary>
           <div class="mkt-guide">
-            <h3 class="mkt-idea-label">1. Firestore rules (free, about 2 minutes, no command line)</h3>
-            <p>Fixes "Firestore rules don't allow this". Firebase console → your project → Firestore Database → <strong>Rules</strong> tab. Replace everything with the contents of <code>firestore.rules</code> from your GitHub repo, then tap <strong>Publish</strong>. Only your own signed-in account can read or change your data under these rules.</p>
-            <h3 class="mkt-idea-label">2. Marketing server (Cloud Functions)</h3>
-            <p>Fixes "Couldn't get a response from the Marketing server". Needs the Blaze plan (set a budget alert first). You can do this from any browser with Google Cloud Shell (shell.cloud.google.com) — the full steps are in <code>functions/README.md</code>.</p>
-            <h3 class="mkt-idea-label">3. Check it worked</h3>
-            <p>Tap <strong>Check again</strong> above. Every row should say OK. If the server row shows an error reference, look it up in Firebase console → Functions → Logs.</p>
+            <p>Competitors, research notes, the idea library and settings all work as they are, and sync with your JARVIS account.</p>
+            <p>AI idea generation, InsightSocial lookups and automatic daily research run on the optional Marketing server, which keeps your API keys off your devices. Setup steps are in <code>functions/README.md</code>.</p>
           </div>
         </details>
       </div>
@@ -3353,7 +3349,7 @@
     <div id="mkt-competitors" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavCompetitors">
       <div class="card">
         <h2 class="card-title">Competitor Watchlist</h2>
-        <p class="field-hint">Up to 10 Instagram accounts. Daily research saves a snapshot of each so you can see what changed. Adding a handle doesn't spend credits until the next run.</p>
+        <p class="field-hint">Up to 10 Instagram accounts. Log their numbers whenever you check their profile and JARVIS charts what changed.</p>
         <form id="mktWatchForm" class="mkt-inline-form" novalidate>
           <label for="mktWatchHandle" class="visually-hidden">Instagram handle to watch</label>
           <input type="text" id="mktWatchHandle" placeholder="@handle" maxlength="31" autocapitalize="off" autocorrect="off" spellcheck="false">
@@ -3512,7 +3508,7 @@
               <input type="number" id="mktSetPlan" min="0" max="500" step="0.01" inputmode="decimal">
             </div>
           </div>
-          <p class="field-hint">The AI budget is whatever is left after the InsightSocial plan. Idea generation is blocked before it can go over.</p>
+          <p class="field-hint">The AI budget is whatever is left after the InsightSocial plan ($20 − $10 = $10 by default). Idea generation is blocked before it can go over.</p>
           <div class="form-row two-col">
             <div>
               <label for="mktSetCredits">InsightSocial credit cap / month</label>
@@ -3543,6 +3539,7 @@
           </div>
         </form>
         <p class="field-hint" id="mktSettingsStatus" role="status"></p>
+        <p class="field-hint" id="mktStorageUse"></p>
       </div>
     </div>
 
@@ -3943,23 +3940,24 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=36"></script>
-<script type="module" src="js/auth.js?v=36"></script>
-<script src="js/app.js?v=36"></script>
-<script src="js/exercises.js?v=36"></script>
-<script src="js/workout.js?v=36"></script>
-<script src="js/nutrition.js?v=36"></script>
-<script src="js/nutrition-label-scan.js?v=36"></script>
-<script src="js/groceries.js?v=36"></script>
-<script src="js/habits.js?v=36"></script>
-<script src="js/business.js?v=36"></script>
-<script src="js/trading.js?v=36"></script>
-<script src="js/blobstore.js?v=36"></script>
-<script src="js/video-api-client.js?v=36"></script>
-<script src="js/video-connections.js?v=36"></script>
-<script src="js/video.js?v=36"></script>
-<script src="js/video-studio.js?v=36"></script>
-<script src="js/content-intelligence.js?v=36"></script>
-<script src="js/form-check.js?v=36"></script>
+<script src="js/firebase-config.js?v=37"></script>
+<script type="module" src="js/auth.js?v=37"></script>
+<script src="js/app.js?v=37"></script>
+<script src="js/exercises.js?v=37"></script>
+<script src="js/workout.js?v=37"></script>
+<script src="js/nutrition.js?v=37"></script>
+<script src="js/nutrition-label-scan.js?v=37"></script>
+<script src="js/groceries.js?v=37"></script>
+<script src="js/habits.js?v=37"></script>
+<script src="js/business.js?v=37"></script>
+<script src="js/trading.js?v=37"></script>
+<script src="js/blobstore.js?v=37"></script>
+<script src="js/video-api-client.js?v=37"></script>
+<script src="js/video-connections.js?v=37"></script>
+<script src="js/video.js?v=37"></script>
+<script src="js/video-studio.js?v=37"></script>
+<script src="functions/lib/idea-spec.js?v=37"></script>
+<script src="js/content-intelligence.js?v=37"></script>
+<script src="js/form-check.js?v=37"></script>
 </body>
 </html>
