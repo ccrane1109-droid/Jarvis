@@ -2109,3 +2109,16 @@ textarea { resize: vertical; min-height: 44px; }
 
 .mkt-idea-card > .list-item-row { flex-wrap: nowrap; align-items: flex-start; gap: 10px; }
 .mkt-idea-card > .list-item-row .card-title { flex: 1; min-width: 0; }
+
+.mkt-health-list { list-style: none; margin: 10px 0 4px; padding: 0; }
+.mkt-health-row { padding: 10px 0; border-top: 1px solid var(--card-border); }
+.mkt-health-row:first-child { border-top: none; }
+.mkt-health-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mkt-health-label { font-weight: 600; font-size: 14px; }
+.mkt-health-text { margin: 4px 0 0; overflow-wrap: anywhere; }
+.mkt-guide { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.mkt-guide p { margin: 0 0 12px; overflow-wrap: anywhere; }
+.mkt-guide code { font-size: 12px; background: var(--bg-elevated); padding: 1px 5px; border-radius: 4px; }
+.mkt-problem { border: 1px solid var(--red-dim); background: var(--red-dim); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; }
+.mkt-problem p { margin: 0 0 10px; }
+.mkt-problem-actions { display: flex; flex-wrap: wrap; gap: 8px; }

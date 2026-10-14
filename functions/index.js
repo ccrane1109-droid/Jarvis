@@ -19,6 +19,7 @@ const Anthropic = require("@anthropic-ai/sdk").default;
 const insight = require("./lib/insight");
 const research = require("./lib/research");
 const ai = require("./lib/ai");
+const { makeGuard } = require("./lib/guard");
 
 initializeApp();
 
@@ -48,32 +49,24 @@ function deps(extra) {
   }, extra);
 }
 
-async function guarded(fn) {
-  try {
-    return await fn();
-  } catch (err) {
-    if (err instanceof insight.InsightError) throw new HttpsError(err.code, err.message);
-    logger.error("Unexpected marketing function error", { message: err && err.message });
-    throw new HttpsError("internal", "Unexpected server error.");
-  }
-}
+const guarded = makeGuard({ InsightError: insight.InsightError, HttpsError: HttpsError, logger: logger });
 
 const uidOf = (request) => request.auth && request.auth.uid;
 
 exports.marketingStatus = onCall(
   Object.assign({}, BASE, { secrets: [INSIGHTSOCIAL_API_KEY, ANTHROPIC_API_KEY], timeoutSeconds: 30 }),
-  (request) => guarded(() => insight.getStatus(uidOf(request), deps({
+  (request) => guarded("marketingStatus", () => insight.getStatus(uidOf(request), deps({
     apiKey: INSIGHTSOCIAL_API_KEY.value(),
     anthropicKey: ANTHROPIC_API_KEY.value()
   }))));
 
 exports.insightRequest = onCall(
   Object.assign({}, BASE, { secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 30 }),
-  (request) => guarded(() => insight.runInsightRequest(uidOf(request), request.data || {}, deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }))));
+  (request) => guarded("insightRequest", () => insight.runInsightRequest(uidOf(request), request.data || {}, deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }))));
 
 exports.runResearch = onCall(
   Object.assign({}, BASE, { secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300 }),
-  (request) => guarded(() => research.runResearch(uidOf(request), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), { trigger: "manual" })));
+  (request) => guarded("runResearch", () => research.runResearch(uidOf(request), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), { trigger: "manual" })));
 
 exports.dailyResearch = onSchedule(
   Object.assign({}, BASE, { maxInstances: 1, secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300, schedule: "every day 08:00", timeZone: "America/New_York" }),
@@ -81,10 +74,10 @@ exports.dailyResearch = onSchedule(
     try {
       await research.runResearch(OWNER_UID.value(), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), { trigger: "schedule" });
     } catch (err) {
-      logger.error("Daily research failed", { message: err && err.message });
+      logger.error("Daily research failed", { fn: "dailyResearch", message: err && err.message, stack: err && err.stack });
     }
   });
 
 exports.generateIdeas = onCall(
   Object.assign({}, BASE, { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 240 }),
-  (request) => guarded(() => ai.generateIdeas(uidOf(request), request.data || {}, deps({ anthropic: anthropicClient() }))));
+  (request) => guarded("generateIdeas", () => ai.generateIdeas(uidOf(request), request.data || {}, deps({ anthropic: anthropicClient() }))));
