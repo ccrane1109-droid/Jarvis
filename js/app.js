@@ -336,6 +336,10 @@
       }
     });
 
+    const marketingSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".marketing-sub-nav-btn"));
+    const marketingSubPanels = Array.prototype.slice.call(document.querySelectorAll(".marketing-sub-panel"));
+    setupTabGroup(marketingSubNavBtns, marketingSubPanels);
+
     initScrollFades();
 
     const briefingBtn = document.getElementById("dailyBriefingBtn");

@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 
@@ -3273,37 +3273,325 @@
   <section id="panel-marketing" class="tab-panel" role="tabpanel" aria-labelledby="navBtnMarketing">
     <div class="panel-header">
       <h1>Marketing</h1>
-      <p class="panel-subtitle">The starting point for Jarvis Content Intelligence — connect outside data sources here.</p>
+      <p class="panel-subtitle">Research, competitors and AI content ideas for Gratiel. Everything runs on your private server and stays in your account.</p>
     </div>
 
-    <div class="disclaimer-strip">
-      InsightSocial requests run on your private JARVIS server (Firebase Cloud Functions), which holds your API key as a secret and only answers your signed-in account. Results are saved privately to your account and reused for 12 hours to avoid paying twice; a monthly credit cap stops new requests once it's reached.
-    </div>
+    <nav class="sub-nav marketing-sub-nav" role="tablist" aria-label="Marketing sections">
+      <button type="button" class="marketing-sub-nav-btn active" data-subtarget="mkt-overview" role="tab" aria-selected="true" aria-controls="mkt-overview" id="mktSubNavOverview">Overview</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-competitors" role="tab" aria-selected="false" aria-controls="mkt-competitors" id="mktSubNavCompetitors">Competitors</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-research" role="tab" aria-selected="false" aria-controls="mkt-research" id="mktSubNavResearch">Research</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-ideas" role="tab" aria-selected="false" aria-controls="mkt-ideas" id="mktSubNavIdeas">AI Ideas</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-library" role="tab" aria-selected="false" aria-controls="mkt-library" id="mktSubNavLibrary">Library</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-settings" role="tab" aria-selected="false" aria-controls="mkt-settings" id="mktSubNavSettings">Settings</button>
+    </nav>
 
-    <div class="card">
-      <div class="list-item-row">
-        <h2 class="card-title">Marketing Server</h2>
-        <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
+    <!-- ---------- Overview ---------- -->
+    <div id="mkt-overview" class="marketing-sub-panel active" role="tabpanel" aria-labelledby="mktSubNavOverview">
+      <div class="card">
+        <div class="list-item-row">
+          <h2 class="card-title">Marketing Server</h2>
+          <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
+        </div>
+        <p class="field-hint" id="ciConnectionStatus" role="status">Checking…</p>
+        <p class="field-hint" id="ciUsageSummary"></p>
       </div>
-      <p class="field-hint" id="ciConnectionStatus">Checking…</p>
-      <p class="field-hint" id="ciUsageSummary"></p>
+
+      <div class="card">
+        <h2 class="card-title">Budget This Month</h2>
+        <div id="mktBudget" aria-live="polite">
+          <div class="mkt-skeleton" aria-hidden="true"></div>
+          <div class="mkt-skeleton short" aria-hidden="true"></div>
+        </div>
+        <p class="field-hint">Firebase hosting/function charges aren't included; check Google Cloud Billing for those.</p>
+      </div>
+
+      <div class="card">
+        <div class="list-item-row">
+          <h2 class="card-title">Daily Research</h2>
+          <button type="button" class="btn btn-secondary" id="mktRunResearchBtn">Run now</button>
+        </div>
+        <p class="field-hint">Runs automatically every day at 8:00 AM (New York time) and refreshes each competitor on your watchlist (1 InsightSocial request each). Manual runs are limited to one every 30 minutes.</p>
+        <div id="mktResearchSummary" aria-live="polite"></div>
+        <details class="mkt-details" id="mktRunHistoryWrap">
+          <summary>Run history</summary>
+          <ul class="item-list" id="mktRunHistory"></ul>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Instagram Profile Lookup</h2>
+        <p class="field-hint">Uses InsightSocial credits the first time; repeat lookups within 12 hours reuse the saved result for free.</p>
+        <form id="ciLookupForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="ciLookupHandle">Instagram handle</label>
+            <input type="text" id="ciLookupHandle" placeholder="e.g. gratiel" maxlength="60" autocapitalize="off" autocorrect="off" spellcheck="false">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary" id="ciLookupBtn">Look Up</button>
+            <button type="button" class="btn-icon hidden" id="ciRefreshBtn">Refresh (uses credits)</button>
+          </div>
+        </form>
+        <p class="field-hint" id="ciLookupStatus" role="status"></p>
+        <div id="ciLookupResult"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <h2 class="card-title">Instagram Profile Lookup</h2>
-      <p class="field-hint">Uses InsightSocial credits the first time; repeat lookups within 12 hours reuse the saved result for free.</p>
-      <form id="ciLookupForm" class="stacked-form" novalidate>
+    <!-- ---------- Competitors ---------- -->
+    <div id="mkt-competitors" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavCompetitors">
+      <div class="card">
+        <h2 class="card-title">Competitor Watchlist</h2>
+        <p class="field-hint">Up to 10 Instagram accounts. Daily research saves a snapshot of each so you can see what changed. Adding a handle doesn't spend credits until the next run.</p>
+        <form id="mktWatchForm" class="mkt-inline-form" novalidate>
+          <label for="mktWatchHandle" class="visually-hidden">Instagram handle to watch</label>
+          <input type="text" id="mktWatchHandle" placeholder="@handle" maxlength="31" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button type="submit" class="btn btn-secondary" id="mktWatchAddBtn">Add</button>
+        </form>
+        <p class="field-hint" id="mktWatchStatus" role="status"></p>
+      </div>
+      <div id="mktCompetitorList" aria-live="polite"></div>
+      <div class="card">
+        <h2 class="card-title">Trending Content &amp; Top Posts</h2>
+        <p class="field-hint">Not available yet. The only InsightSocial endpoint JARVIS has confirmed is the Instagram profile lookup, so post-level trends, hashtags and TikTok data aren't shown rather than guessed. Send the InsightSocial endpoint list and these can be added.</p>
+      </div>
+    </div>
+
+    <!-- ---------- Research ---------- -->
+    <div id="mkt-research" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavResearch">
+      <div class="card">
+        <h2 class="card-title">Audience Research Notes</h2>
+        <p class="field-hint">What you learn about your audience: DMs, comments, customer questions, survey answers. Mark a note <strong>verified</strong> only when you can name where it came from; everything else is a <strong>hypothesis</strong>. The AI idea generator cites these and keeps the two apart.</p>
+        <form id="mktFindingForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="mktFindingText">Finding</label>
+            <textarea id="mktFindingText" rows="2" maxlength="400" placeholder="e.g. Several customers asked if the hoodies run small"></textarea>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktFindingKind">Type</label>
+              <select id="mktFindingKind">
+                <option value="hypothesis">Hypothesis</option>
+                <option value="verified">Verified</option>
+              </select>
+            </div>
+            <div>
+              <label for="mktFindingSource">Source</label>
+              <input type="text" id="mktFindingSource" maxlength="200" placeholder="e.g. 4 Instagram DMs, Oct 2026">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary" id="mktFindingAddBtn">Save Note</button>
+          </div>
+        </form>
+        <p class="field-hint" id="mktFindingStatus" role="status"></p>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Verified</h2>
+        <ul class="item-list" id="mktFindingsVerified" aria-live="polite"></ul>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Hypotheses</h2>
+        <ul class="item-list" id="mktFindingsHypotheses"></ul>
+      </div>
+    </div>
+
+    <!-- ---------- AI Ideas ---------- -->
+    <div id="mkt-ideas" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavIdeas">
+      <div class="card">
+        <h2 class="card-title">Generate Content Ideas</h2>
+        <p class="field-hint">Claude writes complete video ideas (hook, script, shots, caption, CTA) using your brand profile, competitor snapshots and research notes. Each idea shows which points are verified research and which are the strategist's hypotheses.</p>
+        <form id="mktIdeaForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktIdeaPlatform">Platform</label>
+              <select id="mktIdeaPlatform">
+                <option value="both">Instagram + TikTok</option>
+                <option value="instagram">Instagram Reels</option>
+                <option value="tiktok">TikTok</option>
+              </select>
+            </div>
+            <div>
+              <label for="mktIdeaStage">Audience awareness</label>
+              <select id="mktIdeaStage">
+                <option value="any">Let the strategist choose</option>
+                <option value="unaware">Unaware</option>
+                <option value="problem_aware">Problem aware</option>
+                <option value="solution_aware">Solution aware</option>
+                <option value="product_aware">Product aware</option>
+                <option value="most_aware">Most aware</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktIdeaPillar">Content pillar</label>
+              <select id="mktIdeaPillar"><option value="">Any pillar</option></select>
+            </div>
+            <div>
+              <label for="mktIdeaCount">Number of ideas</label>
+              <select id="mktIdeaCount">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="mktIdeaGoal">Goal or notes (optional)</label>
+            <textarea id="mktIdeaGoal" rows="2" maxlength="600" placeholder="e.g. Build hype for the new cross hoodie drop on Friday"></textarea>
+          </div>
+          <p class="field-hint" id="mktIdeaCostHint"></p>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="mktIdeaGenerateBtn">Generate Ideas</button>
+          </div>
+        </form>
+        <p class="field-hint" id="mktIdeaStatus" role="status"></p>
+      </div>
+      <div id="mktIdeaResults" aria-live="polite"></div>
+      <div class="form-actions hidden" id="mktIdeaResultActions">
+        <button type="button" class="btn btn-secondary" id="mktIdeaRegenerateBtn">Regenerate (new ideas)</button>
+        <button type="button" class="btn btn-secondary" id="mktIdeaSaveAllBtn">Save all to Library</button>
+      </div>
+    </div>
+
+    <!-- ---------- Library ---------- -->
+    <div id="mkt-library" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavLibrary">
+      <div class="card">
+        <div class="list-item-row">
+          <h2 class="card-title">Content Idea Library</h2>
+          <button type="button" class="btn btn-secondary" id="mktLibNewBtn">New idea</button>
+        </div>
         <div class="form-row">
-          <label for="ciLookupHandle">Instagram handle</label>
-          <input type="text" id="ciLookupHandle" placeholder="e.g. gratiel" maxlength="60" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <label for="mktLibSearch" class="visually-hidden">Search ideas</label>
+          <input type="search" id="mktLibSearch" placeholder="Search titles, hooks, scripts, captions…" maxlength="80">
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-secondary" id="ciLookupBtn">Look Up</button>
-          <button type="button" class="btn-icon hidden" id="ciRefreshBtn">Refresh (uses credits)</button>
+        <div class="mkt-filters">
+          <label class="visually-hidden" for="mktLibPlatform">Platform</label>
+          <select id="mktLibPlatform"><option value="">All platforms</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="both">Both</option></select>
+          <label class="visually-hidden" for="mktLibStatus">Status</label>
+          <select id="mktLibStatus"><option value="">All statuses</option></select>
+          <label class="visually-hidden" for="mktLibPillar">Pillar</label>
+          <select id="mktLibPillar"><option value="">All pillars</option></select>
+          <label class="visually-hidden" for="mktLibStage">Awareness stage</label>
+          <select id="mktLibStage"><option value="">All stages</option></select>
+          <label class="visually-hidden" for="mktLibPriority">Priority</label>
+          <select id="mktLibPriority"><option value="">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+          <label class="visually-hidden" for="mktLibSort">Sort</label>
+          <select id="mktLibSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="priority">Priority</option><option value="planned">Planned date</option></select>
         </div>
-      </form>
-      <p class="field-hint" id="ciLookupStatus"></p>
-      <div id="ciLookupResult"></div>
+        <label class="mkt-check"><input type="checkbox" id="mktLibFavOnly"> Favorites only</label>
+        <p class="field-hint" id="mktLibCount" role="status"></p>
+      </div>
+      <div id="mktLibList" aria-live="polite"></div>
+    </div>
+
+    <!-- ---------- Settings ---------- -->
+    <div id="mkt-settings" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavSettings">
+      <div class="card">
+        <h2 class="card-title">Budget &amp; Limits</h2>
+        <form id="mktSettingsForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktSetBudget">Monthly budget, all services ($)</label>
+              <input type="number" id="mktSetBudget" min="0" max="500" step="1" inputmode="decimal">
+            </div>
+            <div>
+              <label for="mktSetPlan">InsightSocial plan ($ / month)</label>
+              <input type="number" id="mktSetPlan" min="0" max="500" step="0.01" inputmode="decimal">
+            </div>
+          </div>
+          <p class="field-hint">The AI budget is whatever is left after the InsightSocial plan. Idea generation is blocked before it can go over.</p>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktSetCredits">InsightSocial credit cap / month</label>
+              <input type="number" id="mktSetCredits" min="0" max="100000" step="1" inputmode="numeric">
+            </div>
+            <div>
+              <label for="mktSetModel">AI model</label>
+              <select id="mktSetModel">
+                <option value="claude-opus-5-5">Claude Opus 5.5 (best quality)</option>
+                <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (half the cost)</option>
+                <option value="claude-haiku-5-5">Claude Haiku 5.5 (lowest cost)</option>
+              </select>
+            </div>
+          </div>
+          <p class="field-hint" id="mktSetModelHint"></p>
+
+          <h2 class="card-title mkt-subhead">Brand</h2>
+          <div class="form-row">
+            <label for="mktSetBrand">Brand profile</label>
+            <textarea id="mktSetBrand" rows="5" maxlength="3000" placeholder="Who Gratiel is, products and price range, audience, tone, what to avoid…"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="mktSetPillars">Content pillars (one per line)</label>
+            <textarea id="mktSetPillars" rows="5" maxlength="600"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="mktSettingsSaveBtn">Save Settings</button>
+          </div>
+        </form>
+        <p class="field-hint" id="mktSettingsStatus" role="status"></p>
+      </div>
+    </div>
+
+    <!-- ---------- Idea editor ---------- -->
+    <div class="modal-overlay hidden sheet-overlay" id="mktIdeaModal" role="dialog" aria-modal="true" aria-labelledby="mktIdeaModalTitle">
+      <div class="modal-box sheet-box">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="card-title-row">
+          <h2 id="mktIdeaModalTitle">Edit Idea</h2>
+          <button type="button" class="btn-icon" id="mktIdeaModalCloseBtn" aria-label="Close">&times;</button>
+        </div>
+        <form id="mktIdeaEditForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="mktEdTitle">Title</label>
+            <input type="text" id="mktEdTitle" maxlength="120">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktEdStatus">Status</label>
+              <select id="mktEdStatus"></select>
+            </div>
+            <div>
+              <label for="mktEdPriority">Priority</label>
+              <select id="mktEdPriority"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktEdPlatform">Platform</label>
+              <select id="mktEdPlatform"><option value="both">Instagram + TikTok</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select>
+            </div>
+            <div>
+              <label for="mktEdStage">Awareness stage</label>
+              <select id="mktEdStage"></select>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktEdPillar">Content pillar</label>
+              <input type="text" id="mktEdPillar" maxlength="40" list="mktPillarOptions">
+              <datalist id="mktPillarOptions"></datalist>
+            </div>
+            <div>
+              <label for="mktEdDate">Planned date</label>
+              <input type="date" id="mktEdDate">
+            </div>
+          </div>
+          <div class="form-row"><label for="mktEdObjective">Objective</label><textarea id="mktEdObjective" rows="2" maxlength="600"></textarea></div>
+          <div class="form-row"><label for="mktEdAudience">Target audience</label><textarea id="mktEdAudience" rows="2" maxlength="600"></textarea></div>
+          <div class="form-row"><label for="mktEdHook">Hook</label><textarea id="mktEdHook" rows="2" maxlength="400"></textarea></div>
+          <div class="form-row"><label for="mktEdScript">Script</label><textarea id="mktEdScript" rows="6" maxlength="4000"></textarea></div>
+          <div class="form-row"><label for="mktEdShots">Shots (one per line)</label><textarea id="mktEdShots" rows="4" maxlength="3000"></textarea></div>
+          <div class="form-row"><label for="mktEdCaption">Caption</label><textarea id="mktEdCaption" rows="3" maxlength="2200"></textarea></div>
+          <div class="form-row"><label for="mktEdCta">Call to action</label><input type="text" id="mktEdCta" maxlength="200"></div>
+          <div class="form-row"><label for="mktEdWhy">Why it might work</label><textarea id="mktEdWhy" rows="2" maxlength="1000"></textarea></div>
+          <div class="form-row"><label for="mktEdNotes">Your notes</label><textarea id="mktEdNotes" rows="2" maxlength="1000"></textarea></div>
+          <div class="form-actions sheet-sticky-actions">
+            <button type="submit" class="btn btn-primary" id="mktEdSaveBtn">Save</button>
+            <button type="button" class="btn btn-secondary" id="mktEdCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
     </div>
   </section>
 
@@ -3642,23 +3930,23 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=34"></script>
-<script type="module" src="js/auth.js?v=34"></script>
-<script src="js/app.js?v=34"></script>
-<script src="js/exercises.js?v=34"></script>
-<script src="js/workout.js?v=34"></script>
-<script src="js/nutrition.js?v=34"></script>
-<script src="js/nutrition-label-scan.js?v=34"></script>
-<script src="js/groceries.js?v=34"></script>
-<script src="js/habits.js?v=34"></script>
-<script src="js/business.js?v=34"></script>
-<script src="js/trading.js?v=34"></script>
-<script src="js/blobstore.js?v=34"></script>
-<script src="js/video-api-client.js?v=34"></script>
-<script src="js/video-connections.js?v=34"></script>
-<script src="js/video.js?v=34"></script>
-<script src="js/video-studio.js?v=34"></script>
-<script src="js/content-intelligence.js?v=34"></script>
-<script src="js/form-check.js?v=34"></script>
+<script src="js/firebase-config.js?v=35"></script>
+<script type="module" src="js/auth.js?v=35"></script>
+<script src="js/app.js?v=35"></script>
+<script src="js/exercises.js?v=35"></script>
+<script src="js/workout.js?v=35"></script>
+<script src="js/nutrition.js?v=35"></script>
+<script src="js/nutrition-label-scan.js?v=35"></script>
+<script src="js/groceries.js?v=35"></script>
+<script src="js/habits.js?v=35"></script>
+<script src="js/business.js?v=35"></script>
+<script src="js/trading.js?v=35"></script>
+<script src="js/blobstore.js?v=35"></script>
+<script src="js/video-api-client.js?v=35"></script>
+<script src="js/video-connections.js?v=35"></script>
+<script src="js/video.js?v=35"></script>
+<script src="js/video-studio.js?v=35"></script>
+<script src="js/content-intelligence.js?v=35"></script>
+<script src="js/form-check.js?v=35"></script>
 </body>
 </html>

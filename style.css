@@ -459,7 +459,7 @@ textarea { resize: vertical; min-height: 44px; }
   padding-right: 16px;
 }
 
-.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn, .business-sub-nav-btn {
+.sub-nav-btn, .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn, .business-sub-nav-btn, .marketing-sub-nav-btn {
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -470,11 +470,11 @@ textarea { resize: vertical; min-height: 44px; }
   font-weight: 500;
   white-space: nowrap;
 }
-.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover, .habits-sub-nav-btn:hover, .business-sub-nav-btn:hover { color: var(--text); }
-.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active, .habits-sub-nav-btn.active, .business-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sub-nav-btn:hover, .workout-sub-nav-btn:hover, .nutrition-sub-nav-btn:hover, .habits-sub-nav-btn:hover, .business-sub-nav-btn:hover, .marketing-sub-nav-btn:hover { color: var(--text); }
+.sub-nav-btn.active, .workout-sub-nav-btn.active, .nutrition-sub-nav-btn.active, .habits-sub-nav-btn.active, .business-sub-nav-btn.active, .marketing-sub-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-.sub-panel, .workout-sub-panel, .nutrition-sub-panel, .habits-sub-panel, .business-sub-panel { display: none; }
-.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active, .habits-sub-panel.active, .business-sub-panel.active { display: block; }
+.sub-panel, .workout-sub-panel, .nutrition-sub-panel, .habits-sub-panel, .business-sub-panel, .marketing-sub-panel { display: none; }
+.sub-panel.active, .workout-sub-panel.active, .nutrition-sub-panel.active, .habits-sub-panel.active, .business-sub-panel.active, .marketing-sub-panel.active { display: block; }
 
 .clock-block { text-align: center; padding: 10px 0 16px; }
 .clock-date { color: var(--text-dim); font-size: 13px; }
@@ -2033,3 +2033,79 @@ textarea { resize: vertical; min-height: 44px; }
   .today-progress-ring { align-self: center; }
   .habit-card-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---------------- Marketing ---------------- */
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+
+.mkt-skeleton {
+  height: 14px;
+  border-radius: 6px;
+  margin: 10px 0;
+  background: linear-gradient(90deg, var(--card-border) 0%, var(--card-hover) 50%, var(--card-border) 100%);
+  background-size: 200% 100%;
+  animation: mkt-shimmer 1.4s ease-in-out infinite;
+}
+.mkt-skeleton.short { width: 60%; }
+@keyframes mkt-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .mkt-skeleton { animation: none; } }
+
+.mkt-meter-row { margin-bottom: 14px; }
+.mkt-meter-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 6px; }
+.mkt-meter-label { color: var(--text-dim); }
+.mkt-meter-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.mkt-meter { height: 8px; border-radius: 999px; background: var(--card-border); overflow: hidden; }
+.mkt-meter-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s ease; }
+.mkt-meter-warn .mkt-meter-fill { background: var(--yellow); }
+.mkt-meter-over .mkt-meter-fill { background: var(--red); }
+.mkt-meter-note { font-size: 12px; margin: 6px 0 0; }
+.mkt-note-warn { color: var(--yellow); }
+.mkt-note-over { color: var(--red); }
+@media (prefers-reduced-motion: reduce) { .mkt-meter-fill { transition: none; } }
+
+.mkt-cost-list, .mkt-summary-list { margin: 8px 0; padding-left: 18px; font-size: 13px; color: var(--text-dim); }
+.mkt-cost-list li, .mkt-summary-list li { margin-bottom: 6px; overflow-wrap: anywhere; }
+.mkt-summary-list { color: var(--text); }
+
+.mkt-details { margin-top: 10px; }
+.mkt-details > summary { cursor: pointer; color: var(--accent); font-size: 14px; padding: 8px 0; min-height: 44px; display: flex; align-items: center; }
+
+.mkt-inline-form { display: flex; gap: 8px; align-items: stretch; }
+.mkt-inline-form input { flex: 1; min-width: 0; }
+
+.mkt-spark-wrap { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; color: var(--accent); }
+.mkt-spark { width: 120px; height: 32px; flex: none; }
+.mkt-table-scroll { overflow-x: auto; }
+.mkt-metrics { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mkt-metrics th { text-align: left; color: var(--text-faint); font-weight: 500; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--card-border); }
+.mkt-metrics td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--card-border); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mkt-metrics tr:last-child td { border-bottom: none; }
+
+.mkt-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.mkt-idea-card .card-title { overflow-wrap: anywhere; }
+.mkt-idea-hook { font-size: 15px; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.mkt-idea-block { margin-top: 12px; }
+.mkt-idea-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 0 0 4px; font-weight: 600; }
+.mkt-idea-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.mkt-idea-shots, .mkt-research-basis { margin: 0; padding-left: 20px; line-height: 1.5; }
+.mkt-idea-shots li, .mkt-research-basis li { margin-bottom: 6px; overflow-wrap: anywhere; }
+.mkt-research-basis { list-style: none; padding-left: 0; }
+
+.mkt-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+.mkt-filters select { width: 100%; }
+.mkt-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; color: var(--text-dim); cursor: pointer; }
+.mkt-lib-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.mkt-lib-actions select { flex: 1 1 140px; min-width: 0; }
+.mkt-fav { font-size: 20px; min-width: 44px; min-height: 44px; }
+.mkt-fav.active { color: var(--yellow); }
+.mkt-subhead { margin-top: 18px; }
+#mkt-ideas > .form-actions { margin-bottom: 16px; }
+
+.mkt-idea-card > .list-item-row { flex-wrap: nowrap; align-items: flex-start; gap: 10px; }
+.mkt-idea-card > .list-item-row .card-title { flex: 1; min-width: 0; }

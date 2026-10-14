@@ -4,57 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const insight = require("../lib/insight");
 
-const OWNER = "owner-uid";
-const KEY = "isk_live_FAKE_TEST_KEY_0000";
-
-function fakeDb(initial) {
-  const store = new Map(Object.entries(initial || {}));
-  return {
-    store,
-    doc(path) {
-      return {
-        async get() {
-          return { exists: store.has(path), data: () => store.get(path) };
-        },
-        async set(data, opts) {
-          const prev = opts && opts.merge ? Object.assign({}, store.get(path) || {}) : {};
-          Object.keys(data).forEach((k) => {
-            const v = data[k];
-            prev[k] = v && typeof v === "object" && "__inc" in v ? (prev[k] || 0) + v.__inc : v;
-          });
-          store.set(path, prev);
-        }
-      };
-    }
-  };
-}
-
-function fakeFetch(responses) {
-  const calls = [];
-  const fn = async (url, init) => {
-    calls.push({ url: String(url), headers: init.headers });
-    const next = responses.shift();
-    if (!next) throw new Error("unexpected extra request");
-    if (next.throws) { const e = new Error(next.throws); e.name = next.name || "Error"; throw e; }
-    return { status: next.status, text: async () => (typeof next.body === "string" ? next.body : JSON.stringify(next.body)) };
-  };
-  fn.calls = calls;
-  return fn;
-}
-
-function deps(overrides) {
-  const logs = [];
-  return Object.assign({
-    db: fakeDb(),
-    fetchImpl: fakeFetch([]),
-    apiKey: KEY,
-    ownerUid: OWNER,
-    increment: (n) => ({ __inc: n }),
-    now: () => new Date("2026-10-14T15:00:00Z"),
-    log: { info: (...a) => logs.push(a), error: (...a) => logs.push(a) },
-    logs
-  }, overrides);
-}
+const { OWNER, KEY, fakeDb, fakeFetch, deps } = require("./helpers");
 
 const profileReq = (handle, extra) => Object.assign({ endpoint: "instagram.profile", params: { handle } }, extra || {});
 const okBody = (credits, remaining) => ({ success: true, data: { username: "gratiel", followers: 1234 }, credits_used: credits, credits_remaining: remaining, request_id: "req_1" });
@@ -210,7 +160,14 @@ test("status reports configuration and this month's usage without calling Insigh
   const s = await insight.getStatus(OWNER, d);
   assert.equal(s.keyConfigured, true);
   assert.equal(s.month, "2026-10");
-  assert.deepEqual(s.usage, { creditsUsed: 7, requests: 3, unknownCostRequests: 1, lastCreditsRemaining: 9993 });
+  assert.deepEqual([s.usage.creditsUsed, s.usage.requests, s.usage.unknownCostRequests, s.usage.lastCreditsRemaining], [7, 3, 1, 9993]);
+  assert.equal(s.usage.aiCostUsd, 0);
+  assert.equal(s.monthlyBudgetUsd, 20);
+  assert.equal(s.aiAllowanceUsd, 20);
+  assert.equal(s.aiKeyConfigured, false);
+  assert.deepEqual(s.aiPrices["claude-opus-5-5"], { input: 4, output: 20 });
+  assert.equal(s.aiMaxOutputTokens, 16000);
+  assert.equal(s.lastRun, null);
   assert.deepEqual(s.endpoints, ["instagram.profile"]);
   assert.equal(d.fetchImpl.calls.length, 0);
   await rejectsWith(insight.getStatus("intruder", d), "permission-denied");

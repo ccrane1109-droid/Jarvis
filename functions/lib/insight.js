@@ -18,10 +18,11 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const settingsLib = require("./settings");
 
 const API_BASE = "https://api.insightsocial.app/v1";
 const KEY_PREFIX = "isk_";
-const DEFAULT_MONTHLY_CREDIT_CAP = 1500;
+const DEFAULT_MONTHLY_CREDIT_CAP = settingsLib.DEFAULTS.monthlyCreditCap;
 const MIN_REFRESH_MINUTES = 10;
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_RESPONSE_BYTES = 256 * 1024;
@@ -42,8 +43,6 @@ class InsightError extends Error {
     this.code = code; // a Firebase HttpsError code
   }
 }
-
-function monthKey(date) { return date.toISOString().slice(0, 7); }
 
 function numberOrNull(v) { return typeof v === "number" && Number.isFinite(v) ? v : null; }
 
@@ -74,23 +73,6 @@ function normalizeParams(endpoint, rawParams) {
 function cacheKey(endpoint, params) {
   const sorted = Object.keys(params).sort().map(function (k) { return [k, params[k]]; });
   return crypto.createHash("sha256").update(endpoint + "|" + JSON.stringify(sorted)).digest("hex");
-}
-
-async function readMonthlyCap(db, uid) {
-  const snap = await db.doc("users/" + uid + "/marketing/settings").get();
-  const cap = snap.exists ? Number(snap.data().monthlyCreditCap) : NaN;
-  return Number.isFinite(cap) && cap >= 0 ? cap : DEFAULT_MONTHLY_CREDIT_CAP;
-}
-
-async function readUsage(db, uid, month) {
-  const snap = await db.doc("users/" + uid + "/marketingUsage/" + month).get();
-  const d = snap.exists ? snap.data() : {};
-  return {
-    creditsUsed: numberOrNull(d.creditsUsed) || 0,
-    requests: numberOrNull(d.requests) || 0,
-    unknownCostRequests: numberOrNull(d.unknownCostRequests) || 0,
-    lastCreditsRemaining: numberOrNull(d.lastCreditsRemaining)
-  };
 }
 
 async function callInsightSocial(deps, spec, params) {
@@ -147,8 +129,9 @@ async function runInsightRequest(uid, data, deps) {
     return fromCache({ note: "Refreshed less than " + MIN_REFRESH_MINUTES + " minutes ago, so the saved result was reused." });
   }
 
-  const month = monthKey(now);
-  const [cap, usage] = await Promise.all([readMonthlyCap(deps.db, uid), readUsage(deps.db, uid, month)]);
+  const month = settingsLib.monthKey(now);
+  const [settings, usage] = await Promise.all([settingsLib.readSettings(deps.db, uid), settingsLib.readUsage(deps.db, uid, month)]);
+  const cap = settings.monthlyCreditCap;
   if (usage.creditsUsed >= cap) {
     const msg = "This month's credit cap (" + cap + ") is reached, so no new requests are sent.";
     if (cached) return fromCache({ stale: true, note: msg });
@@ -184,13 +167,27 @@ async function runInsightRequest(uid, data, deps) {
 
 async function getStatus(uid, deps) {
   requireOwner(uid, deps);
-  const month = monthKey(deps.now());
-  const [cap, usage] = await Promise.all([readMonthlyCap(deps.db, uid), readUsage(deps.db, uid, month)]);
+  const month = settingsLib.monthKey(deps.now());
+  const [settings, usage, research] = await Promise.all([
+    settingsLib.readSettings(deps.db, uid),
+    settingsLib.readUsage(deps.db, uid, month),
+    deps.db.doc("users/" + uid + "/marketingState/research").get()
+  ]);
+  const r = research.exists ? research.data() : {};
   return {
     keyConfigured: keyConfigured(deps),
+    aiKeyConfigured: typeof deps.anthropicKey === "string" && deps.anthropicKey.trim().indexOf("sk-ant-") === 0,
     month: month,
-    monthlyCreditCap: cap,
+    monthlyCreditCap: settings.monthlyCreditCap,
+    monthlyBudgetUsd: settings.monthlyBudgetUsd,
+    insightPlanMonthlyUsd: settings.insightPlanMonthlyUsd,
+    aiAllowanceUsd: settingsLib.aiAllowanceUsd(settings),
+    aiModel: settings.aiModel,
+    aiPrices: settingsLib.MODEL_PRICES,
+    aiMaxOutputTokens: settingsLib.AI_MAX_OUTPUT_TOKENS,
     usage: usage,
+    lastRun: r.lastRun || null,
+    lastSuccessfulRunAt: r.lastSuccessfulRunAt || null,
     endpoints: Object.keys(ENDPOINTS)
   };
 }
@@ -198,6 +195,7 @@ async function getStatus(uid, deps) {
 module.exports = {
   runInsightRequest: runInsightRequest,
   getStatus: getStatus,
+  requireOwner: requireOwner,
   InsightError: InsightError,
   ENDPOINTS: ENDPOINTS,
   DEFAULT_MONTHLY_CREDIT_CAP: DEFAULT_MONTHLY_CREDIT_CAP,
