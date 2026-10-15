@@ -203,6 +203,8 @@
       ideas: byId(r.ideas),
       findings: byId(r.findings),
       snapshots: r.snapshots && typeof r.snapshots === "object" ? r.snapshots : {},
+      niche: r.niche && typeof r.niche === "object" ? r.niche : null,
+      finds: byId(r.finds),
       importedCloud: !!r.importedCloud
     };
   }
@@ -235,6 +237,8 @@
       core().saveJSON(STORE_KEY, next);
       state.store = next;
       syncStateFromStore();
+      renderNiche();
+      renderCompetitors();
       resolve(result);
     });
   }
@@ -314,10 +318,15 @@
     if (!signedIn()) { renderAll(); return Promise.resolve(); }
     return cloud().call("marketingStatus", {}, { timeout: 20000 }).then(function (s) { state.status = s; state.statusError = ""; markSync("server"); })
       .catch(function () { /* keep the last known state */ })
-      .then(function () { renderStatus(); renderBudget(); renderResearchSummary(); renderIdeaCostHint(); renderServerOnlyControls(); });
+      .then(function () { renderStatus(); renderBudget(); renderResearchSummary(); renderIdeaCostHint(); renderServerOnlyControls(); renderNiche(); });
+  }
+
+  function renderNiche() {
+    if (window.JarvisNicheResearch) window.JarvisNicheResearch.render();
   }
 
   function renderAll() {
+    renderNiche();
     renderServerOnlyControls();
     renderStatus();
     renderBudget();
@@ -1384,8 +1393,30 @@
     });
   }
 
+  // What the Niche Research tab (js/niche-research.js) may use. It reads the
+  // same local store, so everything it saves syncs like the rest of Marketing.
+  function nicheApi() {
+    return {
+      getStore: function () { return state.store; },
+      getSettings: function () { return state.settings || DEFAULT_SETTINGS; },
+      getIdeas: function () { return state.ideas; },
+      getStatus: function () { return state.status; },
+      isChecking: function () { return state.checkingServer; },
+      commit: commit,
+      sanitizeSettings: sanitizeSettings,
+      mirrorSettings: mirrorSettingsToServer,
+      saveSettings: saveSettings,
+      describeDataError: describeDataError,
+      showTab: function (buttonId) { const b = $(buttonId); if (b) b.click(); },
+      maxWatchlist: MAX_WATCHLIST,
+      core: core
+    };
+  }
+
   function init() {
     if (!$("ciLookupForm")) return;
+    loadStore();
+    if (window.JarvisNicheResearch) window.JarvisNicheResearch.init(nicheApi());
     fillStaticSelects();
     $("ciLookupForm").addEventListener("submit", handleLookup);
     $("ciRefreshBtn").addEventListener("click", function () { if (state.lastHandle) runLookup(state.lastHandle, true); });

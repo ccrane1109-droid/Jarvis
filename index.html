@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=37">
+<link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 
@@ -3277,7 +3277,8 @@
     </div>
 
     <nav class="sub-nav marketing-sub-nav" role="tablist" aria-label="Marketing sections">
-      <button type="button" class="marketing-sub-nav-btn active" data-subtarget="mkt-overview" role="tab" aria-selected="true" aria-controls="mkt-overview" id="mktSubNavOverview">Overview</button>
+      <button type="button" class="marketing-sub-nav-btn active" data-subtarget="mkt-niche" role="tab" aria-selected="true" aria-controls="mkt-niche" id="mktSubNavNiche">Niche</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-overview" role="tab" aria-selected="false" aria-controls="mkt-overview" id="mktSubNavOverview">Overview</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-competitors" role="tab" aria-selected="false" aria-controls="mkt-competitors" id="mktSubNavCompetitors">Competitors</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-research" role="tab" aria-selected="false" aria-controls="mkt-research" id="mktSubNavResearch">Research</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-ideas" role="tab" aria-selected="false" aria-controls="mkt-ideas" id="mktSubNavIdeas">AI Ideas</button>
@@ -3285,8 +3286,80 @@
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-settings" role="tab" aria-selected="false" aria-controls="mkt-settings" id="mktSubNavSettings">Settings</button>
     </nav>
 
+    <!-- ---------- Niche research ---------- -->
+    <div id="mkt-niche" class="marketing-sub-panel nr-scope active" role="tabpanel" aria-labelledby="mktSubNavNiche">
+      <section class="nr-hero" aria-labelledby="nrHeroTitle">
+        <p class="nr-eyebrow">AI Niche Research</p>
+        <h2 class="nr-hero-title" id="nrHeroTitle">Your niche</h2>
+        <p class="nr-hero-sub" id="nrNicheSummary"></p>
+        <ul class="nr-chips" id="nrPlatformChips" aria-label="Platforms researched"></ul>
+        <div class="nr-hero-actions">
+          <button type="button" class="nr-btn nr-btn-primary" id="nrResearchBtn">Research My Niche</button>
+          <button type="button" class="nr-btn nr-btn-ghost" id="nrEditNicheBtn">Edit niche</button>
+        </div>
+        <p class="nr-hint">Automatic search isn't available in this version yet. For now this opens your research kit: searches to run yourself and a place to save what you find.</p>
+        <p class="nr-status-line" id="nrResearchStatus" role="status"></p>
+        <p class="nr-gap hidden" id="nrProfileGap"></p>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrOverviewTitle">
+        <h2 class="nr-h" id="nrOverviewTitle">Niche overview</h2>
+        <div class="nr-tiles" id="nrTiles"></div>
+        <h3 class="nr-h3">Emerging content themes</h3>
+        <div id="nrThemes"></div>
+        <p class="nr-hint">Counted from the finds you've saved. JARVIS's own analysis comes in a later update.</p>
+      </section>
+
+      <section class="nr-card" id="nrSourcesCard" aria-labelledby="nrSourcesTitle">
+        <h2 class="nr-h" id="nrSourcesTitle">Research sources</h2>
+        <ul class="nr-sources" id="nrSources"></ul>
+        <details class="nr-kit" id="nrKit" open>
+          <summary>Searches for your keywords</summary>
+          <p class="nr-hint">Open a search, look for videos that are doing well, then tap Add a find below to save the link and the numbers you see.</p>
+          <div id="nrKitLinks"></div>
+        </details>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrTrendTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="nrTrendTitle">Trending content</h2>
+          <button type="button" class="nr-btn nr-btn-small nr-btn-primary-soft" id="nrAddFindBtn">Add a find</button>
+        </div>
+        <p class="nr-hint">Videos you found yourself, each with its source link. The numbers and notes are what you entered. JARVIS hasn't verified them, and AI explanations arrive in a later update.</p>
+        <div class="nr-filters" role="group" aria-label="Filter finds by platform" id="nrFindFilters"></div>
+        <div id="nrFinds" aria-live="polite"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrCompTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="nrCompTitle">Competitor discovery</h2>
+          <span class="nr-count" id="nrCompCount"></span>
+        </div>
+        <ul class="nr-list" id="nrCompList"></ul>
+        <form class="nr-inline-form" id="nrCompForm" novalidate>
+          <label for="nrCompInput" class="visually-hidden">Instagram handle to track</label>
+          <input type="text" id="nrCompInput" placeholder="@handle" maxlength="60" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button type="submit" class="nr-btn nr-btn-ghost">Add</button>
+        </form>
+        <p class="nr-hint" id="nrCompMsg" role="status"></p>
+        <p class="nr-hint">The watchlist uses Instagram handles and is shared with the Competitors tab. Automatic discovery of new competitors isn't available yet; suggestions will appear here for you to approve.</p>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrOppTitle">
+        <h2 class="nr-h" id="nrOppTitle">Content opportunities</h2>
+        <p class="nr-hint">Your most recent saved ideas. Ideas written from research, with explanations, will appear here once automatic research is connected.</p>
+        <div id="nrOpps"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrDailyTitle">
+        <h2 class="nr-h" id="nrDailyTitle">Daily intelligence</h2>
+        <p class="nr-hint" id="nrDailyStatus" role="status"></p>
+        <div id="nrReports"></div>
+      </section>
+    </div>
+
     <!-- ---------- Overview ---------- -->
-    <div id="mkt-overview" class="marketing-sub-panel active" role="tabpanel" aria-labelledby="mktSubNavOverview">
+    <div id="mkt-overview" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavOverview">
       <div class="card" id="mktHealthCard">
         <div class="list-item-row">
           <h2 class="card-title">Connections</h2>
@@ -3540,6 +3613,125 @@
         </form>
         <p class="field-hint" id="mktSettingsStatus" role="status"></p>
         <p class="field-hint" id="mktStorageUse"></p>
+      </div>
+    </div>
+
+
+    <!-- ---------- Niche profile editor ---------- -->
+    <div class="modal-overlay hidden sheet-overlay nr-scope" id="nrProfileModal" role="dialog" aria-modal="true" aria-labelledby="nrProfileModalTitle">
+      <div class="modal-box sheet-box">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="card-title-row">
+          <h2 id="nrProfileModalTitle">Edit niche</h2>
+          <button type="button" class="btn-icon" id="nrProfileCloseBtn" aria-label="Close">&times;</button>
+        </div>
+        <form id="nrProfileForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="nrBusinessName">Business name</label>
+              <input type="text" id="nrBusinessName" maxlength="60">
+            </div>
+            <div>
+              <label for="nrIndustry">Industry</label>
+              <input type="text" id="nrIndustry" maxlength="80">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="nrAudience">Target audience</label>
+            <textarea id="nrAudience" rows="2" maxlength="300" placeholder="Who are you making this for?"></textarea>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="nrProductCategory">Product category</label>
+              <input type="text" id="nrProductCategory" maxlength="80">
+            </div>
+            <div>
+              <label for="nrPersonality">Brand personality</label>
+              <input type="text" id="nrPersonality" maxlength="200" placeholder="e.g. Authentic, minimalist">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="nrKeywords">Research keywords (one per line, up to 20)</label>
+            <textarea id="nrKeywords" rows="6" maxlength="1500"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="nrCompetitors">Competitors (Instagram handles, one per line, up to 10)</label>
+            <textarea id="nrCompetitors" rows="3" maxlength="600" placeholder="@brandname"></textarea>
+          </div>
+          <fieldset class="nr-fieldset">
+            <legend>Preferred platforms</legend>
+            <label class="nr-check"><input type="checkbox" id="nrPlatIg"> Instagram</label>
+            <label class="nr-check"><input type="checkbox" id="nrPlatTt"> TikTok</label>
+          </fieldset>
+          <p class="nr-form-error" id="nrProfileError" role="alert"></p>
+          <div class="form-actions sheet-sticky-actions">
+            <button type="submit" class="btn btn-primary" id="nrProfileSaveBtn">Save niche</button>
+            <button type="button" class="btn btn-secondary" id="nrProfileCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ---------- Add / edit a find ---------- -->
+    <div class="modal-overlay hidden sheet-overlay nr-scope" id="nrFindModal" role="dialog" aria-modal="true" aria-labelledby="nrFindModalTitle">
+      <div class="modal-box sheet-box">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="card-title-row">
+          <h2 id="nrFindModalTitle">Add a find</h2>
+          <button type="button" class="btn-icon" id="nrFindCloseBtn" aria-label="Close">&times;</button>
+        </div>
+        <form id="nrFindForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="nrFindUrl">Link to the video or post</label>
+            <input type="url" id="nrFindUrl" maxlength="500" placeholder="https://www.tiktok.com/@creator/video/…" autocapitalize="off" autocorrect="off" spellcheck="false">
+          </div>
+          <div class="form-row">
+            <label for="nrFindDesc">What is it?</label>
+            <input type="text" id="nrFindDesc" maxlength="200" placeholder="e.g. Hoodie unboxing with a Bible verse voiceover">
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="nrFindCreator">Creator or brand</label>
+              <input type="text" id="nrFindCreator" maxlength="60" placeholder="@name">
+            </div>
+            <div>
+              <label for="nrFindDate">Posted on</label>
+              <input type="date" id="nrFindDate">
+            </div>
+          </div>
+          <p class="nr-hint">Numbers exactly as the app shows them (12.5K is fine). Leave blank what you can't see.</p>
+          <div class="form-row nr-three-col">
+            <div>
+              <label for="nrFindViews">Views</label>
+              <input type="text" id="nrFindViews" inputmode="text" maxlength="12" autocomplete="off">
+            </div>
+            <div>
+              <label for="nrFindLikes">Likes</label>
+              <input type="text" id="nrFindLikes" inputmode="text" maxlength="12" autocomplete="off">
+            </div>
+            <div>
+              <label for="nrFindComments">Comments</label>
+              <input type="text" id="nrFindComments" inputmode="text" maxlength="12" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="nrFindFormat">Format</label>
+            <select id="nrFindFormat"></select>
+          </div>
+          <div class="form-row">
+            <label for="nrFindHook">Opening hook (what's said or shown first)</label>
+            <input type="text" id="nrFindHook" maxlength="200">
+          </div>
+          <div class="form-row">
+            <label for="nrFindNote">Your note (why you think it works, optional)</label>
+            <textarea id="nrFindNote" rows="2" maxlength="400"></textarea>
+          </div>
+          <p class="nr-form-error" id="nrFindError" role="alert"></p>
+          <div class="form-actions sheet-sticky-actions">
+            <button type="submit" class="btn btn-primary" id="nrFindSaveBtn">Save find</button>
+            <button type="button" class="btn btn-secondary" id="nrFindCancelBtn">Cancel</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -3940,24 +4132,25 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=37"></script>
-<script type="module" src="js/auth.js?v=37"></script>
-<script src="js/app.js?v=37"></script>
-<script src="js/exercises.js?v=37"></script>
-<script src="js/workout.js?v=37"></script>
-<script src="js/nutrition.js?v=37"></script>
-<script src="js/nutrition-label-scan.js?v=37"></script>
-<script src="js/groceries.js?v=37"></script>
-<script src="js/habits.js?v=37"></script>
-<script src="js/business.js?v=37"></script>
-<script src="js/trading.js?v=37"></script>
-<script src="js/blobstore.js?v=37"></script>
-<script src="js/video-api-client.js?v=37"></script>
-<script src="js/video-connections.js?v=37"></script>
-<script src="js/video.js?v=37"></script>
-<script src="js/video-studio.js?v=37"></script>
-<script src="functions/lib/idea-spec.js?v=37"></script>
-<script src="js/content-intelligence.js?v=37"></script>
-<script src="js/form-check.js?v=37"></script>
+<script src="js/firebase-config.js?v=38"></script>
+<script type="module" src="js/auth.js?v=38"></script>
+<script src="js/app.js?v=38"></script>
+<script src="js/exercises.js?v=38"></script>
+<script src="js/workout.js?v=38"></script>
+<script src="js/nutrition.js?v=38"></script>
+<script src="js/nutrition-label-scan.js?v=38"></script>
+<script src="js/groceries.js?v=38"></script>
+<script src="js/habits.js?v=38"></script>
+<script src="js/business.js?v=38"></script>
+<script src="js/trading.js?v=38"></script>
+<script src="js/blobstore.js?v=38"></script>
+<script src="js/video-api-client.js?v=38"></script>
+<script src="js/video-connections.js?v=38"></script>
+<script src="js/video.js?v=38"></script>
+<script src="js/video-studio.js?v=38"></script>
+<script src="functions/lib/idea-spec.js?v=38"></script>
+<script src="js/niche-research.js?v=38"></script>
+<script src="js/content-intelligence.js?v=38"></script>
+<script src="js/form-check.js?v=38"></script>
 </body>
 </html>
