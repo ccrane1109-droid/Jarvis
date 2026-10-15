@@ -97,15 +97,51 @@ test("monthly cap blocks new requests, falls back to a saved result when there i
   assert.equal(d.fetchImpl.calls.length, 0);
 
   let clock = new Date("2026-10-14T00:00:00Z");
-  const d2 = deps({ now: () => clock, fetchImpl: fakeFetch([{ status: 200, body: okBody(5, 5) }]) });
-  await d2.db.doc(`users/${OWNER}/marketing/settings`).set({ monthlyCreditCap: 5 });
+  const d2 = deps({ now: () => clock, fetchImpl: fakeFetch([{ status: 200, body: okBody(10, 5) }]) });
+  await d2.db.doc(`users/${OWNER}/marketing/settings`).set({ monthlyCreditCap: 10 });
   await insight.runInsightRequest(OWNER, profileReq("gratiel"), d2);
   clock = new Date("2026-10-14T13:00:00Z");
   const stale = await insight.runInsightRequest(OWNER, profileReq("gratiel"), d2);
   assert.equal(stale.cached, true);
   assert.equal(stale.stale, true);
-  assert.match(stale.note, /cap \(5\)/);
+  assert.match(stale.note, /cap \(10\)/);
   assert.equal(d2.fetchImpl.calls.length, 1);
+});
+
+test("a request is refused if its documented price would go past the monthly cap", async () => {
+  // 995 of 1000 used: a 10-credit profile lookup would reach 1005, so it isn't sent.
+  const d = deps({ db: fakeDb({
+    [`users/${OWNER}/marketing/settings`]: { monthlyCreditCap: 1000 },
+    [`users/${OWNER}/marketingUsage/2026-10`]: { creditsUsed: 995 }
+  }) });
+  await assert.rejects(insight.runInsightRequest(OWNER, profileReq("gratiel"), d), (e) => e.code === "resource-exhausted" && e.reason === "monthly-cap" && /10 credits.*cap \(1000\)/.test(e.message));
+  assert.equal(d.fetchImpl.calls.length, 0);
+});
+
+test("the browser's saved settings are stored on the server, clamped, and used for the cap", async () => {
+  const d = deps({ fetchImpl: fakeFetch([]) });
+  await insight.getStatus(OWNER, d, { settings: { monthlyCreditCap: 99, watchlist: ["@BrandA", "bad handle"], aiModel: "gpt-4", researchRunCreditCap: 80 } });
+  const saved = d.db.store.get(`users/${OWNER}/marketing/settings`);
+  assert.equal(saved.monthlyCreditCap, 99);
+  assert.deepEqual(saved.watchlist, ["branda"]);
+  assert.equal(saved.aiModel, "claude-sonnet-5-5");
+  assert.equal(saved.researchRunCreditCap, 80);
+  const status = await insight.getStatus(OWNER, d);
+  assert.equal(status.monthlyCreditCap, 99);
+  assert.equal(status.researchRunCreditCap, 80);
+  // Not the owner: nothing is written.
+  const d2 = deps();
+  await rejectsWith(insight.getStatus("intruder", d2, { settings: { monthlyCreditCap: 1 } }), "permission-denied");
+  assert.equal(d2.db.store.size, 0);
+  // Garbage is ignored rather than wiping what's saved.
+  await insight.getStatus(OWNER, d, { settings: "nope" });
+  assert.equal(d.db.store.get(`users/${OWNER}/marketing/settings`).monthlyCreditCap, 99);
+});
+
+test("a caller can limit what one request may spend", async () => {
+  const d = deps({ fetchImpl: fakeFetch([]) });
+  await assert.rejects(insight.runInsightRequest(OWNER, profileReq("gratiel", { maxCredits: 5 }), d), (e) => e.code === "resource-exhausted" && e.reason === "run-cap");
+  assert.equal(d.fetchImpl.calls.length, 0);
 });
 
 test("default monthly cap applies when no setting is saved", async () => {
@@ -168,7 +204,8 @@ test("status reports configuration and this month's usage without calling Insigh
   assert.deepEqual(s.aiPrices["claude-opus-5-5"], { input: 4, output: 20 });
   assert.equal(s.aiMaxOutputTokens, 16000);
   assert.equal(s.lastRun, null);
-  assert.deepEqual(s.endpoints, ["instagram.profile"]);
+  assert.deepEqual(s.endpoints, ["instagram.profile", "tiktok.search.top", "instagram.search.hashtag"]);
+  assert.equal(s.nicheRun, null);
   assert.equal(d.fetchImpl.calls.length, 0);
   await rejectsWith(insight.getStatus("intruder", d), "permission-denied");
   const s2 = await insight.getStatus(OWNER, deps({ apiKey: "" }));

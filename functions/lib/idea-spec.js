@@ -22,7 +22,8 @@
     "claude-sonnet-5-5": { input: 2, output: 10 },
     "claude-haiku-5-5": { input: 0.1, output: 0.5 }
   };
-  const DEFAULT_MODEL = "claude-opus-5-5";
+  // Sonnet 5.5 is the owner's chosen default (about half Opus's price).
+  const DEFAULT_MODEL = "claude-sonnet-5-5";
   // Output cap for one idea-generation request; also the worst-case basis for
   // the budget check and the cost estimate shown in the app.
   const AI_MAX_OUTPUT_TOKENS = 16000;

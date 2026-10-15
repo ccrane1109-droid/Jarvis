@@ -2245,6 +2245,18 @@ textarea { resize: vertical; min-height: 44px; }
 .nr-status-off .nr-status-icon { color: var(--nr-warn); }
 .nr-status-bad { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.45); }
 .nr-status-bad .nr-status-icon { color: var(--nr-bad); }
+.nr-source-text { flex: 1 1 auto; }
+
+/* One line per search under each platform: label, status in words, then what happened. */
+.nr-subsources { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.nr-subsource { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 12.5px; line-height: 1.45; min-width: 0; }
+.nr-subsource-label { font-weight: 600; color: var(--nr-text); overflow-wrap: anywhere; }
+.nr-subsource-status {
+  display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+  color: var(--nr-text); border: 1px solid var(--nr-line); background: rgba(255, 255, 255, 0.05);
+}
+.nr-subsource-detail { flex-basis: 100%; color: var(--nr-dim); overflow-wrap: anywhere; }
+.nr-find-caption { display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-weight: 500; font-size: 15px; }
 
 .nr-kit { border-top: 1px solid var(--nr-line); padding-top: 4px; }
 .nr-kit > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; color: var(--nr-blue); }

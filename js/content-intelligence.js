@@ -25,10 +25,12 @@
   // Mirrors functions/lib/settings.js; the server re-checks everything.
   const DEFAULT_SETTINGS = {
     monthlyCreditCap: 1500,
+    // Most one "Research My Niche" run may spend (a full default run is 220).
+    researchRunCreditCap: 250,
     monthlyBudgetUsd: 20,
     // The owner's InsightSocial plan, $10/month as they reported it.
     insightPlanMonthlyUsd: 10,
-    aiModel: "claude-opus-5-5",
+    aiModel: "claude-sonnet-5-5",
     brandProfile: "",
     contentPillars: ["Faith", "Behind the brand", "Style & outfits", "Community", "Product drops"],
     watchlist: []
@@ -85,6 +87,17 @@
   function core() { return window.JarvisCore; }
   function cloud() { return window.JarvisCloud || null; }
   function signedIn() { const c = cloud(); return !!(c && c.isSignedIn()); }
+
+  // Firestore may not allow the browser to write the server's copy of your
+  // settings, so they travel with each server call instead; the server checks
+  // it's you, clamps them and keeps its own copy (used by the daily run and
+  // the credit caps). Only settings you've actually saved are sent, so a new
+  // device that hasn't synced yet can't overwrite them with defaults.
+  function serverPayload(extra) {
+    const out = Object.assign({}, extra);
+    if (state.store && state.store.settings) out.settings = sanitizeSettings(state.store.settings);
+    return out;
+  }
   function spec() { return window.JarvisIdeaSpec || null; }
   // Private document storage; rejects instead of throwing if it's missing.
   function data() {
@@ -173,6 +186,7 @@
     }).slice(0, MAX_WATCHLIST);
     return {
       monthlyCreditCap: Math.round(clampNumber(r.monthlyCreditCap, 0, 100000, DEFAULT_SETTINGS.monthlyCreditCap)),
+      researchRunCreditCap: Math.round(clampNumber(r.researchRunCreditCap, 0, 5000, DEFAULT_SETTINGS.researchRunCreditCap)),
       monthlyBudgetUsd: clampNumber(r.monthlyBudgetUsd, 0, 500, DEFAULT_SETTINGS.monthlyBudgetUsd),
       insightPlanMonthlyUsd: clampNumber(r.insightPlanMonthlyUsd, 0, 500, DEFAULT_SETTINGS.insightPlanMonthlyUsd),
       aiModel: MODEL_LABELS[r.aiModel] ? r.aiModel : DEFAULT_SETTINGS.aiModel,
@@ -280,7 +294,7 @@
     state.checkingServer = true;
     state.serverCheckedOnce = true;
     renderAll();
-    return cloud().call("marketingStatus", {}, { timeout: 20000 }).then(function (s) {
+    return cloud().call("marketingStatus", serverPayload(), { timeout: 20000 }).then(function (s) {
       state.status = s;
       state.statusError = "";
       markSync("server");
@@ -316,7 +330,7 @@
 
   function refreshStatus() {
     if (!signedIn()) { renderAll(); return Promise.resolve(); }
-    return cloud().call("marketingStatus", {}, { timeout: 20000 }).then(function (s) { state.status = s; state.statusError = ""; markSync("server"); })
+    return cloud().call("marketingStatus", serverPayload(), { timeout: 20000 }).then(function (s) { state.status = s; state.statusError = ""; markSync("server"); })
       .catch(function () { /* keep the last known state */ })
       .then(function () { renderStatus(); renderBudget(); renderResearchSummary(); renderIdeaCostHint(); renderServerOnlyControls(); renderNiche(); });
   }
@@ -559,7 +573,7 @@
     btn.disabled = true;
     btn.textContent = "Running…";
     skeleton(box, 3);
-    cloud().call("runResearch", {}, { timeout: 300000 }).then(function (res) {
+    cloud().call("runResearch", serverPayload(), { timeout: 300000 }).then(function (res) {
       if (res && res.note) core().showToast(res.note);
       return Promise.all([
         data().get("marketingState/research").then(function (r) { state.research = r; }),
@@ -619,7 +633,7 @@
     refreshBtn.disabled = true;
     statusEl.textContent = (refresh ? "Refreshing" : "Looking up") + " @" + handle + "…";
     $("ciLookupResult").textContent = "";
-    cloud().call("insightRequest", { endpoint: "instagram.profile", params: { handle: handle }, refresh: !!refresh }).then(function (res) {
+    cloud().call("insightRequest", serverPayload({ endpoint: "instagram.profile", params: { handle: handle }, refresh: !!refresh })).then(function (res) {
       showResult(res);
       if (!res.cached) refreshStatus();
     }).catch(function (err) {
@@ -1327,6 +1341,8 @@
     $("mktSetBudget").value = s.monthlyBudgetUsd;
     $("mktSetPlan").value = s.insightPlanMonthlyUsd;
     $("mktSetCredits").value = s.monthlyCreditCap;
+    $("mktSetRunCredits").value = s.researchRunCreditCap;
+    renderRunHint();
     $("mktSetModel").value = s.aiModel;
     $("mktSetBrand").value = s.brandProfile;
     $("mktSetPillars").value = s.contentPillars.join("\n");
@@ -1334,6 +1350,15 @@
     const status = $("mktSettingsStatus");
     $("mktStorageUse").textContent = "Marketing is using " + Math.round(storeChars() / STORE_LIMIT_CHARS * 100) + "% of its storage space" + (signedIn() ? " (synced with your JARVIS account)." : " (on this device; sign in to sync).");
     if (status.textContent.indexOf("Sign in") === 0) status.textContent = "";
+  }
+
+  function renderRunHint() {
+    const hint = $("mktSetRunHint");
+    if (!hint) return;
+    const spec = window.JarvisNicheSpec;
+    if (!spec) { hint.textContent = ""; return; }
+    hint.textContent = "A full Research My Niche run uses up to " + formatNumber(spec.MAX_RUN_CREDITS) + " credits. Saved results are reused for " +
+      spec.RESULT_TTL_HOURS + " hours, so pressing it again costs nothing. A run skips any search that would go over this limit.";
   }
 
   function renderModelHint() {
@@ -1357,6 +1382,7 @@
       monthlyBudgetUsd: budget,
       insightPlanMonthlyUsd: plan,
       monthlyCreditCap: Number($("mktSetCredits").value),
+      researchRunCreditCap: Number($("mktSetRunCredits").value),
       aiModel: $("mktSetModel").value,
       brandProfile: $("mktSetBrand").value.trim(),
       contentPillars: $("mktSetPillars").value.split("\n").map(function (p) { return p.trim(); }).filter(Boolean)
@@ -1402,6 +1428,14 @@
       getIdeas: function () { return state.ideas; },
       getStatus: function () { return state.status; },
       isChecking: function () { return state.checkingServer; },
+      isSignedIn: signedIn,
+      callServer: function (name, payload, options) {
+        const c = cloud();
+        if (!c) return Promise.reject(Object.assign(new Error("Sign in to JARVIS to use Marketing."), { code: "functions/unauthenticated" }));
+        return c.call(name, serverPayload(payload), options);
+      },
+      refreshStatus: refreshStatus,
+      describeCallError: describeCallError,
       commit: commit,
       sanitizeSettings: sanitizeSettings,
       mirrorSettings: mirrorSettingsToServer,

@@ -8,11 +8,14 @@
 "use strict";
 
 const spec = require("./idea-spec");
+const nicheSpec = require("./niche-spec");
 
 const { MODEL_PRICES, DEFAULT_MODEL, AI_MAX_OUTPUT_TOKENS } = spec;
 
 const DEFAULTS = {
   monthlyCreditCap: 1500,
+  // Most one "Research My Niche" run may spend (a full default run is 220).
+  researchRunCreditCap: nicheSpec.DEFAULT_RUN_CREDIT_CAP,
   monthlyBudgetUsd: 20,
   // The owner's InsightSocial plan ($10/month, as they reported it).
   insightPlanMonthlyUsd: 10,
@@ -50,6 +53,7 @@ function sanitizeSettings(raw) {
     : [];
   return {
     monthlyCreditCap: clampNumber(r.monthlyCreditCap, 0, 100000, DEFAULTS.monthlyCreditCap),
+    researchRunCreditCap: clampNumber(r.researchRunCreditCap, 0, 5000, DEFAULTS.researchRunCreditCap),
     monthlyBudgetUsd: clampNumber(r.monthlyBudgetUsd, 0, 500, DEFAULTS.monthlyBudgetUsd),
     insightPlanMonthlyUsd: clampNumber(r.insightPlanMonthlyUsd, 0, 500, DEFAULTS.insightPlanMonthlyUsd),
     aiModel: MODEL_PRICES[r.aiModel] ? r.aiModel : DEFAULT_MODEL,
@@ -62,6 +66,20 @@ function sanitizeSettings(raw) {
 async function readSettings(db, uid) {
   const snap = await db.doc("users/" + uid + "/marketing/settings").get();
   return sanitizeSettings(snap.exists ? snap.data() : {});
+}
+
+// The browser sends its saved settings with its server calls. Firestore rules
+// for users/{uid}/marketing/* may not be published, so the browser can't write
+// them itself; the server (already checked to be talking to the owner) saves a
+// clamped copy for itself, which the daily run and the credit caps then use.
+// Writes only when something changed.
+async function syncSettings(db, uid, raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const next = sanitizeSettings(raw);
+  const ref = db.doc("users/" + uid + "/marketing/settings");
+  const snap = await ref.get();
+  if (!snap.exists || JSON.stringify(sanitizeSettings(snap.data())) !== JSON.stringify(next)) await ref.set(next);
+  return next;
 }
 
 function monthKey(date) { return date.toISOString().slice(0, 7); }
@@ -91,6 +109,6 @@ function aiAllowanceUsd(settings) {
 
 module.exports = {
   MODEL_PRICES, DEFAULT_MODEL, AI_MAX_OUTPUT_TOKENS, DEFAULTS, MAX_WATCHLIST,
-  sanitizeSettings, readSettings, readUsage, monthKey, normalizeHandle,
+  sanitizeSettings, readSettings, syncSettings, readUsage, monthKey, normalizeHandle,
   estimateCostUsd, worstCaseCostUsd, aiAllowanceUsd, priceFor
 };

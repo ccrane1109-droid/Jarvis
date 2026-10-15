@@ -9,7 +9,8 @@ those keys as Firebase secrets so they never reach a browser or this repo:
 | Function | What it does | Costs money? |
 |---|---|---|
 | `marketingStatus` | Server/key status, this month's usage and budget, last research run | No |
-| `insightRequest` | Allow-listed InsightSocial lookups, cached 12h, capped monthly | InsightSocial credits, only on a fresh request |
+| `insightRequest` | Allow-listed InsightSocial lookups (profiles cached 12h, searches 20h), capped monthly | InsightSocial credits, only on a fresh request |
+| `researchNiche` | "Research My Niche": TikTok keyword searches and Instagram hashtag searches for your niche keywords (at most 7 + 3 searches, up to 220 credits, limited per run and per month) | InsightSocial credits, only for searches not already saved in the last 20 hours |
 | `runResearch` | "Run research now": refreshes every watchlist handle (at most once per 30 min) | InsightSocial credits (1 request per handle) |
 | `dailyResearch` | Same as above, automatically every day at 08:00 New York time | InsightSocial credits (1 request per handle) |
 | `generateIdeas` | Content ideas from Claude, using your saved research | Claude API tokens, blocked when the AI budget would be exceeded |
@@ -19,10 +20,15 @@ those keys as Firebase secrets so they never reach a browser or this repo:
 There are two separate pieces. The app's **Server Health** card (Marketing →
 Overview) tells you which one is missing.
 
-### A. Firestore rules (free, no command line, about 2 minutes)
+### A. Firestore rules (optional; free, no command line, about 2 minutes)
 
-Fixes "Firestore blocked this" / "Firestore rules don't allow this". Works on
-the free plan.
+Not needed for Research My Niche, search results, or the credit caps: the app
+sends your saved settings and niche with each server call, and results come
+back through the server. The rules are only needed for the competitor
+snapshot history and run list that the Competitors/Research tabs read straight
+from Firestore, and they fix "Firestore blocked this". Works on the free plan.
+Publishing them replaces the project's whole rules file, so check it first if
+other apps use this Firebase project.
 
 1. Open `firestore.rules` in this GitHub repo and copy all of it.
 2. Firebase console → project **jarvis-f01e7** → Firestore Database → **Rules**.
@@ -64,16 +70,18 @@ happens when the functions aren't deployed).
 4. **Deploy** (you'll be asked for `OWNER_UID`: copy your user's UID from
    Firebase console → Authentication → Users):
    ```
-   npx firebase-tools deploy --only functions,firestore:rules
+   npx firebase-tools deploy --only functions
    ```
    The first deploy can take several minutes while Google turns on the
-   services it needs. `firestore:rules` publishes `../firestore.rules` (the
-   same thing as step A).
+   services it needs. It also asks how many days to keep old container
+   images; the default of 1 keeps storage costs lowest. (To publish the
+   rules from step A in the same command, use `--only functions,firestore:rules`.)
 
 ### C. Check it worked
 
 - Firebase console → Functions should list `marketingStatus`,
-  `insightRequest`, `runResearch`, `dailyResearch` and `generateIdeas`.
+  `insightRequest`, `runResearch`, `researchNiche`, `dailyResearch` and
+  `generateIdeas`.
 - In JARVIS: Marketing → Overview → Server Health → **Check again**. Every row
   should say OK.
 - If a row shows "unexpected error (reference abc123ef)", search for that
@@ -81,9 +89,20 @@ happens when the functions aren't deployed).
 
 ## Changing things later
 
-- Budget, InsightSocial plan price, credit cap, AI model, brand profile,
-  content pillars and the competitor watchlist are edited in the app
-  (Marketing → Settings / Competitors). They're stored in
-  `users/{yourUid}/marketing/settings`.
+- Budget, InsightSocial plan price, monthly credit cap, credits per niche
+  research run, AI model, brand profile, content pillars and the competitor
+  watchlist are edited in the app (Marketing → Settings / Competitors). The app
+  sends them with its server calls and the server keeps a clamped copy in
+  `users/{yourUid}/marketing/settings`, which the daily run and the credit caps
+  use. Niche research results are stored at
+  `users/{yourUid}/marketingState/niche`.
+- **After an update to this folder**, redeploy from Cloud Shell (the app
+  itself updates automatically; the server doesn't):
+  ```
+  cd ~/Jarvis && git checkout main && git pull
+  cd functions && npm ci && cd ..
+  npx firebase-tools deploy --only functions
+  ```
+  The Niche tab says when the server needs this ("needs the latest update").
 - Rotate a key: rerun step 3 for that secret, then redeploy.
 - Tests: `cd functions && npm test` (uses fakes; no real calls).

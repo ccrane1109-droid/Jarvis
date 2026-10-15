@@ -1,17 +1,20 @@
 /* ==========================================================================
    JARVIS — Marketing › Niche (AI Niche Research dashboard, Instagram + TikTok)
 
-   What this tab does today, with no server or API key:
+   What this tab does:
    - Holds the niche profile (business, audience, keywords, platforms,
-     competitors) that research will be built from.
-   - "Research My Niche" shows the honest state of every source and opens a
-     manual research kit: one-tap searches for each keyword on Instagram and
-     TikTok, plus a form to save what you find.
-   - Saved finds, themes, competitors and ideas shown here all come from data
-     you entered or JARVIS stored. Nothing on this tab is sample data.
+     competitors) that research is built from.
+   - "Research My Niche" searches Instagram and TikTok for your keywords
+     through InsightSocial, on your Marketing server (the key never reaches
+     the browser). Every source shows what really happened: completed,
+     cached, unavailable or failed. Without the server it opens a manual
+     research kit instead: one-tap searches plus a form to save what you find.
+   - Search results show exactly what InsightSocial returned, with links to
+     the original posts. Saved finds, themes, competitors and ideas come from
+     data you entered or JARVIS stored. Nothing on this tab is sample data.
 
-   Automatic search, AI analysis and daily reports arrive in later updates and
-   will plug into the same sections. Until then those sections say so.
+   AI analysis and daily niche reports arrive in later updates and will plug
+   into the same sections. Until then those sections say so.
 
    Data lives in the Marketing store (localStorage key jarvisMarketing, synced
    with the JARVIS account); competitor handles are the Marketing watchlist.
@@ -60,7 +63,11 @@
   };
 
   let api = null;
-  const ui = { filter: "all", showAllFinds: false, showAllKeywords: false, editingFindId: null, lastAttempt: null, openerId: null };
+  const DISCOVERY_PREVIEW = 6;
+  const ui = {
+    filter: "all", showAllFinds: false, showAllKeywords: false, editingFindId: null, lastAttempt: null, openerId: null,
+    running: false, run: null, discFilter: "all", showAllDisc: false
+  };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, className, text) {
@@ -292,15 +299,93 @@
     failed: { icon: "✕", label: "Failed", cls: "bad" }
   };
 
-  function sourceRows(n) {
+  function spec() { return window.JarvisNicheSpec || null; }
+
+  function planFor(n) {
+    const sp = spec();
+    return sp ? sp.planSearches({ keywords: n.keywords, platforms: n.platforms }) : { steps: [], credits: 0, omitted: { tiktok: 0, instagram: 0 } };
+  }
+
+  // The newest run: the one just made on this device, or the server's last.
+  function currentRun() {
     const server = api.getStatus();
+    const fromServer = server && server.nicheRun && typeof server.nicheRun === "object" && Array.isArray(server.nicheRun.sources) ? server.nicheRun : null;
+    if (ui.run && (!fromServer || String(ui.run.finishedAt || "") >= String(fromServer.finishedAt || ""))) return ui.run;
+    return fromServer;
+  }
+
+  // Why automatic search can't run right now, or "" when it can.
+  function researchBlocker() {
+    if (!spec()) return "Automatic search didn't load. Refresh the page and try again.";
+    if (!api.isSignedIn()) return "Sign in to JARVIS to use automatic search.";
+    const server = api.getStatus();
+    if (!server) {
+      return api.isChecking() ? "Still checking for your Marketing server. Try again in a moment."
+        : "Couldn't reach your Marketing server. It may not be set up yet, or you may be offline.";
+    }
+    if (!server.keyConfigured) return "The InsightSocial key isn't set on your Marketing server yet.";
+    if (!Array.isArray(server.endpoints) || server.endpoints.indexOf("tiktok.search.top") === -1) {
+      return "Your Marketing server needs the latest update before it can search. It has to be redeployed from Cloud Shell.";
+    }
+    return "";
+  }
+
+  const isOk = function (s) { return s.status === "completed" || s.status === "cached"; };
+  const sumOf = function (list, pick) { return list.reduce(function (t, x) { return t + (pick(x) || 0); }, 0); };
+
+  function timeText(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  // One line per search, in words (status is never shown by color alone).
+  function searchDetail(s) {
+    const posts = Array.isArray(s.items) ? s.items.length : 0;
+    const bits = [];
+    if (s.status === "completed") {
+      bits.push(posts + (posts === 1 ? " post" : " posts"));
+      bits.push(s.creditsUsed ? s.creditsUsed + " credits" : "no credits used");
+    } else if (s.status === "cached") {
+      bits.push(posts + (posts === 1 ? " post" : " posts"));
+      bits.push("saved results from " + (timeText(s.fetchedAt) || "earlier") + (s.stale ? " (older than usual: " + (s.note || "credit limit reached") + ")" : ""));
+      bits.push("no credits used");
+    } else {
+      bits.push(s.error || "Not run.");
+    }
+    if (s.dropped > 0) bits.push(s.dropped + " unusable " + (s.dropped === 1 ? "result" : "results") + " skipped");
+    return bits.join(" · ");
+  }
+
+  function summarizePlatform(name, sources) {
+    const ok = sources.filter(isOk);
+    let status;
+    if (ok.length) status = ok.some(function (s) { return s.status === "completed"; }) ? "completed" : "cached";
+    else status = sources.some(function (s) { return s.status === "failed"; }) ? "failed" : "unavailable";
+    const unique = {};
+    ok.forEach(function (s) { (Array.isArray(s.items) ? s.items : []).forEach(function (it) { if (it && it.id) unique[it.id] = true; }); });
+    const posts = Object.keys(unique).length;
+    const credits = sumOf(sources, function (s) { return s.creditsUsed; });
+    const detail = ok.length + " of " + sources.length + (sources.length === 1 ? " search" : " searches") + " returned results (" + posts + (posts === 1 ? " post" : " posts") + ") · " +
+      (credits ? credits + " credits" : "no credits used");
+    return { name: name, status: status, detail: detail, searches: sources };
+  }
+
+  function sourceRows(n) {
+    const blocker = researchBlocker();
+    const run = currentRun();
+    const plan = planFor(n);
     const rows = n.platforms.map(function (p) {
+      const name = platformLabel(p) + " search";
+      if (ui.running) return { name: name, status: "running", detail: "Searching through InsightSocial…" };
+      const mine = run ? run.sources.filter(function (s) { return s.platform === p; }) : [];
+      if (mine.length) return summarizePlatform(name, mine);
+      if (blocker) return { name: name, status: "unavailable", detail: blocker };
+      const steps = plan.steps.filter(function (s) { return s.platform === p; });
       return {
-        name: platformLabel(p) + " search",
-        status: "unavailable",
-        detail: server ? "Automatic search isn't available in this version yet."
-          : api.isChecking() ? "Checking for your Marketing server…"
-          : "Needs the Marketing server, which isn't set up yet."
+        name: name, status: "ready",
+        detail: steps.length ? "Ready: " + steps.length + (steps.length === 1 ? " search" : " searches") + ", up to " + sumOf(steps, function (s) { return s.credits; }) + " credits."
+          : "No usable keywords for this platform yet."
       };
     });
     rows.push({ name: "Manual research kit", status: "ready", detail: "Open the searches below and save what you find." });
@@ -320,6 +405,22 @@
       const text = el("div", "nr-source-text");
       text.appendChild(el("p", "nr-source-name", r.name));
       text.appendChild(el("p", "nr-source-detail", r.detail));
+      if (r.searches && r.searches.length) {
+        const sub = el("ul", "nr-subsources");
+        r.searches.forEach(function (s) {
+          const sv = STATUS_VIEW[s.status] || STATUS_VIEW.unavailable;
+          const row = el("li", "nr-subsource");
+          row.appendChild(el("span", "nr-subsource-label", s.label));
+          row.appendChild(document.createTextNode(" "));
+          const st = el("span", "nr-subsource-status nr-status-" + sv.cls);
+          st.appendChild(el("span", "nr-status-icon", sv.icon)).setAttribute("aria-hidden", "true");
+          st.appendChild(document.createTextNode(" " + sv.label));
+          row.appendChild(st);
+          row.appendChild(el("span", "nr-subsource-detail", searchDetail(s)));
+          sub.appendChild(row);
+        });
+        text.appendChild(sub);
+      }
       li.appendChild(text);
       li.appendChild(badge);
       ul.appendChild(li);
@@ -358,21 +459,194 @@
       box.appendChild(more);
     }
     box.appendChild(el("p", "nr-hint", "Instagram and TikTok may ask you to log in. Hashtag pages only show what the app chooses to show you."));
+
+    const run = currentRun();
+    const stale = $("nrSourcesStale");
+    if (stale) {
+      const changed = !!run && !ui.running && run.sources.map(function (s) { return s.id; }).sort().join("|") !== planFor(n).steps.map(function (s) { return s.id; }).sort().join("|");
+      stale.textContent = changed ? "Your keywords or platforms changed since the last run. Press Research My Niche to search for the new ones." : "";
+      stale.classList.toggle("hidden", !changed);
+    }
   }
 
-  function handleResearch() {
-    ui.lastAttempt = new Date();
-    const server = api.getStatus();
-    const when = ui.lastAttempt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    $("nrResearchStatus").textContent = "Checked at " + when + ": automatic search is unavailable (" +
-      (server ? "not built into this version yet" : "it needs the Marketing server, which isn't set up") +
-      "). Use the manual research kit below, and save what you find.";
-    renderSources();
+  function openKit() {
     $("nrKit").open = true;
-    const card = $("nrSourcesCard");
+  }
+
+  function scrollToCard(id) {
+    const card = $(id);
     if (card && card.scrollIntoView) {
       const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       card.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    }
+  }
+
+  // The button, and the sentence under it that says what pressing it will do and cost.
+  function renderResearchControls() {
+    const btn = $("nrResearchBtn");
+    btn.disabled = ui.running;
+    btn.textContent = ui.running ? "Researching…" : "Research My Niche";
+    btn.setAttribute("aria-busy", ui.running ? "true" : "false");
+    const hint = $("nrResearchHint");
+    const blocker = researchBlocker();
+    const n = niche();
+    if (blocker) {
+      hint.textContent = blocker + " Until then this opens your research kit: searches to run yourself and a place to save what you find.";
+      return;
+    }
+    const plan = planFor(n);
+    if (!plan.steps.length) { hint.textContent = "Add research keywords and pick a platform in Edit niche to search."; return; }
+    const server = api.getStatus();
+    const used = server.usage && typeof server.usage.creditsUsed === "number" ? server.usage.creditsUsed : 0;
+    const names = n.platforms.map(platformLabel).join(" and ");
+    hint.textContent = "Searches " + names + " through InsightSocial: " + plan.steps.length + (plan.steps.length === 1 ? " search" : " searches") +
+      ", up to " + plan.credits + " credits (this month: " + used.toLocaleString() + " of " + (server.monthlyCreditCap || 0).toLocaleString() +
+      " used; each run is limited to " + (server.researchRunCreditCap || 0).toLocaleString() + "). Results are saved for " + spec().RESULT_TTL_HOURS +
+      " hours, so pressing it again costs nothing." + (plan.credits > (server.researchRunCreditCap || 0) ? " Some searches will be skipped by the run limit." : "");
+  }
+
+  function runSummaryLine(run) {
+    return (run.summary || []).join(" ");
+  }
+
+  function handleResearch() {
+    if (ui.running) return;
+    ui.lastAttempt = new Date();
+    const status = $("nrResearchStatus");
+    const blocker = researchBlocker();
+    if (blocker) {
+      status.textContent = blocker + " Use the manual research kit below, and save what you find.";
+      renderSources();
+      openKit();
+      scrollToCard("nrSourcesCard");
+      return;
+    }
+    const n = niche();
+    if (!planFor(n).steps.length) {
+      status.textContent = "Add research keywords and pick a platform in Edit niche first.";
+      return;
+    }
+    ui.running = true;
+    status.textContent = "Searching " + n.platforms.map(platformLabel).join(" and ") + " through InsightSocial. This can take up to a minute.";
+    renderResearchControls();
+    renderSources();
+    scrollToCard("nrSourcesCard");
+    api.callServer("researchNiche", { niche: { keywords: n.keywords, platforms: n.platforms } }, { timeout: 300000 }).then(function (res) {
+      if (res && res.run && Array.isArray(res.run.sources)) {
+        ui.run = res.run;
+        status.textContent = runSummaryLine(res.run);
+      } else {
+        status.textContent = "The server answered, but not in the format JARVIS expects, so nothing was shown.";
+      }
+    }).catch(function (err) {
+      status.textContent = api.describeCallError(err);
+    }).then(function () {
+      ui.running = false;
+      ui.discFilter = "all";
+      ui.showAllDisc = false;
+      render();
+      return api.refreshStatus();
+    }).then(function () {
+      render();
+      if (ui.run) scrollToCard("nrDiscCard");
+    });
+  }
+
+  /* ---------------- search results (what InsightSocial found) ---------------- */
+
+  function collectDiscoveries(run) {
+    const seen = {};
+    const out = [];
+    (run && Array.isArray(run.sources) ? run.sources : []).forEach(function (s) {
+      (Array.isArray(s.items) ? s.items : []).forEach(function (it) {
+        if (!it || typeof it !== "object" || typeof it.id !== "string") return;
+        const key = s.platform + ":" + it.id;
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({ platform: s.platform, via: s.label, item: it });
+      });
+    });
+    out.sort(function (a, b) {
+      return (typeof b.item.views === "number" ? b.item.views : -1) - (typeof a.item.views === "number" ? a.item.views : -1);
+    });
+    return out;
+  }
+
+  function discoveryCard(d) {
+    const it = d.item;
+    const card = el("article", "nr-find");
+    const top = el("div", "nr-find-top");
+    top.appendChild(el("span", "nr-chip nr-chip-" + d.platform, platformLabel(d.platform)));
+    top.appendChild(el("span", "nr-chip nr-chip-plain", "Found by " + d.via));
+    card.appendChild(top);
+    card.appendChild(el("h3", "nr-find-title nr-find-caption" + (it.text ? "" : " nr-muted"), it.text || "No caption provided"));
+    const meta = [];
+    if (typeof it.author === "string" && it.author) meta.push("by @" + it.author);
+    if (typeof it.publishedAt === "string" && it.publishedAt) meta.push("posted " + formatDay(it.publishedAt));
+    if (meta.length) card.appendChild(el("p", "nr-find-meta", meta.join(" · ")));
+
+    const stats = el("dl", "nr-stats");
+    [["Views", it.views], ["Likes", it.likes], ["Comments", it.comments], ["Shares", it.shares]].forEach(function (pair) {
+      if (typeof pair[1] === "number") stats.appendChild(statItem(pair[0], pair[1]));
+    });
+    if (stats.childNodes.length) card.appendChild(stats);
+
+    const foot = el("div", "nr-find-foot");
+    // Only a link on the right site, over https, is ever shown as a link.
+    const link = typeof it.url === "string" ? normalizeSourceUrl(it.url) : { ok: false };
+    if (link.ok && link.platform === d.platform) {
+      let host = "";
+      try { host = new URL(link.url).hostname.replace(/^www\./, ""); } catch (e) { host = "source"; }
+      foot.appendChild(externalLink(link.url, "Open on " + host + " ↗", "nr-link", "Open the original " + platformLabel(d.platform) + " post"));
+    } else {
+      foot.appendChild(el("span", "nr-muted", "No link provided"));
+    }
+    card.appendChild(foot);
+    card.appendChild(el("p", "nr-provenance", "Reported by InsightSocial · not verified by JARVIS"));
+    return card;
+  }
+
+  function renderDiscoveries() {
+    const run = currentRun();
+    const hint = $("nrDiscHint");
+    const filters = $("nrDiscFilters");
+    const box = $("nrDisc");
+    filters.textContent = "";
+    box.textContent = "";
+    if (!run) {
+      hint.textContent = "No search results yet. Press Research My Niche to search Instagram and TikTok. Posts appear here with links to the originals.";
+      filters.classList.add("hidden");
+      return;
+    }
+    const all = collectDiscoveries(run);
+    const when = timeText(run.finishedAt);
+    hint.textContent = "From the search" + (when ? " on " + when : "") + ". Every post, number and link here is what InsightSocial returned for your keywords, shown as received. " +
+      "JARVIS hasn't verified or analyzed them yet; that comes in a later update.";
+    const counts = { all: all.length, instagram: 0, tiktok: 0 };
+    all.forEach(function (d) { if (counts[d.platform] !== undefined) counts[d.platform]++; });
+    filters.classList.toggle("hidden", !all.length);
+    [["all", "All"], ["instagram", "Instagram"], ["tiktok", "TikTok"]].forEach(function (pair) {
+      const b = el("button", "nr-filter" + (ui.discFilter === pair[0] ? " active" : ""), pair[1] + " (" + counts[pair[0]] + ")");
+      b.type = "button";
+      b.setAttribute("aria-pressed", ui.discFilter === pair[0] ? "true" : "false");
+      b.addEventListener("click", function () { ui.discFilter = pair[0]; ui.showAllDisc = false; renderDiscoveries(); });
+      filters.appendChild(b);
+    });
+    if (!all.length) {
+      box.appendChild(el("p", "nr-empty", run.ok
+        ? "The searches ran but returned no posts for your keywords. Try broader keywords in Edit niche."
+        : "No results came back. The Research sources card above says what happened with each search."));
+      return;
+    }
+    const list = ui.discFilter === "all" ? all : all.filter(function (d) { return d.platform === ui.discFilter; });
+    if (!list.length) { box.appendChild(el("p", "nr-empty", "No " + platformLabel(ui.discFilter) + " results in this run.")); return; }
+    const shown = ui.showAllDisc ? list : list.slice(0, DISCOVERY_PREVIEW);
+    shown.forEach(function (d) { box.appendChild(discoveryCard(d)); });
+    if (list.length > DISCOVERY_PREVIEW) {
+      const more = el("button", "nr-btn nr-btn-ghost", ui.showAllDisc ? "Show fewer" : "Show all " + list.length);
+      more.type = "button";
+      more.addEventListener("click", function () { ui.showAllDisc = !ui.showAllDisc; renderDiscoveries(); });
+      box.appendChild(more);
     }
   }
 
@@ -568,7 +842,7 @@
     const server = api.getStatus();
     const line = $("nrDailyStatus");
     if (server) {
-      line.textContent = "Your Marketing server is connected. Its daily 8:00 AM Eastern run refreshes competitor numbers only; full niche research and reports are added in a later update." +
+      line.textContent = "Your Marketing server is connected. Its daily 8:00 AM Eastern run refreshes competitor numbers only. Niche research runs when you press Research My Niche; daily automatic niche research and reports are added in a later update." +
         (server.lastSuccessfulRunAt ? " Last successful run: " + api.core().formatDateTime(server.lastSuccessfulRunAt) + "." : "");
     } else {
       line.textContent = api.isChecking() ? "Checking for your Marketing server…"
@@ -735,7 +1009,9 @@
     if (!api || !api.getStore() || !$("mkt-niche")) return;
     renderHero();
     renderOverview();
+    renderResearchControls();
     renderSources();
+    renderDiscoveries();
     renderFinds();
     renderCompetitors();
     renderOpportunities();
@@ -769,7 +1045,7 @@
     helpers: {
       sanitizeNiche: sanitizeNiche, parseKeywords: parseKeywords, parseHandles: parseHandles, hashtagOf: hashtagOf,
       normalizeSourceUrl: normalizeSourceUrl, parseCount: parseCount, formatCompact: formatCompact, themeCounts: themeCounts,
-      DEFAULT_NICHE: DEFAULT_NICHE
+      collectDiscoveries: collectDiscoveries, DEFAULT_NICHE: DEFAULT_NICHE
     }
   };
 })();

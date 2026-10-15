@@ -91,6 +91,7 @@ async function researchHandle(uid, handle, deps) {
 
 async function runResearch(uid, deps, opts) {
   insight.requireOwner(uid, deps);
+  if (opts && opts.settings) await settingsLib.syncSettings(deps.db, uid, opts.settings);
   const trigger = (opts && opts.trigger) || "manual";
   const now = deps.now();
   const stateRef = deps.db.doc("users/" + uid + "/marketingState/research");
