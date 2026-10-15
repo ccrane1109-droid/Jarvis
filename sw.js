@@ -15,34 +15,35 @@
    fresh index.html, leaving brand-new CSS classes completely unstyled.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v37";
+const CACHE_NAME = "jarvis-cache-v38";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=37",
+  "./style.css?v=38",
   "./manifest.json",
   "./icon.svg",
   "./js/vendor/qrcode/qrcode.js",
   "./js/vendor/qrcode/qrcode_UTF8.js",
-  "./js/firebase-config.js?v=37",
-  "./js/auth.js?v=37",
-  "./js/app.js?v=37",
-  "./js/exercises.js?v=37",
-  "./js/workout.js?v=37",
-  "./js/form-check.js?v=37",
-  "./js/nutrition.js?v=37",
-  "./js/nutrition-label-scan.js?v=37",
-  "./js/groceries.js?v=37",
-  "./js/habits.js?v=37",
-  "./js/business.js?v=37",
-  "./js/trading.js?v=37",
-  "./js/blobstore.js?v=37",
-  "./js/video-api-client.js?v=37",
-  "./js/video-connections.js?v=37",
-  "./js/video.js?v=37",
-  "./js/video-studio.js?v=37",
-  "./functions/lib/idea-spec.js?v=37",
-  "./js/content-intelligence.js?v=37"
+  "./js/firebase-config.js?v=38",
+  "./js/auth.js?v=38",
+  "./js/app.js?v=38",
+  "./js/exercises.js?v=38",
+  "./js/workout.js?v=38",
+  "./js/form-check.js?v=38",
+  "./js/nutrition.js?v=38",
+  "./js/nutrition-label-scan.js?v=38",
+  "./js/groceries.js?v=38",
+  "./js/habits.js?v=38",
+  "./js/business.js?v=38",
+  "./js/trading.js?v=38",
+  "./js/blobstore.js?v=38",
+  "./js/video-api-client.js?v=38",
+  "./js/video-connections.js?v=38",
+  "./js/video.js?v=38",
+  "./js/video-studio.js?v=38",
+  "./functions/lib/idea-spec.js?v=38",
+  "./js/niche-research.js?v=38",
+  "./js/content-intelligence.js?v=38"
 ];
 
 self.addEventListener("install", function (event) {
