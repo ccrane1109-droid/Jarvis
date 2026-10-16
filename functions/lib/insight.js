@@ -19,6 +19,8 @@
 
 const crypto = require("node:crypto");
 const settingsLib = require("./settings");
+const nicheSpec = require("./niche-spec");
+const posts = require("./posts");
 
 const API_BASE = "https://api.insightsocial.app/v1";
 const KEY_PREFIX = "isk_";
@@ -27,20 +29,45 @@ const MIN_REFRESH_MINUTES = 10;
 const REQUEST_TIMEOUT_MS = 20000;
 const MAX_RESPONSE_BYTES = 256 * 1024;
 
-// Only endpoints confirmed from InsightSocial's own material. Add more here
-// once they're verified against the official API reference.
+// Only endpoints confirmed from InsightSocial's own API reference
+// (https://github.com/insightsocial/openapi). Add more here once they're
+// verified there.
+//   credits: the fixed price per call from that reference; used to refuse a
+//            call that would push the month past its cap.
+//   fixed:   parameters sent with every call (not part of the cache key).
+//   reduce:  validates the response and keeps only the fields JARVIS uses; a
+//            null result means the response wasn't the expected shape.
 const ENDPOINTS = {
   "instagram.profile": {
     path: "/instagram/profile",
     params: { handle: /^[a-z0-9._]{1,30}$/ },
+    credits: 10,
     ttlHours: 12
+  },
+  "tiktok.search.top": {
+    path: "/tiktok/search/top",
+    params: { query: /^[^\u0000-\u001f<>]{2,60}$/ },
+    credits: nicheSpec.STEP_TYPES["tiktok.search.top"].credits,
+    // Videos from the last 3 months, so results reflect what is working now.
+    fixed: { publish_time: "last-3-months" },
+    ttlHours: nicheSpec.RESULT_TTL_HOURS,
+    reduce: function (body) { return posts.reducePosts("tiktok", body); }
+  },
+  "instagram.search.hashtag": {
+    path: "/instagram/search/hashtag",
+    params: { hashtag: /^[a-z0-9]{2,40}$/ },
+    credits: nicheSpec.STEP_TYPES["instagram.search.hashtag"].credits,
+    fixed: { type: "top" },
+    ttlHours: nicheSpec.RESULT_TTL_HOURS,
+    reduce: function (body) { return posts.reducePosts("instagram", body); }
   }
 };
 
 class InsightError extends Error {
-  constructor(code, message) {
+  constructor(code, message, reason) {
     super(message);
     this.code = code; // a Firebase HttpsError code
+    this.reason = reason || null; // "monthly-cap" | "run-cap" for resource-exhausted
   }
 }
 
@@ -63,7 +90,10 @@ function normalizeParams(endpoint, rawParams) {
   Object.keys(spec.params).forEach(function (name) {
     let value = rawParams && rawParams[name];
     if (typeof value !== "string") throw new InsightError("invalid-argument", "Missing " + name + ".");
-    value = value.trim().replace(/^@/, "").toLowerCase();
+    value = value.replace(/\s+/g, " ").trim();
+    if (name === "handle") value = value.replace(/^@/, "");
+    if (name === "hashtag") value = value.replace(/^#/, "");
+    value = value.toLowerCase();
     if (!spec.params[name].test(value)) throw new InsightError("invalid-argument", "That " + name + " isn't valid.");
     params[name] = value;
   });
@@ -78,6 +108,7 @@ function cacheKey(endpoint, params) {
 async function callInsightSocial(deps, spec, params) {
   const url = new URL(API_BASE + spec.path);
   Object.keys(params).forEach(function (k) { url.searchParams.set(k, params[k]); });
+  Object.keys(spec.fixed || {}).forEach(function (k) { url.searchParams.set(k, spec.fixed[k]); });
   const controller = new AbortController();
   const timer = setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS);
   try {
@@ -114,6 +145,7 @@ async function runInsightRequest(uid, data, deps) {
   const endpoint = data && data.endpoint;
   const params = normalizeParams(endpoint, data && data.params);
   const spec = ENDPOINTS[endpoint];
+  if (data.settings) await settingsLib.syncSettings(deps.db, uid, data.settings);
   const now = deps.now();
   const cacheRef = deps.db.doc("users/" + uid + "/marketingCache/" + cacheKey(endpoint, params));
   const cacheSnap = await cacheRef.get();
@@ -132,10 +164,19 @@ async function runInsightRequest(uid, data, deps) {
   const month = settingsLib.monthKey(now);
   const [settings, usage] = await Promise.all([settingsLib.readSettings(deps.db, uid), settingsLib.readUsage(deps.db, uid, month)]);
   const cap = settings.monthlyCreditCap;
-  if (usage.creditsUsed >= cap) {
-    const msg = "This month's credit cap (" + cap + ") is reached, so no new requests are sent.";
+  const price = spec.credits || 0;
+  // A caller running several requests (a research run) can limit what this one may spend.
+  if (typeof data.maxCredits === "number" && price > data.maxCredits) {
+    const msg = "Skipped: this request costs " + price + " credits and the run's credit limit has " + Math.max(0, data.maxCredits) + " left.";
     if (cached) return fromCache({ stale: true, note: msg });
-    throw new InsightError("resource-exhausted", msg);
+    throw new InsightError("resource-exhausted", msg, "run-cap");
+  }
+  if (usage.creditsUsed >= cap || usage.creditsUsed + price > cap) {
+    const msg = usage.creditsUsed >= cap
+      ? "This month's credit cap (" + cap + ") is reached, so no new requests are sent."
+      : "This request costs " + price + " credits, which would go past this month's credit cap (" + cap + "), so it wasn't sent.";
+    if (cached) return fromCache({ stale: true, note: msg });
+    throw new InsightError("resource-exhausted", msg, "monthly-cap");
   }
 
   const result = await callInsightSocial(deps, spec, params);
@@ -158,27 +199,38 @@ async function runInsightRequest(uid, data, deps) {
   deps.log.info("insightRequest", { endpoint: endpoint, status: result.status, ok: ok, creditsUsed: creditsUsed });
 
   if (ok) {
+    // Keep only what JARVIS uses, and only if it's the shape InsightSocial documents.
+    const kept = spec.reduce ? spec.reduce(result.body) : result.body;
+    if (kept === null) {
+      deps.log.error("insightRequest: unexpected response shape", { endpoint: endpoint, status: result.status });
+      return { ok: false, cached: false, endpoint: endpoint, params: params, status: result.status, error: "InsightSocial's response wasn't in the format JARVIS expects, so it was discarded.", body: null, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining };
+    }
     const fetchedAt = now.toISOString();
-    await cacheRef.set({ endpoint: endpoint, params: params, status: result.status, body: result.body, fetchedAt: fetchedAt });
-    return { ok: true, cached: false, endpoint: endpoint, params: params, status: result.status, body: result.body, fetchedAt: fetchedAt, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining };
+    await cacheRef.set({ endpoint: endpoint, params: params, status: result.status, body: kept, fetchedAt: fetchedAt });
+    return { ok: true, cached: false, endpoint: endpoint, params: params, status: result.status, body: kept, fetchedAt: fetchedAt, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining };
   }
   return { ok: false, cached: false, endpoint: endpoint, params: params, status: result.status, error: describeFailure(result), body: result.body, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining };
 }
 
-async function getStatus(uid, deps) {
+async function getStatus(uid, deps, opts) {
   requireOwner(uid, deps);
+  // Keep the server's copy of the owner's settings current (see syncSettings).
+  if (opts && opts.settings) await settingsLib.syncSettings(deps.db, uid, opts.settings);
   const month = settingsLib.monthKey(deps.now());
-  const [settings, usage, research] = await Promise.all([
+  const [settings, usage, research, nicheState] = await Promise.all([
     settingsLib.readSettings(deps.db, uid),
     settingsLib.readUsage(deps.db, uid, month),
-    deps.db.doc("users/" + uid + "/marketingState/research").get()
+    deps.db.doc("users/" + uid + "/marketingState/research").get(),
+    deps.db.doc("users/" + uid + "/marketingState/niche").get()
   ]);
   const r = research.exists ? research.data() : {};
+  const n = nicheState.exists ? nicheState.data() : {};
   return {
     keyConfigured: keyConfigured(deps),
     aiKeyConfigured: typeof deps.anthropicKey === "string" && deps.anthropicKey.trim().indexOf("sk-ant-") === 0,
     month: month,
     monthlyCreditCap: settings.monthlyCreditCap,
+    researchRunCreditCap: settings.researchRunCreditCap,
     monthlyBudgetUsd: settings.monthlyBudgetUsd,
     insightPlanMonthlyUsd: settings.insightPlanMonthlyUsd,
     aiAllowanceUsd: settingsLib.aiAllowanceUsd(settings),
@@ -188,6 +240,7 @@ async function getStatus(uid, deps) {
     usage: usage,
     lastRun: r.lastRun || null,
     lastSuccessfulRunAt: r.lastSuccessfulRunAt || null,
+    nicheRun: n.lastRun || null,
     endpoints: Object.keys(ENDPOINTS)
   };
 }
@@ -196,6 +249,7 @@ module.exports = {
   runInsightRequest: runInsightRequest,
   getStatus: getStatus,
   requireOwner: requireOwner,
+  keyConfigured: keyConfigured,
   InsightError: InsightError,
   ENDPOINTS: ENDPOINTS,
   DEFAULT_MONTHLY_CREDIT_CAP: DEFAULT_MONTHLY_CREDIT_CAP,

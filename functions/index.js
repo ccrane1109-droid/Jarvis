@@ -18,6 +18,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const Anthropic = require("@anthropic-ai/sdk").default;
 const insight = require("./lib/insight");
 const research = require("./lib/research");
+const niche = require("./lib/niche");
 const ai = require("./lib/ai");
 const { makeGuard } = require("./lib/guard");
 
@@ -58,7 +59,7 @@ exports.marketingStatus = onCall(
   (request) => guarded("marketingStatus", () => insight.getStatus(uidOf(request), deps({
     apiKey: INSIGHTSOCIAL_API_KEY.value(),
     anthropicKey: ANTHROPIC_API_KEY.value()
-  }))));
+  }), { settings: request.data && request.data.settings })));
 
 exports.insightRequest = onCall(
   Object.assign({}, BASE, { secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 30 }),
@@ -66,7 +67,17 @@ exports.insightRequest = onCall(
 
 exports.runResearch = onCall(
   Object.assign({}, BASE, { secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300 }),
-  (request) => guarded("runResearch", () => research.runResearch(uidOf(request), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), { trigger: "manual" })));
+  (request) => guarded("runResearch", () => research.runResearch(uidOf(request), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), { trigger: "manual", settings: request.data && request.data.settings })));
+
+// "Research My Niche": keyword searches on Instagram and TikTok. Up to 10
+// calls to InsightSocial in a row, each limited to 20s, hence the long timeout.
+exports.researchNiche = onCall(
+  Object.assign({}, BASE, { secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300 }),
+  (request) => guarded("researchNiche", () => niche.runNicheResearch(uidOf(request), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), {
+    trigger: "manual",
+    niche: request.data && request.data.niche,
+    settings: request.data && request.data.settings
+  })));
 
 exports.dailyResearch = onSchedule(
   Object.assign({}, BASE, { maxInstances: 1, secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300, schedule: "every day 08:00", timeZone: "America/New_York" }),

@@ -48,10 +48,14 @@ test("settings are clamped and defaulted safely", () => {
   const s = settingsLib.sanitizeSettings({ monthlyBudgetUsd: -5, insightPlanMonthlyUsd: "abc", aiModel: "gpt-4", watchlist: ["@A", "a", "bad handle", 5], contentPillars: ["  Faith  ", ""], monthlyCreditCap: 1e9 });
   assert.equal(s.monthlyBudgetUsd, 0);
   assert.equal(s.insightPlanMonthlyUsd, 10, "invalid value falls back to the $10 plan default");
-  assert.equal(s.aiModel, "claude-opus-5-5");
+  assert.equal(s.aiModel, "claude-sonnet-5-5", "an unknown model falls back to the default, Sonnet 5.5");
+  assert.equal(settingsLib.sanitizeSettings({ aiModel: "claude-opus-5-5" }).aiModel, "claude-opus-5-5", "a valid choice is kept");
   assert.deepEqual(s.watchlist, ["a"]);
   assert.deepEqual(s.contentPillars, ["Faith"]);
   assert.equal(s.monthlyCreditCap, 100000);
+  assert.equal(s.researchRunCreditCap, 250, "a research run defaults to 250 credits at most");
+  assert.equal(settingsLib.sanitizeSettings({ researchRunCreditCap: 1e9 }).researchRunCreditCap, 5000);
+  assert.equal(settingsLib.sanitizeSettings({ researchRunCreditCap: -3 }).researchRunCreditCap, 0);
 });
 
 test("cost estimate uses the model's per-token prices", () => {
