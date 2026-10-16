@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=39">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 
@@ -3277,19 +3277,21 @@
     </div>
 
     <nav class="sub-nav marketing-sub-nav" role="tablist" aria-label="Marketing sections">
-      <button type="button" class="marketing-sub-nav-btn active" data-subtarget="mkt-niche" role="tab" aria-selected="true" aria-controls="mkt-niche" id="mktSubNavNiche">Niche</button>
-      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-overview" role="tab" aria-selected="false" aria-controls="mkt-overview" id="mktSubNavOverview">Overview</button>
+      <button type="button" class="marketing-sub-nav-btn active" data-subtarget="mkt-overview" role="tab" aria-selected="true" aria-controls="mkt-overview" id="mktSubNavOverview">Overview</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-discover" role="tab" aria-selected="false" aria-controls="mkt-discover" id="mktSubNavDiscover">Discover</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-analysis" role="tab" aria-selected="false" aria-controls="mkt-analysis" id="mktSubNavAnalysis">AI Analysis</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-competitors" role="tab" aria-selected="false" aria-controls="mkt-competitors" id="mktSubNavCompetitors">Competitors</button>
-      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-research" role="tab" aria-selected="false" aria-controls="mkt-research" id="mktSubNavResearch">Research</button>
-      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-ideas" role="tab" aria-selected="false" aria-controls="mkt-ideas" id="mktSubNavIdeas">AI Ideas</button>
-      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-library" role="tab" aria-selected="false" aria-controls="mkt-library" id="mktSubNavLibrary">Library</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-trends" role="tab" aria-selected="false" aria-controls="mkt-trends" id="mktSubNavTrends">Trends</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-ideas" role="tab" aria-selected="false" aria-controls="mkt-ideas" id="mktSubNavIdeas">Content Studio</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-library" role="tab" aria-selected="false" aria-controls="mkt-library" id="mktSubNavLibrary">Saved Library</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-history" role="tab" aria-selected="false" aria-controls="mkt-history" id="mktSubNavHistory">Research History</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-settings" role="tab" aria-selected="false" aria-controls="mkt-settings" id="mktSubNavSettings">Settings</button>
     </nav>
 
-    <!-- ---------- Niche research ---------- -->
-    <div id="mkt-niche" class="marketing-sub-panel nr-scope active" role="tabpanel" aria-labelledby="mktSubNavNiche">
-      <section class="nr-hero" aria-labelledby="nrHeroTitle">
-        <p class="nr-eyebrow">AI Niche Research</p>
+    <!-- ---------- Overview (Today) ---------- -->
+    <div id="mkt-overview" class="marketing-sub-panel nr-scope active" role="tabpanel" aria-labelledby="mktSubNavOverview">
+<section class="nr-hero" aria-labelledby="nrHeroTitle">
+        <p class="nr-eyebrow">Today</p>
         <h2 class="nr-hero-title" id="nrHeroTitle">Your niche</h2>
         <p class="nr-hero-sub" id="nrNicheSummary"></p>
         <ul class="nr-chips" id="nrPlatformChips" aria-label="Platforms researched"></ul>
@@ -3302,91 +3304,38 @@
         <p class="nr-gap hidden" id="nrProfileGap"></p>
       </section>
 
-      <section class="nr-card" aria-labelledby="nrOverviewTitle">
-        <h2 class="nr-h" id="nrOverviewTitle">Niche overview</h2>
+      <ul class="nr-strip" id="nrStatusStrip" aria-label="Connection status"></ul>
+
+      <section class="nr-glance" aria-labelledby="nrOverviewTitle">
+        <h2 class="nr-section-title" id="nrOverviewTitle">At a glance</h2>
         <div class="nr-tiles" id="nrTiles"></div>
-        <h3 class="nr-h3">Emerging content themes</h3>
+        <p class="nr-hint" id="nrTilesNote"></p>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrSummaryTitle">
+        <h2 class="nr-h" id="nrSummaryTitle">What your latest research found</h2>
+        <p class="nr-hint" id="nrSummaryNote"></p>
+        <ul class="nr-summary" id="nrSummary"></ul>
+        <h3 class="nr-h3">Most viewed in this research</h3>
+        <div id="nrTopPosts"></div>
+        <button type="button" class="nr-btn nr-btn-ghost hidden" id="nrSeeAllBtn">See all discovered posts</button>
+        <h3 class="nr-h3">AI research brief</h3>
+        <p class="nr-hint" id="nrBriefNote"></p>
+      </section>
+
+      <section class="nr-card" aria-labelledby="nrThemesTitle">
+        <h2 class="nr-h" id="nrThemesTitle">Themes in your saved posts</h2>
         <div id="nrThemes"></div>
-        <p class="nr-hint">Counted from the finds you've saved. JARVIS's own analysis comes in a later update.</p>
+        <p class="nr-hint">Counted from the posts you've saved yourself. Automatic theme detection needs research over several weeks and arrives in a later update.</p>
       </section>
 
-      <section class="nr-card" id="nrSourcesCard" aria-labelledby="nrSourcesTitle">
-        <h2 class="nr-h" id="nrSourcesTitle">Research sources</h2>
-        <ul class="nr-sources" id="nrSources"></ul>
-        <p class="nr-hint hidden" id="nrSourcesStale" role="status"></p>
-        <details class="nr-kit" id="nrKit" open>
-          <summary>Searches for your keywords</summary>
-          <p class="nr-hint">Open a search, look for videos that are doing well, then tap Add a find below to save the link and the numbers you see.</p>
-          <div id="nrKitLinks"></div>
-        </details>
-      </section>
-
-      <section class="nr-card" id="nrDiscCard" aria-labelledby="nrDiscTitle">
-        <h2 class="nr-h" id="nrDiscTitle">What InsightSocial found</h2>
-        <p class="nr-hint" id="nrDiscHint"></p>
-        <div class="nr-filters" role="group" aria-label="Filter search results by platform" id="nrDiscFilters"></div>
-        <div id="nrDisc" aria-live="polite"></div>
-      </section>
-
-      <section class="nr-card" aria-labelledby="nrTrendTitle">
-        <div class="nr-card-head">
-          <h2 class="nr-h" id="nrTrendTitle">Trending content</h2>
-          <button type="button" class="nr-btn nr-btn-small nr-btn-primary-soft" id="nrAddFindBtn">Add a find</button>
-        </div>
-        <p class="nr-hint">Videos you found yourself, each with its source link. The numbers and notes are what you entered. JARVIS hasn't verified them, and AI explanations arrive in a later update.</p>
-        <div class="nr-filters" role="group" aria-label="Filter finds by platform" id="nrFindFilters"></div>
-        <div id="nrFinds" aria-live="polite"></div>
-      </section>
-
-      <section class="nr-card" aria-labelledby="nrCompTitle">
-        <div class="nr-card-head">
-          <h2 class="nr-h" id="nrCompTitle">Competitor discovery</h2>
-          <span class="nr-count" id="nrCompCount"></span>
-        </div>
-        <ul class="nr-list" id="nrCompList"></ul>
-        <form class="nr-inline-form" id="nrCompForm" novalidate>
-          <label for="nrCompInput" class="visually-hidden">Instagram handle to track</label>
-          <input type="text" id="nrCompInput" placeholder="@handle" maxlength="60" autocapitalize="off" autocorrect="off" spellcheck="false">
-          <button type="submit" class="nr-btn nr-btn-ghost">Add</button>
-        </form>
-        <p class="nr-hint" id="nrCompMsg" role="status"></p>
-        <p class="nr-hint">The watchlist uses Instagram handles and is shared with the Competitors tab. Automatic discovery of new competitors isn't available yet; suggestions will appear here for you to approve.</p>
-      </section>
-
-      <section class="nr-card" aria-labelledby="nrOppTitle">
-        <h2 class="nr-h" id="nrOppTitle">Content opportunities</h2>
-        <p class="nr-hint">Your most recent saved ideas. Ideas written from research, with explanations, will appear here once automatic research is connected.</p>
+<section class="nr-card" aria-labelledby="nrOppTitle">
+        <h2 class="nr-h" id="nrOppTitle">Your newest ideas</h2>
+        <p class="nr-hint">The three ideas you saved most recently. Open the Content Studio to write new ones.</p>
         <div id="nrOpps"></div>
       </section>
 
-      <section class="nr-card" aria-labelledby="nrDailyTitle">
-        <h2 class="nr-h" id="nrDailyTitle">Daily intelligence</h2>
-        <p class="nr-hint" id="nrDailyStatus" role="status"></p>
-        <div id="nrReports"></div>
-      </section>
-    </div>
-
-    <!-- ---------- Overview ---------- -->
-    <div id="mkt-overview" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavOverview">
-      <div class="card" id="mktHealthCard">
-        <div class="list-item-row">
-          <h2 class="card-title">Connections</h2>
-          <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
-        </div>
-        <p class="field-hint" id="ciConnectionStatus" role="status">Checking…</p>
-        <ul class="mkt-health-list" id="mktHealthList" aria-live="polite"></ul>
-        <p class="field-hint" id="mktLastSync"></p>
-        <p class="field-hint" id="ciUsageSummary"></p>
-        <details class="mkt-details" id="mktSetupGuide">
-          <summary>Optional extras</summary>
-          <div class="mkt-guide">
-            <p>Competitors, research notes, the idea library and settings all work as they are, and sync with your JARVIS account.</p>
-            <p>AI idea generation, InsightSocial lookups and automatic daily research run on the optional Marketing server, which keeps your API keys off your devices. Setup steps are in <code>functions/README.md</code>.</p>
-          </div>
-        </details>
-      </div>
-
-      <div class="card">
+<div class="card">
         <h2 class="card-title">Budget This Month</h2>
         <div id="mktBudget" aria-live="polite">
           <div class="mkt-skeleton" aria-hidden="true"></div>
@@ -3394,8 +3343,73 @@
         </div>
         <p class="field-hint">Firebase hosting/function charges aren't included; check Google Cloud Billing for those.</p>
       </div>
+    </div>
 
-      <div class="card">
+    <!-- ---------- Discover ---------- -->
+    <div id="mkt-discover" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavDiscover">
+      <section class="nr-card" aria-labelledby="nrDiscoverTitle">
+        <h2 class="nr-h" id="nrDiscoverTitle">Search your niche</h2>
+        <p class="nr-hint" id="nrDiscoverHint">Searches Instagram and TikTok for your keywords through InsightSocial and lists what it finds, with links to the originals.</p>
+        <button type="button" class="nr-btn nr-btn-primary" id="nrResearchBtn2">Research My Niche</button>
+        <p class="nr-status-line" id="nrResearchStatus2" role="status"></p>
+      </section>
+
+<section class="nr-card" id="nrSourcesCard" aria-labelledby="nrSourcesTitle">
+        <h2 class="nr-h" id="nrSourcesTitle">Research sources</h2>
+        <ul class="nr-sources" id="nrSources"></ul>
+        <p class="nr-hint hidden" id="nrSourcesStale" role="status"></p>
+        <details class="nr-kit" id="nrKit" open>
+          <summary>Searches for your keywords</summary>
+          <p class="nr-hint">Open a search, look for posts that are doing well, then save the link and the numbers you see.</p>
+          <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="nrAddFindBtn2">Save a post you found</button>
+          <div id="nrKitLinks"></div>
+        </details>
+      </section>
+
+<section class="nr-card" id="nrDiscCard" aria-labelledby="nrDiscTitle">
+        <h2 class="nr-h" id="nrDiscTitle">What InsightSocial found</h2>
+        <p class="nr-hint" id="nrDiscHint"></p>
+        <div class="nr-filters" role="group" aria-label="Filter search results by platform" id="nrDiscFilters"></div>
+        <div id="nrDisc" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <!-- ---------- AI Analysis ---------- -->
+    <div id="mkt-analysis" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavAnalysis">
+      <section class="nr-card" aria-labelledby="nrAnalysisTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="nrAnalysisTitle">AI video analysis</h2>
+          <span class="nr-status-badge nr-status-off" id="nrAiState"></span>
+        </div>
+        <p class="nr-hint">Not available yet. This tab will analyze the posts you found: why a hook works, how the video is structured, and what you could adapt for Gratiel. It needs a Claude key on your Marketing server, and it will cost a few cents per analysis.</p>
+        <h3 class="nr-h3">How every analysis will be labelled</h3>
+        <ul class="nr-legend">
+          <li><strong>Metrics only</strong>: based on the view, like, comment and share counts.</li>
+          <li><strong>Caption</strong>: also reads the post's caption. JARVIS has not watched the video.</li>
+          <li><strong>Transcript</strong>: also reads the spoken words (100 InsightSocial credits each, only when you ask).</li>
+          <li><strong>On-screen text</strong>: also reads the text shown on the cover frame (50 credits each, only when you ask).</li>
+        </ul>
+        <p class="nr-hint">JARVIS will never claim it watched a video it only has a caption for.</p>
+        <button type="button" class="nr-btn nr-btn-ghost" id="nrAnalysisGoBtn">Browse discovered posts</button>
+      </section>
+    </div>
+
+    <!-- ---------- Competitors ---------- -->
+    <div id="mkt-competitors" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavCompetitors">
+<div class="card">
+        <h2 class="card-title">Competitor Watchlist</h2>
+        <p class="field-hint">Up to 10 Instagram accounts. Log their numbers whenever you check their profile and JARVIS charts what changed.</p>
+        <form id="mktWatchForm" class="mkt-inline-form" novalidate>
+          <label for="mktWatchHandle" class="visually-hidden">Instagram handle to watch</label>
+          <input type="text" id="mktWatchHandle" placeholder="@handle" maxlength="31" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button type="submit" class="btn btn-secondary" id="mktWatchAddBtn">Add</button>
+        </form>
+        <p class="field-hint" id="mktWatchStatus" role="status"></p>
+      </div>
+
+      <div id="mktCompetitorList" aria-live="polite"></div>
+
+<div class="card">
         <div class="list-item-row">
           <h2 class="card-title">Daily Research</h2>
           <button type="button" class="btn btn-secondary" id="mktRunResearchBtn">Run now</button>
@@ -3408,7 +3422,7 @@
         </details>
       </div>
 
-      <div class="card">
+<div class="card">
         <h2 class="card-title">Instagram Profile Lookup</h2>
         <p class="field-hint">Uses InsightSocial credits the first time; repeat lookups within 12 hours reuse the saved result for free.</p>
         <form id="ciLookupForm" class="stacked-form" novalidate>
@@ -3424,68 +3438,40 @@
         <p class="field-hint" id="ciLookupStatus" role="status"></p>
         <div id="ciLookupResult"></div>
       </div>
+
+      <section class="nr-card" aria-labelledby="nrCompIntelTitle">
+        <h2 class="nr-h" id="nrCompIntelTitle">Competitor content comparison</h2>
+        <p class="nr-hint">Not available yet. Today JARVIS tracks follower-style numbers for Instagram accounts. Comparing what competitors post (frequency, formats, hooks, top posts) and adding TikTok accounts is planned, using only public data InsightSocial provides. JARVIS will never show a competitor's sales or private analytics.</p>
+      </section>
     </div>
 
-    <!-- ---------- Competitors ---------- -->
-    <div id="mkt-competitors" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavCompetitors">
-      <div class="card">
-        <h2 class="card-title">Competitor Watchlist</h2>
-        <p class="field-hint">Up to 10 Instagram accounts. Log their numbers whenever you check their profile and JARVIS charts what changed.</p>
-        <form id="mktWatchForm" class="mkt-inline-form" novalidate>
-          <label for="mktWatchHandle" class="visually-hidden">Instagram handle to watch</label>
-          <input type="text" id="mktWatchHandle" placeholder="@handle" maxlength="31" autocapitalize="off" autocorrect="off" spellcheck="false">
-          <button type="submit" class="btn btn-secondary" id="mktWatchAddBtn">Add</button>
-        </form>
-        <p class="field-hint" id="mktWatchStatus" role="status"></p>
-      </div>
-      <div id="mktCompetitorList" aria-live="polite"></div>
-      <div class="card">
-        <h2 class="card-title">Trending Content &amp; Top Posts</h2>
-        <p class="field-hint">Not available yet. The only InsightSocial endpoint JARVIS has confirmed is the Instagram profile lookup, so post-level trends, hashtags and TikTok data aren't shown rather than guessed. Send the InsightSocial endpoint list and these can be added.</p>
-      </div>
+    <!-- ---------- Trends ---------- -->
+    <div id="mkt-trends" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavTrends">
+      <section class="nr-card" aria-labelledby="nrTrendsTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="nrTrendsTitle">Trend radar</h2>
+          <span class="nr-status-badge nr-status-off"><span class="nr-status-icon" aria-hidden="true">⊘</span> Insufficient data</span>
+        </div>
+        <p class="nr-hint">Trends need history. JARVIS keeps only your latest research session today, and a trend can't be called from one snapshot. When session history is added, a pattern is labelled only after at least 3 research sessions across at least 14 days.</p>
+        <h3 class="nr-h3">What will be tracked</h3>
+        <ul class="nr-legend">
+          <li>Content formats, hooks and storytelling styles</li>
+          <li>Hashtags, and audio when the data is reliable</li>
+          <li>Instagram, TikTok, or both</li>
+        </ul>
+        <h3 class="nr-h3">Labels</h3>
+        <ul class="nr-chips nr-chips-static">
+          <li class="nr-chip nr-chip-plain">Emerging</li>
+          <li class="nr-chip nr-chip-plain">Growing</li>
+          <li class="nr-chip nr-chip-plain">Established</li>
+          <li class="nr-chip nr-chip-plain">Declining</li>
+          <li class="nr-chip nr-chip-plain">Insufficient data</li>
+        </ul>
+      </section>
     </div>
 
-    <!-- ---------- Research ---------- -->
-    <div id="mkt-research" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavResearch">
-      <div class="card">
-        <h2 class="card-title">Audience Research Notes</h2>
-        <p class="field-hint">What you learn about your audience: DMs, comments, customer questions, survey answers. Mark a note <strong>verified</strong> only when you can name where it came from; everything else is a <strong>hypothesis</strong>. The AI idea generator cites these and keeps the two apart.</p>
-        <form id="mktFindingForm" class="stacked-form" novalidate>
-          <div class="form-row">
-            <label for="mktFindingText">Finding</label>
-            <textarea id="mktFindingText" rows="2" maxlength="400" placeholder="e.g. Several customers asked if the hoodies run small"></textarea>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="mktFindingKind">Type</label>
-              <select id="mktFindingKind">
-                <option value="hypothesis">Hypothesis</option>
-                <option value="verified">Verified</option>
-              </select>
-            </div>
-            <div>
-              <label for="mktFindingSource">Source</label>
-              <input type="text" id="mktFindingSource" maxlength="200" placeholder="e.g. 4 Instagram DMs, Oct 2026">
-            </div>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-secondary" id="mktFindingAddBtn">Save Note</button>
-          </div>
-        </form>
-        <p class="field-hint" id="mktFindingStatus" role="status"></p>
-      </div>
-      <div class="card">
-        <h2 class="card-title">Verified</h2>
-        <ul class="item-list" id="mktFindingsVerified" aria-live="polite"></ul>
-      </div>
-      <div class="card">
-        <h2 class="card-title">Hypotheses</h2>
-        <ul class="item-list" id="mktFindingsHypotheses"></ul>
-      </div>
-    </div>
-
-    <!-- ---------- AI Ideas ---------- -->
-    <div id="mkt-ideas" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavIdeas">
+    <!-- ---------- Content Studio ---------- -->
+    <div id="mkt-ideas" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavIdeas">
       <div class="card">
         <h2 class="card-title">Generate Content Ideas</h2>
         <p class="field-hint">Claude writes complete video ideas (hook, script, shots, caption, CTA) using your brand profile, competitor snapshots and research notes. Each idea shows which points are verified research and which are the strategist's hypotheses.</p>
@@ -3541,10 +3527,14 @@
         <button type="button" class="btn btn-secondary" id="mktIdeaRegenerateBtn">Regenerate (new ideas)</button>
         <button type="button" class="btn btn-secondary" id="mktIdeaSaveAllBtn">Save all to Library</button>
       </div>
+    
     </div>
 
-    <!-- ---------- Library ---------- -->
-    <div id="mkt-library" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavLibrary">
+    <!-- ---------- Saved Library ---------- -->
+    <div id="mkt-library" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavLibrary">
+      <h2 class="nr-section-title">Ideas</h2>
+      <p class="nr-section-sub">Content ideas you or the AI have saved.</p>
+
       <div class="card">
         <div class="list-item-row">
           <h2 class="card-title">Content Idea Library</h2>
@@ -3572,10 +3562,99 @@
         <p class="field-hint" id="mktLibCount" role="status"></p>
       </div>
       <div id="mktLibList" aria-live="polite"></div>
+    
+
+      <h2 class="nr-section-title">Saved posts</h2>
+      <p class="nr-section-sub">Posts you found and saved yourself.</p>
+
+<section class="nr-card" aria-labelledby="nrTrendTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="nrTrendTitle">Your saved posts</h2>
+          <button type="button" class="nr-btn nr-btn-small nr-btn-primary-soft" id="nrAddFindBtn">Save a post</button>
+        </div>
+        <p class="nr-hint">Posts you found yourself, each with its source link. The numbers and notes are what you entered. JARVIS hasn't verified them.</p>
+        <div class="nr-filters" role="group" aria-label="Filter finds by platform" id="nrFindFilters"></div>
+        <div id="nrFinds" aria-live="polite"></div>
+      </section>
+
+      <h2 class="nr-section-title">Audience notes</h2>
+      <p class="nr-section-sub">What you learn about your audience. The AI idea generator cites these.</p>
+
+<div class="card">
+        <h2 class="card-title">Audience Research Notes</h2>
+        <p class="field-hint">What you learn about your audience: DMs, comments, customer questions, survey answers. Mark a note <strong>verified</strong> only when you can name where it came from; everything else is a <strong>hypothesis</strong>. The AI idea generator cites these and keeps the two apart.</p>
+        <form id="mktFindingForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="mktFindingText">Finding</label>
+            <textarea id="mktFindingText" rows="2" maxlength="400" placeholder="e.g. Several customers asked if the hoodies run small"></textarea>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="mktFindingKind">Type</label>
+              <select id="mktFindingKind">
+                <option value="hypothesis">Hypothesis</option>
+                <option value="verified">Verified</option>
+              </select>
+            </div>
+            <div>
+              <label for="mktFindingSource">Source</label>
+              <input type="text" id="mktFindingSource" maxlength="200" placeholder="e.g. 4 Instagram DMs, Oct 2026">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary" id="mktFindingAddBtn">Save Note</button>
+          </div>
+        </form>
+        <p class="field-hint" id="mktFindingStatus" role="status"></p>
+      </div>
+
+<div class="card">
+        <h2 class="card-title">Verified</h2>
+        <ul class="item-list" id="mktFindingsVerified" aria-live="polite"></ul>
+      </div>
+
+<div class="card">
+        <h2 class="card-title">Hypotheses</h2>
+        <ul class="item-list" id="mktFindingsHypotheses"></ul>
+      </div>
+    </div>
+
+    <!-- ---------- Research History ---------- -->
+    <div id="mkt-history" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavHistory">
+      <section class="nr-card" aria-labelledby="nrHistoryTitle">
+        <h2 class="nr-h" id="nrHistoryTitle">Latest research session</h2>
+        <div id="nrHistoryLatest"></div>
+        <h3 class="nr-h3">Past sessions</h3>
+        <p class="nr-hint">Only the latest session is kept today. A later update will keep every session so you can reopen old findings without spending credits again.</p>
+      </section>
+
+<section class="nr-card" aria-labelledby="nrDailyTitle">
+        <h2 class="nr-h" id="nrDailyTitle">Daily run and reports</h2>
+        <p class="nr-hint" id="nrDailyStatus" role="status"></p>
+        <div id="nrReports"></div>
+      </section>
     </div>
 
     <!-- ---------- Settings ---------- -->
-    <div id="mkt-settings" class="marketing-sub-panel" role="tabpanel" aria-labelledby="mktSubNavSettings">
+    <div id="mkt-settings" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavSettings">
+<div class="card" id="mktHealthCard">
+        <div class="list-item-row">
+          <h2 class="card-title">Connections</h2>
+          <button type="button" class="btn-icon" id="ciStatusRefreshBtn">Check again</button>
+        </div>
+        <p class="field-hint" id="ciConnectionStatus" role="status">Checking…</p>
+        <ul class="mkt-health-list" id="mktHealthList" aria-live="polite"></ul>
+        <p class="field-hint" id="mktLastSync"></p>
+        <p class="field-hint" id="ciUsageSummary"></p>
+        <details class="mkt-details" id="mktSetupGuide">
+          <summary>Optional extras</summary>
+          <div class="mkt-guide">
+            <p>Competitors, research notes, the idea library and settings all work as they are, and sync with your JARVIS account.</p>
+            <p>AI idea generation, InsightSocial lookups and automatic daily research run on the optional Marketing server, which keeps your API keys off your devices. Setup steps are in <code>functions/README.md</code>.</p>
+          </div>
+        </details>
+      </div>
+
       <div class="card">
         <h2 class="card-title">Budget &amp; Limits</h2>
         <form id="mktSettingsForm" class="stacked-form" novalidate>
@@ -3627,6 +3706,7 @@
         <p class="field-hint" id="mktSettingsStatus" role="status"></p>
         <p class="field-hint" id="mktStorageUse"></p>
       </div>
+    
     </div>
 
 
@@ -3690,7 +3770,7 @@
       <div class="modal-box sheet-box">
         <div class="sheet-handle" aria-hidden="true"></div>
         <div class="card-title-row">
-          <h2 id="nrFindModalTitle">Add a find</h2>
+          <h2 id="nrFindModalTitle">Save a post</h2>
           <button type="button" class="btn-icon" id="nrFindCloseBtn" aria-label="Close">&times;</button>
         </div>
         <form id="nrFindForm" class="stacked-form" novalidate>
@@ -4145,26 +4225,27 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=39"></script>
-<script type="module" src="js/auth.js?v=39"></script>
-<script src="js/app.js?v=39"></script>
-<script src="js/exercises.js?v=39"></script>
-<script src="js/workout.js?v=39"></script>
-<script src="js/nutrition.js?v=39"></script>
-<script src="js/nutrition-label-scan.js?v=39"></script>
-<script src="js/groceries.js?v=39"></script>
-<script src="js/habits.js?v=39"></script>
-<script src="js/business.js?v=39"></script>
-<script src="js/trading.js?v=39"></script>
-<script src="js/blobstore.js?v=39"></script>
-<script src="js/video-api-client.js?v=39"></script>
-<script src="js/video-connections.js?v=39"></script>
-<script src="js/video.js?v=39"></script>
-<script src="js/video-studio.js?v=39"></script>
-<script src="functions/lib/idea-spec.js?v=39"></script>
-<script src="functions/lib/niche-spec.js?v=39"></script>
-<script src="js/niche-research.js?v=39"></script>
-<script src="js/content-intelligence.js?v=39"></script>
-<script src="js/form-check.js?v=39"></script>
+<script src="js/firebase-config.js?v=40"></script>
+<script type="module" src="js/auth.js?v=40"></script>
+<script src="js/app.js?v=40"></script>
+<script src="js/exercises.js?v=40"></script>
+<script src="js/workout.js?v=40"></script>
+<script src="js/nutrition.js?v=40"></script>
+<script src="js/nutrition-label-scan.js?v=40"></script>
+<script src="js/groceries.js?v=40"></script>
+<script src="js/habits.js?v=40"></script>
+<script src="js/business.js?v=40"></script>
+<script src="js/trading.js?v=40"></script>
+<script src="js/blobstore.js?v=40"></script>
+<script src="js/video-api-client.js?v=40"></script>
+<script src="js/video-connections.js?v=40"></script>
+<script src="js/video.js?v=40"></script>
+<script src="js/video-studio.js?v=40"></script>
+<script src="functions/lib/idea-spec.js?v=40"></script>
+<script src="functions/lib/niche-spec.js?v=40"></script>
+<script src="js/marketing-stats.js?v=40"></script>
+<script src="js/niche-research.js?v=40"></script>
+<script src="js/content-intelligence.js?v=40"></script>
+<script src="js/form-check.js?v=40"></script>
 </body>
 </html>

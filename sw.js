@@ -15,36 +15,37 @@
    fresh index.html, leaving brand-new CSS classes completely unstyled.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v39";
+const CACHE_NAME = "jarvis-cache-v40";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=39",
+  "./style.css?v=40",
   "./manifest.json",
   "./icon.svg",
   "./js/vendor/qrcode/qrcode.js",
   "./js/vendor/qrcode/qrcode_UTF8.js",
-  "./js/firebase-config.js?v=39",
-  "./js/auth.js?v=39",
-  "./js/app.js?v=39",
-  "./js/exercises.js?v=39",
-  "./js/workout.js?v=39",
-  "./js/form-check.js?v=39",
-  "./js/nutrition.js?v=39",
-  "./js/nutrition-label-scan.js?v=39",
-  "./js/groceries.js?v=39",
-  "./js/habits.js?v=39",
-  "./js/business.js?v=39",
-  "./js/trading.js?v=39",
-  "./js/blobstore.js?v=39",
-  "./js/video-api-client.js?v=39",
-  "./js/video-connections.js?v=39",
-  "./js/video.js?v=39",
-  "./js/video-studio.js?v=39",
-  "./functions/lib/idea-spec.js?v=39",
-  "./functions/lib/niche-spec.js?v=39",
-  "./js/niche-research.js?v=39",
-  "./js/content-intelligence.js?v=39"
+  "./js/firebase-config.js?v=40",
+  "./js/auth.js?v=40",
+  "./js/app.js?v=40",
+  "./js/exercises.js?v=40",
+  "./js/workout.js?v=40",
+  "./js/form-check.js?v=40",
+  "./js/nutrition.js?v=40",
+  "./js/nutrition-label-scan.js?v=40",
+  "./js/groceries.js?v=40",
+  "./js/habits.js?v=40",
+  "./js/business.js?v=40",
+  "./js/trading.js?v=40",
+  "./js/blobstore.js?v=40",
+  "./js/video-api-client.js?v=40",
+  "./js/video-connections.js?v=40",
+  "./js/video.js?v=40",
+  "./js/video-studio.js?v=40",
+  "./functions/lib/idea-spec.js?v=40",
+  "./functions/lib/niche-spec.js?v=40",
+  "./js/marketing-stats.js?v=40",
+  "./js/niche-research.js?v=40",
+  "./js/content-intelligence.js?v=40"
 ];
 
 self.addEventListener("install", function (event) {

@@ -1,7 +1,8 @@
 /* ==========================================================================
    JARVIS — Marketing › Niche (AI Niche Research dashboard, Instagram + TikTok)
 
-   What this tab does:
+   What these tabs do (Overview, Discover, AI Analysis, Research History, and
+   the saved posts in Saved Library all render from here):
    - Holds the niche profile (business, audience, keywords, platforms,
      competitors) that research is built from.
    - "Research My Niche" searches Instagram and TikTok for your keywords
@@ -240,32 +241,68 @@
 
   /* ---------------- overview ---------------- */
 
-  function tile(label, value) {
+  function tile(label, value, sub) {
     const t = el("div", "nr-tile");
     t.appendChild(el("p", "nr-tile-label", label));
-    t.appendChild(el("p", "nr-tile-value", String(value)));
+    const text = String(value);
+    t.appendChild(el("p", "nr-tile-value" + (text.length > 8 ? " nr-tile-value-sm" : ""), text));
+    if (sub) t.appendChild(el("p", "nr-tile-sub", sub));
     return t;
   }
 
-  function renderOverview() {
-    const n = niche();
+  function statsLib() { return window.JarvisMarketingStats || null; }
+
+  // Numbers for the newest research, or null when there is none (or the numbers helper didn't load).
+  function currentStats() {
+    const S = statsLib();
+    const run = currentRun();
+    return S && run ? S.runStats(run, new Date()) : null;
+  }
+
+  function shortDate(iso) {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function renderTiles() {
+    const S = statsLib();
+    const st = currentStats();
+    const server = api.getStatus();
     const box = $("nrTiles");
     box.textContent = "";
-    box.appendChild(tile("Finds saved", finds().length));
-    box.appendChild(tile("Research keywords", n.keywords.length));
-    box.appendChild(tile("Competitors tracked", watchlist().length));
-    box.appendChild(tile("Ideas in library", api.getIdeas().length));
+    const none = "No research yet";
+    box.appendChild(tile("Posts found", st ? st.posts.toLocaleString() : "—", st ? "in your latest research" : none));
+    box.appendChild(tile("Engagement rate", st && st.rated ? S.formatRate(st.avgRate) : "—",
+      st ? (st.rated ? "average of " + st.rated + " posts with views" : "needs posts that report views") : none));
+    box.appendChild(tile("Posted in 30 days", st && st.dated ? st.fresh + " of " + st.dated : "—",
+      st ? (st.dated ? "posts that include a date" : "no dates reported") : none));
+    box.appendChild(tile("Last research", st && st.finishedAt ? shortDate(st.finishedAt) : "Never",
+      st && st.finishedAt ? timeText(st.finishedAt).replace(/^[A-Za-z]+ \d+, /, "") + " · " + st.trigger : "Press Research My Niche"));
+    box.appendChild(tile("Competitors", watchlist().length, "Instagram accounts tracked"));
+    box.appendChild(tile("Saved ideas", api.getIdeas().length, "in your library"));
+    const used = server && server.usage && typeof server.usage.creditsUsed === "number" ? server.usage.creditsUsed : null;
+    box.appendChild(tile("Credits this month", used !== null ? used.toLocaleString() + " / " + (server.monthlyCreditCap || 0).toLocaleString() : "—",
+      used !== null ? "InsightSocial, against your cap" : "Marketing server not connected"));
+    const aiOn = !!(server && server.aiKeyConfigured);
+    const aiUsd = server && server.usage && typeof server.usage.aiCostUsd === "number" ? server.usage.aiCostUsd : 0;
+    box.appendChild(tile("AI spend", server ? (aiOn ? "$" + aiUsd.toFixed(2) : "Off") : "—",
+      server ? (aiOn ? "of $" + (server.aiAllowanceUsd || 0).toFixed(2) + " this month" : "No Claude key yet") : "Marketing server not connected"));
+    $("nrTilesNote").textContent = "Relevant-post counts and emerging themes are added in later updates. They need more research history than JARVIS keeps today.";
+  }
+
+  function renderOverview() {
+    renderTiles();
 
     const themes = $("nrThemes");
     themes.textContent = "";
     const list = finds();
     if (list.length < 3) {
-      themes.appendChild(el("p", "nr-empty", "Themes appear once you've saved 3 or more finds. Save videos you find in the research kit below, and JARVIS counts which formats keep showing up."));
+      themes.appendChild(el("p", "nr-empty", "Themes appear once you've saved 3 or more posts. Save posts you find with the research kit in Discover, and JARVIS counts which formats keep showing up."));
       return;
     }
     const counts = themeCounts(list);
     if (!counts.length) {
-      themes.appendChild(el("p", "nr-empty", "None of your finds have a format yet. Add one when you save a find to see which formats keep showing up."));
+      themes.appendChild(el("p", "nr-empty", "None of your saved posts have a format yet. Add one when you save a post to see which formats keep showing up."));
       return;
     }
     const max = counts[0].count;
@@ -275,7 +312,7 @@
       const head = el("div", "nr-bar-head");
       head.appendChild(el("span", "nr-bar-label", c.label));
       head.appendChild(document.createTextNode(" "));
-      head.appendChild(el("span", "nr-bar-value", c.count + (c.count === 1 ? " find" : " finds")));
+      head.appendChild(el("span", "nr-bar-value", c.count + (c.count === 1 ? " post" : " posts")));
       li.appendChild(head);
       const track = el("div", "nr-bar-track");
       track.setAttribute("aria-hidden", "true");
@@ -388,7 +425,7 @@
           : "No usable keywords for this platform yet."
       };
     });
-    rows.push({ name: "Manual research kit", status: "ready", detail: "Open the searches below and save what you find." });
+    rows.push({ name: "Manual research kit", status: "ready", detail: "Open the searches below and save the posts you find." });
     return rows;
   }
 
@@ -483,10 +520,13 @@
 
   // The button, and the sentence under it that says what pressing it will do and cost.
   function renderResearchControls() {
-    const btn = $("nrResearchBtn");
-    btn.disabled = ui.running;
-    btn.textContent = ui.running ? "Researching…" : "Research My Niche";
-    btn.setAttribute("aria-busy", ui.running ? "true" : "false");
+    ["nrResearchBtn", "nrResearchBtn2"].forEach(function (id) {
+      const btn = $(id);
+      if (!btn) return;
+      btn.disabled = ui.running;
+      btn.textContent = ui.running ? "Researching…" : "Research My Niche";
+      btn.setAttribute("aria-busy", ui.running ? "true" : "false");
+    });
     const hint = $("nrResearchHint");
     const blocker = researchBlocker();
     const n = niche();
@@ -509,37 +549,41 @@
     return (run.summary || []).join(" ");
   }
 
-  function handleResearch() {
+  // The same message shows on Overview and Discover so it's seen wherever the button was pressed.
+  function setStatus(text) {
+    ["nrResearchStatus", "nrResearchStatus2"].forEach(function (id) { if ($(id)) $(id).textContent = text; });
+  }
+
+  function handleResearch(origin) {
     if (ui.running) return;
     ui.lastAttempt = new Date();
-    const status = $("nrResearchStatus");
     const blocker = researchBlocker();
     if (blocker) {
-      status.textContent = blocker + " Use the manual research kit below, and save what you find.";
+      setStatus(blocker + " Use the manual research kit in Discover, and save what you find.");
       renderSources();
       openKit();
+      if (origin !== "discover") api.showTab("mktSubNavDiscover");
       scrollToCard("nrSourcesCard");
       return;
     }
     const n = niche();
     if (!planFor(n).steps.length) {
-      status.textContent = "Add research keywords and pick a platform in Edit niche first.";
+      setStatus("Add research keywords and pick a platform in Edit niche first.");
       return;
     }
     ui.running = true;
-    status.textContent = "Searching " + n.platforms.map(platformLabel).join(" and ") + " through InsightSocial. This can take up to a minute.";
-    renderResearchControls();
-    renderSources();
-    scrollToCard("nrSourcesCard");
+    setStatus("Searching " + n.platforms.map(platformLabel).join(" and ") + " through InsightSocial. This can take up to a minute.");
+    render();
+    if (origin === "discover") scrollToCard("nrSourcesCard");
     api.callServer("researchNiche", { niche: { keywords: n.keywords, platforms: n.platforms } }, { timeout: 300000 }).then(function (res) {
       if (res && res.run && Array.isArray(res.run.sources)) {
         ui.run = res.run;
-        status.textContent = runSummaryLine(res.run);
+        setStatus(runSummaryLine(res.run));
       } else {
-        status.textContent = "The server answered, but not in the format JARVIS expects, so nothing was shown.";
+        setStatus("The server answered, but not in the format JARVIS expects, so nothing was shown.");
       }
     }).catch(function (err) {
-      status.textContent = api.describeCallError(err);
+      setStatus(api.describeCallError(err));
     }).then(function () {
       ui.running = false;
       ui.discFilter = "all";
@@ -548,24 +592,15 @@
       return api.refreshStatus();
     }).then(function () {
       render();
-      if (ui.run) scrollToCard("nrDiscCard");
+      if (ui.run) scrollToCard(origin === "discover" ? "nrDiscCard" : "nrSummaryTitle");
     });
   }
 
   /* ---------------- search results (what InsightSocial found) ---------------- */
 
   function collectDiscoveries(run) {
-    const seen = {};
-    const out = [];
-    (run && Array.isArray(run.sources) ? run.sources : []).forEach(function (s) {
-      (Array.isArray(s.items) ? s.items : []).forEach(function (it) {
-        if (!it || typeof it !== "object" || typeof it.id !== "string") return;
-        const key = s.platform + ":" + it.id;
-        if (seen[key]) return;
-        seen[key] = true;
-        out.push({ platform: s.platform, via: s.label, item: it });
-      });
-    });
+    const S = statsLib();
+    const out = S ? S.uniquePosts(run) : [];
     out.sort(function (a, b) {
       return (typeof b.item.views === "number" ? b.item.views : -1) - (typeof a.item.views === "number" ? a.item.views : -1);
     });
@@ -697,11 +732,11 @@
     const edit = el("button", "nr-btn nr-btn-ghost nr-btn-small", "Edit");
     edit.type = "button";
     edit.id = "nrEdit_" + f.id;
-    edit.setAttribute("aria-label", "Edit find: " + f.description.slice(0, 40));
+    edit.setAttribute("aria-label", "Edit saved post: " + f.description.slice(0, 40));
     edit.addEventListener("click", function () { openFindModal(f.id, edit.id); });
     const del = el("button", "nr-btn nr-btn-ghost nr-btn-small nr-btn-danger", "Delete");
     del.type = "button";
-    del.setAttribute("aria-label", "Delete find: " + f.description.slice(0, 40));
+    del.setAttribute("aria-label", "Delete saved post: " + f.description.slice(0, 40));
     del.addEventListener("click", function () { deleteFind(f); });
     actions.appendChild(edit);
     actions.appendChild(del);
@@ -729,11 +764,11 @@
     box.textContent = "";
     const list = ui.filter === "all" ? all : all.filter(function (f) { return f.platform === ui.filter; });
     if (!all.length) {
-      box.appendChild(el("p", "nr-empty", "No finds yet. Open a search in the research kit, find a video that's doing well, then tap Add a find to save its link and numbers."));
+      box.appendChild(el("p", "nr-empty", "No saved posts yet. Open a search in Discover, find a post that's doing well, then tap Save a post to keep its link and numbers."));
       return;
     }
     if (!list.length) {
-      box.appendChild(el("p", "nr-empty", "No " + platformLabel(ui.filter) + " finds yet."));
+      box.appendChild(el("p", "nr-empty", "No saved " + platformLabel(ui.filter) + " posts yet."));
       return;
     }
     const shown = ui.showAllFinds ? list : list.slice(0, FINDS_PREVIEW);
@@ -747,63 +782,9 @@
   }
 
   function deleteFind(f) {
-    if (!window.confirm("Delete this find? This can't be undone.")) return;
+    if (!window.confirm("Delete this saved post? This can't be undone.")) return;
     api.commit(function (st) { st.finds = st.finds.filter(function (x) { return x.id !== f.id; }); })
       .catch(function (err) { api.core().showToast(api.describeDataError(err)); });
-  }
-
-  /* ---------------- competitors ---------------- */
-
-  function renderCompetitors() {
-    const list = watchlist();
-    $("nrCompCount").textContent = list.length + " of " + api.maxWatchlist + " tracked";
-    const ul = $("nrCompList");
-    ul.textContent = "";
-    if (!list.length) {
-      ul.appendChild(el("li", "nr-empty", "No competitors tracked yet. Add an Instagram handle below, or ones you spot in your research."));
-    }
-    list.forEach(function (h) {
-      const li = el("li", "nr-row");
-      li.appendChild(externalLink("https://www.instagram.com/" + encodeURIComponent(h) + "/", "@" + h, "nr-link", "Open @" + h + " on Instagram"));
-      const actions = el("span", "nr-find-actions");
-      const nums = el("button", "nr-btn nr-btn-ghost nr-btn-small", "Numbers");
-      nums.type = "button";
-      nums.setAttribute("aria-label", "Log or view numbers for @" + h);
-      nums.addEventListener("click", function () { api.showTab("mktSubNavCompetitors"); });
-      const rm = el("button", "nr-btn nr-btn-ghost nr-btn-small nr-btn-danger", "Remove");
-      rm.type = "button";
-      rm.setAttribute("aria-label", "Remove @" + h + " from the watchlist");
-      rm.addEventListener("click", function () { removeCompetitor(h); });
-      actions.appendChild(nums);
-      actions.appendChild(rm);
-      li.appendChild(actions);
-      ul.appendChild(li);
-    });
-  }
-
-  function addCompetitor(e) {
-    e.preventDefault();
-    const msg = $("nrCompMsg");
-    const parsed = parseHandles($("nrCompInput").value, api.maxWatchlist + 1);
-    if (!parsed.handles.length || parsed.invalid.length) {
-      msg.textContent = parsed.invalid.length ? "Not a valid Instagram handle: " + parsed.invalid[0] : "Enter an Instagram handle.";
-      return;
-    }
-    const current = watchlist();
-    const fresh = parsed.handles.filter(function (h) { return current.indexOf(h) === -1; });
-    if (!fresh.length) { msg.textContent = "Already on your watchlist."; return; }
-    if (current.length + fresh.length > api.maxWatchlist) { msg.textContent = "The watchlist holds up to " + api.maxWatchlist + " accounts. Remove one first."; return; }
-    api.saveSettings({ watchlist: current.concat(fresh) }).then(function () {
-      $("nrCompInput").value = "";
-      msg.textContent = "Added " + fresh.map(function (h) { return "@" + h; }).join(", ") + ".";
-    }).catch(function (err) { msg.textContent = api.describeDataError(err); });
-  }
-
-  function removeCompetitor(handle) {
-    if (!window.confirm("Stop tracking @" + handle + "? Numbers you logged are kept.")) return;
-    api.saveSettings({ watchlist: watchlist().filter(function (h) { return h !== handle; }) }).then(function () {
-      $("nrCompMsg").textContent = "Removed @" + handle + ".";
-    }).catch(function (err) { $("nrCompMsg").textContent = api.describeDataError(err); });
   }
 
   /* ---------------- content opportunities ---------------- */
@@ -813,7 +794,7 @@
     box.textContent = "";
     const ideas = api.getIdeas().slice().sort(function (a, b) { return String(b.createdAt || "").localeCompare(String(a.createdAt || "")); }).slice(0, 3);
     if (!ideas.length) {
-      box.appendChild(el("p", "nr-empty", "No ideas saved yet. Add your own in the Library, or generate some in AI Ideas once your Marketing server is set up."));
+      box.appendChild(el("p", "nr-empty", "No ideas saved yet. Add your own in the Saved Library, or generate some in the Content Studio once your Marketing server is set up."));
     }
     ideas.forEach(function (i) {
       const row = el("div", "nr-idea");
@@ -825,15 +806,123 @@
       box.appendChild(row);
     });
     const actions = el("div", "nr-actions-row");
-    const lib = el("button", "nr-btn nr-btn-ghost", ideas.length ? "Open Library" : "Add an idea");
+    const lib = el("button", "nr-btn nr-btn-ghost", ideas.length ? "Open Saved Library" : "Add an idea");
     lib.type = "button";
     lib.addEventListener("click", function () { api.showTab("mktSubNavLibrary"); });
-    const gen = el("button", "nr-btn nr-btn-ghost", "AI Ideas");
+    const gen = el("button", "nr-btn nr-btn-ghost", "Content Studio");
     gen.type = "button";
     gen.addEventListener("click", function () { api.showTab("mktSubNavIdeas"); });
     actions.appendChild(lib);
     actions.appendChild(gen);
     box.appendChild(actions);
+  }
+
+  /* ---------------- status strip, research summary, history, AI state ---------------- */
+
+  function stripChip(state, text) {
+    const v = STATUS_VIEW[state];
+    const li = el("li", "nr-strip-item nr-status-" + v.cls);
+    li.appendChild(el("span", "nr-status-icon", v.icon)).setAttribute("aria-hidden", "true");
+    li.appendChild(document.createTextNode(" " + text));
+    return li;
+  }
+
+  // Three quick answers to "can I use this right now?", each as icon plus words.
+  function renderStatusStrip() {
+    const ul = $("nrStatusStrip");
+    ul.textContent = "";
+    const server = api.getStatus();
+    if (!api.isSignedIn()) ul.appendChild(stripChip("unavailable", "Signed out"));
+    else if (server) ul.appendChild(stripChip("ready", "Server connected"));
+    else if (api.isChecking()) ul.appendChild(stripChip("running", "Checking server"));
+    else ul.appendChild(stripChip("failed", "Server not reachable"));
+    ul.appendChild(server ? (server.keyConfigured ? stripChip("ready", "InsightSocial key set") : stripChip("unavailable", "InsightSocial key missing"))
+      : stripChip("unavailable", "InsightSocial unknown"));
+    ul.appendChild(server ? (server.aiKeyConfigured ? stripChip("ready", "Claude AI ready") : stripChip("unavailable", "Claude AI off"))
+      : stripChip("unavailable", "Claude AI unknown"));
+  }
+
+  function topPostRow(d) {
+    const it = d.item;
+    const row = el("div", "nr-toprow");
+    const head = el("div", "nr-toprow-head");
+    head.appendChild(el("span", "nr-chip nr-chip-" + d.platform, platformLabel(d.platform)));
+    head.appendChild(el("span", "nr-toprow-views", formatCompact(it.views) + " views"));
+    row.appendChild(head);
+    row.appendChild(el("p", "nr-toprow-text" + (it.text ? "" : " nr-muted"), it.text || "No caption provided"));
+    const link = typeof it.url === "string" ? normalizeSourceUrl(it.url) : { ok: false };
+    if (link.ok && link.platform === d.platform) {
+      let host = "";
+      try { host = new URL(link.url).hostname.replace(/^www\./, ""); } catch (e) { host = "source"; }
+      row.appendChild(externalLink(link.url, "Open on " + host + " ↗", "nr-link", "Open the original " + platformLabel(d.platform) + " post"));
+    }
+    return row;
+  }
+
+  // Everything here is arithmetic on the posts InsightSocial returned: no AI, nothing estimated.
+  function renderSummary() {
+    const S = statsLib();
+    const run = currentRun();
+    const st = currentStats();
+    const note = $("nrSummaryNote");
+    const list = $("nrSummary");
+    const top = $("nrTopPosts");
+    list.textContent = "";
+    top.textContent = "";
+    $("nrSeeAllBtn").classList.toggle("hidden", !st || !st.posts);
+    if (!S || !st) {
+      note.textContent = "No research yet. Press Research My Niche above. This section stays empty until there is real data.";
+      top.appendChild(el("p", "nr-empty", "Your most viewed posts will appear here after your first research."));
+    } else {
+      const when = timeText(run.finishedAt);
+      note.textContent = "From the research" + (when ? " finished " + when : "") + ". Calculated directly from what InsightSocial returned. No AI involved.";
+      S.describeRun(st).forEach(function (line) { list.appendChild(el("li", "", line)); });
+      if (st.topByViews.length) st.topByViews.forEach(function (d) { top.appendChild(topPostRow(d)); });
+      else top.appendChild(el("p", "nr-empty", "None of these posts reported a view count."));
+    }
+    const server = api.getStatus();
+    $("nrBriefNote").textContent = server && server.aiKeyConfigured
+      ? "A Claude key is set. The written brief (executive summary, top opportunities, next steps) arrives in a later update."
+      : "The written brief arrives in a later update. It needs a Claude key, which isn't set yet. Until then, the numbers above are the whole report.";
+  }
+
+  function renderHistory() {
+    const box = $("nrHistoryLatest");
+    box.textContent = "";
+    const run = currentRun();
+    const st = currentStats();
+    if (!run || !st) {
+      box.appendChild(el("p", "nr-empty", "No research has run yet. Press Research My Niche on the Overview."));
+      return;
+    }
+    const cached = run.sources.filter(function (s) { return s.status === "cached"; }).length;
+    const rows = [
+      ["Finished", timeText(run.finishedAt) || "—"],
+      ["Started by", st.trigger === "scheduled" ? "the daily schedule" : "you"],
+      ["Searches", st.searches.ok + " of " + st.searches.total + " returned results"],
+      ["Posts found", st.posts.toLocaleString()],
+      ["Credits used", st.creditsUsed.toLocaleString() + (run.runCreditCap ? " (limit " + run.runCreditCap.toLocaleString() + ")" : "")],
+      ["Reused saved results", cached + (cached === 1 ? " search" : " searches")]
+    ];
+    const dl = el("dl", "nr-facts");
+    rows.forEach(function (r) {
+      const wrap = el("div", "nr-fact");
+      wrap.appendChild(el("dt", "nr-fact-label", r[0]));
+      wrap.appendChild(el("dd", "nr-fact-value", r[1]));
+      dl.appendChild(wrap);
+    });
+    box.appendChild(dl);
+  }
+
+  function renderAnalysis() {
+    const badge = $("nrAiState");
+    badge.textContent = "";
+    const server = api.getStatus();
+    const on = !!(server && server.aiKeyConfigured);
+    const v = STATUS_VIEW[on ? "ready" : "unavailable"];
+    badge.className = "nr-status-badge nr-status-" + v.cls;
+    badge.appendChild(el("span", "nr-status-icon", v.icon)).setAttribute("aria-hidden", "true");
+    badge.appendChild(document.createTextNode(" " + (on ? "Claude key set" : server ? "No Claude key" : "Not connected")));
   }
 
   /* ---------------- daily intelligence ---------------- */
@@ -924,7 +1013,7 @@
   function openFindModal(id, openerId) {
     ui.editingFindId = id || null;
     const f = id ? finds().find(function (x) { return x.id === id; }) : null;
-    $("nrFindModalTitle").textContent = f ? "Edit find" : "Add a find";
+    $("nrFindModalTitle").textContent = f ? "Edit saved post" : "Save a post";
     $("nrFindUrl").value = f ? f.url : "";
     $("nrFindCreator").value = f ? f.creator || "" : "";
     $("nrFindDesc").value = f ? f.description : "";
@@ -962,7 +1051,7 @@
       return k.ok && k.key === link.key && x.id !== ui.editingFindId;
     });
     if (dupe) { err.textContent = "You've already saved this video."; return; }
-    if (!ui.editingFindId && finds().length >= MAX_FINDS) { err.textContent = "You've saved " + MAX_FINDS + " finds, the most Marketing keeps. Delete some old ones first."; return; }
+    if (!ui.editingFindId && finds().length >= MAX_FINDS) { err.textContent = "You've saved " + MAX_FINDS + " posts, the most Marketing keeps. Delete some old ones first."; return; }
 
     const record = {
       platform: link.platform,
@@ -990,7 +1079,7 @@
       }
     }).then(function () {
       closeSheet("nrFindModal");
-      api.core().showToast(editing ? "Find updated." : "Find saved.");
+      api.core().showToast(editing ? "Post updated." : "Post saved.");
     }).catch(function (e2) { err.textContent = api.describeDataError(e2); })
       .then(function () { btn.disabled = false; });
   }
@@ -1006,32 +1095,38 @@
   /* ---------------- wiring ---------------- */
 
   function render() {
-    if (!api || !api.getStore() || !$("mkt-niche")) return;
+    if (!api || !api.getStore() || !$("nrResearchBtn")) return;
     renderHero();
+    renderStatusStrip();
     renderOverview();
+    renderSummary();
+    renderAnalysis();
     renderResearchControls();
     renderSources();
     renderDiscoveries();
     renderFinds();
-    renderCompetitors();
     renderOpportunities();
     renderDaily();
+    renderHistory();
   }
 
   function init(a) {
     api = a;
-    if (!$("mkt-niche")) return;
+    if (!$("nrResearchBtn")) return;
     FORMATS.forEach(function (f) { const o = el("option", "", f.label); o.value = f.value; $("nrFindFormat").appendChild(o); });
-    $("nrResearchBtn").addEventListener("click", handleResearch);
+    $("nrResearchBtn").addEventListener("click", function () { handleResearch("overview"); });
+    $("nrResearchBtn2").addEventListener("click", function () { handleResearch("discover"); });
+    $("nrSeeAllBtn").addEventListener("click", function () { api.showTab("mktSubNavDiscover"); });
+    $("nrAnalysisGoBtn").addEventListener("click", function () { api.showTab("mktSubNavDiscover"); });
     $("nrEditNicheBtn").addEventListener("click", openProfileModal);
     $("nrProfileForm").addEventListener("submit", saveProfile);
     $("nrProfileCloseBtn").addEventListener("click", function () { closeSheet("nrProfileModal"); });
     $("nrProfileCancelBtn").addEventListener("click", function () { closeSheet("nrProfileModal"); });
     $("nrAddFindBtn").addEventListener("click", function () { openFindModal(null, "nrAddFindBtn"); });
+    $("nrAddFindBtn2").addEventListener("click", function () { openFindModal(null, "nrAddFindBtn2"); });
     $("nrFindForm").addEventListener("submit", saveFind);
     $("nrFindCloseBtn").addEventListener("click", function () { closeSheet("nrFindModal"); });
     $("nrFindCancelBtn").addEventListener("click", function () { closeSheet("nrFindModal"); });
-    $("nrCompForm").addEventListener("submit", addCompetitor);
     ["nrProfileModal", "nrFindModal"].forEach(function (id) {
       $(id).addEventListener("click", function (e) { if (e.target === $(id)) closeSheet(id); });
     });
