@@ -2325,3 +2325,116 @@ textarea { resize: vertical; min-height: 44px; }
   .nr-btn { transition: none; }
   .nr-btn:active { transform: none; }
 }
+
+/* ---------------- Marketing intelligence dashboard (tabs, overview, shared look) ---------------- */
+
+/* The tab bar sits outside the panels, so it carries the same tokens. */
+#panel-marketing {
+  --nr-bg: #080d16;
+  --nr-bg2: #101827;
+  --nr-card: #151d2d;
+  --nr-line: rgba(156, 169, 191, 0.18);
+  --nr-blue: #4f83ff;
+  --nr-purple: #875bff;
+  --nr-text: #f5f7ff;
+  --nr-dim: #9ca9bf;
+  --nr-good: #22c55e;
+  --nr-bad: #ef4444;
+  --nr-warn: #f5b84c;
+  letter-spacing: -0.004em;
+}
+#panel-marketing .panel-header h1 { letter-spacing: -0.02em; }
+
+#panel-marketing .marketing-sub-nav {
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 18px;
+  border: 1px solid var(--nr-line);
+  border-radius: 14px;
+  background: rgba(21, 29, 45, 0.72);
+  scrollbar-width: none;
+}
+#panel-marketing .marketing-sub-nav::-webkit-scrollbar { display: none; }
+#panel-marketing .marketing-sub-nav-btn {
+  flex: none;
+  margin: 0;
+  padding: 0 14px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nr-dim);
+  background: transparent;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+#panel-marketing .marketing-sub-nav-btn:hover { color: var(--nr-text); background: rgba(255, 255, 255, 0.06); }
+#panel-marketing .marketing-sub-nav-btn.active {
+  color: #fff;
+  background: linear-gradient(135deg, #3568e8, #6a43e0);
+  box-shadow: 0 4px 14px rgba(79, 131, 255, 0.28);
+}
+#panel-marketing .marketing-sub-nav-btn:focus-visible { outline: 2px solid var(--nr-blue); outline-offset: 2px; }
+#panel-marketing #mktSubNavSettings { margin-left: auto; }
+
+/* Older cards inside Marketing take the same look as the newer ones. */
+#panel-marketing .marketing-sub-panel .card {
+  background: var(--nr-card);
+  border: 1px solid var(--nr-line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+#panel-marketing .marketing-sub-panel .card-title { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; color: var(--nr-text); }
+#panel-marketing .marketing-sub-panel .field-hint { color: var(--nr-dim); }
+.marketing-sub-panel.active { animation: nr-rise 0.28s ease both; }
+
+/* Section headings that group cards inside a tab. */
+.nr-section-title { margin: 24px 2px 6px; font-size: 12.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--nr-dim); font-weight: 650; }
+.nr-glance .nr-section-title { margin-top: 4px; }
+.nr-section-sub { margin: 0 2px 12px; font-size: 13.5px; line-height: 1.5; color: var(--nr-dim); }
+
+/* Overview: status strip, tiles, research summary. */
+.nr-strip { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0 0 16px; }
+.nr-strip-item {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; color: var(--nr-text); border: 1px solid var(--nr-line); background: rgba(255, 255, 255, 0.05);
+}
+.nr-glance { margin-bottom: 16px; }
+.nr-glance .nr-hint { margin-top: 10px; }
+.nr-tile-value, .nr-toprow-views, .nr-fact-value { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.nr-tile-value-sm { font-size: 22px; line-height: 1.25; }
+.nr-tile-sub { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--nr-dim); overflow-wrap: anywhere; }
+
+.nr-summary { margin: 4px 0 6px; padding-left: 18px; font-size: 14px; line-height: 1.55; color: var(--nr-text); }
+.nr-summary li { margin: 8px 0; padding-left: 2px; }
+.nr-summary:empty { display: none; }
+.nr-toprow { padding: 12px 0; border-top: 1px solid var(--nr-line); }
+.nr-toprow:first-child { border-top: none; padding-top: 4px; }
+.nr-toprow-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.nr-toprow-views { font-size: 15px; font-weight: 700; color: var(--nr-text); }
+.nr-toprow-text {
+  margin: 8px 0 2px; font-size: 14px; line-height: 1.45; color: var(--nr-text); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Research history facts, and the plain lists on the placeholder tabs. */
+.nr-facts { margin: 0; }
+.nr-fact { display: flex; justify-content: space-between; gap: 14px; padding: 11px 0; border-top: 1px solid var(--nr-line); }
+.nr-fact:first-child { border-top: none; }
+.nr-fact-label { font-size: 13.5px; color: var(--nr-dim); }
+.nr-fact-value { margin: 0; font-size: 14px; font-weight: 600; color: var(--nr-text); text-align: right; overflow-wrap: anywhere; }
+.nr-legend { margin: 6px 0 12px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; color: var(--nr-text); }
+.nr-chips-static { margin-bottom: 4px; }
+
+@media (min-width: 720px) {
+  #panel-marketing .marketing-sub-nav { padding: 5px; }
+  .nr-hero-actions .nr-btn-primary { flex: 0 1 340px; }
+  .nr-tile-value { font-size: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marketing-sub-panel.active { animation: none; }
+  #panel-marketing .marketing-sub-nav-btn { transition: none; }
+}
+#panel-marketing .marketing-sub-panel .btn-icon { min-height: 40px; padding-left: 12px; padding-right: 12px; }
+#nrResearchBtn2 { width: 100%; max-width: 340px; }
