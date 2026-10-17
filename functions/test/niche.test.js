@@ -225,9 +225,10 @@ test("a full run: 10 searches, real statuses, 220 credits, saved for the page", 
 
 test("running again within 20 hours reuses saved results: cached, 0 credits, no requests", async () => {
   const d = deps({ fetchImpl: fetchFor() });
-  await niche.runNicheResearch(OWNER, d, { niche: profile() });
-  const again = await niche.runNicheResearch(OWNER, d, { niche: profile() });
+  await niche.runNicheResearch(OWNER, d, { niche: profile(), mode: "full" });
+  const again = await niche.runNicheResearch(OWNER, d, { niche: profile(), mode: "full" });
   assert.equal(d.fetchImpl.calls.length, 10, "no new requests");
+  assert.equal(again.run.sources.length, 10);
   assert.ok(again.run.sources.every((s) => s.status === "cached" && s.cached && s.creditsUsed === 0));
   assert.equal(again.run.creditsUsed, 0);
   assert.match(again.run.summary[1], /No credits used \(saved results/);
@@ -237,9 +238,9 @@ test("running again within 20 hours reuses saved results: cached, 0 credits, no 
 
 test("only new keywords cost credits when the niche changes", async () => {
   const d = deps({ fetchImpl: fetchFor() });
-  await niche.runNicheResearch(OWNER, d, { niche: profile({ platforms: ["tiktok"] }) });
+  await niche.runNicheResearch(OWNER, d, { niche: profile({ platforms: ["tiktok"] }), mode: "full" });
   assert.equal(d.fetchImpl.calls.length, 7);
-  const more = await niche.runNicheResearch(OWNER, d, { niche: profile({ keywords: DEFAULT_KEYWORDS.slice(0, 2).concat(["Church merch"]), platforms: ["tiktok"] }) });
+  const more = await niche.runNicheResearch(OWNER, d, { niche: profile({ keywords: DEFAULT_KEYWORDS.slice(0, 2).concat(["Church merch"]), platforms: ["tiktok"] }), mode: "full" });
   assert.equal(d.fetchImpl.calls.length, 8);
   assert.equal(more.run.creditsUsed, 10);
   assert.deepEqual(more.run.sources.map((s) => s.status), ["cached", "cached", "completed"]);
@@ -364,4 +365,86 @@ test("the guard is cleared and the saved niche kept if a run breaks halfway", as
   const saved = d.db.store.get(statePath);
   assert.equal(saved.running, null);
   assert.deepEqual(saved.profile.keywords, ["faith"]);
+});
+
+/* ---------------- quick refresh vs full sweep ---------------- */
+
+const TEN = ["Christian streetwear", "Faith-based clothing", "Minimalist Christian fashion", "Premium streetwear", "Christian lifestyle content",
+  "Clothing brand marketing", "Clothing brand launches", "Fashion storytelling", "Streetwear product photography", "Behind-the-scenes clothing brand content"];
+
+test("a quick refresh searches 3 TikTok keywords (30 credits) and rotates so every keyword gets a turn", () => {
+  const seen = new Set();
+  for (let day = 0; day < 4; day++) {
+    const plan = nicheSpec.planSearches({ keywords: TEN, platforms: ["instagram", "tiktok"] }, { mode: "lean", dayIndex: day });
+    assert.equal(plan.mode, "lean");
+    assert.equal(plan.steps.length, 3);
+    assert.equal(plan.credits, 30);
+    assert.ok(plan.steps.every((s) => s.platform === "tiktok"), "Instagram's hashtag search can't be limited to recent posts, so it only runs in a full sweep");
+    assert.deepEqual(plan.resting, { tiktok: 7, instagram: 0 });
+    plan.steps.forEach((s) => seen.add(s.label));
+  }
+  assert.equal(seen.size, 10, "all ten keywords were searched within four days");
+  const same = (d) => nicheSpec.planSearches({ keywords: TEN, platforms: ["tiktok"] }, { mode: "lean", dayIndex: d }).steps.map((s) => s.label).join();
+  assert.equal(same(5), same(5), "the same day always plans the same searches");
+  assert.notEqual(same(5), same(6));
+});
+
+test("a quick refresh with only Instagram selected searches one hashtag; with few keywords it just searches them", () => {
+  const ig = nicheSpec.planSearches({ keywords: TEN, platforms: ["instagram"] }, { mode: "lean", dayIndex: 2 });
+  assert.deepEqual([ig.steps.length, ig.credits, ig.steps[0].platform], [1, 50, "instagram"]);
+  const two = nicheSpec.planSearches({ keywords: ["faith", "hope"], platforms: ["tiktok"] }, { mode: "lean", dayIndex: 9 });
+  assert.deepEqual([two.steps.length, two.credits], [2, 20]);
+  assert.equal(nicheSpec.planSearches({ keywords: [], platforms: ["tiktok"] }, { mode: "lean" }).steps.length, 0);
+  // no mode means the existing full sweep
+  assert.equal(nicheSpec.planSearches({ keywords: TEN, platforms: ["instagram", "tiktok"] }).credits, 220);
+});
+
+test("a full sweep is suggested when none ran in the last 7 days", () => {
+  const now = new Date("2026-10-14T15:00:00Z");
+  assert.equal(nicheSpec.suggestMode(null, now), "full");
+  assert.equal(nicheSpec.suggestMode("junk", now), "full");
+  assert.equal(nicheSpec.suggestMode("2026-10-08T15:00:00Z", now), "lean");
+  assert.equal(nicheSpec.suggestMode("2026-10-07T15:00:00Z", now), "full");
+  assert.equal(nicheSpec.dayIndex(new Date("1970-01-02T00:00:00Z")), 1);
+  // runs saved before quick refreshes existed were full sweeps
+  assert.equal(nicheSpec.lastFullAtOf({ lastSuccessfulRunAt: "2026-10-12T10:00:00Z", lastRun: { ok: true, sources: new Array(10).fill({}) } }), "2026-10-12T10:00:00Z");
+  assert.equal(nicheSpec.lastFullAtOf({ lastSuccessfulRunAt: "2026-10-12T10:00:00Z", lastRun: { ok: true, mode: "lean", sources: new Array(3).fill({}) } }), null);
+  assert.equal(nicheSpec.lastFullAtOf({ lastFullAt: "2026-10-01T00:00:00Z" }), "2026-10-01T00:00:00Z");
+  assert.equal(nicheSpec.lastFullAtOf(null), null);
+});
+
+test("with no mode sent: the first run is a full sweep, the next days are quick, and a week later it's full again", async () => {
+  let clock = new Date("2026-10-14T15:00:00Z");
+  const d = deps({ now: () => clock, fetchImpl: fetchFor() });
+  const p = { keywords: TEN, platforms: ["instagram", "tiktok"] };
+  const first = await niche.runNicheResearch(OWNER, d, { niche: p });
+  assert.deepEqual([first.run.mode, first.run.sources.length, first.run.creditsUsed], ["full", 10, 220]);
+  assert.equal(d.db.store.get(statePath).lastFullAt, first.run.finishedAt);
+
+  clock = new Date("2026-10-15T15:00:00Z");
+  const second = await niche.runNicheResearch(OWNER, d, { niche: p });
+  assert.deepEqual([second.run.mode, second.run.sources.length, second.run.creditsUsed, second.run.plannedCredits], ["lean", 3, 30, 30]);
+  assert.match(second.run.summary.join(" "), /Quick refresh: today's 3 keywords; the other 7 rotate in on other days/);
+  assert.equal(d.db.store.get(statePath).lastFullAt, first.run.finishedAt, "a quick refresh doesn't count as the weekly sweep");
+
+  clock = new Date("2026-10-21T15:00:00Z");
+  const week = await niche.runNicheResearch(OWNER, d, { niche: p });
+  assert.equal(week.run.mode, "full");
+
+  clock = new Date("2026-10-22T15:00:00Z");
+  const forced = await niche.runNicheResearch(OWNER, d, { niche: p, mode: "full" });
+  assert.equal(forced.run.mode, "full", "an explicit mode is obeyed");
+  const status = await insight.getStatus(OWNER, d);
+  assert.equal(status.nicheLastFullAt, forced.run.finishedAt);
+  assert.equal(status.nicheRuns.length, 4);
+  assert.equal(status.nicheRuns[0].mode, "full");
+  assert.equal(status.serverNow, "2026-10-22T15:00:00.000Z");
+});
+
+test("a failed full sweep doesn't reset the weekly clock", async () => {
+  const down = { status: 503, body: { success: false, error: { message: "Down." }, credits_used: 0 } };
+  const d = deps({ fetchImpl: fakeFetch(() => down) });
+  const res = await niche.runNicheResearch(OWNER, d, { niche: profile(), mode: "full" });
+  assert.equal(res.ok, false);
+  assert.equal(d.db.store.get(statePath).lastFullAt, null);
 });

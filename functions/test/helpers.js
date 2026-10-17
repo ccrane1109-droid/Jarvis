@@ -22,6 +22,9 @@ function fakeDb(initial) {
             prev[k] = v && typeof v === "object" && "__inc" in v ? (prev[k] || 0) + v.__inc : v;
           });
           store.set(path, prev);
+        },
+        async delete() {
+          store.delete(path);
         }
       };
     },

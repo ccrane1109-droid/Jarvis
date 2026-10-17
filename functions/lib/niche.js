@@ -13,8 +13,13 @@
    (completed, cached, unavailable or failed) and every post is exactly what
    InsightSocial returned, validated and trimmed by posts.js.
 
+   A run is a "full sweep" (every search slot, up to 220 credits) or a "quick
+   refresh" (a few TikTok keywords that rotate by day, 30 credits). With no
+   mode given, a full sweep runs when none has completed in the last 7 days.
+   After each run its posts are saved to the research library (library.js).
+
    Firestore (server-written, owner-readable):
-     users/{uid}/marketingState/niche  { profile, lastRun, lastSuccessfulRunAt, runs[] }
+     users/{uid}/marketingState/niche  { profile, lastRun, lastSuccessfulRunAt, lastFullAt, runs[] }
    ========================================================================== */
 
 "use strict";
@@ -22,6 +27,7 @@
 const settingsLib = require("./settings");
 const insight = require("./insight");
 const nicheSpec = require("./niche-spec");
+const library = require("./library");
 
 const RUNS_LIMIT = 20;
 // A run that started this recently and hasn't finished blocks another one, so
@@ -35,8 +41,15 @@ function emptySource(step) {
   return {
     id: step.id, platform: step.platform, kind: step.kind, label: step.label,
     status: "unavailable", items: [], dropped: 0, total: null,
-    creditsUsed: 0, cached: false, stale: false, fetchedAt: null, note: "", error: ""
+    creditsUsed: 0, reportedCredits: null, creditsRemaining: null, chargeReason: "",
+    cached: false, stale: false, fetchedAt: null, note: "", error: ""
   };
+}
+
+// InsightSocial's own explanation for a charge, trimmed; only what it sent.
+function chargeNote(res) {
+  const r = res && typeof res.chargeReason === "string" ? res.chargeReason.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+  return r;
 }
 
 async function runStep(uid, step, remainingCredits, deps) {
@@ -47,6 +60,8 @@ async function runStep(uid, step, remainingCredits, deps) {
       source.status = "failed";
       source.error = res.error || "The search failed.";
       source.creditsUsed = res.creditsUsed || 0;
+      source.reportedCredits = typeof res.creditsUsed === "number" ? res.creditsUsed : null;
+      source.creditsRemaining = typeof res.creditsRemaining === "number" ? res.creditsRemaining : null;
       return source;
     }
     const body = res.body && typeof res.body === "object" ? res.body : {};
@@ -60,6 +75,11 @@ async function runStep(uid, step, remainingCredits, deps) {
     source.note = res.note || "";
     // A live call that didn't report its cost is counted at its documented price, so the run limit stays safe.
     source.creditsUsed = res.cached ? 0 : (typeof res.creditsUsed === "number" ? res.creditsUsed : step.credits);
+    if (!res.cached) {
+      source.reportedCredits = typeof res.creditsUsed === "number" ? res.creditsUsed : null;
+      source.creditsRemaining = typeof res.creditsRemaining === "number" ? res.creditsRemaining : null;
+      source.chargeReason = chargeNote(res);
+    }
   } catch (err) {
     if (err instanceof insight.InsightError) {
       source.status = err.code === "resource-exhausted" ? "unavailable" : "failed";
@@ -73,6 +93,23 @@ async function runStep(uid, step, remainingCredits, deps) {
   return source;
 }
 
+// Compares the balance InsightSocial last reported before this run with the one
+// it reports now, against the cost its searches reported. unexplained is the
+// number of credits the balance dropped beyond that (null when it can't be
+// worked out: no earlier balance, no live search, or a search with no reported cost).
+function balanceCheck(before, sources) {
+  const live = sources.filter(function (s) { return !s.cached && s.creditsRemaining !== null; });
+  if (!live.length) return before === null ? null : { before: before, after: null, reported: null, unexplained: null };
+  const after = live[live.length - 1].creditsRemaining;
+  const spent = sources.filter(function (s) { return s.status === "completed" || s.status === "failed"; });
+  const known = spent.every(function (s) { return s.reportedCredits !== null; });
+  const reported = known ? spent.reduce(function (sum, s) { return sum + s.reportedCredits; }, 0) : null;
+  return {
+    before: before, after: after, reported: reported,
+    unexplained: before !== null && reported !== null ? before - after - reported : null
+  };
+}
+
 async function runNicheResearch(uid, deps, opts) {
   insight.requireOwner(uid, deps);
   if (!insight.keyConfigured(deps)) throw new insight.InsightError("failed-precondition", "The InsightSocial key isn't set on the server yet.");
@@ -81,13 +118,18 @@ async function runNicheResearch(uid, deps, opts) {
 
   const now = deps.now();
   const stateRef = deps.db.doc("users/" + uid + "/marketingState/niche");
-  const [settings, stateSnap] = await Promise.all([settingsLib.readSettings(deps.db, uid), stateRef.get()]);
+  const [settings, stateSnap, usage] = await Promise.all([
+    settingsLib.readSettings(deps.db, uid), stateRef.get(), settingsLib.readUsage(deps.db, uid, settingsLib.monthKey(now))
+  ]);
   const state = stateSnap.exists ? stateSnap.data() : {};
 
   // A profile sent with the request becomes the saved one (the daily run and
   // later runs use it); otherwise the last saved profile is used.
   const profile = nicheSpec.sanitizeProfile(o.niche || state.profile);
-  const plan = nicheSpec.planSearches(profile);
+  // The page sends the mode it showed the cost for; with none, a full sweep runs
+  // when a week has passed since the last one, otherwise a quick refresh.
+  const mode = o.mode === "full" || o.mode === "lean" ? o.mode : nicheSpec.suggestMode(nicheSpec.lastFullAtOf(state), now);
+  const plan = nicheSpec.planSearches(profile, { mode: mode, dayIndex: nicheSpec.dayIndex(now) });
   const savedProfile = Object.assign({}, profile, { updatedAt: now.toISOString() });
   const base = Object.assign({}, state, { profile: savedProfile });
   if (o.niche) await stateRef.set(base);
@@ -108,8 +150,9 @@ async function runNicheResearch(uid, deps, opts) {
 
   const cap = settings.researchRunCreditCap;
   const run = {
-    id: now.toISOString(), trigger: o.trigger || "manual", startedAt: now.toISOString(), finishedAt: null, ok: false,
-    creditsUsed: 0, runCreditCap: cap, plannedCredits: plan.credits, omitted: plan.omitted, sources: [], summary: []
+    id: now.toISOString(), trigger: o.trigger || "manual", mode: mode, startedAt: now.toISOString(), finishedAt: null, ok: false,
+    creditsUsed: 0, runCreditCap: cap, plannedCredits: plan.credits, omitted: plan.omitted, resting: plan.resting,
+    balance: null, library: null, sources: [], summary: []
   };
 
   try {
@@ -129,28 +172,58 @@ async function runNicheResearch(uid, deps, opts) {
     const failed = run.sources.filter(function (s) { return s.status === "failed"; }).length;
     const skipped = run.sources.filter(function (s) { return s.status === "unavailable"; }).length;
     run.ok = good.length > 0;
+
+    // Is InsightSocial's own balance consistent with what its searches reported?
+    run.balance = balanceCheck(usage.lastCreditsRemaining, run.sources);
+
+    // Remember the posts. A problem here must not lose the run's results.
+    if (run.ok) {
+      try {
+        run.library = await library.ingestRun(uid, deps, run);
+      } catch (err) {
+        deps.log.error("nicheResearch: saving to the library failed", { message: err && err.message });
+        run.library = { error: "The posts couldn't be saved to your research library this time." };
+      }
+    }
+
     run.summary.push(plural(good.length, "search", "searches") + " of " + run.sources.length + " returned results (" + plural(posts, "post") + " found).");
     run.summary.push(run.creditsUsed > 0
       ? "Used " + run.creditsUsed + " InsightSocial credits."
       : "No credits used" + (good.some(function (s) { return s.cached; }) ? " (saved results from the last " + nicheSpec.RESULT_TTL_HOURS + " hours were reused)." : "."));
     if (failed) run.summary.push(plural(failed, "search", "searches") + " failed.");
     if (skipped) run.summary.push(plural(skipped, "search", "searches") + " skipped to stay within your credit limits.");
-    const limits = [];
-    if (plan.omitted.tiktok) limits.push("the first " + nicheSpec.TIKTOK_MAX_QUERIES + " keywords on TikTok");
-    if (plan.omitted.instagram) limits.push("the first " + nicheSpec.INSTAGRAM_MAX_HASHTAGS + " hashtags on Instagram");
-    if (limits.length) run.summary.push("To keep each run affordable, JARVIS searched " + limits.join(" and ") + ".");
+    if (mode === "lean") {
+      const rest = plan.resting.tiktok + plan.resting.instagram;
+      run.summary.push("Quick refresh: today's " + plural(plan.steps.length, "keyword") + (rest ? "; the other " + rest + " rotate in on other days." : "."));
+    } else {
+      const limits = [];
+      if (plan.omitted.tiktok) limits.push("the first " + nicheSpec.TIKTOK_MAX_QUERIES + " keywords on TikTok");
+      if (plan.omitted.instagram) limits.push("the first " + nicheSpec.INSTAGRAM_MAX_HASHTAGS + " hashtags on Instagram");
+      if (limits.length) run.summary.push("To keep each run affordable, JARVIS searched " + limits.join(" and ") + ".");
+    }
+    if (run.library && run.library.error) run.summary.push(run.library.error);
+    else if (run.library) run.summary.push(plural(run.library.created, "new post") + " added to your library (" + run.library.count + " saved in all).");
+    if (run.balance && run.balance.unexplained !== null && run.balance.unexplained > 0) {
+      run.summary.push("InsightSocial's balance dropped by " + run.balance.unexplained + " more credits than these searches reported (" + run.balance.before + " to " + run.balance.after + "). JARVIS can't tell why.");
+    }
+    const notes = [];
+    run.sources.forEach(function (s) { if (s.chargeReason && notes.indexOf(s.chargeReason) === -1) notes.push(s.chargeReason); });
+    if (notes.length) run.summary.push("InsightSocial's note on the charge: " + notes.join("; "));
 
+    const fullSweep = mode === "full" && good.length >= Math.ceil(plan.steps.length / 2);
     const compact = {
-      id: run.id, trigger: run.trigger, startedAt: run.startedAt, finishedAt: run.finishedAt, ok: run.ok,
-      creditsUsed: run.creditsUsed, searches: run.sources.length, failures: failed
+      id: run.id, trigger: run.trigger, mode: mode, startedAt: run.startedAt, finishedAt: run.finishedAt, ok: run.ok,
+      creditsUsed: run.creditsUsed, searches: run.sources.length, failures: failed, posts: posts,
+      newPosts: run.library && typeof run.library.created === "number" ? run.library.created : null, balance: run.balance
     };
     await stateRef.set(Object.assign({}, base, {
       running: null,
       lastRun: run,
       lastSuccessfulRunAt: run.ok ? run.finishedAt : (state.lastSuccessfulRunAt || null),
+      lastFullAt: fullSweep ? run.finishedAt : (nicheSpec.lastFullAtOf(state) || null),
       runs: [compact].concat(Array.isArray(state.runs) ? state.runs : []).slice(0, RUNS_LIMIT)
     }));
-    deps.log.info("nicheResearch", { trigger: run.trigger, ok: run.ok, searches: run.sources.length, posts: posts, failed: failed, skipped: skipped, creditsUsed: run.creditsUsed });
+    deps.log.info("nicheResearch", { trigger: run.trigger, mode: mode, ok: run.ok, searches: run.sources.length, posts: posts, failed: failed, skipped: skipped, creditsUsed: run.creditsUsed });
   } catch (err) {
     // Don't leave the guard behind if the run itself broke.
     await stateRef.set(Object.assign({}, base, { running: null })).catch(function () { /* the guard expires on its own */ });
