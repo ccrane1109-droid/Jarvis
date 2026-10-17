@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
 
@@ -3348,13 +3348,78 @@
     <!-- ---------- Discover ---------- -->
     <div id="mkt-discover" class="marketing-sub-panel nr-scope" role="tabpanel" aria-labelledby="mktSubNavDiscover">
       <section class="nr-card" aria-labelledby="nrDiscoverTitle">
-        <h2 class="nr-h" id="nrDiscoverTitle">Search your niche</h2>
-        <p class="nr-hint" id="nrDiscoverHint">Searches Instagram and TikTok for your keywords through InsightSocial and lists what it finds, with links to the originals.</p>
-        <button type="button" class="nr-btn nr-btn-primary" id="nrResearchBtn2">Research My Niche</button>
+        <h2 class="nr-h" id="nrDiscoverTitle">Refresh your research</h2>
+        <p class="nr-hint" id="nrDiscoverHint">Searches Instagram and TikTok for your keywords through InsightSocial and adds what it finds to your research library below.</p>
+        <div class="nr-hero-actions">
+          <button type="button" class="nr-btn nr-btn-primary" id="nrResearchBtn2">Research My Niche</button>
+          <button type="button" class="nr-btn nr-btn-ghost nr-btn-small hidden" id="nrModeSwitchBtn">Run a full sweep instead</button>
+        </div>
         <p class="nr-status-line" id="nrResearchStatus2" role="status"></p>
       </section>
 
-<section class="nr-card" id="nrSourcesCard" aria-labelledby="nrSourcesTitle">
+      <section class="nr-card" id="nrDiscCard" aria-labelledby="nrDiscTitle">
+        <h2 class="nr-h" id="nrDiscTitle">Research library</h2>
+        <p class="nr-hint" id="nrDiscHint"></p>
+        <div class="nr-libsearch">
+          <label class="visually-hidden" for="nrLibSearch">Search the research library</label>
+          <input type="search" id="nrLibSearch" placeholder="Search captions, creators, keywords…" maxlength="80" autocomplete="off">
+        </div>
+        <div class="nr-filters" role="group" aria-label="Filter posts by platform" id="nrDiscFilters"></div>
+        <div class="nr-libsort">
+          <label for="nrLibSort">Sort by</label>
+          <select id="nrLibSort">
+            <option value="views">Most viewed</option>
+            <option value="engagement">Highest engagement</option>
+            <option value="recent">Most recent</option>
+            <option value="relevance">Most relevant to my keywords</option>
+            <option value="new">Newly found</option>
+          </select>
+        </div>
+        <details class="nr-morefilters" id="nrLibMore">
+          <summary id="nrLibMoreSummary">More filters</summary>
+          <div class="nr-filtergrid">
+            <div>
+              <label for="nrLibDays">Published</label>
+              <select id="nrLibDays">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="0">Any time</option>
+              </select>
+            </div>
+            <div>
+              <label for="nrLibViews">Views</label>
+              <select id="nrLibViews">
+                <option value="0">Any</option>
+                <option value="1000">1,000 or more</option>
+                <option value="10000">10,000 or more</option>
+                <option value="100000">100,000 or more</option>
+              </select>
+            </div>
+            <div>
+              <label for="nrLibRate">Engagement rate</label>
+              <select id="nrLibRate">
+                <option value="0">Any</option>
+                <option value="0.03">3% or more</option>
+                <option value="0.05">5% or more</option>
+                <option value="0.1">10% or more</option>
+              </select>
+            </div>
+            <div>
+              <label for="nrLibSession">Research session</label>
+              <select id="nrLibSession"><option value="">All research</option></select>
+            </div>
+          </div>
+          <label class="nr-check"><input type="checkbox" id="nrLibRelevant"> Only posts that match my keywords</label>
+          <label class="nr-check"><input type="checkbox" id="nrLibBookmarked"> Bookmarked only</label>
+          <label class="nr-check"><input type="checkbox" id="nrLibDupes" checked> Hide repeated captions</label>
+          <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="nrLibResetBtn">Reset filters</button>
+        </details>
+        <p class="nr-hint nr-libcount" id="nrLibCount" role="status"></p>
+        <div id="nrDisc" aria-live="polite"></div>
+      </section>
+
+      <section class="nr-card" id="nrSourcesCard" aria-labelledby="nrSourcesTitle">
         <h2 class="nr-h" id="nrSourcesTitle">Research sources</h2>
         <ul class="nr-sources" id="nrSources"></ul>
         <p class="nr-hint hidden" id="nrSourcesStale" role="status"></p>
@@ -3364,13 +3429,6 @@
           <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="nrAddFindBtn2">Save a post you found</button>
           <div id="nrKitLinks"></div>
         </details>
-      </section>
-
-<section class="nr-card" id="nrDiscCard" aria-labelledby="nrDiscTitle">
-        <h2 class="nr-h" id="nrDiscTitle">What InsightSocial found</h2>
-        <p class="nr-hint" id="nrDiscHint"></p>
-        <div class="nr-filters" role="group" aria-label="Filter search results by platform" id="nrDiscFilters"></div>
-        <div id="nrDisc" aria-live="polite"></div>
       </section>
     </div>
 
@@ -3564,6 +3622,14 @@
       <div id="mktLibList" aria-live="polite"></div>
     
 
+      <h2 class="nr-section-title">Bookmarked research posts</h2>
+      <p class="nr-section-sub">Posts from your research library that you bookmarked. Bookmarked posts are never removed from the library.</p>
+
+      <section class="nr-card" aria-labelledby="nrBookmarksTitle">
+        <h2 class="nr-h" id="nrBookmarksTitle">Your bookmarks</h2>
+        <div id="nrBookmarks" aria-live="polite"></div>
+      </section>
+
       <h2 class="nr-section-title">Saved posts</h2>
       <p class="nr-section-sub">Posts you found and saved yourself.</p>
 
@@ -3625,7 +3691,8 @@
         <h2 class="nr-h" id="nrHistoryTitle">Latest research session</h2>
         <div id="nrHistoryLatest"></div>
         <h3 class="nr-h3">Past sessions</h3>
-        <p class="nr-hint">Only the latest session is kept today. A later update will keep every session so you can reopen old findings without spending credits again.</p>
+        <p class="nr-hint" id="nrHistoryNote"></p>
+        <ul class="nr-sessions" id="nrSessions"></ul>
       </section>
 
 <section class="nr-card" aria-labelledby="nrDailyTitle">
@@ -4225,27 +4292,27 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=40"></script>
-<script type="module" src="js/auth.js?v=40"></script>
-<script src="js/app.js?v=40"></script>
-<script src="js/exercises.js?v=40"></script>
-<script src="js/workout.js?v=40"></script>
-<script src="js/nutrition.js?v=40"></script>
-<script src="js/nutrition-label-scan.js?v=40"></script>
-<script src="js/groceries.js?v=40"></script>
-<script src="js/habits.js?v=40"></script>
-<script src="js/business.js?v=40"></script>
-<script src="js/trading.js?v=40"></script>
-<script src="js/blobstore.js?v=40"></script>
-<script src="js/video-api-client.js?v=40"></script>
-<script src="js/video-connections.js?v=40"></script>
-<script src="js/video.js?v=40"></script>
-<script src="js/video-studio.js?v=40"></script>
-<script src="functions/lib/idea-spec.js?v=40"></script>
-<script src="functions/lib/niche-spec.js?v=40"></script>
-<script src="js/marketing-stats.js?v=40"></script>
-<script src="js/niche-research.js?v=40"></script>
-<script src="js/content-intelligence.js?v=40"></script>
-<script src="js/form-check.js?v=40"></script>
+<script src="js/firebase-config.js?v=41"></script>
+<script type="module" src="js/auth.js?v=41"></script>
+<script src="js/app.js?v=41"></script>
+<script src="js/exercises.js?v=41"></script>
+<script src="js/workout.js?v=41"></script>
+<script src="js/nutrition.js?v=41"></script>
+<script src="js/nutrition-label-scan.js?v=41"></script>
+<script src="js/groceries.js?v=41"></script>
+<script src="js/habits.js?v=41"></script>
+<script src="js/business.js?v=41"></script>
+<script src="js/trading.js?v=41"></script>
+<script src="js/blobstore.js?v=41"></script>
+<script src="js/video-api-client.js?v=41"></script>
+<script src="js/video-connections.js?v=41"></script>
+<script src="js/video.js?v=41"></script>
+<script src="js/video-studio.js?v=41"></script>
+<script src="functions/lib/idea-spec.js?v=41"></script>
+<script src="functions/lib/niche-spec.js?v=41"></script>
+<script src="js/marketing-stats.js?v=41"></script>
+<script src="js/niche-research.js?v=41"></script>
+<script src="js/content-intelligence.js?v=41"></script>
+<script src="js/form-check.js?v=41"></script>
 </body>
 </html>

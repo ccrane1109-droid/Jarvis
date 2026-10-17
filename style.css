@@ -2438,3 +2438,36 @@ textarea { resize: vertical; min-height: 44px; }
 }
 #panel-marketing .marketing-sub-panel .btn-icon { min-height: 40px; padding-left: 12px; padding-right: 12px; }
 #nrResearchBtn2 { width: 100%; max-width: 340px; }
+
+/* ---------------- Marketing research library (Discover filters, bookmarks, sessions) ---------------- */
+
+.nr-libsearch { margin: 4px 0 10px; }
+.nr-libsearch input { width: 100%; }
+.nr-libsort { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.nr-libsort label { flex: none; font-size: 13.5px; color: var(--nr-dim); }
+.nr-libsort select { flex: 1; min-width: 0; }
+.nr-morefilters { border: 1px solid var(--nr-line); border-radius: 12px; padding: 0 14px; margin: 4px 0 10px; }
+.nr-morefilters[open] { padding-bottom: 12px; }
+.nr-morefilters summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--nr-text); }
+.nr-morefilters summary:focus-visible { outline: 2px solid var(--nr-blue); outline-offset: 2px; }
+.nr-filtergrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 8px; }
+.nr-filtergrid label { display: block; margin-bottom: 4px; font-size: 12.5px; color: var(--nr-dim); }
+.nr-filtergrid select { width: 100%; }
+.nr-libcount { margin: 8px 0 12px; }
+.nr-chip-new { background: rgba(34, 197, 94, 0.18); border-color: rgba(34, 197, 94, 0.5); }
+.nr-chip-match { background: rgba(245, 184, 76, 0.14); border-color: rgba(245, 184, 76, 0.45); }
+.nr-bm.on { background: rgba(245, 184, 76, 0.16); border-color: rgba(245, 184, 76, 0.5); }
+.nr-change { color: var(--nr-text); font-variant-numeric: tabular-nums; }
+
+.nr-sessions { list-style: none; margin: 0; padding: 0; }
+.nr-session { padding: 12px 0; border-top: 1px solid var(--nr-line); }
+.nr-session:first-child { border-top: none; padding-top: 4px; }
+.nr-session-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.nr-session-when { font-size: 14.5px; font-weight: 650; color: var(--nr-text); }
+.nr-session-facts { margin: 6px 0 8px; font-size: 13.5px; color: var(--nr-dim); font-variant-numeric: tabular-nums; }
+.nr-session-warn { margin: 0 0 8px; font-size: 13px; color: var(--nr-warn); }
+
+@media (min-width: 640px) {
+  .nr-tiles { grid-template-columns: repeat(5, 1fr); }
+  .nr-filtergrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

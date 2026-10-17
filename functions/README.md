@@ -10,7 +10,8 @@ those keys as Firebase secrets so they never reach a browser or this repo:
 |---|---|---|
 | `marketingStatus` | Server/key status, this month's usage and budget, last research run | No |
 | `insightRequest` | Allow-listed InsightSocial lookups (profiles cached 12h, searches 20h), capped monthly | InsightSocial credits, only on a fresh request |
-| `researchNiche` | "Research My Niche": TikTok keyword searches and Instagram hashtag searches for your niche keywords (at most 7 + 3 searches, up to 220 credits, limited per run and per month) | InsightSocial credits, only for searches not already saved in the last 20 hours |
+| `researchNiche` | "Research My Niche": a **quick refresh** (3 TikTok keywords that rotate day by day, 30 credits) or a **full sweep** (up to 7 TikTok keywords + 3 Instagram hashtags, up to 220 credits; suggested once a week). Both are limited per run and per month, and the posts found are saved to your research library | InsightSocial credits, only for searches not already saved in the last 20 hours |
+| `marketingLibrary` | Reads your research library (every post past runs found) and bookmarks posts | No |
 | `runResearch` | "Run research now": refreshes every watchlist handle (at most once per 30 min) | InsightSocial credits (1 request per handle) |
 | `dailyResearch` | Same as above, automatically every day at 08:00 New York time | InsightSocial credits (1 request per handle) |
 | `generateIdeas` | Content ideas from Claude, using your saved research | Claude API tokens, blocked when the AI budget would be exceeded |
@@ -80,8 +81,8 @@ happens when the functions aren't deployed).
 ### C. Check it worked
 
 - Firebase console → Functions should list `marketingStatus`,
-  `insightRequest`, `runResearch`, `researchNiche`, `dailyResearch` and
-  `generateIdeas`.
+  `insightRequest`, `runResearch`, `researchNiche`, `marketingLibrary`,
+  `dailyResearch` and `generateIdeas`.
 - In JARVIS: Marketing → Overview → Server Health → **Check again**. Every row
   should say OK.
 - If a row shows "unexpected error (reference abc123ef)", search for that
@@ -95,7 +96,13 @@ happens when the functions aren't deployed).
   sends them with its server calls and the server keeps a clamped copy in
   `users/{yourUid}/marketing/settings`, which the daily run and the credit caps
   use. Niche research results are stored at
-  `users/{yourUid}/marketingState/niche`.
+  `users/{yourUid}/marketingState/niche`, and the research library (one
+  document per post, written only by the server) at
+  `users/{yourUid}/marketingPosts`. The library keeps up to 1,000 posts: past
+  that, the least recently seen posts that aren't bookmarked are removed.
+  Each research run also compares InsightSocial's reported balance with the
+  cost its searches reported and flags any difference (Marketing → Research
+  History).
 - **After an update to this folder**, redeploy from Cloud Shell (the app
   itself updates automatically; the server doesn't):
   ```

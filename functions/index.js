@@ -19,6 +19,7 @@ const Anthropic = require("@anthropic-ai/sdk").default;
 const insight = require("./lib/insight");
 const research = require("./lib/research");
 const niche = require("./lib/niche");
+const library = require("./lib/library");
 const ai = require("./lib/ai");
 const { makeGuard } = require("./lib/guard");
 
@@ -76,8 +77,15 @@ exports.researchNiche = onCall(
   (request) => guarded("researchNiche", () => niche.runNicheResearch(uidOf(request), deps({ apiKey: INSIGHTSOCIAL_API_KEY.value() }), {
     trigger: "manual",
     niche: request.data && request.data.niche,
+    mode: request.data && request.data.mode,
     settings: request.data && request.data.settings
   })));
+
+// The research library: every post past runs found. Reads and bookmarks only;
+// nothing here calls InsightSocial or costs credits.
+exports.marketingLibrary = onCall(
+  Object.assign({}, BASE, { timeoutSeconds: 30 }),
+  (request) => guarded("marketingLibrary", () => library.handle(uidOf(request), request.data || {}, deps())));
 
 exports.dailyResearch = onSchedule(
   Object.assign({}, BASE, { maxInstances: 1, secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300, schedule: "every day 08:00", timeZone: "America/New_York" }),

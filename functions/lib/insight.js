@@ -182,6 +182,8 @@ async function runInsightRequest(uid, data, deps) {
   const result = await callInsightSocial(deps, spec, params);
   const creditsUsed = numberOrNull(result.body && result.body.credits_used);
   const creditsRemaining = numberOrNull(result.body && result.body.credits_remaining);
+  // InsightSocial's own words for why a call cost what it did, passed on as sent (trimmed).
+  const chargeReason = result.body && typeof result.body.charge_reason === "string" ? posts.plainText(result.body.charge_reason, 80) : "";
 
   // A request that never reached InsightSocial can't have been charged.
   if (result.status !== 0) {
@@ -207,9 +209,9 @@ async function runInsightRequest(uid, data, deps) {
     }
     const fetchedAt = now.toISOString();
     await cacheRef.set({ endpoint: endpoint, params: params, status: result.status, body: kept, fetchedAt: fetchedAt });
-    return { ok: true, cached: false, endpoint: endpoint, params: params, status: result.status, body: kept, fetchedAt: fetchedAt, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining };
+    return { ok: true, cached: false, endpoint: endpoint, params: params, status: result.status, body: kept, fetchedAt: fetchedAt, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining, chargeReason: chargeReason };
   }
-  return { ok: false, cached: false, endpoint: endpoint, params: params, status: result.status, error: describeFailure(result), body: result.body, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining };
+  return { ok: false, cached: false, endpoint: endpoint, params: params, status: result.status, error: describeFailure(result), body: result.body, creditsUsed: creditsUsed, creditsRemaining: creditsRemaining, chargeReason: chargeReason };
 }
 
 async function getStatus(uid, deps, opts) {
@@ -217,14 +219,16 @@ async function getStatus(uid, deps, opts) {
   // Keep the server's copy of the owner's settings current (see syncSettings).
   if (opts && opts.settings) await settingsLib.syncSettings(deps.db, uid, opts.settings);
   const month = settingsLib.monthKey(deps.now());
-  const [settings, usage, research, nicheState] = await Promise.all([
+  const [settings, usage, research, nicheState, libraryState] = await Promise.all([
     settingsLib.readSettings(deps.db, uid),
     settingsLib.readUsage(deps.db, uid, month),
     deps.db.doc("users/" + uid + "/marketingState/research").get(),
-    deps.db.doc("users/" + uid + "/marketingState/niche").get()
+    deps.db.doc("users/" + uid + "/marketingState/niche").get(),
+    deps.db.doc("users/" + uid + "/marketingState/library").get()
   ]);
   const r = research.exists ? research.data() : {};
   const n = nicheState.exists ? nicheState.data() : {};
+  const lib = libraryState.exists ? libraryState.data() : {};
   return {
     keyConfigured: keyConfigured(deps),
     aiKeyConfigured: typeof deps.anthropicKey === "string" && deps.anthropicKey.trim().indexOf("sk-ant-") === 0,
@@ -241,6 +245,11 @@ async function getStatus(uid, deps, opts) {
     lastRun: r.lastRun || null,
     lastSuccessfulRunAt: r.lastSuccessfulRunAt || null,
     nicheRun: n.lastRun || null,
+    nicheRuns: Array.isArray(n.runs) ? n.runs : [],
+    nicheLastFullAt: nicheSpec.lastFullAtOf(n),
+    libraryCount: numberOrNull(lib.count) || 0,
+    libraryBookmarks: numberOrNull(lib.bookmarks) || 0,
+    serverNow: deps.now().toISOString(),
     endpoints: Object.keys(ENDPOINTS)
   };
 }
