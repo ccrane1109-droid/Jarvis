@@ -39,6 +39,17 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
+
+      // Reminders are created and edited only through the server's
+      // `reminders` function, which checks them and works out when each is due.
+      match /reminders/{reminderId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+      match /reminderSettings/{docId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
   }
 }

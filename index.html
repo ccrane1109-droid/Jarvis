@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
 
@@ -1634,6 +1634,7 @@
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-week" role="tab" aria-selected="false" aria-controls="habits-week" id="habitsSubNavWeek">Week</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-goals" role="tab" aria-selected="false" aria-controls="habits-goals" id="habitsSubNavGoals">Goals</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-stats" role="tab" aria-selected="false" aria-controls="habits-stats" id="habitsSubNavStats">Stats</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-reminders" role="tab" aria-selected="false" aria-controls="habits-reminders" id="habitsSubNavReminders">Reminders</button>
     </nav>
 
     <!-- ---------- Sub-panel: Today ---------- -->
@@ -1820,6 +1821,55 @@
         <p class="field-hint">A simple, honest snapshot from what you've actually logged — not a judgment, just a mirror.</p>
         <div class="stat-grid" id="productivityStatsGrid"></div>
       </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Reminders ---------- -->
+    <div id="habits-reminders" class="habits-sub-panel nr-scope rm-scope" role="tabpanel" aria-labelledby="habitsSubNavReminders">
+      <section class="nr-hero rm-hero" aria-labelledby="rmHeroTitle">
+        <p class="nr-eyebrow">Reminders</p>
+        <h2 class="nr-hero-title" id="rmHeroTitle">Your routine</h2>
+        <p class="nr-hero-sub" id="rmHeroSub"></p>
+        <div class="nr-hero-actions">
+          <button type="button" class="nr-btn nr-btn-primary" id="rmNewBtn">New reminder</button>
+        </div>
+        <p class="nr-hint" id="rmNotifNote">Reminders are saved on your JARVIS server. Phone notifications arrive in a later step, so nothing will buzz your phone yet.</p>
+        <p class="nr-status-line" id="rmStatus" role="status"></p>
+      </section>
+
+      <ul class="nr-strip" id="rmStrip" aria-label="Reminder status"></ul>
+
+      <section class="nr-card" aria-labelledby="rmTodayTitle">
+        <h2 class="nr-h" id="rmTodayTitle">Today</h2>
+        <p class="nr-hint" id="rmTodayHint"></p>
+        <div id="rmToday" aria-live="polite"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmListTitle">
+        <h2 class="nr-h" id="rmListTitle">All reminders</h2>
+        <div id="rmList" aria-live="polite"></div>
+        <h3 class="nr-h3 rm-quick-title" id="rmQuickTitle">Add one quickly</h3>
+        <div class="rm-cats" id="rmQuick" role="group" aria-labelledby="rmQuickTitle"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmSettingsTitle">
+        <h2 class="nr-h" id="rmSettingsTitle">Time zone and quiet hours</h2>
+        <div class="form-row">
+          <label for="rmTz">Your time zone</label>
+          <select id="rmTz"></select>
+        </div>
+        <p class="nr-hint">New reminders use this zone. Reminders keep the zone they were made in unless you move them all below, so travelling never changes them by surprise.</p>
+        <label class="nr-check"><input type="checkbox" id="rmQuietOn"> Use quiet hours</label>
+        <div class="form-row two-col">
+          <div><label for="rmQuietStart">Quiet from</label><input type="time" id="rmQuietStart" value="22:00"></div>
+          <div><label for="rmQuietEnd">Until</label><input type="time" id="rmQuietEnd" value="07:00"></div>
+        </div>
+        <p class="nr-hint">Quiet hours only apply to reminders that have &ldquo;Respect quiet hours&rdquo; turned on. By default every reminder sends on time. Your iPhone's own Focus modes work separately.</p>
+        <div class="nr-actions-row">
+          <button type="button" class="nr-btn nr-btn-primary-soft" id="rmSettingsSaveBtn">Save</button>
+          <button type="button" class="nr-btn nr-btn-ghost" id="rmSettingsMoveBtn">Save and move all reminders to this zone</button>
+        </div>
+        <p class="nr-status-line" id="rmSettingsStatus" role="status"></p>
+      </section>
     </div>
   </section>
 
@@ -4116,6 +4166,82 @@
   </div>
 </div>
 
+  <div class="modal-overlay hidden sheet-overlay nr-scope rm-scope" id="rmModal" role="dialog" aria-modal="true" aria-labelledby="rmModalTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="rmModalTitle">New reminder</h2>
+        <button type="button" class="btn-icon" id="rmCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <form id="rmForm" class="stacked-form" novalidate>
+        <div class="form-row">
+          <span class="rm-label" id="rmCatLabel">What is it for?</span>
+          <div class="rm-cats" id="rmCats" role="group" aria-labelledby="rmCatLabel"></div>
+        </div>
+        <p class="nr-hint rm-med-note hidden" id="rmMedNote">JARVIS only reminds you. It never suggests doses, never changes your schedule on its own, and never marks medication as taken: you do that yourself.</p>
+        <div class="form-row">
+          <label for="rmTitle">Name</label>
+          <input type="text" id="rmTitle" maxlength="80" placeholder="e.g. Drink water" autocomplete="off">
+        </div>
+        <div class="form-row">
+          <span class="rm-label" id="rmTypeLabel">How often?</span>
+          <div class="rm-seg" id="rmType" role="group" aria-labelledby="rmTypeLabel"></div>
+        </div>
+        <div class="form-row hidden" id="rmDaysWrap">
+          <span class="rm-label" id="rmDaysLabel">On which days?</span>
+          <div class="rm-days" id="rmDays" role="group" aria-labelledby="rmDaysLabel"></div>
+        </div>
+        <div class="form-row hidden" id="rmDateWrap">
+          <label for="rmDate">Date</label>
+          <input type="date" id="rmDate">
+        </div>
+        <div class="form-row">
+          <span class="rm-label" id="rmTimesLabel">At what time?</span>
+          <div id="rmTimes" role="group" aria-labelledby="rmTimesLabel"></div>
+          <div class="nr-actions-row">
+            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmAddTimeBtn">Add a time</button>
+          </div>
+          <details class="nr-morefilters rm-every" id="rmEvery">
+            <summary>Repeat through the day</summary>
+            <div class="nr-filtergrid">
+              <div><label for="rmEveryStart">From</label><input type="time" id="rmEveryStart" value="09:00"></div>
+              <div><label for="rmEveryEnd">Until</label><input type="time" id="rmEveryEnd" value="19:00"></div>
+              <div>
+                <label for="rmEveryStep">Every</label>
+                <select id="rmEveryStep">
+                  <option value="0.5">30 minutes</option>
+                  <option value="1">1 hour</option>
+                  <option value="2" selected>2 hours</option>
+                  <option value="3">3 hours</option>
+                  <option value="4">4 hours</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmEveryBtn">Fill in the times</button>
+          </details>
+        </div>
+        <p class="nr-hint rm-summary" id="rmSummary" role="status"></p>
+        <div class="form-row">
+          <label for="rmNotes">Notes (optional)</label>
+          <textarea id="rmNotes" rows="2" maxlength="300" placeholder="Anything you want to see with the reminder"></textarea>
+        </div>
+        <label class="nr-check"><input type="checkbox" id="rmPrivate"> Hide the name on my lock screen</label>
+        <label class="nr-check"><input type="checkbox" id="rmQuiet"> Respect quiet hours</label>
+        <label class="nr-check"><input type="checkbox" id="rmEnabled" checked> Turned on</label>
+        <details class="nr-morefilters rm-every" id="rmAdvanced">
+          <summary>Time zone for this reminder</summary>
+          <div class="form-row"><select id="rmFormTz" aria-label="Time zone for this reminder"></select></div>
+        </details>
+        <p class="nr-form-error" id="rmFormError" role="alert"></p>
+        <div class="form-actions sheet-sticky-actions">
+          <button type="submit" class="btn btn-primary" id="rmSaveBtn">Save reminder</button>
+          <button type="button" class="btn btn-secondary" id="rmCancelBtn">Cancel</button>
+          <button type="button" class="btn btn-secondary rm-delete hidden" id="rmDeleteBtn">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 <div class="modal-overlay hidden" id="briefingModal" role="dialog" aria-modal="true" aria-labelledby="briefingModalTitle">
   <div class="modal-box">
     <h2 id="briefingModalTitle">Daily Briefing</h2>
@@ -4292,27 +4418,29 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=41"></script>
-<script type="module" src="js/auth.js?v=41"></script>
-<script src="js/app.js?v=41"></script>
-<script src="js/exercises.js?v=41"></script>
-<script src="js/workout.js?v=41"></script>
-<script src="js/nutrition.js?v=41"></script>
-<script src="js/nutrition-label-scan.js?v=41"></script>
-<script src="js/groceries.js?v=41"></script>
-<script src="js/habits.js?v=41"></script>
-<script src="js/business.js?v=41"></script>
-<script src="js/trading.js?v=41"></script>
-<script src="js/blobstore.js?v=41"></script>
-<script src="js/video-api-client.js?v=41"></script>
-<script src="js/video-connections.js?v=41"></script>
-<script src="js/video.js?v=41"></script>
-<script src="js/video-studio.js?v=41"></script>
-<script src="functions/lib/idea-spec.js?v=41"></script>
-<script src="functions/lib/niche-spec.js?v=41"></script>
-<script src="js/marketing-stats.js?v=41"></script>
-<script src="js/niche-research.js?v=41"></script>
-<script src="js/content-intelligence.js?v=41"></script>
-<script src="js/form-check.js?v=41"></script>
+<script src="js/firebase-config.js?v=42"></script>
+<script type="module" src="js/auth.js?v=42"></script>
+<script src="js/app.js?v=42"></script>
+<script src="js/exercises.js?v=42"></script>
+<script src="js/workout.js?v=42"></script>
+<script src="js/nutrition.js?v=42"></script>
+<script src="js/nutrition-label-scan.js?v=42"></script>
+<script src="js/groceries.js?v=42"></script>
+<script src="js/habits.js?v=42"></script>
+<script src="functions/lib/reminder-spec.js?v=42"></script>
+<script src="js/reminders.js?v=42"></script>
+<script src="js/business.js?v=42"></script>
+<script src="js/trading.js?v=42"></script>
+<script src="js/blobstore.js?v=42"></script>
+<script src="js/video-api-client.js?v=42"></script>
+<script src="js/video-connections.js?v=42"></script>
+<script src="js/video.js?v=42"></script>
+<script src="js/video-studio.js?v=42"></script>
+<script src="functions/lib/idea-spec.js?v=42"></script>
+<script src="functions/lib/niche-spec.js?v=42"></script>
+<script src="js/marketing-stats.js?v=42"></script>
+<script src="js/niche-research.js?v=42"></script>
+<script src="js/content-intelligence.js?v=42"></script>
+<script src="js/form-check.js?v=42"></script>
 </body>
 </html>

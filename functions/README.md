@@ -11,6 +11,7 @@ those keys as Firebase secrets so they never reach a browser or this repo:
 | `marketingStatus` | Server/key status, this month's usage and budget, last research run | No |
 | `insightRequest` | Allow-listed InsightSocial lookups (profiles cached 12h, searches 20h), capped monthly | InsightSocial credits, only on a fresh request |
 | `researchNiche` | "Research My Niche": a **quick refresh** (3 TikTok keywords that rotate day by day, 30 credits) or a **full sweep** (up to 7 TikTok keywords + 3 Instagram hashtags, up to 220 credits; suggested once a week). Both are limited per run and per month, and the posts found are saved to your research library | InsightSocial credits, only for searches not already saved in the last 20 hours |
+| `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included. It does not send notifications yet | Nothing beyond free-tier Firestore |
 | `marketingLibrary` | Reads your research library (every post past runs found) and bookmarks posts | No |
 | `runResearch` | "Run research now": refreshes every watchlist handle (at most once per 30 min) | InsightSocial credits (1 request per handle) |
 | `dailyResearch` | Same as above, automatically every day at 08:00 New York time | InsightSocial credits (1 request per handle) |
@@ -82,7 +83,7 @@ happens when the functions aren't deployed).
 
 - Firebase console → Functions should list `marketingStatus`,
   `insightRequest`, `runResearch`, `researchNiche`, `marketingLibrary`,
-  `dailyResearch` and `generateIdeas`.
+  `reminders`, `dailyResearch` and `generateIdeas`.
 - In JARVIS: Marketing → Overview → Server Health → **Check again**. Every row
   should say OK.
 - If a row shows "unexpected error (reference abc123ef)", search for that
@@ -103,6 +104,13 @@ happens when the functions aren't deployed).
   Each research run also compares InsightSocial's reported balance with the
   cost its searches reported and flags any difference (Marketing → Research
   History).
+- Reminders are stored at `users/{yourUid}/reminders` (one document each) and
+  `users/{yourUid}/reminderSettings/main`, written only by the server. Each
+  reminder keeps its own time zone and a `nextFireAt` moment (empty while it is
+  turned off). Time-zone math uses the `luxon` package (pinned to an exact
+  version); a time that doesn't exist when clocks spring forward fires shifted
+  forward by the gap, and a time that happens twice when clocks fall back fires
+  once.
 - **After an update to this folder**, redeploy from Cloud Shell (the app
   itself updates automatically; the server doesn't):
   ```

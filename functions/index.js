@@ -20,6 +20,7 @@ const insight = require("./lib/insight");
 const research = require("./lib/research");
 const niche = require("./lib/niche");
 const library = require("./lib/library");
+const reminders = require("./lib/reminders");
 const ai = require("./lib/ai");
 const { makeGuard } = require("./lib/guard");
 
@@ -86,6 +87,12 @@ exports.researchNiche = onCall(
 exports.marketingLibrary = onCall(
   Object.assign({}, BASE, { timeoutSeconds: 30 }),
   (request) => guarded("marketingLibrary", () => library.handle(uidOf(request), request.data || {}, deps())));
+
+// Reminders: storage and management (create, edit, delete, enable, settings).
+// Owner only; no secrets, no InsightSocial or Claude calls, no cost beyond Firestore.
+exports.reminders = onCall(
+  Object.assign({}, BASE, { timeoutSeconds: 30 }),
+  (request) => guarded("reminders", () => reminders.handle(uidOf(request), request.data || {}, deps())));
 
 exports.dailyResearch = onSchedule(
   Object.assign({}, BASE, { maxInstances: 1, secrets: [INSIGHTSOCIAL_API_KEY], timeoutSeconds: 300, schedule: "every day 08:00", timeZone: "America/New_York" }),
