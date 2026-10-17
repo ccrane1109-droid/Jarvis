@@ -388,6 +388,7 @@
       if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisGroceries && typeof window.JarvisGroceries.init === "function") window.JarvisGroceries.init();
       if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
+      if (window.JarvisReminders && typeof window.JarvisReminders.init === "function") window.JarvisReminders.init();
       if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
       if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
       if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();

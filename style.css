@@ -2471,3 +2471,84 @@ textarea { resize: vertical; min-height: 44px; }
   .nr-tiles { grid-template-columns: repeat(5, 1fr); }
   .nr-filtergrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* ---------------- Habits › Reminders ---------------- */
+
+.rm-hero .nr-hint { margin: 12px 0 0; }
+.rm-label { display: block; font-size: 13px; font-weight: 600; color: var(--nr-dim, #9ca9bf); }
+.rm-quick-title { margin-top: 20px; }
+.rm-error { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: #ff8b8b; }
+.rm-summary { color: var(--nr-text, #f5f7ff); font-variant-numeric: tabular-nums; }
+.rm-med-note { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(245, 184, 76, 0.4); background: rgba(245, 184, 76, 0.08); color: var(--nr-text, #f5f7ff); }
+.rm-every { margin: 8px 0 0; }
+
+.rm-icon {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 12px; font-size: 20px;
+  background: rgba(79, 131, 255, 0.14); border: 1px solid rgba(79, 131, 255, 0.28);
+}
+.rm-title { margin: 0; font-size: 15.5px; font-weight: 650; color: var(--nr-text, #f5f7ff); overflow-wrap: anywhere; }
+.rm-sub { margin: 2px 0 0; font-size: 13px; line-height: 1.4; color: var(--nr-dim, #9ca9bf); overflow-wrap: anywhere; }
+
+.rm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px 0; animation: nr-rise 0.3s ease both; }
+.rm-row + .rm-row { border-top: 1px solid var(--nr-line, rgba(156, 169, 191, 0.18)); }
+.rm-main { flex: 1 1 160px; min-width: 0; }
+.rm-next { margin: 4px 0 0; font-size: 13px; color: var(--nr-text, #f5f7ff); font-variant-numeric: tabular-nums; }
+.rm-row.off .rm-title, .rm-row.off .rm-next, .rm-row.off .rm-icon { opacity: 0.55; }
+.rm-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
+.rm-switch {
+  position: relative; flex: none; width: 52px; height: 32px; padding: 0; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--nr-line, rgba(156, 169, 191, 0.18)); background: rgba(255, 255, 255, 0.08);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.rm-switch::before { content: ""; position: absolute; inset: -7px -4px; }
+.rm-switch-knob { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); transition: transform 0.2s ease; }
+.rm-switch.on { background: linear-gradient(135deg, var(--nr-blue, #4f83ff), var(--nr-purple, #875bff)); border-color: transparent; }
+.rm-switch.on .rm-switch-knob { transform: translateX(20px); }
+.rm-switch:disabled { opacity: 0.5; cursor: default; }
+.rm-switch:focus-visible { outline: 2px solid var(--nr-blue, #4f83ff); outline-offset: 3px; }
+
+.rm-today-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.rm-today-row + .rm-today-row { border-top: 1px solid var(--nr-line, rgba(156, 169, 191, 0.18)); }
+.rm-today-row.past { opacity: 0.55; }
+.rm-today-text { flex: 1; min-width: 0; }
+.rm-when { flex: none; font-size: 15px; font-weight: 700; color: var(--nr-text, #f5f7ff); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+.rm-cats { display: flex; flex-wrap: wrap; gap: 8px; }
+.rm-cat {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px; border-radius: 12px; cursor: pointer;
+  font: inherit; font-size: 14px; color: var(--nr-text, #f5f7ff);
+  border: 1px solid var(--nr-line, rgba(156, 169, 191, 0.18)); background: rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.rm-cat:hover { background: rgba(255, 255, 255, 0.08); }
+.rm-cat:active, .rm-chip:active { transform: scale(0.97); }
+.rm-cat.on { background: rgba(79, 131, 255, 0.2); border-color: rgba(79, 131, 255, 0.6); }
+.rm-cat:focus-visible, .rm-chip:focus-visible { outline: 2px solid var(--nr-blue, #4f83ff); outline-offset: 2px; }
+
+.rm-seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.rm-chip {
+  min-height: 44px; padding: 8px 16px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+  color: var(--nr-dim, #9ca9bf); border: 1px solid var(--nr-line, rgba(156, 169, 191, 0.18)); background: rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.rm-chip.on { color: var(--nr-text, #f5f7ff); background: rgba(79, 131, 255, 0.2); border-color: rgba(79, 131, 255, 0.55); }
+.rm-days { display: flex; gap: 6px; }
+.rm-day { flex: 1; min-width: 40px; padding: 8px 0; text-align: center; }
+.rm-time-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rm-time-row input { flex: 1; min-width: 0; }
+.rm-delete { margin-left: auto; color: #ff8b8b; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rm-row { animation: none; }
+  .rm-switch, .rm-switch-knob, .rm-cat, .rm-chip { transition: none; }
+  .rm-cat:active, .rm-chip:active { transform: none; }
+}
+
+/* Time fields aren't in the app's global input styling; the reminder screens use them a lot. */
+.rm-scope input[type="time"] {
+  background: var(--bg-elevated); color: var(--text); border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+  padding: 10px 12px; min-height: 44px; outline: none; width: 100%; color-scheme: dark; transition: border-color 0.15s;
+}
+.rm-scope input[type="time"]:focus { border-color: var(--accent); }
