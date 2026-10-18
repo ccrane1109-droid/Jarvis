@@ -50,6 +50,24 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
+
+      // Phone notifications. None of these are readable or writable from a
+      // browser, on purpose (the page uses the server's `notifications`
+      // function instead):
+      //  - pushSubscriptions holds each phone's push address and keys. Anyone
+      //    holding an address can send to that phone, so it never leaves the server.
+      //  - reminderEvents is the server's record of each reminder moment that
+      //    was due, what happened to it and why (sent, missed, failed).
+      //  - reminderState holds server bookkeeping such as the last test time.
+      match /pushSubscriptions/{id} {
+        allow read, write: if false;
+      }
+      match /reminderEvents/{eventId} {
+        allow read, write: if false;
+      }
+      match /reminderState/{docId} {
+        allow read, write: if false;
+      }
     }
   }
 }

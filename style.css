@@ -2552,3 +2552,10 @@ textarea { resize: vertical; min-height: 44px; }
   padding: 10px 12px; min-height: 44px; outline: none; width: 100%; color-scheme: dark; transition: border-color 0.15s;
 }
 .rm-scope input[type="time"]:focus { border-color: var(--accent); }
+
+/* Phone notifications card */
+.rm-steps { margin: 4px 0 12px; padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--nr-text, #f5f7ff); }
+.rm-steps li { margin: 6px 0; overflow-wrap: anywhere; }
+.rm-check { margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px dashed var(--nr-line, rgba(156, 169, 191, 0.3)); }
+.rm-check .rm-label { margin: 0 0 8px; color: var(--nr-text, #f5f7ff); font-weight: 500; line-height: 1.4; }
+#rmNotifCard .nr-actions-row .nr-btn { flex: 1 1 auto; }

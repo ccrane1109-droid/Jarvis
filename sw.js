@@ -15,40 +15,75 @@
    fresh index.html, leaving brand-new CSS classes completely unstyled.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v42";
+const CACHE_NAME = "jarvis-cache-v43";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=42",
+  "./style.css?v=43",
   "./manifest.json",
   "./icon.svg",
   "./js/vendor/qrcode/qrcode.js",
   "./js/vendor/qrcode/qrcode_UTF8.js",
-  "./js/firebase-config.js?v=42",
-  "./js/auth.js?v=42",
-  "./js/app.js?v=42",
-  "./js/exercises.js?v=42",
-  "./js/workout.js?v=42",
-  "./js/form-check.js?v=42",
-  "./js/nutrition.js?v=42",
-  "./js/nutrition-label-scan.js?v=42",
-  "./js/groceries.js?v=42",
-  "./js/habits.js?v=42",
-  "./functions/lib/reminder-spec.js?v=42",
-  "./js/reminders.js?v=42",
-  "./js/business.js?v=42",
-  "./js/trading.js?v=42",
-  "./js/blobstore.js?v=42",
-  "./js/video-api-client.js?v=42",
-  "./js/video-connections.js?v=42",
-  "./js/video.js?v=42",
-  "./js/video-studio.js?v=42",
-  "./functions/lib/idea-spec.js?v=42",
-  "./functions/lib/niche-spec.js?v=42",
-  "./js/marketing-stats.js?v=42",
-  "./js/niche-research.js?v=42",
-  "./js/content-intelligence.js?v=42"
+  "./js/firebase-config.js?v=43",
+  "./js/auth.js?v=43",
+  "./js/app.js?v=43",
+  "./js/exercises.js?v=43",
+  "./js/workout.js?v=43",
+  "./js/form-check.js?v=43",
+  "./js/nutrition.js?v=43",
+  "./js/nutrition-label-scan.js?v=43",
+  "./js/groceries.js?v=43",
+  "./js/habits.js?v=43",
+  "./functions/lib/reminder-spec.js?v=43",
+  "./js/reminders.js?v=43",
+  "./js/push-handlers.js?v=43",
+  "./icon-192.png",
+  "./apple-touch-icon.png",
+  "./js/business.js?v=43",
+  "./js/trading.js?v=43",
+  "./js/blobstore.js?v=43",
+  "./js/video-api-client.js?v=43",
+  "./js/video-connections.js?v=43",
+  "./js/video.js?v=43",
+  "./js/video-studio.js?v=43",
+  "./functions/lib/idea-spec.js?v=43",
+  "./functions/lib/niche-spec.js?v=43",
+  "./js/marketing-stats.js?v=43",
+  "./js/niche-research.js?v=43",
+  "./js/content-intelligence.js?v=43"
 ];
+
+// Push notifications (reminders). The rules live in js/push-handlers.js so they can be tested.
+importScripts("./js/push-handlers.js?v=43");
+
+// Every push must show a notification, even a damaged one: Apple removes the push
+// permission from a web app that keeps receiving pushes that show nothing.
+self.addEventListener("push", function (event) {
+  const H = self.JarvisPushHandlers;
+  let raw = "";
+  try { raw = event.data ? event.data.text() : ""; } catch (e) { raw = ""; }
+  const n = H.notificationFor(H.parsePush(raw), self.registration.scope);
+  event.waitUntil(self.registration.showNotification(n.title, n.options));
+});
+
+// A tap brings JARVIS forward (or opens it) and tells the page which reminder it was.
+self.addEventListener("notificationclick", function (event) {
+  const H = self.JarvisPushHandlers;
+  const data = event.notification.data || {};
+  const scope = self.registration.scope;
+  const target = H.targetUrl(data, scope);
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+      const i = H.appWindow(list.map(function (c) { return c.url; }), scope);
+      if (i === -1) return self.clients.openWindow(target);
+      return list[i].focus().then(function (client) {
+        if (client && client.postMessage) client.postMessage({ type: "jarvis-open-reminder", id: data.id || "", kind: data.kind || "reminder", url: target });
+        return client;
+      });
+    })
+  );
+});
 
 self.addEventListener("install", function (event) {
   event.waitUntil(

@@ -11,7 +11,9 @@ those keys as Firebase secrets so they never reach a browser or this repo:
 | `marketingStatus` | Server/key status, this month's usage and budget, last research run | No |
 | `insightRequest` | Allow-listed InsightSocial lookups (profiles cached 12h, searches 20h), capped monthly | InsightSocial credits, only on a fresh request |
 | `researchNiche` | "Research My Niche": a **quick refresh** (3 TikTok keywords that rotate day by day, 30 credits) or a **full sweep** (up to 7 TikTok keywords + 3 Instagram hashtags, up to 220 credits; suggested once a week). Both are limited per run and per month, and the posts found are saved to your research library | InsightSocial credits, only for searches not already saved in the last 20 hours |
-| `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included. It does not send notifications yet | Nothing beyond free-tier Firestore |
+| `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included | Nothing beyond free-tier Firestore |
+| `notifications` | Phone notifications: remembers which phones you turned notifications on for, and sends the "Send a test now" and "Test in 90 seconds" messages | Nothing (free push services from Apple, Google, Mozilla and Microsoft) |
+| `reminderTick` | Runs **every minute** (Cloud Scheduler). Finds reminders that are due, records each one once, and sends it to your phones. Reminders more than 30 minutes late are marked missed, not sent | Free tier covers it; see "Reminder delivery" below |
 | `marketingLibrary` | Reads your research library (every post past runs found) and bookmarks posts | No |
 | `runResearch` | "Run research now": refreshes every watchlist handle (at most once per 30 min) | InsightSocial credits (1 request per handle) |
 | `dailyResearch` | Same as above, automatically every day at 08:00 New York time | InsightSocial credits (1 request per handle) |
@@ -79,11 +81,31 @@ happens when the functions aren't deployed).
    images; the default of 1 keeps storage costs lowest. (To publish the
    rules from step A in the same command, use `--only functions,firestore:rules`.)
 
+### B2. Notification keys (once, before the first deploy that includes reminders)
+
+Phone notifications need a key pair that identifies your server to Apple's
+(and other) push services. The private half is a Firebase secret; the public
+half goes to the phone. One command makes both and stores them. It never
+prints them, never overwrites existing ones, and doesn't ask you to paste
+anything:
+
+```
+cd ~/Jarvis/functions && node scripts/setup-vapid.js && cd ..
+```
+
+Run it after `npm ci` and `firebase use` (steps above) and **before**
+`npx firebase-tools deploy --only functions`, because the deploy attaches the
+secrets. If it says the keys already exist, that's fine: leave them. Replacing
+them (`node scripts/setup-vapid.js --force-new`) makes every phone turn
+notifications on again.
+
 ### C. Check it worked
 
 - Firebase console → Functions should list `marketingStatus`,
   `insightRequest`, `runResearch`, `researchNiche`, `marketingLibrary`,
-  `reminders`, `dailyResearch` and `generateIdeas`.
+  `reminders`, `notifications`, `reminderTick`, `dailyResearch` and
+  `generateIdeas`. Cloud Scheduler (Google Cloud console) should show the jobs
+  for `dailyResearch` and `reminderTick`.
 - In JARVIS: Marketing → Overview → Server Health → **Check again**. Every row
   should say OK.
 - If a row shows "unexpected error (reference abc123ef)", search for that
@@ -111,13 +133,38 @@ happens when the functions aren't deployed).
   version); a time that doesn't exist when clocks spring forward fires shifted
   forward by the gap, and a time that happens twice when clocks fall back fires
   once.
+- **Reminder delivery.** `reminderTick` runs every minute. Each run (1) claims
+  the reminders whose moment has arrived in one database transaction that also
+  writes a record named after the reminder and the exact moment, so two runs,
+  a retry or a crash cannot create two notifications for one moment, then
+  (2) sends the records that are due to your phones, with a short lease so
+  another run leaves them alone. A failed send is retried after 2 minutes, up
+  to 3 attempts. The record's status is `sent` (a push service accepted it),
+  `missed` (over 30 minutes late), `failed` or `no-device`. **`sent` means a
+  push service accepted the message. It can't show whether the phone then
+  displayed it**; only the phone can show that, which is what the in-app tests
+  are for. Without the notification keys the tick does nothing and leaves the
+  reminders' moments untouched.
+  Cloud Scheduler allows a small number of jobs free per account (3 is what the
+  documentation lists; I couldn't confirm whether that is per billing account
+  or per project) and about $0.10 per month for each job beyond that. JARVIS
+  adds two jobs (`dailyResearch`, `reminderTick`). When nothing is due the
+  tick makes two empty database queries a minute, which Firestore counts as
+  about one read each: roughly 2,900 reads a day against the 50,000 a day the
+  free tier lists.
+- Phone subscriptions, reminder records and reminder bookkeeping are stored at
+  `users/{yourUid}/pushSubscriptions`, `reminderEvents` and `reminderState`,
+  written only by the server and not readable from a browser. A phone's push
+  address never leaves the server.
 - **After an update to this folder**, redeploy from Cloud Shell (the app
   itself updates automatically; the server doesn't):
   ```
   cd ~/Jarvis && git checkout main && git pull
   cd functions && npm ci && cd ..
+  node functions/scripts/setup-vapid.js
   npx firebase-tools deploy --only functions
   ```
-  The Niche tab says when the server needs this ("needs the latest update").
+  (`setup-vapid.js` is safe to run every time: it does nothing if the keys
+  already exist.) The Niche tab says when the server needs this ("needs the latest update").
 - Rotate a key: rerun step 3 for that secret, then redeploy.
 - Tests: `cd functions && npm test` (uses fakes; no real calls).

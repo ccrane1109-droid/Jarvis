@@ -97,4 +97,12 @@ function inQuietHours(date, quiet, zone) {
   return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
 
-module.exports = { isValidZone, localDate, occurrencesOnDate, nextOccurrence, upcoming, todayOccurrences, inQuietHours };
+// The moment quiet hours next end, at or after `date` (used to hold a reminder until then).
+function quietEndAfter(date, quiet, zone) {
+  const dt = DateTime.fromJSDate(date, { zone: zone });
+  let end = DateTime.fromISO(dt.toISODate() + "T" + quiet.end, { zone: zone });
+  if (end.toMillis() <= date.getTime()) end = DateTime.fromISO(dt.plus({ days: 1 }).toISODate() + "T" + quiet.end, { zone: zone });
+  return end.toJSDate();
+}
+
+module.exports = { isValidZone, localDate, occurrencesOnDate, nextOccurrence, upcoming, todayOccurrences, inQuietHours, quietEndAfter };

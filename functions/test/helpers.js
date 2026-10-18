@@ -8,10 +8,12 @@ const KEY = "isk_live_FAKE_TEST_KEY_0000";
 
 function fakeDb(initial) {
   const store = new Map(Object.entries(initial || {}));
-  return {
+  let txChain = Promise.resolve();
+  const db = {
     store,
     doc(path) {
       return {
+        path,
         async get() {
           return { exists: store.has(path), data: () => store.get(path) };
         },
@@ -23,24 +25,80 @@ function fakeDb(initial) {
           });
           store.set(path, prev);
         },
+        async create(data) {
+          if (store.has(path)) throw Object.assign(new Error("ALREADY_EXISTS"), { code: 6 });
+          store.set(path, Object.assign({}, data));
+        },
+        async update(data) {
+          if (!store.has(path)) throw Object.assign(new Error("NOT_FOUND"), { code: 5 });
+          store.set(path, Object.assign({}, store.get(path), data));
+        },
         async delete() {
           store.delete(path);
         }
       };
     },
     collection(path) {
-      return {
+      const q = { filters: [], order: null, max: Infinity };
+      const query = {
+        where(field, op, value) { q.filters.push({ field, op, value }); return query; },
+        orderBy(field) { q.order = field; return query; },
+        limit(n) { q.max = n; return query; },
         async get() {
           const prefix = path + "/";
-          const docs = [];
+          let docs = [];
           store.forEach((value, key) => {
             if (key.startsWith(prefix) && !key.slice(prefix.length).includes("/")) {
               docs.push({ id: key.slice(prefix.length), data: () => value });
             }
           });
-          return { docs };
+          q.filters.forEach((f) => {
+            if (f.op !== "<=") throw new Error("fake query: only <= is supported");
+            // Like Firestore, a range filter only matches values of the same type (so null never matches).
+            docs = docs.filter((d) => typeof d.data()[f.field] === "string" && d.data()[f.field] <= f.value);
+          });
+          if (q.order) docs.sort((a, b) => (a.data()[q.order] < b.data()[q.order] ? -1 : a.data()[q.order] > b.data()[q.order] ? 1 : 0));
+          return { docs: docs.slice(0, q.max) };
         }
       };
+      return query;
+    },
+    // Transactions run one at a time (like Firestore, which retries conflicting ones), reads see the state
+    // before the transaction, and writes are applied together at the end.
+    runTransaction(fn) {
+      const run = async () => {
+        const writes = [];
+        const tx = {
+          get: (ref) => ref.get(),
+          create: (ref, data) => { writes.push(() => ref.create(data)); },
+          set: (ref, data, opts) => { writes.push(() => ref.set(data, opts)); },
+          update: (ref, data) => { writes.push(() => ref.update(data)); },
+          delete: (ref) => { writes.push(() => ref.delete()); }
+        };
+        const result = await fn(tx);
+        for (const w of writes) await w();
+        return result;
+      };
+      const next = txChain.then(run, run);
+      txChain = next.catch(() => {});
+      return next;
+    }
+  };
+  return db;
+}
+
+// Stands in for the web-push library: records every send and answers from a list or a function.
+function fakeWebPush(answer) {
+  const calls = [];
+  return {
+    calls,
+    vapid: null,
+    setVapidDetails(subject, pub, priv) { this.vapid = { subject, pub, priv }; },
+    async sendNotification(subscription, payload, options) {
+      calls.push({ subscription, payload, options });
+      const r = typeof answer === "function" ? answer(subscription, payload, options, calls.length) : (answer && answer.length ? answer.shift() : { statusCode: 201 });
+      if (r && r.error) throw Object.assign(new Error(r.error.message || "push failed"), { statusCode: r.error.statusCode, body: r.error.body });
+      return r || { statusCode: 201 };
     }
   };
 }
@@ -72,4 +130,4 @@ function deps(overrides) {
   }, overrides);
 }
 
-module.exports = { OWNER, KEY, fakeDb, fakeFetch, deps };
+module.exports = { OWNER, KEY, fakeDb, fakeFetch, fakeWebPush, deps };
