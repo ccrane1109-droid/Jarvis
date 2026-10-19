@@ -71,6 +71,297 @@
     return dayText(iso, zone);
   }
 
+  /* ---------------- phone notifications ---------------- */
+
+  const CHECK_KEY = "jarvisPushCheck";
+  const push = { cfg: null, subscribed: false, serverKnows: false, busy: false, loaded: false, error: "", scheduledAt: null };
+
+  function isIos() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent || "") || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function isStandalone() {
+    return window.navigator.standalone === true || !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  }
+  function canPush() {
+    return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  }
+  function permission() { return "Notification" in window ? Notification.permission : "denied"; }
+
+  function readCheck() {
+    try { const c = JSON.parse(localStorage.getItem(CHECK_KEY) || "null"); return c && (c.result === "arrived" || c.result === "missing") ? c : null; } catch (e) { return null; }
+  }
+  function writeCheck(result) {
+    try { localStorage.setItem(CHECK_KEY, JSON.stringify({ result: result, at: new Date().toISOString() })); } catch (e) { /* ignore */ }
+  }
+
+  function urlBase64ToUint8Array(base64) {
+    const padded = (base64 + "=".repeat((4 - base64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(padded);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function sameKey(buffer, bytes) {
+    if (!buffer) return false;
+    const a = new Uint8Array(buffer);
+    if (a.length !== bytes.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== bytes[i]) return false;
+    return true;
+  }
+
+  // True only when the browser shows which key a subscription was made with and it isn't ours.
+  // If the browser doesn't show it, the subscription is given the benefit of the doubt.
+  function keyMismatch(sub, key) {
+    const buffer = sub && sub.options ? sub.options.applicationServerKey : null;
+    return !!buffer && !sameKey(buffer, key);
+  }
+
+  function callN(data) {
+    const c = cloud();
+    if (!c) return Promise.reject(Object.assign(new Error("Sign in to JARVIS to use notifications."), { code: "functions/unauthenticated" }));
+    return c.call("notifications", data, { timeout: 25000 });
+  }
+
+  // Which of the screens the card shows. Only says "on" when this phone is really subscribed and your server knows it.
+  function pushMode() {
+    if (!signedIn()) return "signed-out";
+    if (isIos() && !isStandalone()) return "needs-home-screen";
+    if (!canPush()) return "unsupported";
+    if (permission() === "denied") return "denied";
+    if (push.cfg && push.cfg.keysReady === false) return "keys-missing";
+    if (push.subscribed && push.serverKnows) return "on";
+    return "off";
+  }
+
+  function pushError(err) {
+    if (err && err.name === "NotAllowedError") return "Notifications weren't allowed. If you tapped Don't Allow, change it in the iPhone's Settings app.";
+    if (err && err.name === "AbortError") return "The phone's push service didn't answer. Check you're online and try again.";
+    if (err && err.name === "InvalidStateError") return "JARVIS isn't ready to receive notifications yet. Close it, open it from the Home Screen icon, and try again.";
+    return describeError(err);
+  }
+
+  // Looks at this phone and your server and updates the card. Heals a missing server record without asking.
+  function refreshPush() {
+    push.error = "";
+    if (!signedIn() || !canPush() || (isIos() && !isStandalone())) { push.loaded = true; renderPush(); return Promise.resolve(); }
+    let sub = null;
+    const swReady = permission() === "granted" ? navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }) : Promise.resolve(null);
+    return swReady.then(function (s) {
+      sub = s;
+      return callN({ action: "config", endpoint: sub ? sub.endpoint : "" });
+    }).then(function (cfg) {
+      if (!cfg || cfg.ok !== true) throw new Error("The server answered, but not in the format JARVIS expects.");
+      push.cfg = cfg;
+      if (sub && cfg.publicKey && keyMismatch(sub, urlBase64ToUint8Array(cfg.publicKey))) sub = null;
+      push.subscribed = !!sub;
+      push.serverKnows = !!(sub && cfg.thisDevice);
+      if (sub && !cfg.thisDevice && cfg.keysReady) {
+        // The phone has a subscription the server lost (or never got): register it again quietly.
+        return callN({ action: "subscribe", subscription: sub.toJSON() }).then(function () { push.serverKnows = true; return callN({ action: "config", endpoint: sub.endpoint }); }).then(function (c2) { push.cfg = c2; });
+      }
+      return null;
+    }).catch(function (err) {
+      push.error = pushError(err);
+    }).then(function () {
+      push.loaded = true;
+      renderPush();
+    });
+  }
+
+  function setPushStatus(text) { $("rmNotifStatus").textContent = text || ""; }
+
+  const HOME_SCREEN_STEPS = [
+    "Open JARVIS in Safari (https://ccrane1109-droid.github.io/Jarvis/).",
+    "Tap the Share button, then Add to Home Screen.",
+    "Turn on Open as Web App, then tap Add.",
+    "Close Safari and open JARVIS from the new icon on your Home Screen, then come back to this tab."
+  ];
+
+  function renderPush() {
+    const mode = pushMode();
+    const badge = $("rmNotifBadge");
+    const text = $("rmNotifText");
+    const steps = $("rmNotifSteps");
+    const show = function (id, on) { $(id).classList.toggle("hidden", !on); };
+    const set = function (cls, icon, label) {
+      badge.className = "nr-status-badge nr-status-" + cls;
+      badge.textContent = "";
+      badge.appendChild(el("span", "nr-status-icon", icon)).setAttribute("aria-hidden", "true");
+      badge.appendChild(document.createTextNode(" " + label));
+    };
+    steps.textContent = "";
+    show("rmNotifSteps", false);
+    ["rmNotifOnBtn", "rmNotifTestNowBtn", "rmNotifTestLaterBtn", "rmNotifOffBtn"].forEach(function (id) { show(id, false); $(id).disabled = push.busy; });
+    show("rmNotifCheck", false);
+    $("rmNotifDevices").textContent = "";
+    const check = readCheck();
+
+    if (mode === "signed-out") {
+      set("off", "⊘", "Signed out");
+      text.textContent = "Sign in to JARVIS to turn on notifications.";
+    } else if (mode === "needs-home-screen") {
+      set("off", "⊘", "Needs the Home Screen");
+      text.textContent = "iPhone only allows notifications for web apps that were added to the Home Screen. It won't work from a Safari tab.";
+      HOME_SCREEN_STEPS.forEach(function (t) { steps.appendChild(el("li", "", t)); });
+      show("rmNotifSteps", true);
+    } else if (mode === "unsupported") {
+      set("off", "⊘", "Not supported here");
+      text.textContent = "This browser can't receive notifications from JARVIS. Use JARVIS from the Home Screen on your iPhone.";
+    } else if (mode === "denied") {
+      set("bad", "✕", "Blocked");
+      text.textContent = "Notifications are blocked for JARVIS on this phone. In the iPhone's Settings app, find JARVIS under Notifications and allow them, then come back.";
+    } else if (mode === "keys-missing") {
+      set("off", "⊘", "Server setup needed");
+      text.textContent = "Your JARVIS server doesn't have its notification keys yet. That's a one-time setup step in Cloud Shell (it's written in functions/README.md).";
+    } else if (mode === "on") {
+      set("ok", "✓", "On for this phone");
+      const d = push.cfg && push.cfg.devices ? push.cfg.devices : [];
+      const via = d.length ? d.map(function (x) { return x.platform; }).filter(function (p, i, all) { return all.indexOf(p) === i; }).join(" and ") + "'s notification service" : "the phone maker's notification service";
+      text.textContent = "This phone is registered. Your server sends reminders to it through " + via + "." +
+        (check && check.result === "arrived" ? "" : " Whether they reach a locked phone with JARVIS closed hasn't been proven yet. Use “Test in 90 seconds”, close JARVIS and lock the phone to find out.");
+      show("rmNotifTestNowBtn", true);
+      show("rmNotifTestLaterBtn", true);
+      show("rmNotifOffBtn", true);
+      show("rmNotifCheck", !!push.scheduledAt || !check);
+      if (check) {
+        $("rmNotifCheckLabel").textContent = "You reported on " + core().formatDateTime(check.at) + " that a closed-app test " + (check.result === "arrived" ? "arrived." : "did not arrive.") + " Run the test again to update that.";
+      } else {
+        $("rmNotifCheckLabel").textContent = "Run “Test in 90 seconds”, close JARVIS and lock your phone, then tell JARVIS what happened:";
+      }
+      show("rmNotifCheck", !!push.scheduledAt || !!check);
+      const lines = d.map(function (x) { return x.platform + (x.lastSuccessAt ? ": last accepted by the push service " + core().formatDateTime(x.lastSuccessAt) : ": nothing sent yet") + (x.lastError ? " (last problem: " + x.lastError + ")" : ""); });
+      $("rmNotifDevices").textContent = lines.join(" · ");
+    } else {
+      set("off", "⊘", "Not on yet");
+      text.textContent = "Turn this on once on this phone. iPhone will ask you to allow notifications.";
+      show("rmNotifOnBtn", true);
+    }
+    if (push.error) setPushStatus(push.error);
+    renderHero();
+  }
+
+  function turnOn() {
+    if (push.busy) return;
+    push.busy = true;
+    push.error = "";
+    setPushStatus("Asking for permission…");
+    renderPush();
+    let cfg = null;
+    // The permission question has to be asked straight from the tap, before anything is awaited.
+    const asked = Notification.requestPermission();
+    Promise.resolve(asked).then(function (perm) {
+      if (perm !== "granted") throw Object.assign(new Error("not allowed"), { name: "NotAllowedError" });
+      setPushStatus("Setting up this phone…");
+      return callN({ action: "config" });
+    }).then(function (c) {
+      cfg = c;
+      if (!c || !c.keysReady || !c.publicKey) throw new Error("Your JARVIS server doesn't have its notification keys yet.");
+      return navigator.serviceWorker.ready;
+    }).then(function (reg) {
+      const key = urlBase64ToUint8Array(cfg.publicKey);
+      return reg.pushManager.getSubscription().then(function (existing) {
+        // A subscription made with different keys can't be used; replace it.
+        if (existing && keyMismatch(existing, key)) {
+          return existing.unsubscribe().then(function () { return null; });
+        }
+        return existing;
+      }).then(function (existing) {
+        return existing || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      });
+    }).then(function (sub) {
+      return callN({ action: "subscribe", subscription: sub.toJSON() });
+    }).then(function () {
+      setPushStatus("Turned on. Press “Send a test now” to check it.");
+    }).catch(function (err) {
+      push.error = pushError(err);
+      setPushStatus(push.error);
+    }).then(function () {
+      push.busy = false;
+      return refreshPush();
+    });
+  }
+
+  function turnOff() {
+    if (push.busy) return;
+    push.busy = true;
+    setPushStatus("Turning off…");
+    renderPush();
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+      if (!sub) return null;
+      const endpoint = sub.endpoint;
+      return sub.unsubscribe().then(function () { return callN({ action: "unsubscribe", endpoint: endpoint }); });
+    }).then(function () {
+      push.scheduledAt = null;
+      setPushStatus("Turned off for this phone.");
+    }).catch(function (err) {
+      setPushStatus(pushError(err));
+    }).then(function () {
+      push.busy = false;
+      return refreshPush();
+    });
+  }
+
+  function testNow() {
+    if (push.busy) return;
+    push.busy = true;
+    setPushStatus("Sending…");
+    renderPush();
+    callN({ action: "test", delaySeconds: 0 }).then(function (res) {
+      if (res.accepted > 0) {
+        setPushStatus("Sent. The push service accepted it for " + res.accepted + " of " + res.devices + (res.devices === 1 ? " phone" : " phones") + ". Did a notification appear on your phone? If not, check the iPhone's Settings → Notifications → JARVIS and Focus mode.");
+      } else if (res.gone) {
+        setPushStatus("The push service says this phone isn't registered any more. Turn notifications off and on again.");
+      } else {
+        setPushStatus("The push service didn't accept it" + (res.errors && res.errors[0] ? ": " + res.errors[0] : ".") + (res.retryable ? " This may be temporary. Try again in a minute." : ""));
+      }
+    }).catch(function (err) {
+      setPushStatus(describeError(err));
+    }).then(function () {
+      push.busy = false;
+      return refreshPush();
+    });
+  }
+
+  function testLater() {
+    if (push.busy) return;
+    push.busy = true;
+    setPushStatus("Scheduling…");
+    renderPush();
+    callN({ action: "test", delaySeconds: 90 }).then(function (res) {
+      push.scheduledAt = res.dueAt;
+      setPushStatus("Scheduled. It should arrive within about 2 minutes. Close JARVIS and lock your phone now, then tell JARVIS what happened when you open it again.");
+    }).catch(function (err) {
+      setPushStatus(describeError(err));
+    }).then(function () {
+      push.busy = false;
+      renderPush();
+    });
+  }
+
+  function reportCheck(result) {
+    writeCheck(result);
+    push.scheduledAt = null;
+    setPushStatus(result === "arrived" ? "Thanks. That's recorded on this phone." : "Recorded. A missing notification is useful to know: check the iPhone's Settings → Notifications → JARVIS, Focus modes, and Low Power Mode, then try again.");
+    renderPush();
+  }
+
+  // A tapped notification brings you to the reminders (the reminder's own screen comes with the next step).
+  function openFromNotification() {
+    const nav = $("navBtnHabits");
+    if (nav) nav.click();
+    const tab = $("habitsSubNavReminders");
+    if (tab) tab.click();
+  }
+
+  function pushChip() {
+    const m = pushMode();
+    if (m === "on") return stripChip("ok", "✓", "Phone notifications: on");
+    if (m === "denied") return stripChip("bad", "✕", "Phone notifications: blocked");
+    if (m === "needs-home-screen") return stripChip("off", "⊘", "Phone notifications: needs Home Screen");
+    return stripChip("off", "⊘", "Phone notifications: not on yet");
+  }
+
   /* ---------------- talking to the server ---------------- */
 
   function call(data) {
@@ -205,7 +496,7 @@
     else if (state.loading && !state.loaded) strip.appendChild(stripChip("info", "…", "Checking server"));
     else if (state.error) strip.appendChild(stripChip("bad", "✕", state.fromCache ? "Showing saved copy" : "Server problem"));
     else strip.appendChild(stripChip("ok", "✓", "Saved on your server"));
-    strip.appendChild(stripChip("off", "⊘", "Phone notifications: not set up yet"));
+    strip.appendChild(pushChip());
     if (state.settings) strip.appendChild(stripChip("info", "◷", state.settings.timezone.replace(/_/g, " ")));
   }
 
@@ -357,6 +648,7 @@
     renderToday();
     renderList();
     renderSettings();
+    renderPush();
   }
 
   /* ---------------- turning on and off, settings ---------------- */
@@ -644,6 +936,17 @@
       f.times = times;
       renderForm();
     });
+    $("rmNotifOnBtn").addEventListener("click", turnOn);
+    $("rmNotifOffBtn").addEventListener("click", turnOff);
+    $("rmNotifTestNowBtn").addEventListener("click", testNow);
+    $("rmNotifTestLaterBtn").addEventListener("click", testLater);
+    $("rmNotifArrivedBtn").addEventListener("click", function () { reportCheck("arrived"); });
+    $("rmNotifMissingBtn").addEventListener("click", function () { reportCheck("missing"); });
+    if ("serviceWorker" in navigator && navigator.serviceWorker.addEventListener) {
+      navigator.serviceWorker.addEventListener("message", function (e) {
+        if (e && e.data && e.data.type === "jarvis-open-reminder") openFromNotification();
+      });
+    }
     $("rmSettingsSaveBtn").addEventListener("click", function () { saveSettings(false); });
     $("rmSettingsMoveBtn").addEventListener("click", function () { saveSettings(true); });
 
@@ -652,6 +955,7 @@
       render();
       if (!state.loaded || state.error) load(); else if (Date.now() - (state.lastLoadAt || 0) > 5 * 60000) load();
       state.lastLoadAt = Date.now();
+      if (!push.loaded || !push.cfg || Date.now() - (push.lastRefreshAt || 0) > 60000) { push.lastRefreshAt = Date.now(); refreshPush(); }
     });
     // The relative times ("in 5 min") and the Today list stay fresh while the tab is open.
     if (tickTimer) clearInterval(tickTimer);
@@ -668,6 +972,11 @@
     renderQuick();
     wire();
     render();
+    // JARVIS was opened by tapping a notification.
+    if (/[?&]reminder=/.test(window.location.search)) {
+      try { window.history.replaceState(null, "", window.location.pathname); } catch (e) { /* ignore */ }
+      openFromNotification();
+    }
   }
 
   window.JarvisReminders = {

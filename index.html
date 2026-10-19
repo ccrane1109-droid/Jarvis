@@ -7,9 +7,9 @@
 <meta name="theme-color" content="#0a0e14">
 <meta name="description" content="JARVIS — a personal dashboard for workouts, nutrition, habits, business, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
 
@@ -1832,11 +1832,35 @@
         <div class="nr-hero-actions">
           <button type="button" class="nr-btn nr-btn-primary" id="rmNewBtn">New reminder</button>
         </div>
-        <p class="nr-hint" id="rmNotifNote">Reminders are saved on your JARVIS server. Phone notifications arrive in a later step, so nothing will buzz your phone yet.</p>
+        <p class="nr-hint">Reminders are saved on your JARVIS server, and the server is what sends them to your phone. That is built to work with JARVIS closed, but it isn't proven on your phone until you run the closed-app test below.</p>
         <p class="nr-status-line" id="rmStatus" role="status"></p>
       </section>
 
       <ul class="nr-strip" id="rmStrip" aria-label="Reminder status"></ul>
+
+      <section class="nr-card" id="rmNotifCard" aria-labelledby="rmNotifTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="rmNotifTitle">Phone notifications</h2>
+          <span class="nr-status-badge nr-status-off" id="rmNotifBadge"></span>
+        </div>
+        <p class="nr-hint" id="rmNotifText"></p>
+        <ol class="rm-steps hidden" id="rmNotifSteps"></ol>
+        <div class="nr-actions-row">
+          <button type="button" class="nr-btn nr-btn-primary-soft hidden" id="rmNotifOnBtn">Turn on notifications on this phone</button>
+          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifTestNowBtn">Send a test now</button>
+          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifTestLaterBtn">Test in 90 seconds</button>
+          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifOffBtn">Turn off on this phone</button>
+        </div>
+        <div class="rm-check hidden" id="rmNotifCheck">
+          <p class="rm-label" id="rmNotifCheckLabel">Did the test arrive while JARVIS was closed?</p>
+          <div class="nr-actions-row">
+            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmNotifArrivedBtn">Yes, it arrived</button>
+            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmNotifMissingBtn">No, nothing came</button>
+          </div>
+        </div>
+        <p class="nr-status-line" id="rmNotifStatus" role="status"></p>
+        <p class="nr-hint" id="rmNotifDevices"></p>
+      </section>
 
       <section class="nr-card" aria-labelledby="rmTodayTitle">
         <h2 class="nr-h" id="rmTodayTitle">Today</h2>
@@ -4418,29 +4442,29 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=42"></script>
-<script type="module" src="js/auth.js?v=42"></script>
-<script src="js/app.js?v=42"></script>
-<script src="js/exercises.js?v=42"></script>
-<script src="js/workout.js?v=42"></script>
-<script src="js/nutrition.js?v=42"></script>
-<script src="js/nutrition-label-scan.js?v=42"></script>
-<script src="js/groceries.js?v=42"></script>
-<script src="js/habits.js?v=42"></script>
-<script src="functions/lib/reminder-spec.js?v=42"></script>
-<script src="js/reminders.js?v=42"></script>
-<script src="js/business.js?v=42"></script>
-<script src="js/trading.js?v=42"></script>
-<script src="js/blobstore.js?v=42"></script>
-<script src="js/video-api-client.js?v=42"></script>
-<script src="js/video-connections.js?v=42"></script>
-<script src="js/video.js?v=42"></script>
-<script src="js/video-studio.js?v=42"></script>
-<script src="functions/lib/idea-spec.js?v=42"></script>
-<script src="functions/lib/niche-spec.js?v=42"></script>
-<script src="js/marketing-stats.js?v=42"></script>
-<script src="js/niche-research.js?v=42"></script>
-<script src="js/content-intelligence.js?v=42"></script>
-<script src="js/form-check.js?v=42"></script>
+<script src="js/firebase-config.js?v=43"></script>
+<script type="module" src="js/auth.js?v=43"></script>
+<script src="js/app.js?v=43"></script>
+<script src="js/exercises.js?v=43"></script>
+<script src="js/workout.js?v=43"></script>
+<script src="js/nutrition.js?v=43"></script>
+<script src="js/nutrition-label-scan.js?v=43"></script>
+<script src="js/groceries.js?v=43"></script>
+<script src="js/habits.js?v=43"></script>
+<script src="functions/lib/reminder-spec.js?v=43"></script>
+<script src="js/reminders.js?v=43"></script>
+<script src="js/business.js?v=43"></script>
+<script src="js/trading.js?v=43"></script>
+<script src="js/blobstore.js?v=43"></script>
+<script src="js/video-api-client.js?v=43"></script>
+<script src="js/video-connections.js?v=43"></script>
+<script src="js/video.js?v=43"></script>
+<script src="js/video-studio.js?v=43"></script>
+<script src="functions/lib/idea-spec.js?v=43"></script>
+<script src="functions/lib/niche-spec.js?v=43"></script>
+<script src="js/marketing-stats.js?v=43"></script>
+<script src="js/niche-research.js?v=43"></script>
+<script src="js/content-intelligence.js?v=43"></script>
+<script src="js/form-check.js?v=43"></script>
 </body>
 </html>
