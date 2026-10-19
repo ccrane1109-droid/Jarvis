@@ -11,8 +11,12 @@
    (localStorage key jarvisRemindersCache, not synced) so the list still shows
    when you're offline. Changes need a connection; nothing is queued silently.
 
-   This step stores and manages reminders. It does not send notifications yet,
-   and the page says so.
+   Notifications are sent by the server (see the Phone notifications card).
+   What you do about a reminder (done, skip, snooze, undo) goes through the
+   same function, and the page works out today's progress from the server's
+   records with functions/lib/reminder-events.js, the same file the
+   server uses. Nothing here ever marks anything done for you: only your tap
+   does, medication included.
    ========================================================================== */
 
 (function () {
@@ -20,10 +24,13 @@
 
   const CACHE_KEY = "jarvisRemindersCache";
   const spec = window.JarvisReminderSpec || null;
+  const ev = window.JarvisReminderEvents || null;
   const state = {
     ready: false, loading: false, loaded: false, error: "", fromCache: false, cachedAt: null,
     reminders: [], settings: null, max: 100, busy: {},
-    editingId: null, form: null, openerId: null
+    editingId: null, form: null, openerId: null,
+    events: [], eventsLoaded: false, eventsError: "", eventsAt: 0, eventsBusy: false,
+    hist: null, histBusy: false, act: null, actBusy: false, pendingOpen: null, loadedDay: ""
   };
   let tickTimer = null;
 
@@ -346,14 +353,6 @@
     renderPush();
   }
 
-  // A tapped notification brings you to the reminders (the reminder's own screen comes with the next step).
-  function openFromNotification() {
-    const nav = $("navBtnHabits");
-    if (nav) nav.click();
-    const tab = $("habitsSubNavReminders");
-    if (tab) tab.click();
-  }
-
   function pushChip() {
     const m = pushMode();
     if (m === "on") return stripChip("ok", "✓", "Phone notifications: on");
@@ -382,6 +381,7 @@
       if (ref) return "The server hit an unexpected error (reference " + ref + "). Find that reference in Firebase console → Functions → Logs.";
       return "Couldn't get a response from the reminders server. Usually it hasn't been redeployed yet, or the last deploy failed.";
     }
+    if (code === "functions/invalid-argument" && /Unknown reminders action/i.test(message)) return "The server needs its latest update (redeploy from Cloud Shell) before this works.";
     if (code === "functions/failed-precondition" || code === "functions/resource-exhausted" || code === "functions/invalid-argument") return message;
     if (code === "functions/unavailable" || code === "functions/deadline-exceeded") return "Couldn't reach the server. Check your connection and try again.";
     return "Something went wrong" + (message ? ": " + message : ".");
@@ -399,7 +399,8 @@
     if (!s.ok) return null;
     return Object.assign({}, s.value, {
       id: r.id, timezone: s.value.timezone || spec.DEFAULT_TIMEZONE,
-      nextFireAt: isoOrNull(r.nextFireAt), today: isoList(r.today), upcoming: isoList(r.upcoming)
+      nextFireAt: isoOrNull(r.nextFireAt), today: isoList(r.today), upcoming: isoList(r.upcoming),
+      createdAt: isoOrNull(r.createdAt), updatedAt: isoOrNull(r.updatedAt)
     });
   }
 
@@ -443,8 +444,64 @@
     }).then(function () {
       state.loading = false;
       state.loaded = true;
+      state.loadedDay = core().todayISODate();
       render();
+      return state.error ? null : loadEvents();
     });
+  }
+
+  /* ---------------- what happened: the records ---------------- */
+
+  const STATUSES = ["queued", "sent", "missed", "failed", "no-device", "cancelled"];
+
+  // Keeps only what the page uses, and checks the shape before anything is drawn from it.
+  function cleanEvent(e) {
+    if (!ev || !e || typeof e !== "object" || typeof e.id !== "string") return null;
+    const test = e.kind === "test";
+    if (test ? !/^test_[a-z0-9]+$/.test(e.id) : !ev.ID_RE.test(e.id)) return null;
+    const scheduledFor = isoOrNull(e.scheduledFor);
+    if (!scheduledFor) return null;
+    return {
+      id: e.id, kind: test ? "test" : "reminder", reminderId: typeof e.reminderId === "string" ? e.reminderId : null,
+      category: typeof e.category === "string" ? e.category : "custom", title: typeof e.title === "string" ? e.title.slice(0, 80) : "",
+      timezone: typeof e.timezone === "string" ? e.timezone : null, scheduledFor: scheduledFor,
+      status: STATUSES.indexOf(e.status) !== -1 ? e.status : "queued", outcome: e.outcome === "done" || e.outcome === "skipped" ? e.outcome : null,
+      outcomeAt: isoOrNull(e.outcomeAt), snoozedUntil: isoOrNull(e.snoozedUntil), snoozeCount: Number(e.snoozeCount) > 0 ? Math.floor(Number(e.snoozeCount)) : 0,
+      sentAt: isoOrNull(e.sentAt), lastError: typeof e.lastError === "string" ? e.lastError.slice(0, 200) : null
+    };
+  }
+
+  function badShape() { return Object.assign(new Error("The server answered, but not in the format JARVIS expects."), { code: "bad-shape" }); }
+  function errText(err) { return err && err.code === "bad-shape" ? err.message : describeError(err); }
+
+  // The last two days of records: enough to know how today is going, whatever time zone a reminder is in.
+  function loadEvents() {
+    if (!signedIn() || !ev || state.eventsBusy) return Promise.resolve();
+    state.eventsBusy = true;
+    return call({ action: "events", days: 2 }).then(function (res) {
+      if (!res || res.ok !== true || !Array.isArray(res.events)) throw badShape();
+      state.events = res.events.map(cleanEvent).filter(Boolean);
+      state.eventsLoaded = true;
+      state.eventsError = "";
+      state.eventsAt = Date.now();
+    }).catch(function (err) {
+      state.eventsError = errText(err);
+    }).then(function () {
+      state.eventsBusy = false;
+      renderToday();
+    });
+  }
+
+  // Puts one changed record (or its removal) into everything the page holds.
+  function applyEvent(id, fresh) {
+    [state.events, state.hist && state.hist.events].forEach(function (list) {
+      if (!list) return;
+      const i = list.findIndex(function (x) { return x.id === id; });
+      if (i !== -1) list.splice(i, 1);
+      if (fresh) list.push(fresh);
+    });
+    state.events.sort(function (a, b) { return a.scheduledFor < b.scheduledFor ? 1 : -1; });
+    if (state.hist) state.hist.events.sort(function (a, b) { return a.scheduledFor < b.scheduledFor ? 1 : -1; });
   }
 
   function replaceReminder(r) {
@@ -500,16 +557,86 @@
     if (state.settings) strip.appendChild(stripChip("info", "◷", state.settings.timezone.replace(/_/g, " ")));
   }
 
+  /* ---------------- today: progress and what's still open ---------------- */
+
+  function stateLabel(it) {
+    switch (it.state) {
+      case "done": return "Done" + (it.outcomeAt ? " at " + timeText(it.outcomeAt, it.timezone) : "");
+      case "skipped": return "Skipped";
+      case "snoozed": return "Snoozed until " + timeText(it.snoozedUntil, it.timezone);
+      case "awaiting": return "Sent. Waiting for you";
+      case "sending": return "Sending…";
+      case "missed": return "Missed: over 30 minutes late, so it wasn't sent";
+      case "failed": return "Couldn't be sent";
+      case "no-device": return "No phone was set up for notifications";
+      case "cancelled": return "Not sent";
+      case "due": return "Due now";
+      default: return "Coming up";
+    }
+  }
+
+  function whenText(it) {
+    return timeText(it.scheduledFor, it.timezone) + (it.timezone !== deviceZone() ? " " + zoneName(it.scheduledFor, it.timezone) : "");
+  }
+
+  function progressText(c) {
+    const parts = [c.done + " of " + c.total + " done"];
+    if (c.skipped) parts.push(c.skipped + " skipped");
+    if (c.open) parts.push(c.open + " still open");
+    if (c.snoozed) parts.push(c.snoozed + " snoozed");
+    if (c.upcoming) parts.push(c.upcoming + " coming up");
+    return parts.join(" · ");
+  }
+
+  function renderProgress(view) {
+    const box = $("rmProgress");
+    const c = view.counts;
+    box.classList.toggle("hidden", !c.total);
+    const open = $("rmOpen");
+    open.textContent = "";
+    open.classList.toggle("hidden", !view.open.length);
+    if (!c.total) return;
+    const pct = view.percent === null ? 0 : view.percent;
+    $("rmProgressFill").style.width = pct + "%";
+    $("rmProgressText").textContent = progressText(c) + (view.percent === null ? "" : " (" + view.percent + "%)");
+    const bar = $("rmProgressBar");
+    bar.setAttribute("aria-valuenow", String(pct));
+    bar.classList.toggle("done", c.total > 0 && c.done + c.skipped === c.total && c.done > 0);
+    if (view.open.length) {
+      open.appendChild(el("p", "rm-open-title", "Still open (" + view.open.length + ")"));
+      const chips = el("div", "rm-open-chips");
+      view.open.forEach(function (it) {
+        const b = el("button", "rm-open-chip", it.title + " · " + whenText(it));
+        b.type = "button";
+        b.addEventListener("click", function () { openAct(it, b); });
+        chips.appendChild(b);
+      });
+      open.appendChild(chips);
+    }
+  }
+
   function renderToday() {
     const box = $("rmToday");
     const hint = $("rmTodayHint");
     box.textContent = "";
-    const items = [];
-    state.reminders.forEach(function (r) {
-      if (!r.enabled) return;
-      r.today.forEach(function (iso) { items.push({ r: r, iso: iso }); });
-    });
-    items.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; });
+    // Without the server's records the plan can still be shown, but not what happened to it.
+    const known = state.eventsLoaded && !!ev;
+    const view = known ? ev.dayView(state.reminders, state.events, Date.now()) : null;
+    if (view) renderProgress(view); else { $("rmProgress").classList.add("hidden"); $("rmOpen").classList.add("hidden"); }
+
+    const byId = {};
+    state.reminders.forEach(function (r) { byId[r.id] = r; });
+    let items;
+    if (view) {
+      items = view.items;
+    } else {
+      items = [];
+      state.reminders.forEach(function (r) {
+        if (!r.enabled) return;
+        r.today.forEach(function (iso) { items.push({ reminderId: r.id, eventId: null, title: r.title, category: r.category, timezone: r.timezone, scheduledFor: iso, state: new Date(iso).getTime() <= Date.now() ? "past" : "upcoming", hasEvent: false }); });
+      });
+      items.sort(function (a, b) { return a.scheduledFor < b.scheduledFor ? -1 : a.scheduledFor > b.scheduledFor ? 1 : 0; });
+    }
     if (!items.length) {
       hint.textContent = "";
       box.appendChild(el("p", "nr-empty", state.reminders.length
@@ -517,19 +644,281 @@
         : "Your reminders for today will show here."));
       return;
     }
-    hint.textContent = "What is scheduled for today. Marking reminders done, snoozing and skipping arrive with notifications.";
-    const now = Date.now();
+    hint.textContent = view
+      ? "Tap a reminder to mark it done, skip it or snooze it. You can mark one done before its time, too."
+      : (state.eventsError ? state.eventsError + " " : "") + "What is scheduled for today. Marking reminders done, skipping and snoozing need the server's records, which couldn't be read just now.";
     items.forEach(function (it) {
-      const past = new Date(it.iso).getTime() <= now;
-      const row = el("div", "rm-today-row" + (past ? " past" : ""));
-      row.appendChild(el("span", "rm-icon", iconOf(it.r))).setAttribute("aria-hidden", "true");
+      const r = byId[it.reminderId] || {};
+      const row = el("div", "rm-today-row rm-s-" + it.state);
+      const main = el(view ? "button" : "div", "rm-today-main");
+      if (view) {
+        main.type = "button";
+        main.setAttribute("aria-label", it.title + ", " + whenText(it) + ", " + stateLabel(it) + ". Open options.");
+        main.addEventListener("click", function () { openAct(it, main); });
+      }
+      main.appendChild(el("span", "rm-icon", iconOf(it))).setAttribute("aria-hidden", "true");
       const text = el("div", "rm-today-text");
-      text.appendChild(el("p", "rm-title", it.r.title));
-      text.appendChild(el("p", "rm-sub", (past ? "Earlier today" : "Coming up") + (it.r.notes ? " · " + it.r.notes : "")));
-      row.appendChild(text);
-      const when = timeText(it.iso, it.r.timezone) + (it.r.timezone !== deviceZone() ? " " + zoneName(it.iso, it.r.timezone) : "");
-      row.appendChild(el("span", "rm-when", when));
+      text.appendChild(el("p", "rm-title", it.title));
+      text.appendChild(el("p", "rm-sub rm-state", view ? stateLabel(it) : (it.state === "past" ? "Earlier today" : "Coming up") + (r.notes ? " · " + r.notes : "")));
+      main.appendChild(text);
+      row.appendChild(main);
+      row.appendChild(el("span", "rm-when", whenText(it)));
+      if (view && (ev.OPEN_STATES.indexOf(it.state) !== -1 || it.state === "snoozed")) {
+        const done = el("button", "nr-btn nr-btn-ghost nr-btn-small rm-quick-done", "Done");
+        done.type = "button";
+        done.setAttribute("aria-label", "Mark " + it.title + " at " + whenText(it) + " as done");
+        done.disabled = state.actBusy;
+        done.addEventListener("click", function () { quickDone(it); });
+        row.appendChild(done);
+      }
       box.appendChild(row);
+    });
+  }
+
+  /* ---------------- answering a reminder: done, skip, snooze, undo ---------------- */
+
+  function itemFromEvent(e) {
+    return {
+      reminderId: e.reminderId, eventId: e.id, title: e.title || "Reminder", category: e.category, hasEvent: true,
+      timezone: e.timezone || (state.settings && state.settings.timezone) || deviceZone() || spec.DEFAULT_TIMEZONE,
+      scheduledFor: e.scheduledFor, state: ev.stateOf(e, Date.now()), snoozedUntil: e.snoozedUntil, outcomeAt: e.outcomeAt, snoozeCount: e.snoozeCount
+    };
+  }
+
+  // One request for any answer. A moment with no record yet is named by reminder + moment; otherwise by its record.
+  function answer(item, choice, minutes) {
+    const body = { action: "act", choice: choice };
+    if (minutes) body.minutes = minutes;
+    if (item.hasEvent) body.eventId = item.eventId;
+    else { body.reminderId = item.reminderId; body.scheduledFor = item.scheduledFor; }
+    return call(body).then(function (res) {
+      if (!res || res.ok !== true || (!res.event && res.removed !== true)) throw badShape();
+      applyEvent(item.eventId, res.event ? cleanEvent(res.event) : null);
+      return res;
+    });
+  }
+
+  const SNOOZE_LABELS = { 5: "5 min", 10: "10 min", 15: "15 min", 30: "30 min", 60: "1 hour" };
+  const ACT_TOAST = { done: "Marked done.", skip: "Skipped.", undo: "Undone." };
+
+  // Done in one tap from the list; the sheet has the rest (and Undo).
+  function quickDone(it) {
+    if (state.actBusy) return;
+    state.actBusy = true;
+    setStatus("");
+    renderToday();
+    answer(it, "done").then(function () {
+      core().showToast("Marked done. Tap it to undo.");
+    }).catch(function (err) {
+      setStatus(errText(err));
+    }).then(function () {
+      state.actBusy = false;
+      renderToday();
+      renderHistory();
+    });
+  }
+
+  function openAct(item, opener) {
+    if (!ev || !signedIn()) return;
+    state.act = { item: item, opener: opener || null };
+    state.actBusy = false;
+    $("rmActError").textContent = "";
+    renderAct();
+    core().openModal("rmActModal");
+    const first = [$("rmActDone"), $("rmActUndo")].filter(function (b) { return !b.classList.contains("hidden"); })[0];
+    if (first) first.focus();
+  }
+
+  function closeAct() {
+    core().closeModal("rmActModal");
+    const opener = state.act && state.act.opener;
+    state.act = null;
+    if (opener && opener.isConnected && opener.focus) opener.focus();
+  }
+
+  function renderAct() {
+    if (!state.act) return;
+    const it = state.act.item;
+    const cat = spec.categoryOf(it.category);
+    const answered = it.state === "done" || it.state === "skipped";
+    const upcoming = it.state === "upcoming";
+    $("rmActTitle").textContent = (cat ? cat.icon + " " : "") + it.title;
+    $("rmActWhen").textContent = dayText(it.scheduledFor, it.timezone) + " at " + whenText(it);
+    $("rmActState").textContent = stateLabel(it) + (it.snoozeCount ? " · snoozed " + it.snoozeCount + (it.snoozeCount === 1 ? " time" : " times") : "");
+    $("rmActMed").classList.toggle("hidden", it.category !== "medication" || answered);
+    $("rmActMain").classList.toggle("hidden", answered);
+    $("rmActDone").textContent = upcoming ? "Done already" : "Done";
+    $("rmActSkip").textContent = upcoming ? "Skip this one" : "Skip";
+    const canSnooze = !answered && !upcoming && it.hasEvent && it.snoozeCount < ev.MAX_SNOOZES;
+    $("rmActSnoozeWrap").classList.toggle("hidden", !canSnooze);
+    const chips = $("rmActSnooze");
+    chips.textContent = "";
+    ev.SNOOZE_MINUTES.forEach(function (m) {
+      const b = el("button", "rm-chip", SNOOZE_LABELS[m] || m + " min");
+      b.type = "button";
+      b.disabled = state.actBusy;
+      b.addEventListener("click", function () { doAct("snooze", m); });
+      chips.appendChild(b);
+    });
+    $("rmActUndo").classList.toggle("hidden", !answered);
+    ["rmActDone", "rmActSkip", "rmActUndo", "rmActCloseBtn"].forEach(function (id) { $(id).disabled = state.actBusy; });
+  }
+
+  function doAct(choice, minutes) {
+    if (!state.act || state.actBusy) return;
+    state.actBusy = true;
+    $("rmActError").textContent = "";
+    renderAct();
+    const item = state.act.item;
+    answer(item, choice, minutes).then(function (res) {
+      core().showToast(choice === "snooze" ? "Snoozed for " + (SNOOZE_LABELS[minutes] || minutes + " min") + ". It will be sent again." : ACT_TOAST[choice]);
+      const fresh = res.event ? cleanEvent(res.event) : null;
+      if (choice === "undo" && fresh) state.act.item = itemFromEvent(fresh);
+      else closeAct();
+    }).catch(function (err) {
+      $("rmActError").textContent = errText(err);
+    }).then(function () {
+      state.actBusy = false;
+      if (state.act) renderAct();
+      renderToday();
+      renderHistory();
+    });
+  }
+
+  /* ---------------- tapping a notification ---------------- */
+
+  // A tapped notification opens the reminders and, when JARVIS can tell which one, its options.
+  function openFromNotification(id) {
+    const nav = $("navBtnHabits");
+    if (nav) nav.click();
+    const tab = $("habitsSubNavReminders");
+    if (tab) tab.click();
+    if (typeof id === "string" && id) {
+      state.pendingOpen = { id: id, tries: 0 };
+      tryPendingOpen();
+    }
+  }
+
+  // Sign-in is restored a moment after the page opens, so wait for it (up to about ten seconds).
+  function tryPendingOpen() {
+    const p = state.pendingOpen;
+    if (!p || !ev || !spec) return;
+    if (/^test_/.test(p.id)) { state.pendingOpen = null; core().showToast("That was a test notification."); return; }
+    if (!ev.ID_RE.test(p.id)) { state.pendingOpen = null; return; }
+    if (!signedIn()) {
+      if (++p.tries < 40) setTimeout(tryPendingOpen, 250); else state.pendingOpen = null;
+      return;
+    }
+    state.pendingOpen = null;
+    if (!state.loaded || state.error) load();
+    call({ action: "event", eventId: p.id }).then(function (res) {
+      const c = res && res.ok === true && res.event ? cleanEvent(res.event) : null;
+      if (!c) { core().showToast("That reminder isn't on record any more."); return; }
+      openAct(itemFromEvent(c), null);
+    }).catch(function (err) {
+      setStatus(errText(err));
+    });
+  }
+
+  /* ---------------- history ---------------- */
+
+  function historyLabel(e) {
+    const s = ev.stateOf(e, Date.now());
+    if (e.kind === "test") return { cls: "info", text: "Test · " + (e.status === "sent" ? "sent" : e.status === "queued" ? "waiting" : e.status) };
+    if (s === "done") return { cls: "ok", text: "Done" };
+    if (s === "skipped") return { cls: "off", text: "Skipped" };
+    if (s === "snoozed") return { cls: "info", text: "Snoozed" };
+    if (s === "awaiting") return Date.now() - Date.parse(e.scheduledFor) < ev.FRESH_MS ? { cls: "info", text: "Sent" } : { cls: "warn", text: "No answer" };
+    if (s === "sending") return { cls: "info", text: "Sending" };
+    if (s === "missed") return { cls: "bad", text: "Missed" };
+    if (s === "failed") return { cls: "bad", text: "Failed" };
+    if (s === "no-device") return { cls: "bad", text: "No phone" };
+    return { cls: "off", text: "Not sent" };
+  }
+
+  function summaryBar(s) {
+    const bar = el("div", "rm-sum-bar");
+    bar.setAttribute("aria-hidden", "true");
+    [["done", s.done], ["skipped", s.skipped], ["pending", s.pending], ["open", s.open]].forEach(function (seg) {
+      if (!seg[1]) return;
+      const x = el("span", "rm-sum-seg " + seg[0]);
+      x.style.width = (100 * seg[1] / s.total) + "%";
+      bar.appendChild(x);
+    });
+    return bar;
+  }
+
+  function historySummaryText(s) {
+    const parts = [s.done + " done"];
+    if (s.skipped) parts.push(s.skipped + " skipped");
+    if (s.open) parts.push(s.open + " with no answer");
+    if (s.pending) parts.push(s.pending + " just sent");
+    return parts.join(" · ") + (s.percent === null ? "" : " · " + s.percent + "%");
+  }
+
+  function renderHistory() {
+    const box = $("rmHist");
+    box.textContent = "";
+    if (!state.hist || !ev) return;
+    const list = state.hist.events;
+    if (!list.length) { box.appendChild(el("p", "nr-empty", "Nothing has been sent in the last 14 days.")); return; }
+    const sum = ev.summarize(list, Date.now());
+    if (sum.reminders.length) {
+      box.appendChild(el("h3", "nr-h3", "How it went"));
+      const all = el("p", "rm-sum-all", "All reminders: " + historySummaryText(sum.all));
+      box.appendChild(all);
+      sum.reminders.forEach(function (s) {
+        const row = el("div", "rm-sum-row");
+        const head = el("div", "rm-sum-head");
+        head.appendChild(el("span", "rm-title", s.title));
+        head.appendChild(el("span", "rm-sub", historySummaryText(s)));
+        row.appendChild(head);
+        row.appendChild(summaryBar(s));
+        box.appendChild(row);
+      });
+      box.appendChild(el("p", "nr-hint", "“No answer” means the reminder passed and you didn't tap Done or Skip. It doesn't mean you didn't do it."));
+    }
+    box.appendChild(el("h3", "nr-h3 rm-hist-h", "Every notification"));
+    let lastDay = "";
+    list.forEach(function (e) {
+      const zone = e.timezone || (state.settings && state.settings.timezone) || deviceZone();
+      const day = dayText(e.scheduledFor, zone);
+      if (day !== lastDay) { box.appendChild(el("p", "rm-hist-day", day)); lastDay = day; }
+      const tappable = e.kind === "reminder" && !!e.reminderId;
+      const row = el(tappable ? "button" : "div", "rm-hist-row");
+      if (tappable) {
+        row.type = "button";
+        row.setAttribute("aria-label", e.title + " at " + timeText(e.scheduledFor, zone) + ". Open options.");
+        row.addEventListener("click", function () { openAct(itemFromEvent(e), row); });
+      }
+      row.appendChild(el("span", "rm-hist-time", timeText(e.scheduledFor, zone)));
+      row.appendChild(el("span", "rm-hist-title", e.kind === "test" ? "JARVIS test" : e.title));
+      const lab = historyLabel(e);
+      row.appendChild(el("span", "rm-hist-chip nr-status-" + lab.cls, lab.text));
+      if (e.lastError && (e.status === "failed" || e.status === "missed")) row.title = e.lastError;
+      box.appendChild(row);
+    });
+    if (state.hist.truncated) box.appendChild(el("p", "nr-hint", "Showing the most recent " + list.length + "."));
+  }
+
+  function loadHistory() {
+    if (!ev) return;
+    if (!signedIn()) { $("rmHistStatus").textContent = "Sign in to JARVIS to see the history."; return; }
+    if (state.histBusy) return;
+    state.histBusy = true;
+    $("rmHistStatus").textContent = "Loading…";
+    $("rmHistBtn").disabled = true;
+    call({ action: "events", days: 14 }).then(function (res) {
+      if (!res || res.ok !== true || !Array.isArray(res.events)) throw badShape();
+      state.hist = { events: res.events.map(cleanEvent).filter(Boolean), truncated: res.truncated === true };
+      $("rmHistStatus").textContent = "";
+      $("rmHistBtn").textContent = "Refresh";
+    }).catch(function (err) {
+      $("rmHistStatus").textContent = errText(err);
+    }).then(function () {
+      state.histBusy = false;
+      $("rmHistBtn").disabled = false;
+      renderHistory();
     });
   }
 
@@ -914,6 +1303,7 @@
     $("rmModal").addEventListener("click", function (e) { if (e.target === $("rmModal")) closeForm(); });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !$("rmModal").classList.contains("hidden")) closeForm();
+      else if (e.key === "Escape" && !$("rmActModal").classList.contains("hidden") && !state.actBusy) closeAct();
     });
     $("rmTitle").addEventListener("input", function () { if (state.form) state.form.title = $("rmTitle").value; });
     $("rmNotes").addEventListener("input", function () { if (state.form) state.form.notes = $("rmNotes").value; });
@@ -944,9 +1334,14 @@
     $("rmNotifMissingBtn").addEventListener("click", function () { reportCheck("missing"); });
     if ("serviceWorker" in navigator && navigator.serviceWorker.addEventListener) {
       navigator.serviceWorker.addEventListener("message", function (e) {
-        if (e && e.data && e.data.type === "jarvis-open-reminder") openFromNotification();
+        if (e && e.data && e.data.type === "jarvis-open-reminder") openFromNotification(typeof e.data.id === "string" ? e.data.id : "");
       });
     }
+    $("rmActCloseBtn").addEventListener("click", closeAct);
+    $("rmActDone").addEventListener("click", function () { doAct("done"); });
+    $("rmActSkip").addEventListener("click", function () { doAct("skip"); });
+    $("rmActUndo").addEventListener("click", function () { doAct("undo"); });
+    $("rmHistBtn").addEventListener("click", loadHistory);
     $("rmSettingsSaveBtn").addEventListener("click", function () { saveSettings(false); });
     $("rmSettingsMoveBtn").addEventListener("click", function () { saveSettings(true); });
 
@@ -954,6 +1349,7 @@
     $("habitsSubNavReminders").addEventListener("click", function () {
       render();
       if (!state.loaded || state.error) load(); else if (Date.now() - (state.lastLoadAt || 0) > 5 * 60000) load();
+      else if (Date.now() - state.eventsAt > 30000) loadEvents();
       state.lastLoadAt = Date.now();
       if (!push.loaded || !push.cfg || Date.now() - (push.lastRefreshAt || 0) > 60000) { push.lastRefreshAt = Date.now(); refreshPush(); }
     });
@@ -961,7 +1357,13 @@
     if (tickTimer) clearInterval(tickTimer);
     tickTimer = setInterval(function () {
       const panel = $("habits-reminders");
-      if (panel && panel.classList.contains("active") && state.loaded) { renderHero(); renderToday(); }
+      if (panel && panel.classList.contains("active") && state.loaded) {
+        // A new day (or a reminder's today list gone stale) means asking the server again.
+        if (state.loadedDay && state.loadedDay !== core().todayISODate()) load();
+        else if (state.eventsLoaded && !document.hidden && Date.now() - state.eventsAt > 3 * 60000) loadEvents();
+        renderHero();
+        renderToday();
+      }
     }, 60000);
   }
 
@@ -972,10 +1374,13 @@
     renderQuick();
     wire();
     render();
-    // JARVIS was opened by tapping a notification.
-    if (/[?&]reminder=/.test(window.location.search)) {
+    // JARVIS was opened by tapping a notification: ?reminder=<the reminder's record>.
+    const tapped = window.location.search.match(/[?&]reminder=([^&#]*)/);
+    if (tapped) {
       try { window.history.replaceState(null, "", window.location.pathname); } catch (e) { /* ignore */ }
-      openFromNotification();
+      let id = "";
+      try { id = decodeURIComponent(tapped[1]); } catch (e) { id = ""; }
+      openFromNotification(id);
     }
   }
 

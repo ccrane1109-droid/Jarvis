@@ -39,10 +39,10 @@ function fakeDb(initial) {
       };
     },
     collection(path) {
-      const q = { filters: [], order: null, max: Infinity };
+      const q = { filters: [], order: null, dir: "asc", max: Infinity };
       const query = {
         where(field, op, value) { q.filters.push({ field, op, value }); return query; },
-        orderBy(field) { q.order = field; return query; },
+        orderBy(field, dir) { q.order = field; q.dir = dir === "desc" ? "desc" : "asc"; return query; },
         limit(n) { q.max = n; return query; },
         async get() {
           const prefix = path + "/";
@@ -53,11 +53,14 @@ function fakeDb(initial) {
             }
           });
           q.filters.forEach((f) => {
-            if (f.op !== "<=") throw new Error("fake query: only <= is supported");
+            if (f.op !== "<=" && f.op !== ">=") throw new Error("fake query: only <= and >= are supported");
             // Like Firestore, a range filter only matches values of the same type (so null never matches).
-            docs = docs.filter((d) => typeof d.data()[f.field] === "string" && d.data()[f.field] <= f.value);
+            docs = docs.filter((d) => typeof d.data()[f.field] === "string" && (f.op === "<=" ? d.data()[f.field] <= f.value : d.data()[f.field] >= f.value));
           });
-          if (q.order) docs.sort((a, b) => (a.data()[q.order] < b.data()[q.order] ? -1 : a.data()[q.order] > b.data()[q.order] ? 1 : 0));
+          if (q.order) {
+            const sign = q.dir === "desc" ? -1 : 1;
+            docs.sort((a, b) => sign * (a.data()[q.order] < b.data()[q.order] ? -1 : a.data()[q.order] > b.data()[q.order] ? 1 : 0));
+          }
           return { docs: docs.slice(0, q.max) };
         }
       };

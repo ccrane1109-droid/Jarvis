@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
 
@@ -1864,8 +1864,23 @@
 
       <section class="nr-card" aria-labelledby="rmTodayTitle">
         <h2 class="nr-h" id="rmTodayTitle">Today</h2>
+        <div class="rm-progress hidden" id="rmProgress">
+          <div class="rm-progress-track" id="rmProgressBar" role="progressbar" aria-labelledby="rmProgressText" aria-valuemin="0" aria-valuemax="100"><span class="rm-progress-fill" id="rmProgressFill"></span></div>
+          <p class="rm-progress-text" id="rmProgressText"></p>
+        </div>
+        <div class="rm-open hidden" id="rmOpen"></div>
         <p class="nr-hint" id="rmTodayHint"></p>
         <div id="rmToday" aria-live="polite"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmHistTitle">
+        <h2 class="nr-h" id="rmHistTitle">History</h2>
+        <p class="nr-hint" id="rmHistHint">What was sent and what you did about it. “Sent” means the push service accepted the message. It can't show whether your phone displayed it.</p>
+        <div class="nr-actions-row">
+          <button type="button" class="nr-btn nr-btn-ghost" id="rmHistBtn">Show the last 14 days</button>
+        </div>
+        <p class="nr-status-line" id="rmHistStatus" role="status"></p>
+        <div id="rmHist" aria-live="polite"></div>
       </section>
 
       <section class="nr-card" aria-labelledby="rmListTitle">
@@ -4190,6 +4205,29 @@
   </div>
 </div>
 
+  <div class="modal-overlay hidden sheet-overlay nr-scope rm-scope" id="rmActModal" role="dialog" aria-modal="true" aria-labelledby="rmActTitle">
+    <div class="modal-box sheet-box">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="card-title-row">
+        <h2 id="rmActTitle">Reminder</h2>
+        <button type="button" class="btn-icon" id="rmActCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <p class="rm-sub rm-act-when" id="rmActWhen"></p>
+      <p class="rm-act-state" id="rmActState" role="status"></p>
+      <p class="nr-hint rm-med-note hidden" id="rmActMed">Only tap Done if you've taken it. JARVIS never marks medication as taken for you.</p>
+      <div class="rm-act-main" id="rmActMain">
+        <button type="button" class="btn btn-primary" id="rmActDone">Done</button>
+        <button type="button" class="btn btn-secondary" id="rmActSkip">Skip</button>
+      </div>
+      <div class="rm-act-snooze" id="rmActSnoozeWrap">
+        <span class="rm-label" id="rmActSnoozeLabel">Or remind me again in</span>
+        <div class="rm-seg" id="rmActSnooze" role="group" aria-labelledby="rmActSnoozeLabel"></div>
+      </div>
+      <button type="button" class="btn btn-secondary hidden" id="rmActUndo">Undo</button>
+      <p class="nr-form-error" id="rmActError" role="alert"></p>
+    </div>
+  </div>
+
   <div class="modal-overlay hidden sheet-overlay nr-scope rm-scope" id="rmModal" role="dialog" aria-modal="true" aria-labelledby="rmModalTitle">
     <div class="modal-box sheet-box">
       <div class="sheet-handle" aria-hidden="true"></div>
@@ -4442,29 +4480,30 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=43"></script>
-<script type="module" src="js/auth.js?v=43"></script>
-<script src="js/app.js?v=43"></script>
-<script src="js/exercises.js?v=43"></script>
-<script src="js/workout.js?v=43"></script>
-<script src="js/nutrition.js?v=43"></script>
-<script src="js/nutrition-label-scan.js?v=43"></script>
-<script src="js/groceries.js?v=43"></script>
-<script src="js/habits.js?v=43"></script>
-<script src="functions/lib/reminder-spec.js?v=43"></script>
-<script src="js/reminders.js?v=43"></script>
-<script src="js/business.js?v=43"></script>
-<script src="js/trading.js?v=43"></script>
-<script src="js/blobstore.js?v=43"></script>
-<script src="js/video-api-client.js?v=43"></script>
-<script src="js/video-connections.js?v=43"></script>
-<script src="js/video.js?v=43"></script>
-<script src="js/video-studio.js?v=43"></script>
-<script src="functions/lib/idea-spec.js?v=43"></script>
-<script src="functions/lib/niche-spec.js?v=43"></script>
-<script src="js/marketing-stats.js?v=43"></script>
-<script src="js/niche-research.js?v=43"></script>
-<script src="js/content-intelligence.js?v=43"></script>
-<script src="js/form-check.js?v=43"></script>
+<script src="js/firebase-config.js?v=44"></script>
+<script type="module" src="js/auth.js?v=44"></script>
+<script src="js/app.js?v=44"></script>
+<script src="js/exercises.js?v=44"></script>
+<script src="js/workout.js?v=44"></script>
+<script src="js/nutrition.js?v=44"></script>
+<script src="js/nutrition-label-scan.js?v=44"></script>
+<script src="js/groceries.js?v=44"></script>
+<script src="js/habits.js?v=44"></script>
+<script src="functions/lib/reminder-spec.js?v=44"></script>
+<script src="functions/lib/reminder-events.js?v=44"></script>
+<script src="js/reminders.js?v=44"></script>
+<script src="js/business.js?v=44"></script>
+<script src="js/trading.js?v=44"></script>
+<script src="js/blobstore.js?v=44"></script>
+<script src="js/video-api-client.js?v=44"></script>
+<script src="js/video-connections.js?v=44"></script>
+<script src="js/video.js?v=44"></script>
+<script src="js/video-studio.js?v=44"></script>
+<script src="functions/lib/idea-spec.js?v=44"></script>
+<script src="functions/lib/niche-spec.js?v=44"></script>
+<script src="js/marketing-stats.js?v=44"></script>
+<script src="js/niche-research.js?v=44"></script>
+<script src="js/content-intelligence.js?v=44"></script>
+<script src="js/form-check.js?v=44"></script>
 </body>
 </html>
