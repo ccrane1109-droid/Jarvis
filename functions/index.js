@@ -23,6 +23,7 @@ const research = require("./lib/research");
 const niche = require("./lib/niche");
 const library = require("./lib/library");
 const reminders = require("./lib/reminders");
+const reminderLog = require("./lib/reminder-log");
 const push = require("./lib/push");
 const delivery = require("./lib/delivery");
 const webpush = require("web-push");
@@ -95,11 +96,16 @@ exports.marketingLibrary = onCall(
   Object.assign({}, BASE, { timeoutSeconds: 30 }),
   (request) => guarded("marketingLibrary", () => library.handle(uidOf(request), request.data || {}, deps())));
 
-// Reminders: storage and management (create, edit, delete, enable, settings).
-// Owner only; no secrets, no InsightSocial or Claude calls, no cost beyond Firestore.
+// Reminders: storage and management (create, edit, delete, enable, settings) and what you do
+// about them (done, skip, snooze, history). Owner only; no secrets, no InsightSocial or Claude
+// calls, no cost beyond Firestore.
 exports.reminders = onCall(
   Object.assign({}, BASE, { timeoutSeconds: 30 }),
-  (request) => guarded("reminders", () => reminders.handle(uidOf(request), request.data || {}, deps())));
+  (request) => guarded("reminders", () => {
+    const data = request.data || {};
+    const handler = reminderLog.ACTIONS.indexOf(data.action) !== -1 ? reminderLog : reminders;
+    return handler.handle(uidOf(request), data, deps());
+  }));
 
 // Phone notifications: turning them on for a phone, sending a test, and (below) the
 // once-a-minute run that sends reminders that have come due.

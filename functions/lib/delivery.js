@@ -13,9 +13,12 @@
 
    Firestore (written only by the server):
      users/{uid}/reminderEvents/{reminderId}_{moment}
-        { kind, reminderId, category, title, lockTitle, lockBody, scheduledFor, deliverAt,
-          sendDue, status, attempts, devices, accepted, createdAt, sentAt, finishedAt, lastError }
-     status: queued -> sent | missed | failed | no-device
+        { kind, reminderId, category, title, timezone, lockTitle, lockBody, scheduledFor, deliverAt,
+          sendDue, status, attempts, devices, accepted, createdAt, sentAt, finishedAt, lastError,
+          outcome, outcomeAt, snoozedUntil, snoozeCount }
+     status: queued -> sent | missed | failed | no-device | cancelled
+     outcome (done / skipped), snoozedUntil and snoozeCount are only ever set by you, through
+     reminder-log.js. This file never sets them.
 
    A reminder more than 30 minutes past its time is marked "missed" and not
    sent: a stale "take it now" is worse than none. Everything is recorded, so
@@ -30,6 +33,7 @@
 const reminders = require("./reminders");
 const time = require("./reminder-time");
 const spec = require("./reminder-spec");
+const events = require("./reminder-events");
 const push = require("./push");
 
 const MAX_PER_RUN = 25;
@@ -41,17 +45,16 @@ const MAX_ATTEMPTS = 3;
 const remindersPath = (uid) => "users/" + uid + "/reminders";
 const eventsPath = (uid) => "users/" + uid + "/reminderEvents";
 
-function eventIdFor(reminderId, momentIso) {
-  return reminderId + "_" + momentIso.replace(/[^0-9]/g, "");
-}
+const eventIdFor = events.eventIdFor;
 
 function isoPlus(date, ms) { return new Date(date.getTime() + ms).toISOString(); }
 
 function newEvent(fields, now) {
   return Object.assign({
-    kind: "reminder", reminderId: null, category: "custom", title: "", lockTitle: "", lockBody: "",
+    kind: "reminder", reminderId: null, category: "custom", title: "", timezone: null, lockTitle: "", lockBody: "",
     scheduledFor: null, deliverAt: null, sendDue: null, status: "queued", attempts: 0, devices: 0, accepted: 0,
-    createdAt: now.toISOString(), sentAt: null, finishedAt: null, lastError: null
+    createdAt: now.toISOString(), sentAt: null, finishedAt: null, lastError: null,
+    outcome: null, outcomeAt: null, snoozedUntil: null, snoozeCount: 0
   }, fields);
 }
 
@@ -84,7 +87,7 @@ async function claim(uid, deps, reminderId, scheduledFor, settings, now) {
       const deliverAt = held ? time.quietEndAfter(due, settings.quiet, zone).toISOString() : scheduledFor;
       const lock = push.lockScreenText(r, spec.categoryOf(r.category));
       tx.create(refEvent, newEvent({
-        kind: "reminder", reminderId: reminderId, category: r.category, title: r.title, lockTitle: lock.title, lockBody: lock.body,
+        kind: "reminder", reminderId: reminderId, category: r.category, title: r.title, timezone: zone, lockTitle: lock.title, lockBody: lock.body,
         scheduledFor: scheduledFor, deliverAt: deliverAt, sendDue: deliverAt
       }, now));
     }
@@ -170,4 +173,4 @@ async function runTick(uid, deps) {
   return summary;
 }
 
-module.exports = { MAX_LATE_MS, MAX_ATTEMPTS, LEASE_MS, RETRY_MS, eventIdFor, queueEvent, runTick };
+module.exports = { MAX_LATE_MS, MAX_ATTEMPTS, LEASE_MS, RETRY_MS, eventIdFor, newEvent, queueEvent, runTick };

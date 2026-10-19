@@ -11,7 +11,7 @@ those keys as Firebase secrets so they never reach a browser or this repo:
 | `marketingStatus` | Server/key status, this month's usage and budget, last research run | No |
 | `insightRequest` | Allow-listed InsightSocial lookups (profiles cached 12h, searches 20h), capped monthly | InsightSocial credits, only on a fresh request |
 | `researchNiche` | "Research My Niche": a **quick refresh** (3 TikTok keywords that rotate day by day, 30 credits) or a **full sweep** (up to 7 TikTok keywords + 3 Instagram hashtags, up to 220 credits; suggested once a week). Both are limited per run and per month, and the posts found are saved to your research library | InsightSocial credits, only for searches not already saved in the last 20 hours |
-| `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included | Nothing beyond free-tier Firestore |
+| `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included. Also what you do about each one: mark it done, skip it, snooze it, undo that, and the recent history | Nothing beyond free-tier Firestore |
 | `notifications` | Phone notifications: remembers which phones you turned notifications on for, and sends the "Send a test now" and "Test in 90 seconds" messages | Nothing (free push services from Apple, Google, Mozilla and Microsoft) |
 | `reminderTick` | Runs **every minute** (Cloud Scheduler). Finds reminders that are due, records each one once, and sends it to your phones. Reminders more than 30 minutes late are marked missed, not sent | Free tier covers it; see "Reminder delivery" below |
 | `marketingLibrary` | Reads your research library (every post past runs found) and bookmarks posts | No |
@@ -152,6 +152,21 @@ notifications on again.
   tick makes two empty database queries a minute, which Firestore counts as
   about one read each: roughly 2,900 reads a day against the 50,000 a day the
   free tier lists.
+- **Answering a reminder.** Tapping a notification opens JARVIS on that reminder's
+  options (iPhone web notifications can't carry Done or Snooze buttons on the
+  lock screen, as far as I can tell; I haven't confirmed this on your phone).
+  **Done** and **Skip** record your answer on the reminder's record
+  (`outcome`: `done` or `skipped`, with `outcomeAt`). **Snooze** (5, 10, 15, 30
+  minutes or 1 hour; up to 6 times) puts the same record back in the delivery
+  queue for that time, so the next once-a-minute run sends it again and the new
+  notification replaces the old one. Marking a reminder done *before* its time
+  writes its record in advance as `cancelled`, so it doesn't go off; undoing that
+  while the time is still ahead removes the record. **Only a tap from you ever
+  sets an answer. Nothing on the server does, and medication is no exception.**
+  Today's progress (done out of everything you didn't skip) and the "still open"
+  list are worked out from these records by `functions/lib/reminder-events.js`,
+  the same file the page uses, with no Claude calls. Records are kept; nothing
+  deletes them yet (about 20 a day at most).
 - Phone subscriptions, reminder records and reminder bookkeeping are stored at
   `users/{yourUid}/pushSubscriptions`, `reminderEvents` and `reminderState`,
   written only by the server and not readable from a browser. A phone's push
