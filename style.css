@@ -2617,3 +2617,12 @@ button.rm-hist-row { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .rm-progress-fill { transition: none; }
 }
+
+/* Label scan: values the scan wasn't sure of, and the raw text it read */
+.scan-check { box-shadow: 0 0 0 2px rgba(245, 184, 76, 0.75); border-radius: var(--radius-sm); }
+.scan-raw { margin: 4px 0 8px; }
+.scan-raw summary { cursor: pointer; font-size: 12.5px; color: var(--text-dim); padding: 6px 0; }
+.scan-raw pre {
+  margin: 4px 0 0; padding: 10px 12px; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: 12px; line-height: 1.45; color: var(--text-dim); background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+}

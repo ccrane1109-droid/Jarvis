@@ -1589,6 +1589,30 @@
     if (connectionsTabBtn) connectionsTabBtn.click();
   }
 
+  // Scan helpers: friendly names, the amber "check this" outline, and the raw text the scanner read.
+  function scanNames() { return (window.JarvisLabelParse && window.JarvisLabelParse.NAMES) || {}; }
+  function markScanCheck(namePrefix, field) {
+    const input = $(namePrefix + capitalize(field));
+    if (!input) return;
+    input.classList.add("scan-check");
+    input.addEventListener("input", function () { input.classList.remove("scan-check"); }, { once: true });
+  }
+  function clearScanMarks(namePrefix) {
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
+      const input = $(namePrefix + capitalize(f));
+      if (input) input.classList.remove("scan-check");
+    });
+    setScanRaw(namePrefix, "");
+  }
+  function setScanRaw(namePrefix, text) {
+    const wrap = $(namePrefix + "ScanRawWrap");
+    const pre = $(namePrefix + "ScanRaw");
+    if (!wrap || !pre) return;
+    pre.textContent = text || "";
+    wrap.classList.toggle("hidden", !text);
+    wrap.open = false;
+  }
+
   // Shared by the Food Log and Saved Foods "Scan Label" buttons: runs the
   // on-device OCR scan (js/nutrition-label-scan.js — no AI connection or
   // API key needed) and fills in whichever of the same editable macro/micro
@@ -1605,6 +1629,7 @@
     const btn = $(btnId);
     if (btn) btn.disabled = true;
     setAiStatus(statusId, "Reading the label…");
+    clearScanMarks(namePrefix);
     // A fresh scan attempt invalidates whatever "Remember This Food" state
     // was left over from a previous photo on the Food Log form.
     if (namePrefix === "food") {
@@ -1615,6 +1640,7 @@
       setAiStatus(statusId, statusText);
     }).then(function (result) {
       if (btn) btn.disabled = false;
+      setScanRaw(namePrefix, result.rawText);
       if (!result.ok) {
         setAiStatus(statusId, result.error, true);
         return;
@@ -1622,10 +1648,20 @@
       MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
         if (isNonNegativeNumber(result.fields[f])) $(namePrefix + capitalize(f)).value = result.fields[f];
       });
+      // Values the scan wasn't sure of get an amber outline until you touch them.
+      (result.uncertain || []).forEach(function (f) { markScanCheck(namePrefix, f); });
       const servingInput = $(namePrefix + "Serving");
       if (result.servingSize && servingInput && !servingInput.value.trim()) servingInput.value = result.servingSize.slice(0, 40);
-      const foundList = Object.keys(result.fields);
-      setAiStatus(statusId, "Found " + foundList.length + " value" + (foundList.length === 1 ? "" : "s") + " on the label (" + foundList.join(", ") + ") — this is OCR, not guaranteed accurate, so double-check against the photo before saving.");
+      const names = scanNames();
+      const foundList = Object.keys(result.fields).map(function (k) { return names[k] || k; });
+      const parts = ["Found " + foundList.length + " value" + (foundList.length === 1 ? "" : "s") + " on the label (" + foundList.join(", ") + ")."];
+      const missing = (result.missing || []).map(function (k) { return names[k] || k; });
+      if (missing.length) parts.push("Couldn't read " + missing.join(", ") + ". Enter " + (missing.length === 1 ? "it" : "them") + " from the label yourself, or try another photo.");
+      const check = (result.uncertain || []).map(function (k) { return names[k] || k; });
+      if (check.length) parts.push("Double-check " + check.join(", ") + " (outlined).");
+      (result.warnings || []).forEach(function (w) { parts.push(w); });
+      parts.push("This is OCR, not guaranteed accurate, so check the numbers against the photo before saving.");
+      setAiStatus(statusId, parts.join(" "), missing.length > 0 || (result.warnings || []).length > 0);
       // The Saved Foods form's own "Save Food" button already remembers
       // whatever it scans — but the Food Log form only logs today's meal,
       // so offer a one-tap way to also remember this food for next time.
