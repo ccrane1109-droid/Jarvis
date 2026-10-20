@@ -234,3 +234,64 @@ test("a serving size whose g was read as a 9 is put right: (459) is (45g)", () =
   assert.equal(parse("Serving size 2 tbsp (30 mL)").servingSize, "2 tbsp (30 mL)");
   assert.equal(parse("Serving size 1 container (250g)").servingSize, "1 container (250g)");
 });
+
+/* ---------------- scaling to the amount you actually eat ---------------- */
+
+test("a weight or volume is read from the way servings are written", () => {
+  assert.deepEqual(P.parseAmount("250g"), { value: 250, unit: "g" });
+  assert.deepEqual(P.parseAmount("250 g"), { value: 250, unit: "g" });
+  assert.deepEqual(P.parseAmount("250 grams"), { value: 250, unit: "g" });
+  assert.deepEqual(P.parseAmount("1 container (170g)"), { value: 170, unit: "g" });
+  assert.deepEqual(P.parseAmount("3/4 cup (30g)"), { value: 30, unit: "g" });
+  assert.deepEqual(P.parseAmount("2 tbsp (30 mL)"), { value: 30, unit: "ml" });
+  assert.deepEqual(P.parseAmount("300ml"), { value: 300, unit: "ml" });
+  assert.deepEqual(P.parseAmount("1.5g"), { value: 1.5, unit: "g" });
+  assert.deepEqual(P.parseAmount("1,5 g"), { value: 1.5, unit: "g" }, "a decimal comma");
+  assert.deepEqual(P.parseAmount("About 1 cup (227g)"), { value: 227, unit: "g" });
+});
+
+test("the metric amount in brackets beats the household one, and ounces are converted", () => {
+  assert.deepEqual(P.parseAmount("6 oz (170g)"), { value: 170, unit: "g" });
+  assert.equal(P.parseAmount("6 oz").unit, "g");
+  assert.ok(Math.abs(P.parseAmount("6 oz").value - 170.1) < 0.1);
+  const fl = P.parseAmount("8 fl oz");
+  assert.equal(fl.unit, "ml");
+  assert.ok(Math.abs(fl.value - 236.6) < 0.1);
+});
+
+test("text with no weight or volume gives nothing, and mg or a bare number is never taken for grams", () => {
+  for (const t of ["1 cup", "2 scoops", "250", "1 container", "", null, undefined, "45mg", "0g", "g", "serving"]) assert.equal(P.parseAmount(t), null, String(t));
+});
+
+test("scaling: the label's serving against the amount you typed", () => {
+  const plan = P.scalingPlan("1 container (170g)", "250g");
+  assert.equal(plan.ok, true);
+  assert.ok(Math.abs(plan.factor - 250 / 170) < 1e-9);
+  assert.deepEqual(plan.label, { value: 170, unit: "g" });
+  assert.deepEqual(plan.mine, { value: 250, unit: "g" });
+  assert.equal(P.scalingPlan("1 cup (240 mL)", "120 ml").factor, 0.5);
+  assert.equal(P.scalingPlan("1 bar (45g)", "45g").factor, 1, "the same amount changes nothing");
+});
+
+test("scaling says why it can't be done instead of guessing", () => {
+  assert.deepEqual(P.scalingPlan("1 container (170g)", "1 cup"), { ok: false, reason: "no-amount" });
+  assert.deepEqual(P.scalingPlan("1 container (170g)", ""), { ok: false, reason: "no-amount" });
+  assert.deepEqual(P.scalingPlan("1 container (170g)", "250"), { ok: false, reason: "no-amount" }, "a bare number has no unit");
+  assert.equal(P.scalingPlan(null, "250g").reason, "no-label");
+  assert.equal(P.scalingPlan("1 cup", "250g").reason, "no-label");
+  assert.equal(P.scalingPlan("1 cup (240 mL)", "250g").reason, "units", "millilitres are not grams");
+  assert.equal(P.scalingPlan("1 container (170g)", "25000g").reason, "range");
+  assert.equal(P.scalingPlan("1 container (170000g)", "250g").reason, "range");
+});
+
+test("scaled numbers are rounded the way the form shows them, and no field is invented", () => {
+  const label = { calories: 120, protein: 17, carbs: 6, fat: 0, fiber: 0, sodium: 65, calcium: 200, iron: 0.4, potassium: 260, vitaminD: 0 };
+  const s = P.scaleFields(label, 250 / 170);
+  assert.deepEqual(s, { calories: 176, protein: 25, carbs: 8.8, fat: 0, fiber: 0, sodium: 96, calcium: 294, iron: 0.6, potassium: 382, vitaminD: 0 });
+  assert.deepEqual(Object.keys(P.scaleFields({ calories: 100 }, 2)), ["calories"]);
+  assert.deepEqual(P.scaleFields({}, 2), {});
+  assert.deepEqual(P.scaleFields(null, 2), {});
+  assert.deepEqual(P.scaleFields({ calories: "x", fat: NaN, protein: 4 }, 2), { protein: 8 });
+  assert.equal(P.scaleFields({ fat: 1.5 }, 1).fat, 1.5, "a factor of 1 leaves the label's numbers as printed");
+  assert.equal(P.scaleFields({ fat: 3.5 }, 0.5).fat, 1.8);
+});

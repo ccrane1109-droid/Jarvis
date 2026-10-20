@@ -22,6 +22,13 @@
 
    Plausibility checks never change a number. They only produce `warnings`
    (for example, calories that don't fit the fat, carbs and protein read).
+
+   Scaling: a label's numbers are for ITS serving ("1 container (170g)"). When
+   you log a different amount ("250g"), every number is multiplied by
+   250 / 170. Only a plain weight or volume you typed with a unit counts
+   (g, ml, oz, fl oz); a bare "250" or "1 cup" is never guessed at, and grams
+   are never compared with millilitres. scalingPlan() says whether it can be
+   done and, if not, why, so the page can tell you instead of staying quiet.
    ========================================================================== */
 
 (function (root, factory) {
@@ -242,5 +249,61 @@
     return { fields: fields, uncertain: uncertain, warnings: warnings, missing: missing, servingSize: servingSize, matchedCount: Object.keys(fields).length, rawText: text };
   }
 
-  return { parseNutritionLabelText: parseNutritionLabelText, checkFields: checkFields, FIELDS: FIELDS, NAMES: NAMES, MAIN: MAIN, LIMITS: LIMITS };
+  /* ---------------- scaling to the amount you actually eat ---------------- */
+
+  const OZ_TO_G = 28.3495;
+  const FL_OZ_TO_ML = 29.5735;
+  const MIN_FACTOR = 0.01;
+  const MAX_FACTOR = 100;
+  // Decimal places kept after scaling (whole numbers for calories and the larger minerals).
+  const DECIMALS = { calories: 0, sodium: 0, calcium: 0, potassium: 0, fat: 1, carbs: 1, fiber: 1, protein: 1, iron: 1, vitaminC: 1, vitaminD: 1 };
+
+  // A weight or volume written in text: "250g", "250 g", "1 cup (240 mL)", "6 oz (170g)", "8 fl oz".
+  // -> { value, unit: "g" | "ml" } in grams or millilitres, or null when there isn't one.
+  // A metric amount in brackets wins ("6 oz (170g)" is 170 g), then any metric amount, then ounces.
+  function parseAmount(text) {
+    const t = String(text === undefined || text === null ? "" : text).replace(/(\d),(\d{1,2})(?!\d)/g, "$1.$2");
+    let m = t.match(/\(\s*(\d+(?:\.\d+)?)\s*(g|grams?|ml|millilit(?:er|re)s?)\s*\)/i);
+    if (!m) m = t.match(/(\d+(?:\.\d+)?)\s*(g|grams?|ml|millilit(?:er|re)s?)(?![a-z])/i);
+    if (m) {
+      const value = Number(m[1]);
+      return value > 0 ? { value: value, unit: /^g/i.test(m[2]) ? "g" : "ml" } : null;
+    }
+    m = t.match(/(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|oz)(?![a-z])/i);
+    if (m) {
+      const value = Number(m[1]);
+      if (!(value > 0)) return null;
+      return /fl/i.test(m[2]) ? { value: value * FL_OZ_TO_ML, unit: "ml" } : { value: value * OZ_TO_G, unit: "g" };
+    }
+    return null;
+  }
+
+  // Can the label's numbers be scaled to the amount you typed? -> { ok, factor, label, mine } or { ok: false, reason }
+  //   reason: "no-amount" (you haven't typed a weight or volume), "no-label" (the label's serving couldn't be read),
+  //           "units" (grams on one side, millilitres on the other), "range" (the two differ absurdly, so one is a misread)
+  function scalingPlan(labelServingText, myAmountText) {
+    const mine = parseAmount(myAmountText);
+    if (!mine) return { ok: false, reason: "no-amount" };
+    const label = parseAmount(labelServingText);
+    if (!label) return { ok: false, reason: "no-label", mine: mine };
+    if (label.unit !== mine.unit) return { ok: false, reason: "units", label: label, mine: mine };
+    const factor = mine.value / label.value;
+    if (!(factor >= MIN_FACTOR && factor <= MAX_FACTOR)) return { ok: false, reason: "range", label: label, mine: mine, factor: factor };
+    return { ok: true, factor: factor, label: label, mine: mine };
+  }
+
+  // The label's numbers multiplied by factor and rounded the way the form shows them. Never invents a field.
+  function scaleFields(fields, factor) {
+    const out = {};
+    Object.keys(fields || {}).forEach(function (k) {
+      const v = fields[k];
+      if (typeof v !== "number" || !isFinite(v)) return;
+      const places = DECIMALS[k] === undefined ? 1 : DECIMALS[k];
+      const f = Math.pow(10, places);
+      out[k] = Math.round(v * factor * f) / f;
+    });
+    return out;
+  }
+
+  return { parseAmount: parseAmount, scalingPlan: scalingPlan, scaleFields: scaleFields, parseNutritionLabelText: parseNutritionLabelText, checkFields: checkFields, FIELDS: FIELDS, NAMES: NAMES, MAIN: MAIN, LIMITS: LIMITS };
 });

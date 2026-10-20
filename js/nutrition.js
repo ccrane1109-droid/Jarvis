@@ -1589,6 +1589,75 @@
     if (connectionsTabBtn) connectionsTabBtn.click();
   }
 
+  // What the last scan read off the label, per form: the label's own numbers and serving, kept so they can be
+  // scaled to a different amount later without compounding rounding. { fields, servingSize, factor, uncertain }
+  const scanBase = {};
+
+  function fmtAmount(a) {
+    const v = Math.round(a.value * 10) / 10;
+    return v + (a.unit === "ml" ? " mL" : " g");
+  }
+  function fmtFactor(f) { return String(Math.round(f * 100) / 100); }
+
+  function setScannedValues(namePrefix, values) {
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
+      if (isNonNegativeNumber(values[f])) $(namePrefix + capitalize(f)).value = values[f];
+    });
+  }
+
+  // The numbers as printed on the label, for the "What the scanner read" panel (useful once they've been scaled).
+  function labelSummary(base) {
+    const names = scanNames();
+    const list = Object.keys(base.fields).map(function (k) { return (names[k] || k) + " " + base.fields[k]; });
+    return "As printed on the label (for " + (base.servingSize || "the label's serving") + "): " + list.join(", ") + ".\n\n";
+  }
+
+  // The sentence explaining what happened to the numbers, and whether it needs attention.
+  function scalingMessage(plan, mineText, labelText) {
+    if (plan.ok) {
+      return plan.factor === 1
+        ? "Your " + mineText + " is the label's serving, so the numbers are as printed."
+        : { text: "Scaled to your " + mineText + ": the label's serving is " + fmtAmount(plan.label) + ", so every number is ×" + fmtFactor(plan.factor) + ". The numbers as printed are under \u201cWhat the scanner read\u201d.", scaled: true };
+    }
+    if (plan.reason === "no-label") return { text: "Couldn't read the label's serving size, so these numbers are for the label's own serving, not your " + mineText + ". Check them against the label.", problem: true };
+    if (plan.reason === "units") return { text: "The label's serving is " + fmtAmount(plan.label) + " but yours is " + mineText + " (a volume against a weight), so the numbers weren't scaled. They're for the label's serving.", problem: true };
+    if (plan.reason === "range") return { text: "The label's serving (" + fmtAmount(plan.label) + ") and yours (" + mineText + ") are too far apart to be right, so the numbers weren't scaled. One of them may be misread.", problem: true };
+    return { text: "\u201c" + mineText + "\u201d isn't a weight or volume with a unit, so the numbers are for the label's serving" + (labelText ? " (" + labelText + ")" : "") + ". Type it like 250g to have them scaled.", problem: false };
+  }
+
+  // After a scan, typing a new amount offers to scale the scanned numbers to it (never silently: you may have
+  // edited some numbers by hand).
+  function updateRescaleButton(namePrefix) {
+    const row = $(namePrefix + "ScanRescaleRow");
+    const btn = $(namePrefix + "ScanRescaleBtn");
+    if (!row || !btn) return;
+    const base = scanBase[namePrefix];
+    const input = $(namePrefix + "Serving");
+    let show = false;
+    if (base && input) {
+      const plan = window.JarvisLabelParse.scalingPlan(base.servingSize, input.value);
+      if (plan.ok && Math.abs(plan.factor - base.factor) > 1e-9) {
+        show = true;
+        btn.textContent = "Scale the scanned numbers to " + input.value.trim();
+      }
+    }
+    row.classList.toggle("hidden", !show);
+  }
+
+  function handleRescaleClick(namePrefix) {
+    const base = scanBase[namePrefix];
+    const input = $(namePrefix + "Serving");
+    if (!base || !input) return;
+    const plan = window.JarvisLabelParse.scalingPlan(base.servingSize, input.value);
+    if (!plan.ok) return;
+    setScannedValues(namePrefix, window.JarvisLabelParse.scaleFields(base.fields, plan.factor));
+    base.factor = plan.factor;
+    $(namePrefix + "ScanRescaleRow").classList.add("hidden");
+    const m = scalingMessage(plan, input.value.trim(), base.servingSize);
+    setAiStatus(namePrefix + "ScanStatus", (typeof m === "string" ? m : m.text) + " Double-check anything outlined before saving.");
+    setScanRaw(namePrefix, labelSummary(base) + (base.rawText || ""));
+  }
+
   // Scan helpers: friendly names, the amber "check this" outline, and the raw text the scanner read.
   function scanNames() { return (window.JarvisLabelParse && window.JarvisLabelParse.NAMES) || {}; }
   function markScanCheck(namePrefix, field) {
@@ -1603,6 +1672,8 @@
       if (input) input.classList.remove("scan-check");
     });
     setScanRaw(namePrefix, "");
+    delete scanBase[namePrefix];
+    updateRescaleButton(namePrefix);
   }
   function setScanRaw(namePrefix, text) {
     const wrap = $(namePrefix + "ScanRawWrap");
@@ -1645,13 +1716,27 @@
         setAiStatus(statusId, result.error, true);
         return;
       }
-      MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
-        if (isNonNegativeNumber(result.fields[f])) $(namePrefix + capitalize(f)).value = result.fields[f];
-      });
+      const parse = window.JarvisLabelParse;
+      const servingInput = $(namePrefix + "Serving");
+      // The label's numbers are for the label's serving. If you've already typed the amount you're having
+      // ("250g"), every number is scaled to it; with no amount typed, the label's own serving is filled in.
+      const mineText = servingInput ? servingInput.value.trim() : "";
+      let plan = null;
+      let values = result.fields;
+      let scaling = null;
+      if (mineText) {
+        plan = parse.scalingPlan(result.servingSize, mineText);
+        if (plan.ok) values = parse.scaleFields(result.fields, plan.factor);
+        scaling = scalingMessage(plan, mineText, result.servingSize);
+      } else if (result.servingSize && servingInput) {
+        servingInput.value = result.servingSize.slice(0, 40);
+      }
+      setScannedValues(namePrefix, values);
+      scanBase[namePrefix] = { fields: Object.assign({}, result.fields), servingSize: result.servingSize, factor: plan && plan.ok ? plan.factor : 1, rawText: result.rawText };
       // Values the scan wasn't sure of get an amber outline until you touch them.
       (result.uncertain || []).forEach(function (f) { markScanCheck(namePrefix, f); });
-      const servingInput = $(namePrefix + "Serving");
-      if (result.servingSize && servingInput && !servingInput.value.trim()) servingInput.value = result.servingSize.slice(0, 40);
+      if (plan && plan.ok && plan.factor !== 1) setScanRaw(namePrefix, labelSummary(scanBase[namePrefix]) + result.rawText);
+      updateRescaleButton(namePrefix);
       const names = scanNames();
       const foundList = Object.keys(result.fields).map(function (k) { return names[k] || k; });
       const parts = ["Found " + foundList.length + " value" + (foundList.length === 1 ? "" : "s") + " on the label (" + foundList.join(", ") + ")."];
@@ -1660,8 +1745,13 @@
       const check = (result.uncertain || []).map(function (k) { return names[k] || k; });
       if (check.length) parts.push("Double-check " + check.join(", ") + " (outlined).");
       (result.warnings || []).forEach(function (w) { parts.push(w); });
+      let scaleProblem = false;
+      if (scaling) {
+        parts.push(typeof scaling === "string" ? scaling : scaling.text);
+        scaleProblem = typeof scaling !== "string" && !!scaling.problem;
+      }
       parts.push("This is OCR, not guaranteed accurate, so check the numbers against the photo before saving.");
-      setAiStatus(statusId, parts.join(" "), missing.length > 0 || (result.warnings || []).length > 0);
+      setAiStatus(statusId, parts.join(" "), missing.length > 0 || (result.warnings || []).length > 0 || scaleProblem);
       // The Saved Foods form's own "Save Food" button already remembers
       // whatever it scans — but the Food Log form only logs today's meal,
       // so offer a one-tap way to also remember this food for next time.
@@ -2381,6 +2471,8 @@
     $("foodForm").addEventListener("submit", handleFoodFormSubmit);
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
     $("foodScanLabelBtn").addEventListener("click", function () { $("foodScanLabelInput").click(); });
+    $("foodServing").addEventListener("input", function () { updateRescaleButton("food"); });
+    $("foodScanRescaleBtn").addEventListener("click", function () { handleRescaleClick("food"); });
     $("foodScanLabelInput").addEventListener("change", handleScanFoodLabelInput);
     $("foodRememberBtn").addEventListener("click", handleRememberFoodClick);
     $("foodName").addEventListener("input", handleFoodNameInputForMatch);
@@ -2401,6 +2493,8 @@
     $("savedFoodForm").addEventListener("submit", handleSavedFoodFormSubmit);
     $("savedFoodCancelBtn").addEventListener("click", resetSavedFoodForm);
     $("savedFoodScanLabelBtn").addEventListener("click", function () { $("savedFoodScanLabelInput").click(); });
+    $("savedFoodServing").addEventListener("input", function () { updateRescaleButton("savedFood"); });
+    $("savedFoodScanRescaleBtn").addEventListener("click", function () { handleRescaleClick("savedFood"); });
     $("savedFoodScanLabelInput").addEventListener("change", handleScanSavedFoodLabelInput);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
     $("savedFoodSearchInput").addEventListener("input", function (e) { savedFoodSearch = e.target.value; renderSavedFoods(); });
