@@ -54,7 +54,22 @@
   const DETAIL_LONG_SIDE = 2000;     // the label area, re-read at this size
   const FULL_FRAME_LONG_SIDE = 2400; // when no label could be located, read the whole photo at higher detail
 
+  const PASS_TIMEOUT_MS = 60000;    // the first reading may take this long before it is abandoned
+  const LATER_PASS_TIMEOUT_MS = 40000; // so may each later one, which are bigger or fiddlier but less likely to be needed
+  const TOTAL_BUDGET_MS = 90000;   // after this long, no further reading is started
+  const IDLE_RELEASE_MS = 60000;    // the engine (a hundred MB or so) is let go this long after a scan
+  const MAX_READINGS = 4;
+  // Below this page-level confidence from the engine, every number is flagged. Measured on synthetic label photos
+  // with two recognition models: every photo that was read fully right scored 76 or more, badly read ones mostly under 70.
+  const LOW_CONFIDENCE = 70;
+
   let workerPromise = null;
+  let workerHandle = null;
+  let idleTimer = null;
+  let scanning = false;
+  // Where the engine's progress messages go: always the scan that is running NOW. (The engine is created once and
+  // kept; a callback captured at creation would keep reporting into the first scan's form for good.)
+  let progressHook = null;
 
   function loadScriptOnce(src) {
     return new Promise(function (resolve, reject) {
@@ -68,9 +83,9 @@
     });
   }
 
-  function ensureWorker(onStatus) {
+  function ensureWorker() {
     if (workerPromise) return workerPromise;
-    onStatus("Loading the text-recognition engine… (first time only, a few MB)");
+    if (progressHook) progressHook({ text: "Loading the text-recognition engine… (first time only, a few MB)" });
     workerPromise = loadScriptOnce(TESSERACT_URL)
       .then(function () {
         if (!window.Tesseract) throw new Error("Text-recognition library failed to load.");
@@ -86,19 +101,40 @@
           // resolution working.
           workerBlobURL: false,
           logger: function (m) {
-            if (m && m.status === "recognizing text" && typeof m.progress === "number") {
-              onStatus("Reading the label… " + Math.round(m.progress * 100) + "%");
-            } else if (m && m.status && m.status.indexOf("loading") !== -1) {
-              onStatus("Downloading the English recognition data… (one-time, a few MB)");
-            }
+            const hook = progressHook;
+            if (!hook || !m) return;
+            if (m.status === "recognizing text" && typeof m.progress === "number") hook({ progress: m.progress });
+            else if (m.status && m.status.indexOf("loading") !== -1) hook({ text: "Downloading the English recognition data… (one-time, a few MB)" });
           }
         });
+      })
+      .then(function (w) {
+        workerHandle = w;
+        return w;
       })
       .catch(function (err) {
         workerPromise = null; // allow retry
         throw err;
       });
     return workerPromise;
+  }
+
+  // Lets go of the engine (and its memory). The next scan creates a new one, which is quick once the data is cached.
+  function releaseWorker() {
+    const w = workerHandle;
+    workerPromise = null;
+    workerHandle = null;
+    if (w && typeof w.terminate === "function") { try { w.terminate(); } catch (e) { /* already gone */ } }
+  }
+
+  function withTimeout(promise, ms, onTimeout) {
+    return new Promise(function (resolve, reject) {
+      const t = setTimeout(function () {
+        onTimeout();
+        reject(Object.assign(new Error("That took too long, so it was stopped."), { code: "timeout" }));
+      }, ms);
+      promise.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+    });
   }
 
   function fileToImage(file) {
@@ -152,6 +188,55 @@
     return canvas;
   }
 
+  function cloneCanvas(src) {
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext("2d").drawImage(src, 0, 0);
+    return c;
+  }
+
+  // Light text on a dark panel becomes dark text on a light one (the recognition engine expects the latter).
+  function invert(canvas) {
+    const g = canvas.getContext("2d");
+    const data = g.getImageData(0, 0, canvas.width, canvas.height);
+    const px = data.data;
+    for (let i = 0; i < px.length; i += 4) { px[i] = px[i + 1] = px[i + 2] = 255 - px[i]; }
+    g.putImageData(data, 0, 0);
+    return canvas;
+  }
+
+  // Black and white, deciding each pixel against its own neighbourhood, so a shadow or a bright patch across the
+  // label doesn't swallow part of the text. (Bradley's adaptive threshold, using an integral image.)
+  function binarize(canvas) {
+    const w = canvas.width, h = canvas.height;
+    const g = canvas.getContext("2d");
+    const data = g.getImageData(0, 0, w, h);
+    const px = data.data;
+    const integral = new Float64Array((w + 1) * (h + 1));
+    for (let y = 0; y < h; y++) {
+      let row = 0;
+      for (let x = 0; x < w; x++) {
+        row += px[(y * w + x) * 4];
+        integral[(y + 1) * (w + 1) + x + 1] = integral[y * (w + 1) + x + 1] + row;
+      }
+    }
+    const half = Math.max(8, Math.round(Math.max(w, h) / 24));
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - half), y1 = Math.min(h - 1, y + half);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - half), x1 = Math.min(w - 1, x + half);
+        const count = (x1 - x0 + 1) * (y1 - y0 + 1);
+        const sum = integral[(y1 + 1) * (w + 1) + x1 + 1] - integral[y0 * (w + 1) + x1 + 1] - integral[(y1 + 1) * (w + 1) + x0] + integral[y0 * (w + 1) + x0];
+        const i = (y * w + x) * 4;
+        const v = px[i] * count <= sum * 0.88 ? 0 : 255;
+        px[i] = px[i + 1] = px[i + 2] = v;
+      }
+    }
+    g.putImageData(data, 0, 0);
+    return canvas;
+  }
+
   /* ---------------- finding the label in a photo ---------------- */
 
   // The words a Nutrition Facts panel is made of, compared with the common OCR mix-ups (l/1 for i) folded away.
@@ -193,15 +278,18 @@
   // How good a reading looks: more values is better, a warning or a doubtful value costs a little.
   function quality(r) { return r.matchedCount * 10 - r.warnings.length * 8 - r.uncertain.length; }
 
-  // `a` is the first reading, `b` the closer second one (both parse results). Each value comes from whichever
-  // reading was sure of it; if both were, the better reading's value is used. Values the two readings disagree
-  // about are flagged so the page says to check them.
+  // `a` is everything read so far, `b` the newest reading (both parse results). Each value comes from whichever
+  // reading was sure of it; if both were, the better reading's value is used. Where the two disagree, the value
+  // that fits the rest of the label better (calories against fat/carbs/protein, amounts against Daily Values)
+  // is kept, and the value is flagged so the page says to check it.
   function mergeReadings(a, b) {
     const parser = window.JarvisLabelParse;
     const main = quality(b) >= quality(a) ? b : a;
     const other = main === a ? b : a;
+    const dvs = Object.assign({}, other.dvs, main.dvs);
     const fields = {};
     const uncertain = [];
+    const disagreeing = [];
     Object.keys(Object.assign({}, other.fields, main.fields)).forEach(function (k) {
       const inMain = main.fields[k] !== undefined, inOther = other.fields[k] !== undefined;
       const mainSure = inMain && main.uncertain.indexOf(k) === -1, otherSure = inOther && other.uncertain.indexOf(k) === -1;
@@ -209,16 +297,40 @@
       if (inMain && inOther && !mainSure && otherSure) pick = other;
       fields[k] = pick.fields[k];
       const disagree = inMain && inOther && main.fields[k] !== other.fields[k];
+      if (disagree) disagreeing.push(k);
       if (disagree || pick.uncertain.indexOf(k) !== -1) uncertain.push(k);
     });
-    // Check the combined set (calories against macros, fiber against carbs) rather than trusting either alone.
-    const check = parser.checkFields(fields);
+    // For each value the readings disagree on, try both against everything else; the one with fewer problems wins.
+    disagreeing.forEach(function (k) {
+      const problems = function (value) {
+        const trial = Object.assign({}, fields);
+        trial[k] = value;
+        return parser.checkFields(trial, dvs).warnings.length;
+      };
+      const withMain = problems(main.fields[k]), withOther = problems(other.fields[k]);
+      if (withMain < withOther) fields[k] = main.fields[k];
+      else if (withOther < withMain) fields[k] = other.fields[k];
+    });
+    // Check the combined set (calories against macros, fiber against carbs, amounts against Daily Values) rather
+    // than trusting either alone.
+    const check = parser.checkFields(fields, dvs);
     check.uncertain.forEach(function (k) { if (uncertain.indexOf(k) === -1) uncertain.push(k); });
+    // A repair note from a reading ("Fat: read 15g, but the 2% Daily Value … so 1.5g is used") stays only while that
+    // repaired value is the one kept. The checks above ran on the combined values, so their notes are never stale.
+    const repairs = (a.warnings || []).concat(b.warnings || []).filter(function (w, i, all) {
+      if (all.indexOf(w) !== i) return false;
+      const used = w.match(/so ([\d.]+)[a-z]* is used\.$/);
+      return !!used && Object.keys(fields).some(function (k) {
+        return w.indexOf(parser.NAMES[k].charAt(0).toUpperCase() + parser.NAMES[k].slice(1) + ": read ") === 0 && fields[k] === Number(used[1]);
+      });
+    });
+    const warnings = repairs.concat(check.warnings);
     return {
-      fields: fields, uncertain: uncertain, warnings: check.warnings,
-      missing: parser.MAIN.filter(function (k) { return fields[k] === undefined; }),
+      fields: fields, uncertain: uncertain, warnings: warnings,
+      dvs: dvs, missing: parser.MAIN.filter(function (k) { return fields[k] === undefined; }),
       servingSize: main.servingSize || other.servingSize, matchedCount: Object.keys(fields).length,
-      rawText: a.rawText.trim() + "\n\n--- second reading ---\n" + b.rawText.trim()
+      confidence: Math.max(a.confidence || 0, b.confidence || 0),
+      rawText: a.rawText.trim() + "\n\n--- another reading ---\n" + b.rawText.trim()
     };
   }
 
@@ -227,10 +339,10 @@
 
   /* ---------------- the scan ---------------- */
 
-  function recognize(worker, canvas) {
-    return worker.recognize(canvas).then(function (result) {
+  function recognize(worker, canvas, limitMs) {
+    return withTimeout(worker.recognize(canvas), limitMs, releaseWorker).then(function (result) {
       const data = (result && result.data) || {};
-      return { text: data.text || "", words: data.words || [] };
+      return { text: data.text || "", words: data.words || [], confidence: typeof data.confidence === "number" ? data.confidence : 0 };
     });
   }
 
@@ -238,64 +350,123 @@
   // resolves to { ok:true, fields, uncertain, warnings, missing, servingSize, matchedCount, rawText } or
   // { ok:false, error, rawText }. onStatus(text) is called with progress updates
   // along the way; never rejects, so callers don't need a .catch.
-  function scanNutritionLabel(file, onStatus) {
+  async function scanNutritionLabel(file, onStatus) {
     const status = typeof onStatus === "function" ? onStatus : function () {};
     const parser = window.JarvisLabelParse;
-    if (!file) return Promise.resolve({ ok: false, error: "No photo selected." });
-    if (!parser) return Promise.resolve({ ok: false, error: "Label reading isn't available right now." });
-    let img = null;
-    let worker = null;
-    let first = null;
-    let firstCanvas = null;
-    return fileToImage(file)
-      .then(function (loaded) {
-        img = loaded;
-        status("Preparing the photo…");
-        const longSide = Math.max(img.naturalWidth, img.naturalHeight);
-        // Small photos are enlarged a little (OCR does better with bigger type); big ones are shrunk for speed.
-        firstCanvas = enhance(drawRegion(img, 0, 0, img.naturalWidth, img.naturalHeight, Math.min(FIRST_PASS_LONG_SIDE, Math.max(longSide, Math.min(longSide * 2, 1400)))));
-        return ensureWorker(status);
-      })
-      .then(function (w) {
-        worker = w;
-        status("Reading the label…");
-        return recognize(worker, firstCanvas);
-      })
-      .then(function (r1) {
-        first = parser.parseNutritionLabelText(r1.text);
-        first.words = r1.words;
-        if (complete(first)) return first;
-        // Not everything was found: take a second, closer look.
-        const box = findLabelBox(r1.words, firstCanvas.width, firstCanvas.height);
-        let canvas;
-        if (box) {
-          status("Found the label. Reading it again in more detail…");
-          const kx = img.naturalWidth / firstCanvas.width, ky = img.naturalHeight / firstCanvas.height;
-          const sx = Math.round(box.x0 * kx), sy = Math.round(box.y0 * ky);
-          canvas = enhance(drawRegion(img, sx, sy, Math.round((box.x1 - box.x0) * kx), Math.round((box.y1 - box.y0) * ky), DETAIL_LONG_SIDE));
-        } else {
-          status("Reading the whole photo in more detail…");
-          const longSide = Math.max(img.naturalWidth, img.naturalHeight);
-          canvas = enhance(drawRegion(img, 0, 0, img.naturalWidth, img.naturalHeight, Math.min(FULL_FRAME_LONG_SIDE, Math.max(longSide, FIRST_PASS_LONG_SIDE))));
+    if (!file) return { ok: false, error: "No photo selected." };
+    if (!parser) return { ok: false, error: "Label reading isn't available right now." };
+    if (scanning) return { ok: false, error: "A scan is already running. Wait for it to finish." };
+    scanning = true;
+    clearTimeout(idleTimer);
+    const started = Date.now();
+    const withinBudget = function () { return Date.now() - started < TOTAL_BUDGET_MS; };
+    let merged = null;
+    let timedOut = false;
+    let looks = 0;
+
+    // One reading of a canvas: the words, parsed, folded into everything read so far.
+    async function read(canvas, label) {
+      looks++;
+      progressHook = function (m) {
+        if (m.text) status(m.text);
+        else if (typeof m.progress === "number") status(label + " " + Math.round(m.progress * 100) + "%");
+      };
+      status(label);
+      const worker = await ensureWorker();
+      // The first reading gets the full allowance; later ones only what's left of the overall budget.
+      const left = TOTAL_BUDGET_MS - (Date.now() - started);
+      const r = await recognize(worker, canvas, looks === 1 ? PASS_TIMEOUT_MS : Math.max(15000, Math.min(LATER_PASS_TIMEOUT_MS, left)));
+      const parsed = parser.parseNutritionLabelText(r.text);
+      parsed.words = r.words;
+      parsed.confidence = r.confidence;
+      merged = merged ? mergeReadings(merged, parsed) : parsed;
+      return { parsed: parsed, words: r.words };
+    }
+
+    try {
+      status("Preparing the photo…");
+      const img = await fileToImage(file);
+      const longSide = Math.max(img.naturalWidth, img.naturalHeight);
+      // Small photos are enlarged a little (OCR does better with bigger type); big ones are shrunk for speed.
+      const firstSize = Math.min(FIRST_PASS_LONG_SIDE, Math.max(longSide, Math.min(longSide * 2, 1400)));
+      const firstCanvas = enhance(drawRegion(img, 0, 0, img.naturalWidth, img.naturalHeight, firstSize));
+      const first = await read(firstCanvas, "Reading the label…");
+
+      // Not everything was found (or something looked off): look again, closer, and in other ways.
+      // Each step is skipped once the time budget is spent, and a step that times out ends the scan with what we have.
+      if (!complete(merged)) {
+        try {
+          const more = function () { return !complete(merged) && withinBudget() && looks < MAX_READINGS; };
+          // Where the label sits in the original photo (in its own pixels), and whether it is light-on-dark.
+          let region = null, reversed = false;
+          const locate = function (words, canvas, flipped) {
+            const box = findLabelBox(words, canvas.width, canvas.height);
+            if (!box) return;
+            const kx = img.naturalWidth / canvas.width, ky = img.naturalHeight / canvas.height;
+            region = { x: Math.round(box.x0 * kx), y: Math.round(box.y0 * ky), w: Math.round((box.x1 - box.x0) * kx), h: Math.round((box.y1 - box.y0) * ky) };
+            reversed = flipped;
+          };
+          locate(first.words, firstCanvas, false);
+
+          // Label not found, and the photo has more detail than the first look used (the label is small in the
+          // frame): read the whole photo at a larger size.
+          let whole = firstCanvas;
+          const bigSize = Math.min(FULL_FRAME_LONG_SIDE, longSide);
+          if (!region && more() && bigSize > firstSize * 1.15) {
+            whole = enhance(drawRegion(img, 0, 0, img.naturalWidth, img.naturalHeight, bigSize));
+            const big = await read(whole, "Looking at the whole photo more closely…");
+            locate(big.words, whole, false);
+          }
+          // Still no label words at all: it may be light writing on a dark panel, so look at the photo the other way
+          // round (at the first look's size, which is quick; a label that is found is then read closely).
+          if (!region && more()) {
+            const flipped = await read(invert(cloneCanvas(firstCanvas)), "Trying the photo the other way round…");
+            locate(flipped.words, firstCanvas, true);
+          }
+
+          // Found it: read just that part of the original photo, at a size the engine likes.
+          const area = function () {
+            const canvas = enhance(drawRegion(img, region.x, region.y, region.w, region.h, DETAIL_LONG_SIDE));
+            return reversed ? invert(canvas) : canvas;
+          };
+          if (region && more()) await read(area(), "Found the label. Taking a closer look…");
+          // Still not clean: one more reading that evens out shadows and glare.
+          if (region && more()) await read(binarize(area()), "Trying again with the light evened out…");
+        } catch (err) {
+          if (!err || err.code !== "timeout") throw err;
+          timedOut = true; // keep whatever the readings so far found
         }
-        return recognize(worker, canvas).then(function (r2) {
-          const second = parser.parseNutritionLabelText(r2.text);
-          return mergeReadings(first, second);
-        });
-      })
-      .then(function (parsed) {
-        if (parsed.matchedCount === 0) {
-          return { ok: false, rawText: parsed.rawText, error: "Couldn't find any recognizable Nutrition Facts on that photo — try a straighter, well-lit shot of just the label, or enter the numbers by hand." };
-        }
-        return Object.assign({ ok: true }, parsed);
-      })
-      .catch(function (err) {
-        return { ok: false, error: "Couldn't scan that photo: " + (err && err.message ? err.message : String(err)) };
-      });
+      }
+
+      if (!merged || merged.matchedCount === 0) {
+        return { ok: false, rawText: merged ? merged.rawText : "", error: timedOut
+          ? "That photo took too long to read, so it was stopped. Try a closer, sharper, well-lit shot of just the label, or enter the numbers by hand."
+          : "Couldn't find any recognizable Nutrition Facts on that photo. Move closer so the label fills most of the photo, keep it flat and well lit, or enter the numbers by hand." };
+      }
+      const result = Object.assign({ ok: true }, merged);
+      result.warnings = (merged.warnings || []).slice();
+      // A photo the engine itself found hard to read: nothing it says can be trusted without a look.
+      if (merged.confidence > 0 && merged.confidence < LOW_CONFIDENCE) {
+        result.uncertain = Object.keys(merged.fields);
+        result.warnings.unshift("This photo was hard to read, so check every number against the label.");
+      }
+      if (timedOut) result.warnings.push("The last, closer reading took too long and was stopped, so this may be incomplete.");
+      return result;
+    } catch (err) {
+      return { ok: false, error: err && err.code === "timeout"
+        ? "That photo took too long to read, so it was stopped. Try a closer, sharper, well-lit shot of just the label, or enter the numbers by hand."
+        : "Couldn't scan that photo: " + (err && err.message ? err.message : String(err)) };
+    } finally {
+      scanning = false;
+      progressHook = null;
+      // Let the engine's memory go a while after the last scan, which keeps a phone's browser from running short.
+      idleTimer = setTimeout(releaseWorker, IDLE_RELEASE_MS);
+    }
   }
 
   window.JarvisLabelScan = {
     scanNutritionLabel: scanNutritionLabel,
-    parseNutritionLabelText: function (text) { return window.JarvisLabelParse.parseNutritionLabelText(text); } // exposed for testing
+    parseNutritionLabelText: function (text) { return window.JarvisLabelParse.parseNutritionLabelText(text); }, // exposed for testing
+    mergeReadings: mergeReadings // exposed for testing
   };
 })();
