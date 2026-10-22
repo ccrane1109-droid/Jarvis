@@ -2690,3 +2690,37 @@ button.rm-hist-row { cursor: pointer; }
 .dc-recent-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--card-border); }
 .dc-recent-row:last-child { border-bottom: none; }
 .dc-recent-score { font-size: 22px; font-weight: 800; color: var(--accent); }
+
+/* Discipline: accountability */
+
+.dc-next { border-left: 4px solid var(--accent); }
+.dc-next[data-kind="missed"] { border-left-color: var(--yellow); }
+.dc-next[data-kind="win"] { border-left-color: var(--green); }
+.dc-next-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 700; }
+.dc-next-title { font-size: 20px; font-weight: 700; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.dc-next-text { color: var(--text-dim); font-size: 14px; margin-bottom: 12px; }
+.dc-next-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dc-next-actions .btn { flex: 1 1 140px; min-height: 44px; }
+.dc-flow { border-color: var(--accent); }
+.dc-chips { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.dc-chip {
+  text-align: left; min-height: 44px; padding: 10px 12px; cursor: pointer; font-size: 15px;
+  background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); color: var(--text);
+  overflow-wrap: anywhere;
+}
+.dc-chip.on { border-color: var(--accent); background: var(--accent-dim); color: #fff; }
+.dc-do { font-size: 16px; margin: 10px 0; }
+.dc-challenge { padding: 10px 12px; border-left: 3px solid var(--yellow); background: var(--yellow-dim); border-radius: 6px; font-size: 14px; margin: 8px 0 12px; }
+.dc-timer-clock { font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 8px 0; line-height: 1.1; }
+.dc-fix { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--card-border); }
+.dc-rule-list { display: flex; flex-direction: column; margin-bottom: 8px; }
+.dc-rule-row, .dc-nudge-row, .dc-sugg { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--card-border); }
+.dc-rule-row:last-child, .dc-nudge-row:last-child, .dc-sugg:last-child { border-bottom: none; }
+.dc-rule-row span, .dc-nudge-row > div, .dc-sugg > div { min-width: 0; overflow-wrap: anywhere; }
+.dc-share-row .btn { flex: 1 1 140px; min-height: 44px; }
+.dc-check:disabled { opacity: 0.6; cursor: default; }
+#dcWeeklyText { width: 100%; }
+
+.dc-sugg strong, .dc-nudge-row strong, .dc-recent-row strong { display: inline-block; }
+.dc-sugg .field-hint, .dc-nudge-row .field-hint, .dc-recent-row .field-hint, .dc-rule-row .field-hint { margin-top: 4px; }
+.dc-sugg .btn, .dc-nudge-row .btn { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }

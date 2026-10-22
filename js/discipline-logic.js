@@ -19,6 +19,10 @@
    was attainable that day. Days with excused items are counted and shown in
    the trends, so they can't hide. A day is scored only once every item is
    answered; a day with no review has no score (it is never counted as zero).
+
+   Accountability (what to do next, why you're avoiding something, your own
+   rules, the weekly summary) is also plain rules over what was entered, with
+   fixed advice text. It is not AI and it never invents numbers.
    ========================================================================== */
 
 (function (root, factory) {
@@ -58,6 +62,39 @@
     rest: { label: "Planned rest day", na: ["training"] },
     travel: { label: "Travel or event day", na: ["gratiel", "training"] }
   };
+
+  // Why something is being avoided, what to do right now about it, and a rule that would prevent it next time.
+  const REASONS = [
+    { key: "big", label: "It feels too big or unclear", first: "Write the first three steps. Do only step 1 for two minutes.", rule: "Write the first step of every priority before I start the day." },
+    { key: "boring", label: "It's boring or I'm dreading it", first: "Phone in another room and a 10-minute timer. You only owe the 10 minutes.", rule: "Do the task I'm dreading first, before anything fun." },
+    { key: "afraid", label: "I'm afraid it won't be good", first: "Make the worst possible version for five minutes. Fix it later, not while making it.", rule: "Make a rough version first and improve it in a second block." },
+    { key: "tired", label: "I'm tired or low on energy", first: "Do two minutes. If you're still wiped after that, do the minimum version, not nothing.", rule: "Do the hard task right after school, before the energy dip." },
+    { key: "phone", label: "My phone keeps pulling me", first: "Put the phone in another room right now, then start a 10-minute timer.", rule: "Phone goes on the charger in another room when I get home." },
+    { key: "didnt", label: "I just didn't start", first: "Start the two-minute timer now. Starting is the whole job.", rule: "Do two minutes of the key task before I touch my phone." }
+  ];
+  const EXCUSES = [
+    { key: "tomorrow", label: "I'll do it tomorrow", challenge: "Tomorrow-you has the same phone and the same excuse. Do two minutes now, and pick a start time for the rest." },
+    { key: "tired", label: "I'm too tired", challenge: "Tired is a reason to shrink the task, not skip it. Do two minutes, then decide." },
+    { key: "break", label: "I deserve a break", challenge: "A break is earned after the block, not before it. Do the block, then take the break." },
+    { key: "ready", label: "I'll start when I feel ready", challenge: "Feeling ready usually shows up after you start. Start for two minutes." },
+    { key: "phone", label: "I'll just check my phone first", challenge: "Checking first is how hours disappear. Task first; phone after the timer." },
+    { key: "skip", label: "One skipped day won't matter", challenge: "One skipped day rarely matters. A habit of skipping does. Do the minimum version." }
+  ];
+  // A starting rule for each scoring area, offered when that area is the weak one.
+  const AREA_RULES = {
+    followThrough: "Plan tomorrow's key task before bed.",
+    focus: "Phone goes on the charger in another room when I get home.",
+    time: "Write a start time next to every priority.",
+    consistency: "Do my school work before my phone on school days.",
+    routines: "My phone charges outside my bedroom every night.",
+    reflection: "Do my evening review before I open any app for fun."
+  };
+  const STARTER_RULES = [AREA_RULES.consistency, AREA_RULES.routines, AREA_RULES.followThrough];
+  const DEFAULT_TIMES = { planBy: "06:30", afterSchool: "15:45", review: "20:30" };
+  const MAX_RULES = 5;
+  const RULE_MAX = 100;
+  const AVOID_CAP = 300;
+  const START_MINUTES = 2;
 
   const PRIORITY_MAX = 100;
   const NOTE_MAX = 240;
@@ -102,6 +139,57 @@
   function state(v) { return v === "done" || v === "not" || v === "na" ? v : null; }
   function stamp(v) { return Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : Date.now(); }
 
+  function timeOfDay(v, fallback) {
+    const m = typeof v === "string" ? v.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/) : null;
+    return m ? (m[1].length === 1 ? "0" + m[1] : m[1]) + ":" + m[2] : fallback;
+  }
+  function minutesOf(hhmm) { const p = hhmm.split(":"); return Number(p[0]) * 60 + Number(p[1]); }
+  function sanitizeTimes(raw) {
+    const r = raw && typeof raw === "object" ? raw : {};
+    return { planBy: timeOfDay(r.planBy, DEFAULT_TIMES.planBy), afterSchool: timeOfDay(r.afterSchool, DEFAULT_TIMES.afterSchool), review: timeOfDay(r.review, DEFAULT_TIMES.review) };
+  }
+  function keyOf(list, key) { return list.some(function (x) { return x.key === key; }) ? key : ""; }
+
+  // Your own rules: [{ id, text }], at most MAX_RULES, no blanks or repeats.
+  function sanitizeRules(raw) {
+    const out = [];
+    (Array.isArray(raw) ? raw : []).forEach(function (r) {
+      const text = clean(r && r.text, RULE_MAX);
+      if (!text || out.length >= MAX_RULES) return;
+      if (out.some(function (x) { return x.text.toLowerCase() === text.toLowerCase(); })) return;
+      const id = typeof (r && r.id) === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(r.id) && !out.some(function (x) { return x.id === r.id; }) ? r.id : "r" + Date.now().toString(36) + out.length;
+      out.push({ id: id, text: text });
+    });
+    return out;
+  }
+
+  // Times you sat down to start something you were avoiding, and what came of it.
+  function sanitizeAvoid(raw) {
+    const out = [];
+    (Array.isArray(raw) ? raw : []).forEach(function (a) {
+      if (!a || typeof a !== "object" || !isISODate(a.date)) return;
+      out.push({
+        at: stamp(a.at), date: a.date, task: clean(a.task, PRIORITY_MAX),
+        reason: keyOf(REASONS, a.reason), excuse: keyOf(EXCUSES, a.excuse),
+        outcome: a.outcome === "started" || a.outcome === "dropped" ? a.outcome : null
+      });
+    });
+    return out.slice(-AVOID_CAP);
+  }
+
+  // The running start timer, or null. endsAt is worked out from the start, so it stays right if the app is closed.
+  function sanitizeTimer(raw) {
+    if (!raw || typeof raw !== "object" || !(Number(raw.startedAt) > 0)) return null;
+    const minutes = Math.round(Number(raw.minutes));
+    if (!(minutes >= 1 && minutes <= 60)) return null;
+    return {
+      task: clean(raw.task, PRIORITY_MAX), taskId: /^(key|p[0-2])$/.test(raw.taskId) ? raw.taskId : "",
+      reason: keyOf(REASONS, raw.reason), excuse: keyOf(EXCUSES, raw.excuse),
+      entryAt: Number(raw.entryAt) > 0 ? Number(raw.entryAt) : 0, // which avoid-log entry this run belongs to, if any
+      startedAt: Number(raw.startedAt), minutes: minutes, endsAt: Number(raw.startedAt) + minutes * 60000
+    };
+  }
+
   function sanitizeMorning(raw) {
     if (!raw || typeof raw !== "object") return null;
     const list = Array.isArray(raw.priorities) ? raw.priorities : [];
@@ -136,8 +224,14 @@
       focus: rating(raw.focus),
       time: rating(raw.time),
       output: clean(raw.output, NOTE_MAX),
+      blocker: keyOf(REASONS, raw.blocker),
+      rules: [],
       savedAt: stamp(raw.savedAt)
     };
+    (Array.isArray(raw.rules) ? raw.rules : []).slice(0, MAX_RULES).forEach(function (r) {
+      const text = clean(r && r.text, RULE_MAX);
+      if (text) review.rules.push({ id: clean(r.id, 40), text: text, state: state(r.state) });
+    });
     NOTE_FIELDS.forEach(function (f) { review[f] = clean(raw[f], NOTE_MAX); });
     return review;
   }
@@ -160,7 +254,11 @@
       const day = sanitizeDay(r.days[date]);
       if (day.morning || day.review || day.type !== "normal") days[date] = day;
     });
-    return { settings: { phoneLimit: limit(r.settings && r.settings.phoneLimit) }, days: days };
+    return {
+      settings: { phoneLimit: limit(r.settings && r.settings.phoneLimit), times: sanitizeTimes(r.settings && r.settings.times) },
+      rules: sanitizeRules(r.rules), avoid: sanitizeAvoid(r.avoid), timer: sanitizeTimer(r.timer),
+      days: days
+    };
   }
 
   /* ---------------- the daily score ---------------- */
@@ -352,7 +450,150 @@
     };
   }
 
+  /* ---------------- accountability ---------------- */
+
+  function firstUseDate(days) {
+    const dates = Object.keys(days).filter(function (d) { return days[d].morning || days[d].review; }).sort();
+    return dates.length ? dates[0] : null;
+  }
+  function hasPlanItems(m) { return !!m && (!!m.keyTask.text || m.priorities.some(function (p) { return !!p.text; })); }
+
+  // The one thing to do right now, from the time of day and what has actually been entered.
+  //   input: { todayISO, minutes (since midnight, local), days, settings: { times } }
+  //   -> { kind, title, text, task: { id, text } | null, actions: [...] }   actions are ids the screen knows:
+  //      "plan", "scoreYesterday", "start", "avoid", "review", "planTomorrow"
+  function nextUp(input) {
+    const days = input.days;
+    const times = sanitizeTimes(input.settings && input.settings.times);
+    const first = firstUseDate(days);
+    const today = sanitizeDay(days[input.todayISO]);
+    const yesterday = addDays(input.todayISO, -1);
+    const evening = input.minutes >= minutesOf(times.review);
+
+    if (!first) return { kind: "plan", title: "Start with a morning plan", text: "Two minutes: the one task that makes today a win, and up to three more.", task: null, actions: ["plan"] };
+    if (yesterday >= first && !isScored(days, yesterday)) {
+      return { kind: "missed", title: "Score yesterday first", text: "One miss is data, two is a pattern. A rough, honest review is enough.", task: null, actions: ["scoreYesterday"] };
+    }
+    if (isScored(days, input.todayISO)) {
+      const tomorrow = sanitizeDay(days[addDays(input.todayISO, 1)]);
+      if (!hasPlanItems(tomorrow.morning)) return { kind: "planTomorrow", title: "Plan tomorrow tonight", text: "Decide the key task and a start time now, so tomorrow's first minutes are already settled.", task: null, actions: ["planTomorrow"] };
+      return { kind: "done", title: "Today is done and tomorrow is planned", text: "Protect your sleep.", task: null, actions: [] };
+    }
+    if (!hasPlanItems(today.morning)) {
+      if (evening) return { kind: "review", title: "No plan was set today", text: "Score the day anyway, honestly. The review is where the learning is.", task: null, actions: ["review"] };
+      return { kind: "plan", title: "Lock in today's plan", text: "Two minutes. Decide what makes today a win before the day decides for you.", task: null, actions: ["plan"] };
+    }
+    if (evening) return { kind: "review", title: "Evening review time", text: "Score your day while it's fresh. Then plan tomorrow.", task: null, actions: ["review"] };
+    const m = today.morning;
+    if (m.keyTask.text && !m.keyTask.done) {
+      const late = input.minutes >= minutesOf(times.afterSchool);
+      return { kind: "win", title: m.keyTask.text, text: late ? "This is what makes today a win. Start it before anything else." : "This is what makes today a win.", task: { id: "key", text: m.keyTask.text }, actions: ["start", "avoid"] };
+    }
+    for (let i = 0; i < 3; i++) {
+      if (m.priorities[i].text && !m.priorities[i].done) return { kind: "next", title: m.priorities[i].text, text: "Next on your list.", task: { id: "p" + i, text: m.priorities[i].text }, actions: ["start", "avoid"] };
+    }
+    return { kind: "allDone", title: "Everything you planned is done", text: "Review at " + times.review + ". Protect your sleep.", task: null, actions: [] };
+  }
+
+  // The start timer: how long is left, and whether it has run out.
+  function timerState(timer, nowMs) {
+    if (!timer) return null;
+    // Never more than the time it was set for, even if the phone's clock was moved back.
+    const remaining = Math.min(Math.max(0, timer.endsAt - nowMs), timer.endsAt - timer.startedAt);
+    return { remainingMs: remaining, finished: remaining === 0 };
+  }
+
+  function inWindow(date, todayISO, windowDays) { return date <= todayISO && date >= addDays(todayISO, -(windowDays - 1)); }
+  function countBy(list, keyFn, table) {
+    const counts = {};
+    list.forEach(function (x) { const k = keyFn(x); if (k) counts[k] = (counts[k] || 0) + 1; });
+    return Object.keys(counts).map(function (k) {
+      const entry = table.filter(function (t) { return t.key === k; })[0];
+      return { key: k, label: entry ? entry.label : k, count: counts[k] };
+    }).sort(function (a, b) { return b.count - a.count || (a.key < b.key ? -1 : 1); });
+  }
+
+  // Times you used "I'm avoiding it" in the window, why, and how often you started anyway.
+  function avoidSummary(avoid, todayISO, windowDays) {
+    const list = avoid.filter(function (a) { return inWindow(a.date, todayISO, windowDays); });
+    const started = list.filter(function (a) { return a.outcome === "started"; }).length;
+    const dropped = list.filter(function (a) { return a.outcome === "dropped"; }).length;
+    const resolved = started + dropped;
+    return { total: list.length, started: started, dropped: dropped, open: list.length - resolved, startRate: resolved ? Math.round(100 * started / resolved) : null, reasons: countBy(list, function (a) { return a.reason; }, REASONS) };
+  }
+
+  // What got in the way on days a priority was missed (the "what got in the way?" answers on scored days).
+  function blockerSummary(days, todayISO, windowDays) {
+    const list = [];
+    Object.keys(days).forEach(function (d) {
+      if (!inWindow(d, todayISO, windowDays) || !days[d].review || !days[d].review.blocker) return;
+      list.push({ blocker: days[d].review.blocker });
+    });
+    return countBy(list, function (x) { return x.blocker; }, REASONS);
+  }
+
+  // How often your own rules were kept, from the evening answers ("not today" answers are left out).
+  function ruleSummary(days, todayISO, windowDays) {
+    const by = {};
+    let answered = 0, kept = 0;
+    Object.keys(days).forEach(function (d) {
+      if (!inWindow(d, todayISO, windowDays) || !days[d].review) return;
+      (days[d].review.rules || []).forEach(function (r) {
+        if (r.state !== "done" && r.state !== "not") return;
+        const k = r.text.toLowerCase();
+        if (!by[k]) by[k] = { text: r.text, answered: 0, kept: 0 };
+        by[k].answered++; answered++;
+        if (r.state === "done") { by[k].kept++; kept++; }
+      });
+    });
+    return { answered: answered, kept: kept, rate: answered ? Math.round(100 * kept / answered) : null, byRule: Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.answered - a.answered; }) };
+  }
+
+  // Up to three rules worth trying: aimed at the weakest scoring areas once there is data, otherwise starter ideas.
+  //   -> [{ text, why, starter }]. Rules you already have are never offered again.
+  function suggestRules(trend, rules) {
+    const have = (rules || []).map(function (r) { return r.text.toLowerCase(); });
+    const fresh = function (text) { return have.indexOf(text.toLowerCase()) === -1; };
+    const out = [];
+    if (trend && trend.categories) {
+      trend.categories.filter(function (c) { return c.pct !== null && c.pct < 100; }).sort(function (a, b) { return a.pct - b.pct; }).forEach(function (c) {
+        const text = AREA_RULES[c.key];
+        if (text && fresh(text) && out.length < 3) out.push({ text: text, why: c.label + " averaged " + c.pct + "% of what was attainable.", starter: false });
+      });
+    }
+    STARTER_RULES.forEach(function (text) {
+      if (out.length < 3 && fresh(text) && !out.some(function (o) { return o.text === text; })) out.push({ text: text, why: "A starting idea. There isn't enough scored data yet to aim it at your weak spot.", starter: true });
+    });
+    return out;
+  }
+
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function shortDate(iso) { return MONTHS[Number(iso.slice(5, 7)) - 1] + " " + Number(iso.slice(8, 10)); }
+
+  // Plain text for sharing the week with someone you answer to. Numbers and your rules only: no reflections.
+  function weeklyText(input) {
+    const today = input.todayISO;
+    const t = trendSummary(input.days, today, 7);
+    const lines = ["My week on JARVIS Discipline (" + shortDate(addDays(today, -6)) + " to " + shortDate(today) + "):"];
+    if (!t.scoredDays) lines.push("No scored days yet this week.");
+    else {
+      lines.push("Scored days: " + t.scoredDays + " of 7." + (t.enough ? " Average score: " + t.average + "." : "") + (t.best ? " Best: " + t.best.score + "." : ""));
+      lines.push("Review streak: " + reviewStreak(input.days, today) + " days.");
+      if (t.phone.days) lines.push("Phone: averaged " + t.phone.averageHours + "h a day, over my limit on " + t.phone.overLimit + " of " + t.phone.days + " days.");
+    }
+    const rs = ruleSummary(input.days, today, 7);
+    if (rs.answered) lines.push("Rules kept: " + rs.kept + " of " + rs.answered + " answers.");
+    const av = avoidSummary(input.avoid || [], today, 7);
+    if (av.started + av.dropped) lines.push("When I avoided something, I started anyway " + av.started + " of " + (av.started + av.dropped) + " times.");
+    if ((input.rules || []).length) lines.push("What I'm working on: " + input.rules.slice(0, 3).map(function (r) { return r.text; }).join(" "));
+    return lines.join("\n");
+  }
+
   return {
+    REASONS: REASONS, EXCUSES: EXCUSES, DEFAULT_TIMES: DEFAULT_TIMES, MAX_RULES: MAX_RULES, RULE_MAX: RULE_MAX, START_MINUTES: START_MINUTES, AREA_RULES: AREA_RULES,
+    sanitizeRules: sanitizeRules, sanitizeAvoid: sanitizeAvoid, sanitizeTimer: sanitizeTimer, sanitizeTimes: sanitizeTimes, minutesOf: minutesOf,
+    nextUp: nextUp, timerState: timerState, avoidSummary: avoidSummary, blockerSummary: blockerSummary, ruleSummary: ruleSummary,
+    suggestRules: suggestRules, weeklyText: weeklyText, shortDate: shortDate, firstUseDate: firstUseDate,
     CATEGORIES: CATEGORIES, ITEMS: ITEMS, DAY_TYPES: DAY_TYPES, NOTE_FIELDS: NOTE_FIELDS,
     PRIORITY_MAX: PRIORITY_MAX, NOTE_MAX: NOTE_MAX, DEFAULT_PHONE_LIMIT: DEFAULT_PHONE_LIMIT,
     MIN_DAYS_FOR_AVERAGES: MIN_DAYS_FOR_AVERAGES, MIN_DAYS_FOR_WEEKDAYS: MIN_DAYS_FOR_WEEKDAYS,

@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=49">
+<link rel="stylesheet" href="style.css?v=50">
 </head>
 <body>
 
@@ -1932,8 +1932,9 @@
     <div id="discipline-today" class="discipline-sub-panel active" role="tabpanel" aria-labelledby="disciplineSubNavToday">
       <div class="card">
         <div class="segmented-control" id="dcDayPills" role="tablist" aria-label="Which day">
-          <button type="button" class="segmented-btn active" data-day="today" id="dcDayToday">Today</button>
           <button type="button" class="segmented-btn" data-day="yesterday" id="dcDayYesterday">Yesterday</button>
+          <button type="button" class="segmented-btn active" data-day="today" id="dcDayToday">Today</button>
+          <button type="button" class="segmented-btn" data-day="tomorrow" id="dcDayTomorrow">Tomorrow</button>
         </div>
         <div class="card-title-row dc-title-row">
           <h2 class="card-title" id="dcDateTitle">Today</h2>
@@ -1942,12 +1943,22 @@
             <span class="badge badge-neutral" id="dcLimitBadge">Phone limit 5h</span>
           </div>
         </div>
-        <p class="field-hint dc-nudge hidden" id="dcNudge" role="status"></p>
+      </div>
+
+      <div class="card dc-next hidden" id="dcNextCard" aria-live="polite">
+        <div class="dc-next-kicker">Next up</div>
+        <div class="dc-next-title" id="dcNextTitle"></div>
+        <p class="dc-next-text" id="dcNextText"></p>
+        <div class="dc-next-actions" id="dcNextActions"></div>
+      </div>
+
+      <div class="card dc-flow hidden" id="dcFlowCard" aria-live="polite">
+        <div id="dcFlow"></div>
       </div>
 
       <div class="card" id="dcMorningCard">
         <div class="card-title-row">
-          <h2 class="card-title">Morning plan</h2>
+          <h2 class="card-title" id="dcMorningTitle">Morning plan</h2>
           <button type="button" class="btn-icon hidden" id="dcMorningEditBtn">Edit plan</button>
         </div>
         <form id="dcMorningForm" class="stacked-form" novalidate>
@@ -1997,6 +2008,10 @@
           <div class="dc-q"><span class="dc-q-label" id="dcFocusLabel">Focus today <small>(1 = scattered, 5 = locked in)</small></span><div class="segmented-control dc-seg" data-rating="focus" id="dcFocus" role="group" aria-labelledby="dcFocusLabel"></div></div>
           <div class="dc-q"><span class="dc-q-label" id="dcTimeLabel">Did you keep to your plan? <small>(1 = not at all, 5 = closely)</small></span><div class="segmented-control dc-seg" data-rating="time" id="dcTime" role="group" aria-labelledby="dcTimeLabel"></div></div>
           <div id="dcItems"></div>
+          <div id="dcRulesQ" class="hidden">
+            <span class="dc-q-label">Your rules today <small>(not part of the score)</small></span>
+            <div id="dcRules"></div>
+          </div>
           <div class="form-row">
             <label for="dcOutput">What exists now that didn&rsquo;t this morning? <small>(optional)</small></label>
             <input type="text" id="dcOutput" maxlength="240" autocomplete="off" placeholder="A draft, a quote request, a post, a price&hellip;">
@@ -2034,6 +2049,27 @@
         <div id="dcCategories"></div>
       </div>
       <div class="card">
+        <h2 class="card-title">When you avoid things</h2>
+        <div id="dcAvoidStats"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Your rules</h2>
+        <div id="dcRuleStats"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Weekly review</h2>
+        <p class="field-hint">The last 7 days, a rule to try next, and a summary you can send to someone you answer to. Nothing is sent unless you tap Share.</p>
+        <h3 class="checklist-title">Try next week</h3>
+        <div id="dcWeeklySuggestions"></div>
+        <h3 class="checklist-title">Your week, to share</h3>
+        <textarea id="dcWeeklyText" rows="7" aria-label="Your weekly summary. You can edit it before sharing."></textarea>
+        <p class="field-hint">Numbers and your rules only. Your reflections and task names are never included. Edit it however you like first.</p>
+        <div class="form-actions dc-share-row">
+          <button type="button" class="btn btn-primary" id="dcShareBtn">Share my week</button>
+          <button type="button" class="btn btn-secondary" id="dcCopyBtn">Copy</button>
+        </div>
+      </div>
+      <div class="card">
         <h2 class="card-title">Recent days</h2>
         <div id="dcRecent"></div>
       </div>
@@ -2051,6 +2087,35 @@
           </div>
           <div class="form-actions"><button type="submit" class="btn btn-primary">Save limit</button></div>
         </form>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Your rules</h2>
+        <p class="field-hint">Up to 5 if-then rules you hold yourself to, like &ldquo;Phone on the charger when I get home.&rdquo; You answer each one every evening, and Trends shows how often you kept it.</p>
+        <div id="dcRulesManager"></div>
+        <form id="dcRuleForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="dcRuleInput">Add a rule</label>
+            <input type="text" id="dcRuleInput" maxlength="100" autocomplete="off" placeholder="If … then I will …">
+          </div>
+          <div class="form-actions"><button type="submit" class="btn btn-primary" id="dcRuleAddBtn">Add rule</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Your times</h2>
+        <p class="field-hint">Used by &ldquo;Next up&rdquo; and by the reminders below.</p>
+        <form id="dcTimesForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div><label for="dcTimePlan">Plan by</label><input type="time" id="dcTimePlan"></div>
+            <div><label for="dcTimeSchool">After-school start</label><input type="time" id="dcTimeSchool"></div>
+          </div>
+          <div class="form-row"><label for="dcTimeReview">Evening review</label><input type="time" id="dcTimeReview"></div>
+          <div class="form-actions"><button type="submit" class="btn btn-primary">Save times</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Reminders outside the app</h2>
+        <p class="field-hint">Each button opens a new reminder, already filled in, for you to check and save. Nothing is created until you tap Save. Reminders are sent by your JARVIS server; delivery with JARVIS closed isn&rsquo;t proven on your phone until you pass the closed-app test on the Reminders screen. JARVIS can&rsquo;t block apps or lock your phone; for that, use iPhone Settings &rarr; Screen Time &rarr; App Limits.</p>
+        <div class="dc-nudges" id="dcNudges"></div>
       </div>
       <div class="card">
         <h2 class="card-title">How the score works</h2>
@@ -4638,33 +4703,33 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=49"></script>
-<script type="module" src="js/auth.js?v=49"></script>
-<script src="js/app.js?v=49"></script>
-<script src="js/exercises.js?v=49"></script>
-<script src="js/workout.js?v=49"></script>
-<script src="js/nutrition.js?v=49"></script>
-<script src="js/nutrition-label-parse.js?v=49"></script>
-<script src="js/nutrition-label-scan.js?v=49"></script>
-<script src="js/groceries.js?v=49"></script>
-<script src="js/habits.js?v=49"></script>
-<script src="js/discipline-logic.js?v=49"></script>
-<script src="js/discipline.js?v=49"></script>
-<script src="functions/lib/reminder-spec.js?v=49"></script>
-<script src="functions/lib/reminder-events.js?v=49"></script>
-<script src="js/reminders.js?v=49"></script>
-<script src="js/business.js?v=49"></script>
-<script src="js/trading.js?v=49"></script>
-<script src="js/blobstore.js?v=49"></script>
-<script src="js/video-api-client.js?v=49"></script>
-<script src="js/video-connections.js?v=49"></script>
-<script src="js/video.js?v=49"></script>
-<script src="js/video-studio.js?v=49"></script>
-<script src="functions/lib/idea-spec.js?v=49"></script>
-<script src="functions/lib/niche-spec.js?v=49"></script>
-<script src="js/marketing-stats.js?v=49"></script>
-<script src="js/niche-research.js?v=49"></script>
-<script src="js/content-intelligence.js?v=49"></script>
-<script src="js/form-check.js?v=49"></script>
+<script src="js/firebase-config.js?v=50"></script>
+<script type="module" src="js/auth.js?v=50"></script>
+<script src="js/app.js?v=50"></script>
+<script src="js/exercises.js?v=50"></script>
+<script src="js/workout.js?v=50"></script>
+<script src="js/nutrition.js?v=50"></script>
+<script src="js/nutrition-label-parse.js?v=50"></script>
+<script src="js/nutrition-label-scan.js?v=50"></script>
+<script src="js/groceries.js?v=50"></script>
+<script src="js/habits.js?v=50"></script>
+<script src="js/discipline-logic.js?v=50"></script>
+<script src="js/discipline.js?v=50"></script>
+<script src="functions/lib/reminder-spec.js?v=50"></script>
+<script src="functions/lib/reminder-events.js?v=50"></script>
+<script src="js/reminders.js?v=50"></script>
+<script src="js/business.js?v=50"></script>
+<script src="js/trading.js?v=50"></script>
+<script src="js/blobstore.js?v=50"></script>
+<script src="js/video-api-client.js?v=50"></script>
+<script src="js/video-connections.js?v=50"></script>
+<script src="js/video.js?v=50"></script>
+<script src="js/video-studio.js?v=50"></script>
+<script src="functions/lib/idea-spec.js?v=50"></script>
+<script src="functions/lib/niche-spec.js?v=50"></script>
+<script src="js/marketing-stats.js?v=50"></script>
+<script src="js/niche-research.js?v=50"></script>
+<script src="js/content-intelligence.js?v=50"></script>
+<script src="js/form-check.js?v=50"></script>
 </body>
 </html>
