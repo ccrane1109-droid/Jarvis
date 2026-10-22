@@ -1734,7 +1734,8 @@
       setScannedValues(namePrefix, values);
       scanBase[namePrefix] = { fields: Object.assign({}, result.fields), servingSize: result.servingSize, factor: plan && plan.ok ? plan.factor : 1, rawText: result.rawText };
       // Values the scan wasn't sure of get an amber outline until you touch them.
-      (result.uncertain || []).forEach(function (f) { markScanCheck(namePrefix, f); });
+      // The same outline marks the blank spots: the main values the scan couldn't read.
+      (result.uncertain || []).concat(result.missing || []).forEach(function (f) { markScanCheck(namePrefix, f); });
       if (plan && plan.ok && plan.factor !== 1) setScanRaw(namePrefix, labelSummary(scanBase[namePrefix]) + result.rawText);
       updateRescaleButton(namePrefix);
       const names = scanNames();

@@ -23,6 +23,13 @@
    Plausibility checks never change a number. They only produce `warnings`
    (for example, calories that don't fit the fat, carbs and protein read).
 
+   Mangled label words ("Calorigg", "Tota] Fat") are matched loosely, but only
+   at the start of a line, so a stray word elsewhere can't be taken for a
+   nutrient. A line's printed % Daily Value is an independent check on its
+   amount: when they disagree, the amount is flagged, and when only a lost
+   decimal point explains it ("15g" beside "2%" fits only 1.5g) the value is
+   corrected and the correction is reported, never made silently.
+
    Scaling: a label's numbers are for ITS serving ("1 container (170g)"). When
    you log a different amount ("250g"), every number is multiplied by
    250 / 170. Only a plain weight or volume you typed with a unit counts
@@ -46,15 +53,65 @@
   // the look-alike spellings only matter when the exact one isn't there (the regex engine tries them in order).
   // Spaces are allowed before a unit made of real letters, but a look-alike that is a DIGIT (9) must touch
   // the number and not run into more digits or a % sign: in "24g 9%", the 9 belongs to the percent column.
+  // A stray ¢ or © right after the number is the engine's debris next to the unit ("5¢g", "2.5¢9"); a lone ¢ is a g.
   const UNITS = {
-    g: "\\s*g|[q9](?![0-9%])",
-    mg: "\\s*(?:mg|rng|mq)|m9(?![0-9%])",
-    mcg: "\\s*(?:mcg|rncg|meg|mog|µg|ug)|mc9(?![0-9%])"
+    g: "[¢©]?\\s*g|[¢©]?[q9](?![0-9%])|¢(?![0-9%a-z])",
+    mg: "[¢©]?\\s*(?:mg|rng|mq)|[¢©]?m9(?![0-9%])",
+    mcg: "[¢©]?\\s*(?:mcg|mcq|rncg|rncq|meg|mog|µg|ug)|[¢©]?mc9(?![0-9%])"
   };
   const EXACT = { g: "g", mg: "mg", mcg: "(?:mcg|µg|ug)" };
 
   // Highest value that could really be on one serving's label; anything above is a misread, not a fact.
   const LIMITS = { calories: 2500, fat: 150, sodium: 6000, carbs: 300, fiber: 80, protein: 150, vitaminD: 200, calcium: 3000, iron: 100, potassium: 6000, vitaminC: 1500 };
+
+  // What 100% Daily Value is for each nutrient: the current US label first, then the older one still found on packs.
+  // slack is how far a printed amount can be from the real one because of rounding.
+  const DV = {
+    fat: { basis: [78, 65], slack: 0.5, decimals: true },
+    sodium: { basis: [2300, 2400], slack: 5, decimals: false },
+    carbs: { basis: [275, 300], slack: 0.5, decimals: true },
+    fiber: { basis: [28, 25], slack: 0.5, decimals: true },
+    vitaminD: { basis: [20, 10], slack: 0.5, decimals: true },
+    calcium: { basis: [1300, 1000], slack: 10, decimals: false },
+    iron: { basis: [18], slack: 0.5, decimals: true },
+    potassium: { basis: [4700, 3500], slack: 10, decimals: false },
+    vitaminC: { basis: [90, 60], slack: 0.5, decimals: true }
+  };
+
+  // Does a printed % Daily Value fit this amount? (Either label's basis may fit; one point of rounding is allowed.)
+  function dvFits(key, value, pct) {
+    const d = DV[key];
+    if (!d || pct === null || pct === undefined) return true;
+    const slack = Math.max(d.slack, 0.1 * value);
+    return d.basis.some(function (b) {
+      return pct >= (value - slack) / b * 100 - 1 && pct <= (value + slack) / b * 100 + 1;
+    });
+  }
+
+  // Loose matching of a label word, for text the camera angle has mangled. A name is only matched by its
+  // whole spelling within a small edit distance; the vitamins are left out (C and D differ by one letter).
+  const LABEL_VARIANTS = {
+    calories: ["calories"], fat: ["totalfat"], sodium: ["sodium"],
+    carbs: ["totalcarbohydrate", "totalcarbohydrates", "totalcarbs", "carbohydrate", "carbohydrates"],
+    fiber: ["dietaryfiber", "fiber"], protein: ["protein"], calcium: ["calcium"], iron: ["iron"], potassium: ["potassium"]
+  };
+  const distLimit = function (len) { return len <= 7 ? 1 : len <= 11 ? 2 : 3; };
+
+  // Edit distance where swapping two neighbouring letters ("protien") counts as one edit.
+  function editDistance(a, b) {
+    if (Math.abs(a.length - b.length) > 3) return 99;
+    const d = [];
+    for (let i = 0; i <= a.length; i++) d.push([i]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+      }
+    }
+    return d[a.length][b.length];
+  }
 
   // label: what the line starts with. unit: what its amount is measured in (null: calories, a bare number).
   const FIELDS = [
@@ -96,7 +153,7 @@
       const value = toNumber(m[1]);
       if (value === null) continue;
       const exact = new RegExp("^(?:" + EXACT[unit] + ")$", "i").test(m[2].replace(/\s/g, ""));
-      out.push({ value: value, uncertain: !exact || hadLookalike(m[1]) });
+      out.push({ value: value, uncertain: !exact || hadLookalike(m[1]), end: m.index + m[0].length });
     }
     return out;
   }
@@ -109,7 +166,8 @@
     const first = toNumber(m[1]);
     // The label has two columns, so two numbers mean two columns, not one split number.
     if (column !== null) {
-      const pick = column === 1 && m[2] === undefined && m[3] !== undefined ? toNumber(m[3]) : (column === 1 && m[2] !== undefined ? toNumber(m[2]) : first);
+      // The second column's number. A line with only one number can't be placed in a column, so it isn't guessed at.
+      const pick = column === 1 ? (m[2] !== undefined ? toNumber(m[2]) : (m[3] !== undefined ? toNumber(m[3]) : null)) : first;
       return pick !== null && pick <= LIMITS.calories ? [{ value: pick, uncertain: hadLookalike(m[1]) }] : [];
     }
     const joined = m[2] !== undefined ? toNumber(m[1] + m[2]) : null;
@@ -144,6 +202,11 @@
     while ((m = re.exec(text)) !== null) {
       // "Saturated Fat" / "Trans Fat" lines are not Total Fat; a bare "Fat" is only accepted below.
       const rest = text.slice(m.index + m[0].length);
+      if (field.key === "calories") {
+        // The footnote "...2,000 calories a day..." is not the product's calories.
+        if (/\d[\d,.]*\s*$/.test(text.slice(Math.max(0, m.index - 14), m.index))) continue;
+        if (/^\s*(?:a|per|each)\s+day/i.test(rest)) continue;
+      }
       const line = rest.split("\n")[0];
       // A value can sit on the next line when the name wraps; take the first two lines then.
       segs.push(line.trim() === "" || !/\d|[Oo]/.test(line) ? rest.split("\n").slice(0, 2).join(" ") : line);
@@ -159,14 +222,42 @@
     while ((m = re.exec(text)) !== null) {
       const before = text.slice(Math.max(0, m.index - 14), m.index).toLowerCase();
       if (/(saturated|sat\.?|trans|poly\w*|mono\w*|unsat\w*|total|low|non|reduced|fat-?free|\bcal\w*)\s*[-:.]*\s*$/.test(before)) continue;
+      // The word just before may be one of those, mangled ("Saturateq Fat", "Tota] Fat").
+      const prev = (text.slice(0, m.index).match(/([^\s]+)\s*$/) || ["", ""])[1].toLowerCase().replace(/[^a-z]/g, "");
+      if (prev.length >= 3 && ["saturated", "trans", "polyunsaturated", "monounsaturated", "unsaturated", "total"].some(function (w) { return editDistance(prev, w) <= (w.length <= 5 ? 1 : 2); })) continue;
       segs.push(text.slice(m.index + m[0].length).split("\n")[0]);
     }
     return segs;
   }
 
+  // Lines that START with a mangled spelling of the field's name, as the text after it. Only used when no exact
+  // spelling gave a value. The value must follow the name (a digit-like character next), so a stray word can't match.
+  function fuzzySegments(text, key) {
+    const variants = LABEL_VARIANTS[key];
+    if (!variants) return [];
+    const lines = text.split("\n");
+    const segs = [];
+    lines.forEach(function (line, idx) {
+      line.split(/\s*[\u2022\u00b7|]\s*/).forEach(function (piece) {
+        const tokens = piece.replace(/^[^A-Za-z0-9]+/, "").split(" ").filter(Boolean);
+        for (let n = 1; n <= 3 && n <= tokens.length; n++) {
+          const word = tokens.slice(0, n).join("").toLowerCase().replace(/[^a-z]/g, "");
+          if (word.length < 4) continue;
+          const hit = variants.some(function (v) { return editDistance(word, v) <= distLimit(v.length); });
+          if (!hit) continue;
+          let rest = tokens.slice(n).join(" ");
+          if (rest.trim() === "" && lines[idx + 1]) rest = lines[idx + 1];
+          if (/^[^A-Za-z0-9]{0,3}[0-9OoIl|]/.test(rest)) { segs.push(rest); break; }
+        }
+      });
+    });
+    return segs;
+  }
+
   function pickAmount(amounts, column) {
     if (!amounts.length) return null;
-    if (column === 1 && amounts.length > 1) return amounts[1];
+    // Second column wanted but only one amount readable: it could be either column, so it isn't used.
+    if (column === 1) return amounts.length > 1 ? amounts[1] : null;
     return amounts[0];
   }
 
@@ -184,10 +275,22 @@
   const NAMES = { calories: "calories", fat: "fat", sodium: "sodium", carbs: "carbs", fiber: "fiber", protein: "protein", vitaminD: "vitamin D", calcium: "calcium", iron: "iron", potassium: "potassium", vitaminC: "vitamin C" };
   const MAIN = ["calories", "fat", "carbs", "protein"];
 
+  const UNIT_OF = { fat: "g", carbs: "g", fiber: "g", sodium: "mg", calcium: "mg", iron: "mg", potassium: "mg", vitaminC: "mg", vitaminD: "mcg" };
+
   // Sanity checks on a set of fields. Never changes a number: only says which ones to double-check, and why.
-  function checkFields(fields) {
+  // dvs: the % Daily Value printed beside each amount, when it was read.
+  function checkFields(fields, dvs) {
     const warnings = [];
     const uncertain = [];
+    const bad = [];
+    Object.keys(dvs || {}).forEach(function (k) {
+      if (fields[k] !== undefined && !dvFits(k, fields[k], dvs[k])) bad.push(k);
+    });
+    bad.slice(0, 3).forEach(function (k) {
+      warnings.push(NAMES[k].charAt(0).toUpperCase() + NAMES[k].slice(1) + " (" + fields[k] + UNIT_OF[k] + ") doesn't match the " + dvs[k] + "% Daily Value printed beside it. One of them may be misread.");
+    });
+    if (bad.length > 3) warnings.push(bad.length - 3 + " more amounts don't match their printed Daily Values.");
+    bad.forEach(function (k) { uncertain.push(k); });
     const expected = atwater(fields);
     if (fields.calories !== undefined && expected !== null && calorieMismatch(fields.calories, expected)) {
       warnings.push("Calories (" + fields.calories + ") don't fit the fat, carbs and protein that were read (about " + Math.round(expected) + "). One of them may be misread.");
@@ -207,23 +310,53 @@
     const column = servingColumn(text);
     const fields = {};
     const uncertain = [];
+    const dvs = {};
+    const repairs = [];
     let calorieOptions = [];
 
-    FIELDS.forEach(function (field) {
-      let segs = segmentsFor(text, field);
-      if (field.key === "fat" && !segs.length) segs = bareFatSegments(text);
+    // Tries the segments (the text after a field's name) in order; the first that gives a value wins.
+    function read(field, segs) {
       for (let i = 0; i < segs.length; i++) {
         if (field.key === "calories") {
           const cands = calorieCandidates(segs[i], column);
-          if (cands.length) { calorieOptions = cands; break; }
+          if (cands.length) { calorieOptions = cands; return true; }
           continue;
         }
         const pick = pickAmount(amountsIn(segs[i], field.unit), column);
         if (pick && pick.value <= LIMITS[field.key]) {
-          fields[field.key] = pick.value;
-          if (pick.uncertain) uncertain.push(field.key);
-          break;
+          let value = pick.value;
+          let doubtful = pick.uncertain;
+          // The Daily Value printed after the amount (single-column labels only).
+          const dvMatch = column === null && DV[field.key] ? segs[i].slice(pick.end).match(/^\s{0,3}(\d{1,3}|[Oo])\s*%/) : null;
+          const pct = dvMatch ? toNumber(dvMatch[1]) : null;
+          if (pct !== null) dvs[field.key] = pct;
+          // A lost decimal point: "15g" beside "2%" only fits 1.5g.
+          if (pct !== null && DV[field.key].decimals && value >= 10 && !dvFits(field.key, value, pct) && dvFits(field.key, value / 10, pct)) {
+            repairs.push(NAMES[field.key].charAt(0).toUpperCase() + NAMES[field.key].slice(1) + ": read " + value + UNIT_OF[field.key] + ", but the " + pct + "% Daily Value printed beside it only fits " + value / 10 + UNIT_OF[field.key] + ", so " + value / 10 + UNIT_OF[field.key] + " is used.");
+            value = value / 10;
+            doubtful = true;
+          }
+          fields[field.key] = value;
+          if (doubtful) uncertain.push(field.key);
+          return true;
         }
+      }
+      return false;
+    }
+
+    FIELDS.forEach(function (field) {
+      let segs = segmentsFor(text, field);
+      if (!read(field, segs)) {
+        // No exact spelling gave a value: try a mangled one at the start of a line. Anything read that way is doubtful.
+        const before = field.key === "calories" ? calorieOptions.length : fields[field.key] !== undefined;
+        read(field, fuzzySegments(text, field.key));
+        const after = field.key === "calories" ? calorieOptions.length : fields[field.key] !== undefined;
+        if (!before && after) {
+          if (field.key === "calories") calorieOptions = calorieOptions.map(function (o) { return { value: o.value, uncertain: true }; });
+          else if (uncertain.indexOf(field.key) === -1) uncertain.push(field.key);
+        }
+        // Labels that just say "Fat" (not "Total Fat"): the last resort, and always worth a look.
+        if (field.key === "fat" && fields.fat === undefined && read(field, bareFatSegments(text)) && uncertain.indexOf("fat") === -1) uncertain.push("fat");
       }
     });
 
@@ -238,15 +371,15 @@
       if (chosen.uncertain) uncertain.push("calories");
     }
 
-    const check = checkFields(fields);
+    const check = checkFields(fields, dvs);
     check.uncertain.forEach(function (k) { if (uncertain.indexOf(k) === -1) uncertain.push(k); });
-    const warnings = check.warnings;
+    const warnings = repairs.concat(check.warnings);
 
     const servingMatch = text.match(new RegExp("serv" + I + "ng\\s*s" + I + "ze[\\s:.\\-]*?([^\\n]{1,40})", "i"));
     // A serving written "(45g)" can come out "(459)": a bare number in brackets is a weight whose g was misread.
     const servingSize = servingMatch ? servingMatch[1].trim().replace(/[.\s]+$/, "").replace(/\((\d{1,4}(?:\.\d)?)9\)/, "($1g)") : null;
     const missing = MAIN.filter(function (k) { return fields[k] === undefined; });
-    return { fields: fields, uncertain: uncertain, warnings: warnings, missing: missing, servingSize: servingSize, matchedCount: Object.keys(fields).length, rawText: text };
+    return { fields: fields, uncertain: uncertain, warnings: warnings, dvs: dvs, missing: missing, servingSize: servingSize, matchedCount: Object.keys(fields).length, rawText: text };
   }
 
   /* ---------------- scaling to the amount you actually eat ---------------- */
