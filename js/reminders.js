@@ -1109,10 +1109,22 @@
     };
   }
 
-  function openForm(reminder, category, openerId) {
+  // A new reminder can start with some things filled in ({ title, times, type, days }), always checked the same way
+  // the form checks anything typed in. It is only ever a starting point: nothing is saved until Save is tapped.
+  function applyPrefill(form, prefill) {
+    const title = spec.cleanText(prefill.title, spec.TITLE_MAX);
+    if (title) form.title = title;
+    const times = spec.cleanTimes(Array.isArray(prefill.times) ? prefill.times : []).times;
+    if (times.length) form.times = times;
+    const days = spec.cleanDays(prefill.days);
+    if (prefill.type === "weekly" && days.length) { form.type = "weekly"; form.days = days; }
+  }
+
+  function openForm(reminder, category, openerId, prefill) {
     if (!signedIn()) return;
     state.editingId = reminder ? reminder.id : null;
     state.form = reminder ? formFrom(reminder) : blankForm(category);
+    if (!reminder && prefill) applyPrefill(state.form, prefill);
     state.openerId = openerId || "rmNewBtn";
     $("rmModalTitle").textContent = reminder ? "Edit reminder" : "New reminder";
     $("rmSaveBtn").textContent = reminder ? "Save changes" : "Save reminder";
@@ -1384,9 +1396,21 @@
     }
   }
 
+  // For other screens: go to Reminders and open a new reminder, already filled in, for the person to check and save.
+  function openNew(prefill) {
+    const nav = $("navBtnHabits");
+    if (nav) nav.click();
+    const tab = $("habitsSubNavReminders");
+    if (tab) tab.click();
+    if (!signedIn()) { core().showToast("Log in to your JARVIS account to set reminders."); return false; }
+    openForm(null, "custom", "rmNewBtn", prefill || null);
+    return true;
+  }
+
   window.JarvisReminders = {
     init: init,
     render: render,
+    openNew: openNew,
     helpers: { relative: relative, describeError: describeError, cleanReminder: cleanReminder }
   };
 })();
