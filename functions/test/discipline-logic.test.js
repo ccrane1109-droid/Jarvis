@@ -155,7 +155,7 @@ test("the saved store drops bad dates and junk, keeps real days, and defaults th
   assert.equal(s.settings.phoneLimit, D.DEFAULT_PHONE_LIMIT);
   assert.equal(D.sanitizeStore({ settings: { phoneLimit: 3.5 } }).settings.phoneLimit, 3.5);
   assert.deepEqual(D.sanitizeStore(null), {
-    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, days: {}
+    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, program: { start: null, done: {} }, days: {}
   });
   assert.deepEqual(D.sanitizeStore("garbage").days, {});
 });
@@ -479,4 +479,12 @@ test("a timer remembers its task and avoid-log entry, and ignores a task id that
   assert.deepEqual([t.taskId, t.entryAt, t.task], ["p1", 777, "Lift"]);
   assert.equal(D.sanitizeTimer({ startedAt: 1000, minutes: 2, taskId: "p9" }).taskId, "");
   assert.equal(D.sanitizeTimer({ startedAt: 1000, minutes: 2 }).entryAt, 0);
+});
+
+test("the program state keeps a real start date and only valid ticks", () => {
+  assert.deepEqual(D.sanitizeProgram(null), { start: null, done: {} });
+  assert.equal(D.sanitizeProgram({ start: "2026-02-30" }).start, null, "not a real date");
+  assert.equal(D.sanitizeProgram({ start: "2026-10-22" }).start, "2026-10-22");
+  const p = D.sanitizeProgram({ start: "2026-10-22", done: { "1": [2, 0, 2, "x", -1, 99], "31": [0], "0": [0], "3": [], "7": "no", "x": [1] } });
+  assert.deepEqual(p.done, { "1": [0, 2] }, "days outside 1-30, empty and junk are dropped; ticks are unique and sorted");
 });

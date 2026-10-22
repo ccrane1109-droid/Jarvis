@@ -190,6 +190,19 @@
     };
   }
 
+  // The 30-day program: the day it started, and which of each day's own-word missions were ticked ({ "3": [0, 2] }).
+  function sanitizeProgram(raw) {
+    const r = raw && typeof raw === "object" ? raw : {};
+    const done = {};
+    Object.keys(r.done && typeof r.done === "object" ? r.done : {}).forEach(function (k) {
+      const n = Number(k);
+      if (!Number.isInteger(n) || n < 1 || n > 30 || !Array.isArray(r.done[k])) return;
+      const picked = r.done[k].filter(function (i, at, all) { return Number.isInteger(i) && i >= 0 && i <= 9 && all.indexOf(i) === at; });
+      if (picked.length) done[String(n)] = picked.sort();
+    });
+    return { start: isISODate(r.start) ? r.start : null, done: done };
+  }
+
   function sanitizeMorning(raw) {
     if (!raw || typeof raw !== "object") return null;
     const list = Array.isArray(raw.priorities) ? raw.priorities : [];
@@ -257,6 +270,7 @@
     return {
       settings: { phoneLimit: limit(r.settings && r.settings.phoneLimit), times: sanitizeTimes(r.settings && r.settings.times) },
       rules: sanitizeRules(r.rules), avoid: sanitizeAvoid(r.avoid), timer: sanitizeTimer(r.timer),
+      program: sanitizeProgram(r.program),
       days: days
     };
   }
@@ -591,7 +605,7 @@
 
   return {
     REASONS: REASONS, EXCUSES: EXCUSES, DEFAULT_TIMES: DEFAULT_TIMES, MAX_RULES: MAX_RULES, RULE_MAX: RULE_MAX, START_MINUTES: START_MINUTES, AREA_RULES: AREA_RULES,
-    sanitizeRules: sanitizeRules, sanitizeAvoid: sanitizeAvoid, sanitizeTimer: sanitizeTimer, sanitizeTimes: sanitizeTimes, minutesOf: minutesOf,
+    sanitizeRules: sanitizeRules, sanitizeProgram: sanitizeProgram, sanitizeAvoid: sanitizeAvoid, sanitizeTimer: sanitizeTimer, sanitizeTimes: sanitizeTimes, minutesOf: minutesOf,
     nextUp: nextUp, timerState: timerState, avoidSummary: avoidSummary, blockerSummary: blockerSummary, ruleSummary: ruleSummary,
     suggestRules: suggestRules, weeklyText: weeklyText, shortDate: shortDate, firstUseDate: firstUseDate,
     CATEGORIES: CATEGORIES, ITEMS: ITEMS, DAY_TYPES: DAY_TYPES, NOTE_FIELDS: NOTE_FIELDS,

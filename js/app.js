@@ -230,7 +230,7 @@
       if (dsum.hasData) {
         rows.push(
           '<div class="briefing-row"><strong>Discipline:</strong> ' + (dsum.plannedToday ? "today's plan is set" : "no plan set yet today") +
-          ' &middot; ' + dsum.streak + ' day review streak' + (dsum.last ? ' &middot; last score ' + dsum.last.score + ' (' + dsum.last.when + ')' : '') + '</div>'
+          ' &middot; ' + dsum.streak + ' day review streak' + (dsum.programDay ? ' &middot; program day ' + dsum.programDay + ' of 30' : '') + (dsum.last ? ' &middot; last score ' + dsum.last.score + ' (' + dsum.last.when + ')' : '') + '</div>'
         );
       }
     }

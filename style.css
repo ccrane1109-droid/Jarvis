@@ -2724,3 +2724,19 @@ button.rm-hist-row { cursor: pointer; }
 .dc-sugg strong, .dc-nudge-row strong, .dc-recent-row strong { display: inline-block; }
 .dc-sugg .field-hint, .dc-nudge-row .field-hint, .dc-recent-row .field-hint, .dc-rule-row .field-hint { margin-top: 4px; }
 .dc-sugg .btn, .dc-nudge-row .btn { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+
+/* Discipline: 30-day program */
+
+.dc-lesson { border-left: 4px solid var(--accent-dim); }
+.dc-lesson-p { font-size: 14px; color: var(--text-dim); margin: 8px 0; line-height: 1.5; }
+.dc-lesson-p strong { color: var(--text); }
+.dc-lesson-p.dc-do { color: var(--text); }
+.dc-check.auto { cursor: default; }
+.dc-auto { display: inline-block; margin-left: 4px; font-size: 11px; color: var(--text-faint); }
+.dc-day { padding: 10px 0; border-bottom: 1px solid var(--card-border); }
+.dc-day:last-child { border-bottom: none; }
+.dc-day summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; font-weight: 600; min-height: 44px; }
+.dc-day summary span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.dc-day.locked { display: flex; justify-content: space-between; gap: 12px; color: var(--text-faint); }
+.dc-checklist + .field-hint { margin-top: 10px; }
+.dc-day summary .field-hint { white-space: nowrap; margin-top: 0; flex: 0 0 auto; }

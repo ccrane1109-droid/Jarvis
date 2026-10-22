@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=50">
+<link rel="stylesheet" href="style.css?v=51">
 </head>
 <body>
 
@@ -1924,6 +1924,7 @@
 
     <nav class="sub-nav discipline-sub-nav" role="tablist" aria-label="Discipline sections">
       <button type="button" class="discipline-sub-nav-btn active" data-subtarget="discipline-today" role="tab" aria-selected="true" aria-controls="discipline-today" id="disciplineSubNavToday">Today</button>
+      <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-program" role="tab" aria-selected="false" aria-controls="discipline-program" id="disciplineSubNavProgram">Program</button>
       <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-trends" role="tab" aria-selected="false" aria-controls="discipline-trends" id="disciplineSubNavTrends">Trends</button>
       <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-setup" role="tab" aria-selected="false" aria-controls="discipline-setup" id="disciplineSubNavSetup">Setup</button>
     </nav>
@@ -1954,6 +1955,17 @@
 
       <div class="card dc-flow hidden" id="dcFlowCard" aria-live="polite">
         <div id="dcFlow"></div>
+      </div>
+
+      <div class="card dc-lesson hidden" id="dcLessonCard">
+        <div class="dc-next-kicker" id="dcLessonKicker"></div>
+        <div class="dc-next-title" id="dcLessonTitle"></div>
+        <div id="dcLessonBody" class="hidden"></div>
+        <p class="field-hint" id="dcLessonMissions"></p>
+        <div class="dc-next-actions">
+          <button type="button" class="btn btn-secondary" id="dcLessonToggle" aria-expanded="false">Read the lesson</button>
+          <button type="button" class="btn btn-secondary" id="dcLessonGo">See missions</button>
+        </div>
       </div>
 
       <div class="card" id="dcMorningCard">
@@ -2026,6 +2038,17 @@
           </div>
         </form>
         <div id="dcResult" class="dc-result hidden" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Program ---------- -->
+    <div id="discipline-program" class="discipline-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavProgram">
+      <div class="card" id="dcProgHead"></div>
+      <div class="card hidden" id="dcProgMissions"></div>
+      <div class="card hidden" id="dcProgLesson"></div>
+      <div class="card">
+        <h2 class="card-title">All 30 days</h2>
+        <div id="dcProgDays"></div>
       </div>
     </div>
 
@@ -4703,33 +4726,34 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=50"></script>
-<script type="module" src="js/auth.js?v=50"></script>
-<script src="js/app.js?v=50"></script>
-<script src="js/exercises.js?v=50"></script>
-<script src="js/workout.js?v=50"></script>
-<script src="js/nutrition.js?v=50"></script>
-<script src="js/nutrition-label-parse.js?v=50"></script>
-<script src="js/nutrition-label-scan.js?v=50"></script>
-<script src="js/groceries.js?v=50"></script>
-<script src="js/habits.js?v=50"></script>
-<script src="js/discipline-logic.js?v=50"></script>
-<script src="js/discipline.js?v=50"></script>
-<script src="functions/lib/reminder-spec.js?v=50"></script>
-<script src="functions/lib/reminder-events.js?v=50"></script>
-<script src="js/reminders.js?v=50"></script>
-<script src="js/business.js?v=50"></script>
-<script src="js/trading.js?v=50"></script>
-<script src="js/blobstore.js?v=50"></script>
-<script src="js/video-api-client.js?v=50"></script>
-<script src="js/video-connections.js?v=50"></script>
-<script src="js/video.js?v=50"></script>
-<script src="js/video-studio.js?v=50"></script>
-<script src="functions/lib/idea-spec.js?v=50"></script>
-<script src="functions/lib/niche-spec.js?v=50"></script>
-<script src="js/marketing-stats.js?v=50"></script>
-<script src="js/niche-research.js?v=50"></script>
-<script src="js/content-intelligence.js?v=50"></script>
-<script src="js/form-check.js?v=50"></script>
+<script src="js/firebase-config.js?v=51"></script>
+<script type="module" src="js/auth.js?v=51"></script>
+<script src="js/app.js?v=51"></script>
+<script src="js/exercises.js?v=51"></script>
+<script src="js/workout.js?v=51"></script>
+<script src="js/nutrition.js?v=51"></script>
+<script src="js/nutrition-label-parse.js?v=51"></script>
+<script src="js/nutrition-label-scan.js?v=51"></script>
+<script src="js/groceries.js?v=51"></script>
+<script src="js/habits.js?v=51"></script>
+<script src="js/discipline-logic.js?v=51"></script>
+<script src="js/discipline-program.js?v=51"></script>
+<script src="js/discipline.js?v=51"></script>
+<script src="functions/lib/reminder-spec.js?v=51"></script>
+<script src="functions/lib/reminder-events.js?v=51"></script>
+<script src="js/reminders.js?v=51"></script>
+<script src="js/business.js?v=51"></script>
+<script src="js/trading.js?v=51"></script>
+<script src="js/blobstore.js?v=51"></script>
+<script src="js/video-api-client.js?v=51"></script>
+<script src="js/video-connections.js?v=51"></script>
+<script src="js/video.js?v=51"></script>
+<script src="js/video-studio.js?v=51"></script>
+<script src="functions/lib/idea-spec.js?v=51"></script>
+<script src="functions/lib/niche-spec.js?v=51"></script>
+<script src="js/marketing-stats.js?v=51"></script>
+<script src="js/niche-research.js?v=51"></script>
+<script src="js/content-intelligence.js?v=51"></script>
+<script src="js/form-check.js?v=51"></script>
 </body>
 </html>

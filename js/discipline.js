@@ -21,6 +21,7 @@
 
   const LS_KEY = "jarvisDiscipline";
   const L = window.JarvisDisciplineLogic;
+  const P = window.JarvisDisciplineProgram || null; // the 30-day program; the tracker still works without it
 
   const ITEM_QUESTIONS = {
     school: "Did you finish your school work?",
@@ -56,6 +57,7 @@
   let flow = null;               // the "I'm avoiding it" steps: { step, taskId, taskText, reason, excuse }
   let tickHandle = null;
   let weeklyEdited = false;
+  let lessonOpen = false;
   let draft = newDraft(null);    // the review form's button answers while it's being filled in
 
   function emptyStore() { return L.sanitizeStore(null); }
@@ -589,6 +591,7 @@
     renderHeader();
     renderNextUp();
     renderFlow();
+    renderLessonCard();
     renderMorning();
     $("dcReviewCard").classList.toggle("hidden", selected === "tomorrow");
     renderReviewHint();
@@ -818,17 +821,155 @@
     reminders.openNew({ title: n.title, times: [store.settings.times[n.timeKey]], type: n.type, days: n.days || null });
   }
 
+  /* ---------------- the 30-day program ---------------- */
+
+  function programContext(dayNumber) {
+    return { date: P.dateOfDay(store.program.start, dayNumber), days: store.days, rules: store.rules, manualDone: store.program.done[String(dayNumber)] || [] };
+  }
+
+  function lessonHtml(entry) {
+    return '<p class="dc-lesson-p"><strong>The idea.</strong> ' + esc(entry.principle) + '</p>' +
+      '<p class="dc-lesson-p"><strong>Why it matters.</strong> ' + esc(entry.why) + '</p>' +
+      '<p class="dc-lesson-p"><strong>Picture this.</strong> ' + esc(entry.example) + '</p>' +
+      '<p class="dc-lesson-p dc-do"><strong>Try it now.</strong> ' + esc(entry.apply) + '</p>';
+  }
+
+  function missionRows(progress, interactive) {
+    return '<div class="dc-checklist">' + progress.items.map(function (m, i) {
+      if (m.auto || !interactive) {
+        return '<div class="dc-check' + (m.done ? " done" : "") + ' auto" role="checkbox" aria-checked="' + m.done + '" aria-disabled="true">' +
+          '<span class="dc-box" aria-hidden="true">' + (m.done ? "✓" : "") + '</span><span class="dc-check-text">' + esc(m.text) + (m.auto ? ' <small class="dc-auto">checked for you</small>' : "") + '</span></div>';
+      }
+      return '<button type="button" class="dc-check' + (m.done ? " done" : "") + '" role="checkbox" aria-checked="' + m.done + '" data-mission="' + i + '">' +
+        '<span class="dc-box" aria-hidden="true">' + (m.done ? "✓" : "") + '</span><span class="dc-check-text">' + esc(m.text) + '</span></button>';
+    }).join("") + '</div>';
+  }
+
+  function renderLessonCard() {
+    const card = $("dcLessonCard");
+    if (!P) { card.classList.add("hidden"); return; }
+    const pd = P.programDay(store.program.start, todayISO());
+    if (selected !== "today" || pd.status !== "active") { card.classList.add("hidden"); return; }
+    const entry = P.DAYS[pd.day - 1];
+    const progress = P.dayProgress(pd.day, programContext(pd.day));
+    card.classList.remove("hidden");
+    $("dcLessonKicker").textContent = "Day " + pd.day + " of 30 · Today's principle";
+    $("dcLessonTitle").textContent = entry.title;
+    $("dcLessonBody").innerHTML = lessonOpen ? lessonHtml(entry) : "";
+    $("dcLessonBody").classList.toggle("hidden", !lessonOpen);
+    $("dcLessonToggle").textContent = lessonOpen ? "Hide the lesson" : "Read the lesson";
+    $("dcLessonToggle").setAttribute("aria-expanded", String(lessonOpen));
+    $("dcLessonMissions").textContent = "Missions today: " + progress.done + " of " + progress.total + " done.";
+  }
+
+  function renderProgram() {
+    if (!P) { $("dcProgHead").innerHTML = '<div class="empty-state">The program isn\'t available right now.</div>'; return; }
+    const today = todayISO();
+    const pd = P.programDay(store.program.start, today);
+    const head = $("dcProgHead"), missions = $("dcProgMissions"), lesson = $("dcProgLesson");
+    missions.classList.toggle("hidden", pd.status !== "active");
+    lesson.classList.toggle("hidden", pd.status !== "active");
+
+    if (pd.status === "notStarted") {
+      head.innerHTML = '<h2 class="card-title">30-day discipline program</h2>' +
+        '<p class="dc-line">One short lesson and two or three missions a day. Missions JARVIS can check from your own entries are checked for you; the rest you tick yourself.</p>' +
+        '<ul class="dc-lines">' + P.WEEKS.map(function (w) { return "<li><strong>Days " + w.days[0] + "-" + w.days[1] + ": " + esc(w.name) + "</strong><br><span class=\"field-hint\">" + esc(w.focus) + " Phone target: " + w.phone + "h.</span></li>"; }).join("") + '</ul>' +
+        '<div class="form-actions"><button type="button" class="btn btn-primary" data-prog="start">Start today as day 1</button></div>' +
+        '<p class="field-hint">You can restart any time. Nothing here changes your plans, reviews or rules.</p>';
+    } else if (pd.status === "complete") {
+      const end = P.dateOfDay(store.program.start, 30);
+      const t = L.trendSummary(store.days, end, 30);
+      let done = 0, total = 0;
+      for (let n = 1; n <= 30; n++) { const p = P.dayProgress(n, programContext(n)); done += p.done; total += p.total; }
+      head.innerHTML = '<h2 class="card-title">Program complete</h2>' +
+        '<p class="dc-line">You reached the end of day 30. Over those 30 days you scored <strong>' + t.scoredDays + '</strong> days' + (t.enough ? ', averaging <strong>' + t.average + '</strong>' : '') + ' and completed <strong>' + done + ' of ' + total + '</strong> missions.</p>' +
+        '<p class="field-hint">Those are your own numbers. Keep what worked; your rules, plans and history are unchanged.</p>' +
+        '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="restart">Start the program again</button></div>';
+    } else {
+      const week = P.weekOf(pd.day);
+      const target = P.phoneTarget(pd.day);
+      head.innerHTML = '<div class="card-title-row"><h2 class="card-title">Day ' + pd.day + ' of 30</h2><span class="badge badge-accent">Week ' + week.n + '</span></div>' +
+        '<p class="dc-line"><strong>' + esc(week.name) + '.</strong> ' + esc(week.focus) + '</p>' +
+        '<div class="dc-track"><div class="dc-fill" style="width:' + Math.round(100 * pd.day / 30) + '%"></div></div>' +
+        '<p class="dc-line">This week\'s phone target: <strong>' + target + 'h</strong> a day. Your limit is ' + store.settings.phoneLimit + 'h.</p>' +
+        (store.settings.phoneLimit !== target ? '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="target">Use ' + target + 'h as my limit</button></div>' : "") +
+        '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="restart">Restart the program</button></div>';
+      const progress = P.dayProgress(pd.day, programContext(pd.day));
+      missions.innerHTML = '<h2 class="card-title">Today\'s missions (' + progress.done + ' of ' + progress.total + ')</h2>' + missionRows(progress, true) +
+        '<p class="field-hint">Ones marked “checked for you” tick themselves when your entries show it. Tap the others when you have done them.</p>';
+      lesson.innerHTML = '<h2 class="card-title">Day ' + pd.day + ': ' + esc(P.DAYS[pd.day - 1].title) + '</h2>' + lessonHtml(P.DAYS[pd.day - 1]) +
+        '<p class="field-hint">Fixed wording, not AI. Researchers are named only where the finding is well known.</p>';
+    }
+
+    $("dcProgDays").innerHTML = P.DAYS.map(function (entry) {
+      const n = entry.day;
+      if (pd.status === "notStarted" || (pd.status === "active" && n > pd.day)) {
+        return '<div class="dc-day locked"><span>Day ' + n + '</span><span class="field-hint">' + (pd.status === "notStarted" ? "Week " + P.weekOf(n).n : "Unlocks " + prettyDate(P.dateOfDay(store.program.start, n))) + '</span></div>';
+      }
+      const p = P.dayProgress(n, programContext(n));
+      return '<details class="dc-day"><summary><span>Day ' + n + ' · ' + esc(entry.title) + '</span><span class="field-hint">' + (n === pd.day && pd.status === "active" ? "Today · " : "") + p.done + ' of ' + p.total + '</span></summary>' +
+        lessonHtml(entry) + missionRows(p, false) + '</details>';
+    }).join("");
+  }
+
+  function handleProgramClick(e) {
+    if (!P) return;
+    const act = e.target.closest("[data-prog]");
+    const mission = e.target.closest("[data-mission]");
+    const today = todayISO();
+    if (mission) {
+      const pd = P.programDay(store.program.start, today);
+      if (pd.status !== "active") return;
+      const key = String(pd.day);
+      const i = Number(mission.getAttribute("data-mission"));
+      const list = (store.program.done[key] || []).slice();
+      const at = list.indexOf(i);
+      if (at === -1) list.push(i); else list.splice(at, 1);
+      store.program.done[key] = list.sort();
+      if (!list.length) delete store.program.done[key];
+      store.program = L.sanitizeProgram(store.program);
+      save();
+      renderProgram();
+      renderLessonCard();
+      return;
+    }
+    if (!act) return;
+    const what = act.getAttribute("data-prog");
+    if (what === "start") {
+      store.program = { start: today, done: {} };
+      save();
+      core().showToast("Day 1 starts today.");
+    } else if (what === "restart") {
+      if (!window.confirm("Restart the program from today? The missions you ticked in this run are cleared. Your plans, reviews and rules stay.")) return;
+      store.program = { start: today, done: {} };
+      save();
+      core().showToast("Restarted. Today is day 1.");
+    } else if (what === "target") {
+      const target = P.phoneTarget(P.programDay(store.program.start, today).day);
+      store.settings.phoneLimit = target;
+      save();
+      renderHeader();
+      renderSetup();
+      core().showToast("Phone limit is now " + target + "h.");
+    }
+    renderProgram();
+    renderLessonCard();
+    renderNextUp();
+  }
+
   /* ---------------- wiring ---------------- */
 
   function renderEverything() {
     loadReviewForm();
     renderAllToday();
+    renderProgram();
     renderTrends();
     renderSetup();
   }
 
   function onSubTabChange(targetId) {
     if (targetId === "discipline-today") { if (selectedDate() !== renderedDate) loadReviewForm(); renderAllToday(); }
+    if (targetId === "discipline-program") renderProgram();
     if (targetId === "discipline-trends") { weeklyEdited = false; renderTrends(); }
     if (targetId === "discipline-setup") renderSetup();
   }
@@ -848,6 +989,7 @@
       plannedToday: !!(day && day.morning),
       reviewedToday: !!(day && L.scoreDay(day).complete),
       streak: L.reviewStreak(store.days, today),
+      programDay: P && P.programDay(store.program.start, today).status === "active" ? P.programDay(store.program.start, today).day : 0,
       last: last ? { score: last.score, when: when } : null
     };
   }
@@ -886,6 +1028,9 @@
     $("dcRuleForm").addEventListener("submit", handleRuleSubmit);
     $("dcRulesManager").addEventListener("click", handleRulesManagerClick);
     $("dcNudges").addEventListener("click", handleNudgeClick);
+    $("discipline-program").addEventListener("click", handleProgramClick);
+    $("dcLessonToggle").addEventListener("click", function () { lessonOpen = !lessonOpen; renderLessonCard(); });
+    $("dcLessonGo").addEventListener("click", function () { $("disciplineSubNavProgram").click(); });
 
     // An app left open past midnight should roll over to the new day when it comes back to the front;
     // a timer that ran out while the app was in the background is shown as finished.
