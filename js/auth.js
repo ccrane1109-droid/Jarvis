@@ -31,6 +31,14 @@
      reaches Firestore last wins" for that key as a whole — acceptable for
      a personal app, just not a guarantee of never losing an edit in that
      specific scenario.
+   - Not everything fits in that one document (Firestore caps a document at
+     1 MiB) and not every key was ever added to it. The food log, saved
+     foods, recipes, nutrition goals, tasks, goals, Discipline, groceries
+     and form-check history are backed up separately, in their own
+     documents under users/{uid}/appData, by js/cloud-backup.js (the rules
+     for what to keep when two copies differ are in js/backup-logic.js).
+     This file only starts that at sign-in, tells it about each save, and
+     lets it finish before the app starts reading its data.
 
    Requires a Firestore database to actually exist in the Firebase project
    (Databases & Storage -> Firestore Database -> Create database) and
@@ -160,7 +168,14 @@
   }
 
   function handleLogout() {
-    fb.signOut(auth);
+    // Give any change still waiting to back up a few seconds to go out first
+    // (once signed out the cloud would refuse it; it would only upload next sign-in).
+    const session = window.JarvisBackup && window.JarvisBackup.current();
+    const waiting = session && session.status().waiting > 0;
+    const flush = waiting
+      ? Promise.race([session.flush().catch(function () {}), new Promise(function (resolve) { setTimeout(resolve, 4000); })])
+      : Promise.resolve();
+    flush.then(function () { fb.signOut(auth); });
   }
 
   function toast(message) {
@@ -418,8 +433,29 @@
         patch[key] = value;
         fb.setDoc(ref, { store: patch }, { merge: true }).catch(function () { /* best-effort; local save already succeeded */ });
       }
+      if (result !== false && window.JarvisBackup) window.JarvisBackup.onSave(key); // no-op unless it's one of the backup keys and a backup session is running
       return result;
     };
+  }
+
+  // Starts the separate backup (see the header comment) and waits for its
+  // first pass, but never longer than BACKUP_LOGIN_WAIT_MS: on a slow or
+  // unreachable cloud the app opens with this device's data and the backup
+  // carries on behind it (it will then leave this session's data alone and
+  // combine anything newer the next time the app opens).
+  const BACKUP_LOGIN_WAIT_MS = 8000;
+  function startBackup(user) {
+    const backup = window.JarvisBackup;
+    if (!backup) return Promise.resolve();
+    // A sign-in that happens after the app already started (the "please log in" screen) is followed by a
+    // page reload (see proceedToApp); the backup runs in the sign-in that follows the reload instead.
+    if (bootStarted) return Promise.resolve();
+    let session;
+    try { session = backup.attach({ fb: fb, db: db, uid: user.uid }); } catch (e) { return Promise.resolve(); }
+    return new Promise(function (resolve) {
+      const timer = setTimeout(resolve, BACKUP_LOGIN_WAIT_MS);
+      session.reconcile().then(function () {}, function () {}).then(function () { clearTimeout(timer); resolve(); });
+    });
   }
 
   // The app only ever boots its feature modules once per page load. If
@@ -468,6 +504,9 @@
     showOnly("authLoading");
     $("authLoading").querySelector("p").textContent = "Syncing your data…";
     syncFromCloud(user.uid).then(function () {
+      return startBackup(user);
+    }).then(function () {
+      if (window.JarvisBackup) window.JarvisBackup.appStarted(); // from here on the backup must not rewrite data the app has loaded
       if (!currentUserHasTotp && !pendingTotpSecret) {
         showOnly("authTotpEnrollPrompt");
         openGate();
