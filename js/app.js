@@ -225,6 +225,16 @@
       rows.push('<div class="briefing-row"><strong>Habits:</strong> ' + habitsText + '</div>');
     }
 
+    if (window.JarvisDiscipline && typeof window.JarvisDiscipline.getSummary === "function") {
+      const dsum = window.JarvisDiscipline.getSummary();
+      if (dsum.hasData) {
+        rows.push(
+          '<div class="briefing-row"><strong>Discipline:</strong> ' + (dsum.plannedToday ? "today's plan is set" : "no plan set yet today") +
+          ' &middot; ' + dsum.streak + ' day review streak' + (dsum.last ? ' &middot; last score ' + dsum.last.score + ' (' + dsum.last.when + ')' : '') + '</div>'
+        );
+      }
+    }
+
     if (window.JarvisWorkout && typeof window.JarvisWorkout.getSummary === "function") {
       const w = window.JarvisWorkout.getSummary();
       const lastText = w.lastWorkout ? ("last: " + escapeHtml(w.lastWorkout.name) + " on " + formatDate(w.lastWorkout.date)) : "no workouts logged yet";
@@ -328,6 +338,14 @@
       }
     });
 
+    const disciplineSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".discipline-sub-nav-btn"));
+    const disciplineSubPanels = Array.prototype.slice.call(document.querySelectorAll(".discipline-sub-panel"));
+    setupTabGroup(disciplineSubNavBtns, disciplineSubPanels, function (targetId) {
+      if (window.JarvisDiscipline && typeof window.JarvisDiscipline.onSubTabChange === "function") {
+        window.JarvisDiscipline.onSubTabChange(targetId);
+      }
+    });
+
     const businessSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".business-sub-nav-btn"));
     const businessSubPanels = Array.prototype.slice.call(document.querySelectorAll(".business-sub-panel"));
     setupTabGroup(businessSubNavBtns, businessSubPanels, function (targetId) {
@@ -396,6 +414,13 @@
       if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
       if (window.JarvisFormCheck && typeof window.JarvisFormCheck.init === "function") window.JarvisFormCheck.init();
       if (window.JarvisContentIntel && typeof window.JarvisContentIntel.init === "function") window.JarvisContentIntel.init();
+      // Last of the modules (before the briefing, which reads its summary), and guarded: a problem starting the
+      // Discipline tab must never stop the other tabs from working.
+      try {
+        if (window.JarvisDiscipline && typeof window.JarvisDiscipline.init === "function") window.JarvisDiscipline.init();
+      } catch (err) {
+        if (window.console) console.error("Discipline tab failed to start", err);
+      }
       maybeAutoShowBriefing();
     }
 

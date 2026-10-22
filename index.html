@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=48">
+<link rel="stylesheet" href="style.css?v=49">
 </head>
 <body>
 
@@ -117,6 +117,7 @@
       <button type="button" class="main-nav-btn active" data-target="panel-workout" role="tab" aria-selected="true" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
       <button type="button" class="main-nav-btn" data-target="panel-nutrition" role="tab" aria-selected="false" aria-controls="panel-nutrition" id="navBtnNutrition">Nutrition</button>
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
+      <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-trading" role="tab" aria-selected="false" aria-controls="panel-trading" id="navBtnTrading">Trading Lab</button>
       <button type="button" class="main-nav-btn" data-target="panel-video" role="tab" aria-selected="false" aria-controls="panel-video" id="navBtnVideo">AI Video</button>
@@ -1915,6 +1916,154 @@
   </section>
 
   <!-- ===================== BUSINESS ===================== -->
+  <section id="panel-discipline" class="tab-panel" role="tabpanel" aria-labelledby="navBtnDiscipline">
+    <div class="panel-header">
+      <h1>Discipline</h1>
+      <p class="panel-subtitle">Plan the day, review it honestly, and watch the pattern. Every number here is something you entered.</p>
+    </div>
+
+    <nav class="sub-nav discipline-sub-nav" role="tablist" aria-label="Discipline sections">
+      <button type="button" class="discipline-sub-nav-btn active" data-subtarget="discipline-today" role="tab" aria-selected="true" aria-controls="discipline-today" id="disciplineSubNavToday">Today</button>
+      <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-trends" role="tab" aria-selected="false" aria-controls="discipline-trends" id="disciplineSubNavTrends">Trends</button>
+      <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-setup" role="tab" aria-selected="false" aria-controls="discipline-setup" id="disciplineSubNavSetup">Setup</button>
+    </nav>
+
+    <!-- ---------- Sub-panel: Today ---------- -->
+    <div id="discipline-today" class="discipline-sub-panel active" role="tabpanel" aria-labelledby="disciplineSubNavToday">
+      <div class="card">
+        <div class="segmented-control" id="dcDayPills" role="tablist" aria-label="Which day">
+          <button type="button" class="segmented-btn active" data-day="today" id="dcDayToday">Today</button>
+          <button type="button" class="segmented-btn" data-day="yesterday" id="dcDayYesterday">Yesterday</button>
+        </div>
+        <div class="card-title-row dc-title-row">
+          <h2 class="card-title" id="dcDateTitle">Today</h2>
+          <div class="dc-badges">
+            <span class="badge badge-accent" id="dcStreakBadge">0 day streak</span>
+            <span class="badge badge-neutral" id="dcLimitBadge">Phone limit 5h</span>
+          </div>
+        </div>
+        <p class="field-hint dc-nudge hidden" id="dcNudge" role="status"></p>
+      </div>
+
+      <div class="card" id="dcMorningCard">
+        <div class="card-title-row">
+          <h2 class="card-title">Morning plan</h2>
+          <button type="button" class="btn-icon hidden" id="dcMorningEditBtn">Edit plan</button>
+        </div>
+        <form id="dcMorningForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="dcKeyTask">The one task that makes today a win</label>
+            <input type="text" id="dcKeyTask" maxlength="100" autocomplete="off" placeholder="e.g. Finish the English essay">
+          </div>
+          <div class="form-row">
+            <label for="dcPriority1">Your other priorities (up to 3)</label>
+            <input type="text" id="dcPriority1" maxlength="100" autocomplete="off" placeholder="Priority 1">
+            <input type="text" id="dcPriority2" maxlength="100" autocomplete="off" placeholder="Priority 2" aria-label="Priority 2">
+            <input type="text" id="dcPriority3" maxlength="100" autocomplete="off" placeholder="Priority 3" aria-label="Priority 3">
+          </div>
+          <div class="form-row">
+            <label for="dcDistraction">Your biggest distraction today</label>
+            <input type="text" id="dcDistraction" maxlength="240" autocomplete="off" placeholder="e.g. YouTube after school">
+          </div>
+          <div class="form-row">
+            <label for="dcPlan">Your if-then plan</label>
+            <textarea id="dcPlan" rows="2" maxlength="240" placeholder="If I walk in the door, then my phone goes on the charger and I open my homework."></textarea>
+            <p class="field-hint">A plan with a time and a place beats a wish.</p>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="dcMorningSaveBtn">Lock in the plan</button>
+          </div>
+        </form>
+        <div id="dcMorningSummary" class="dc-summary hidden"></div>
+      </div>
+
+      <div class="card" id="dcReviewCard">
+        <h2 class="card-title">Evening review</h2>
+        <p class="field-hint" id="dcReviewHint"></p>
+        <div class="form-row">
+          <label for="dcDayType">What kind of day was it?</label>
+          <select id="dcDayType"></select>
+          <p class="field-hint">Sick, exam, planned rest, travel: some items start as &ldquo;not today&rdquo;. They leave the score out of what was attainable, and they are counted in Trends.</p>
+        </div>
+        <form id="dcReviewForm" class="stacked-form" novalidate>
+          <div class="dc-q">
+            <label for="dcScreenHours">Screen time today, in hours</label>
+            <div class="dc-phone-row">
+              <input type="number" id="dcScreenHours" min="0" max="24" step="0.1" inputmode="decimal" placeholder="e.g. 4.5">
+              <div class="segmented-control dc-seg" data-item="phone" id="dcPhoneNa"></div>
+            </div>
+            <p class="field-hint">Read it from Settings &rarr; Screen Time. JARVIS can't see it for you.</p>
+          </div>
+          <div class="dc-q"><span class="dc-q-label" id="dcFocusLabel">Focus today <small>(1 = scattered, 5 = locked in)</small></span><div class="segmented-control dc-seg" data-rating="focus" id="dcFocus" role="group" aria-labelledby="dcFocusLabel"></div></div>
+          <div class="dc-q"><span class="dc-q-label" id="dcTimeLabel">Did you keep to your plan? <small>(1 = not at all, 5 = closely)</small></span><div class="segmented-control dc-seg" data-rating="time" id="dcTime" role="group" aria-labelledby="dcTimeLabel"></div></div>
+          <div id="dcItems"></div>
+          <div class="form-row">
+            <label for="dcOutput">What exists now that didn&rsquo;t this morning? <small>(optional)</small></label>
+            <input type="text" id="dcOutput" maxlength="240" autocomplete="off" placeholder="A draft, a quote request, a post, a price&hellip;">
+          </div>
+          <div class="form-row"><label for="dcProcrastinated">Where did you procrastinate?</label><textarea id="dcProcrastinated" rows="2" maxlength="240"></textarea></div>
+          <div class="form-row"><label for="dcDistractions">What caused your distractions?</label><textarea id="dcDistractions" rows="2" maxlength="240"></textarea></div>
+          <div class="form-row"><label for="dcWentWell">What did you do well?</label><textarea id="dcWentWell" rows="2" maxlength="240"></textarea></div>
+          <div class="form-row"><label for="dcImprove">What will you improve tomorrow?</label><textarea id="dcImprove" rows="2" maxlength="240"></textarea></div>
+          <p class="field-hint dc-missing hidden" id="dcMissing" role="alert"></p>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="dcReviewSaveBtn">Score my day</button>
+          </div>
+        </form>
+        <div id="dcResult" class="dc-result hidden" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Trends ---------- -->
+    <div id="discipline-trends" class="discipline-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavTrends">
+      <div class="card">
+        <div class="segmented-control" id="dcWindowPills" role="tablist" aria-label="Time window">
+          <button type="button" class="segmented-btn active" data-window="7" id="dcWindow7">Last 7 days</button>
+          <button type="button" class="segmented-btn" data-window="30" id="dcWindow30">Last 30 days</button>
+        </div>
+        <div class="stat-grid dc-stats" id="dcStats"></div>
+        <p class="field-hint dc-insights" id="dcTrendNote"></p>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Daily score</h2>
+        <div class="dc-chart" id="dcChart" role="img" aria-label="Daily discipline scores"></div>
+        <div class="dc-chart-axis" id="dcChartAxis"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Where the points go</h2>
+        <div id="dcCategories"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Recent days</h2>
+        <div id="dcRecent"></div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Setup ---------- -->
+    <div id="discipline-setup" class="discipline-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavSetup">
+      <div class="card">
+        <h2 class="card-title">Phone limit</h2>
+        <p class="field-hint">Hours of screen time a day that still earns full marks. Each review keeps the limit it was scored with, so changing this never rewrites past days.</p>
+        <form id="dcSetupForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="dcPhoneLimit">Daily limit (hours)</label>
+            <input type="number" id="dcPhoneLimit" min="0.5" max="24" step="0.5" inputmode="decimal">
+          </div>
+          <div class="form-actions"><button type="submit" class="btn btn-primary">Save limit</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2 class="card-title">How the score works</h2>
+        <div id="dcRubric"></div>
+        <p class="field-hint">A day is scored only once every item is answered. A day with no review has no score; it is never counted as zero. Items marked &ldquo;not today&rdquo; leave both what you earned and what was possible, so a sick day with everything attainable done is 100. The score is feedback, not a measure of your worth.</p>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Where your entries are kept</h2>
+        <p class="field-hint">Your plans and reviews are saved on this device only. They are not backed up to your JARVIS account, so clearing this browser&rsquo;s data would erase them.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="panel-business" class="tab-panel" role="tabpanel" aria-labelledby="navBtnBusiness">
     <div class="panel-header">
       <h1>Business</h1>
@@ -4489,31 +4638,33 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=48"></script>
-<script type="module" src="js/auth.js?v=48"></script>
-<script src="js/app.js?v=48"></script>
-<script src="js/exercises.js?v=48"></script>
-<script src="js/workout.js?v=48"></script>
-<script src="js/nutrition.js?v=48"></script>
-<script src="js/nutrition-label-parse.js?v=48"></script>
-<script src="js/nutrition-label-scan.js?v=48"></script>
-<script src="js/groceries.js?v=48"></script>
-<script src="js/habits.js?v=48"></script>
-<script src="functions/lib/reminder-spec.js?v=48"></script>
-<script src="functions/lib/reminder-events.js?v=48"></script>
-<script src="js/reminders.js?v=48"></script>
-<script src="js/business.js?v=48"></script>
-<script src="js/trading.js?v=48"></script>
-<script src="js/blobstore.js?v=48"></script>
-<script src="js/video-api-client.js?v=48"></script>
-<script src="js/video-connections.js?v=48"></script>
-<script src="js/video.js?v=48"></script>
-<script src="js/video-studio.js?v=48"></script>
-<script src="functions/lib/idea-spec.js?v=48"></script>
-<script src="functions/lib/niche-spec.js?v=48"></script>
-<script src="js/marketing-stats.js?v=48"></script>
-<script src="js/niche-research.js?v=48"></script>
-<script src="js/content-intelligence.js?v=48"></script>
-<script src="js/form-check.js?v=48"></script>
+<script src="js/firebase-config.js?v=49"></script>
+<script type="module" src="js/auth.js?v=49"></script>
+<script src="js/app.js?v=49"></script>
+<script src="js/exercises.js?v=49"></script>
+<script src="js/workout.js?v=49"></script>
+<script src="js/nutrition.js?v=49"></script>
+<script src="js/nutrition-label-parse.js?v=49"></script>
+<script src="js/nutrition-label-scan.js?v=49"></script>
+<script src="js/groceries.js?v=49"></script>
+<script src="js/habits.js?v=49"></script>
+<script src="js/discipline-logic.js?v=49"></script>
+<script src="js/discipline.js?v=49"></script>
+<script src="functions/lib/reminder-spec.js?v=49"></script>
+<script src="functions/lib/reminder-events.js?v=49"></script>
+<script src="js/reminders.js?v=49"></script>
+<script src="js/business.js?v=49"></script>
+<script src="js/trading.js?v=49"></script>
+<script src="js/blobstore.js?v=49"></script>
+<script src="js/video-api-client.js?v=49"></script>
+<script src="js/video-connections.js?v=49"></script>
+<script src="js/video.js?v=49"></script>
+<script src="js/video-studio.js?v=49"></script>
+<script src="functions/lib/idea-spec.js?v=49"></script>
+<script src="functions/lib/niche-spec.js?v=49"></script>
+<script src="js/marketing-stats.js?v=49"></script>
+<script src="js/niche-research.js?v=49"></script>
+<script src="js/content-intelligence.js?v=49"></script>
+<script src="js/form-check.js?v=49"></script>
 </body>
 </html>
