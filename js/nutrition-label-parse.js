@@ -438,5 +438,68 @@
     return out;
   }
 
-  return { parseAmount: parseAmount, scalingPlan: scalingPlan, scaleFields: scaleFields, parseNutritionLabelText: parseNutritionLabelText, checkFields: checkFields, FIELDS: FIELDS, NAMES: NAMES, MAIN: MAIN, LIMITS: LIMITS };
+  // ---- keeping the calculation with a saved food ----------------------------------------------------------------
+
+  const FOOD_FIELDS = ["calories", "protein", "carbs", "fat", "fiber", "sodium", "calcium", "iron", "potassium", "vitaminC", "vitaminD"];
+  function formNumber(v) {
+    if (v === "" || v === null || v === undefined) return null;
+    const n = Number(v);
+    return isFinite(n) && n >= 0 ? n : null;
+  }
+
+  // What to store with a food scanned from a label so it can be worked out again for another amount later:
+  // { serving, values } = the label's own serving and numbers. base is what the scan read ({ fields, servingSize,
+  // factor }, where factor is what the form's numbers were scaled by) and form the form's values now (by field,
+  // strings or numbers). A number left as scanned is kept exactly as printed; one changed by hand is taken back to the
+  // label's serving. null when there's nothing to keep: no readable label serving, or most numbers were overwritten
+  // (the scan no longer describes this food).
+  function labelBasisFromScan(base, form) {
+    if (!base || !base.fields || !base.servingSize || !parseAmount(base.servingSize)) return null;
+    const factor = base.factor > 0 ? base.factor : 1;
+    const keys = {};
+    Object.keys(base.fields).forEach(function (k) { keys[k] = true; });
+    Object.keys(form || {}).forEach(function (k) { if (FOOD_FIELDS.indexOf(k) !== -1) keys[k] = true; });
+    const values = {};
+    let seen = 0, changed = 0;
+    Object.keys(keys).forEach(function (k) {
+      const typed = formNumber(form && form[k]);
+      const printed = typeof base.fields[k] === "number" && isFinite(base.fields[k]) ? base.fields[k] : null;
+      if (typed === null && printed === null) return;
+      seen++;
+      if (typed === null) { changed++; return; } // cleared by hand
+      const one = {};
+      one[k] = printed;
+      if (printed !== null && scaleFields(one, factor)[k] === typed) { values[k] = printed; return; }
+      changed++;
+      values[k] = Math.round(typed / factor * 1000) / 1000;
+    });
+    if (!seen || !Object.keys(values).length || (changed >= 2 && changed > seen / 2)) return null;
+    return { serving: String(base.servingSize).slice(0, 60), values: values };
+  }
+
+  // The serving and numbers a food can be worked out from: its saved label basis, or else its own serving when that
+  // is a weight or volume ("125g", "1 cup (240 mL)"). null when there is none, or when the serving is a multiple
+  // ("1.6x 125g") whose numbers aren't for the 125 g.
+  function basisOfFood(food) {
+    if (!food) return null;
+    const lab = food.label;
+    if (lab && lab.values && typeof lab.serving === "string" && parseAmount(lab.serving)) return { serving: lab.serving, values: lab.values, fromLabel: true };
+    const serving = String(food.serving || "");
+    if (!parseAmount(serving) || /^\s*[\d.]+\s*[x\u00d7]\s/i.test(serving)) return null;
+    const values = {};
+    FOOD_FIELDS.forEach(function (k) { if (typeof food[k] === "number" && isFinite(food[k])) values[k] = food[k]; });
+    return Object.keys(values).length ? { serving: serving, values: values, fromLabel: false } : null;
+  }
+
+  // How much of the basis serving a food's own serving text is: "125g" of "1 container (250g)" is 0.5, and a multiple
+  // ("1.6x 125g") is that many times as much. null when the text has no weight or volume to compare, or can't be compared.
+  function servingFactor(basisServing, servingText) {
+    const text = String(servingText === undefined || servingText === null ? "" : servingText).trim();
+    const multiple = text.match(/^(\d+(?:\.\d+)?)\s*[x\u00d7]\s*(.*)$/i);
+    const times = multiple && Number(multiple[1]) > 0 ? Number(multiple[1]) : 1;
+    const plan = scalingPlan(basisServing, multiple ? multiple[2] : text);
+    return plan.ok ? plan.factor * times : null;
+  }
+
+  return { parseAmount: parseAmount, scalingPlan: scalingPlan, scaleFields: scaleFields, servingFactor: servingFactor, labelBasisFromScan: labelBasisFromScan, basisOfFood: basisOfFood, parseNutritionLabelText: parseNutritionLabelText, checkFields: checkFields, FIELDS: FIELDS, NAMES: NAMES, MAIN: MAIN, LIMITS: LIMITS };
 });

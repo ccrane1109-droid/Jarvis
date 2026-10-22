@@ -452,3 +452,84 @@ test("on a two-column label, a line with only one readable amount is left out, n
   assert.equal(parse("Per 100g Per serving\nCalories 40").fields.calories, undefined);
   assert.ok(r.missing.includes("protein") && r.missing.includes("fat"));
 });
+
+const SCAN = () => ({ fields: { calories: 140, protein: 22, carbs: 9, fat: 0, sodium: 65 }, servingSize: "1 container (250g)", factor: 0.5 });
+
+test("the label's own numbers are kept for re-use, not the scaled ones in the form", () => {
+  const b = P.labelBasisFromScan(SCAN(), { calories: "70", protein: "11", carbs: "4.5", fat: "0", sodium: "33", fiber: "" });
+  assert.equal(b.serving, "1 container (250g)");
+  assert.deepEqual(b.values, { calories: 140, protein: 22, carbs: 9, fat: 0, sodium: 65 });
+});
+
+test("a number corrected by hand is taken back to the label's serving, and the rest stay as printed", () => {
+  const b = P.labelBasisFromScan(SCAN(), { calories: "75", protein: "11", carbs: "4.5", fat: "0", sodium: "33" });
+  assert.equal(b.values.calories, 150, "75 for half the serving is 150 for the whole");
+  assert.equal(b.values.protein, 22);
+  assert.equal(b.values.sodium, 65, "rounded 33 isn't a change to 65 scaled by half");
+});
+
+test("with no scaling the form's numbers are the label's numbers", () => {
+  const base = SCAN(); base.factor = 1;
+  assert.deepEqual(P.labelBasisFromScan(base, { calories: "140", protein: "22", carbs: "9", fat: "0", sodium: "65" }).values, base.fields);
+});
+
+test("a value typed that the scan never read is kept too (taken back to the label's serving)", () => {
+  const b = P.labelBasisFromScan(SCAN(), { calories: "70", protein: "11", carbs: "4.5", fat: "0", sodium: "33", fiber: "2" });
+  assert.equal(b.values.fiber, 4);
+});
+
+test("nothing is kept when the scan no longer describes the food", () => {
+  assert.equal(P.labelBasisFromScan(SCAN(), { calories: "300", protein: "1", carbs: "40", fat: "9", sodium: "5" }), null, "most numbers overwritten");
+  assert.equal(P.labelBasisFromScan(null, { calories: "70" }), null, "no scan");
+  const noServing = SCAN(); noServing.servingSize = null;
+  assert.equal(P.labelBasisFromScan(noServing, { calories: "70" }), null, "label serving unreadable, so nothing to scale from");
+  const cupOnly = SCAN(); cupOnly.servingSize = "1 cup";
+  assert.equal(P.labelBasisFromScan(cupOnly, { calories: "70" }), null, "a serving with no weight or volume can't be scaled");
+});
+
+test("a field cleared by hand is not kept", () => {
+  const b = P.labelBasisFromScan(SCAN(), { calories: "70", protein: "11", carbs: "4.5", fat: "0", sodium: "" });
+  assert.equal(b.values.sodium, undefined);
+});
+
+test("a food is worked out again from its label basis, else from its own weight or volume serving", () => {
+  const withLabel = P.basisOfFood({ serving: "125g", calories: 70, label: { serving: "1 container (250g)", values: { calories: 140 } } });
+  assert.equal(withLabel.serving, "1 container (250g)");
+  assert.equal(withLabel.values.calories, 140);
+  const plain = P.basisOfFood({ serving: "100g", calories: 165, protein: 31, carbs: 0, fat: 3.6, sodium: undefined });
+  assert.equal(plain.serving, "100g");
+  assert.deepEqual(plain.values, { calories: 165, protein: 31, carbs: 0, fat: 3.6 });
+  assert.equal(P.basisOfFood({ serving: "1 serving", calories: 200 }), null, "no weight or volume");
+  assert.equal(P.basisOfFood({ serving: "1 cup", calories: 200 }), null);
+  assert.equal(P.basisOfFood(null), null);
+});
+
+test("a multiple such as \"1.6x 125g\" is never taken for 125 g of food (its numbers are for 200 g)", () => {
+  assert.equal(P.basisOfFood({ serving: "1.6x 125g", calories: 112 }), null);
+  assert.equal(P.basisOfFood({ serving: "2 x 100g", calories: 330 }), null);
+  assert.equal(P.basisOfFood({ serving: "2× 100g", calories: 330 }), null);
+  assert.ok(P.basisOfFood({ serving: "2 cookies (30g)", calories: 140 }), "a count before a weight is fine: the weight is the serving's");
+});
+
+test("the basis scales to any typed amount without drifting, and leaves the basis itself alone", () => {
+  const b = P.labelBasisFromScan(SCAN(), { calories: "70", protein: "11", carbs: "4.5", fat: "0", sodium: "33" });
+  const frozen = JSON.stringify(b);
+  const a200 = P.scalingPlan(b.serving, "200g");
+  assert.equal(a200.factor, 0.8);
+  assert.deepEqual(P.scaleFields(b.values, a200.factor), { calories: 112, protein: 17.6, carbs: 7.2, fat: 0, sodium: 52 });
+  const a50 = P.scalingPlan(b.serving, "50g");
+  assert.deepEqual(P.scaleFields(b.values, a50.factor), { calories: 28, protein: 4.4, carbs: 1.8, fat: 0, sodium: 13 });
+  assert.equal(JSON.stringify(b), frozen);
+  assert.equal(P.scalingPlan(b.serving, "200 mL").reason, "units");
+  assert.equal(P.scalingPlan(b.serving, "lots").reason, "no-amount");
+});
+
+test("how much of the basis serving a food's own serving is, including multiples", () => {
+  assert.equal(P.servingFactor("1 container (250g)", "125g"), 0.5);
+  assert.equal(P.servingFactor("1 container (250g)", "1 container (250g)"), 1);
+  assert.equal(P.servingFactor("1 container (250g)", "1.6x 125g"), 0.8);
+  assert.equal(P.servingFactor("1 container (250g)", "2× 250g"), 2);
+  assert.equal(P.servingFactor("1 container (250g)", "my bowl"), null);
+  assert.equal(P.servingFactor("1 container (250g)", "200 mL"), null, "volume against weight");
+  assert.equal(P.servingFactor("1 cup", "125g"), null, "no weight on the basis side");
+});

@@ -117,6 +117,18 @@
     return out;
   }
 
+  // The label numbers kept with a food ({ serving, values }: a serving and the numbers for it), so the food can be
+  // worked out again for another amount later. Anything that isn't a serving with numbers is dropped.
+  function sanitizeLabel(raw) {
+    if (!raw || typeof raw !== "object" || typeof raw.serving !== "string" || !raw.values || typeof raw.values !== "object") return null;
+    const values = {};
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
+      const v = raw.values[f];
+      if (typeof v === "number" && isFinite(v) && v >= 0) values[f] = v;
+    });
+    return Object.keys(values).length ? { serving: raw.serving.slice(0, 60), values: values } : null;
+  }
+
   function sanitizeFoodItem(raw) {
     const core = window.JarvisCore;
     const item = {
@@ -137,6 +149,8 @@
         item[f] = Number(raw[f]);
       }
     });
+    const label = sanitizeLabel(raw.label);
+    if (label) item.label = label;
     return item;
   }
 
@@ -1013,6 +1027,7 @@
       const el = $(id); if (el) el.value = "";
     });
     $("foodIsFruitVeg").checked = false;
+    clearScanMarks("food"); // a finished or abandoned form's scan must never attach to the next food
     setAiStatus("foodScanStatus", "");
     setAiStatus("foodRememberStatus", "");
     $("foodRememberRow").classList.add("hidden");
@@ -1035,7 +1050,8 @@
       fat: $("foodFat").value, fiber: $("foodFiber").value,
       sodium: $("foodSodium").value, calcium: $("foodCalcium").value, iron: $("foodIron").value,
       potassium: $("foodPotassium").value, vitaminC: $("foodVitaminC").value, vitaminD: $("foodVitaminD").value,
-      isFruitVeg: $("foodIsFruitVeg").checked
+      isFruitVeg: $("foodIsFruitVeg").checked,
+      label: labelToKeep("food")
     };
 
     const today = core.todayISODate();
@@ -1048,6 +1064,8 @@
       if (idx !== -1) {
         raw.id = foodFormEditId.id;
         raw.createdAt = day.meals[oldMeal][idx].createdAt;
+        const old = day.meals[oldMeal][idx];
+        if (!raw.label && old.label && sameFood(old, raw)) raw.label = old.label; // untouched: keep what it had
         const item = sanitizeFoodItem(raw);
         day.meals[oldMeal].splice(idx, 1);
         day.meals[meal].push(item);
@@ -1229,6 +1247,7 @@
         if (el) el.value = item[f] !== undefined ? item[f] : "";
       });
       $("foodIsFruitVeg").checked = !!item.isFruitVeg;
+      adoptBasis("food", item);
       renderFoodForm();
       renderFoodLog();
       return;
@@ -1264,6 +1283,7 @@
       "savedFoodSodium", "savedFoodCalcium", "savedFoodIron", "savedFoodPotassium", "savedFoodVitaminC", "savedFoodVitaminD"].forEach(function (id) {
       const el = $(id); if (el) el.value = "";
     });
+    clearScanMarks("savedFood");
     setAiStatus("savedFoodScanStatus", "");
     renderSavedFoodForm();
   }
@@ -1279,13 +1299,15 @@
       calories: $("savedFoodCalories").value, protein: $("savedFoodProtein").value,
       carbs: $("savedFoodCarbs").value, fat: $("savedFoodFat").value, fiber: $("savedFoodFiber").value,
       sodium: $("savedFoodSodium").value, calcium: $("savedFoodCalcium").value, iron: $("savedFoodIron").value,
-      potassium: $("savedFoodPotassium").value, vitaminC: $("savedFoodVitaminC").value, vitaminD: $("savedFoodVitaminD").value
+      potassium: $("savedFoodPotassium").value, vitaminC: $("savedFoodVitaminC").value, vitaminD: $("savedFoodVitaminD").value,
+      label: labelToKeep("savedFood")
     };
     if (window._savedFoodEditId) {
       const idx = savedFoods.findIndex(function (f) { return f.id === window._savedFoodEditId; });
       if (idx !== -1) {
         raw.id = window._savedFoodEditId;
         raw.createdAt = savedFoods[idx].createdAt;
+        if (!raw.label && savedFoods[idx].label && sameFood(savedFoods[idx], raw)) raw.label = savedFoods[idx].label;
         savedFoods[idx] = sanitizeFoodItem(raw);
       }
     } else {
@@ -1348,6 +1370,7 @@
         const el = $("savedFood" + capitalize(f2));
         if (el) el.value = food[f2] !== undefined ? food[f2] : "";
       });
+      adoptBasis("savedFood", food);
       renderSavedFoodForm();
       $("savedFoodName").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -1675,6 +1698,45 @@
     delete scanBase[namePrefix];
     updateRescaleButton(namePrefix);
   }
+  // Is the form's content (raw, as strings) the same food as this stored item: same serving, same numbers?
+  function sameFood(item, raw) {
+    if ((item.serving || "") !== (raw.serving || "")) return false;
+    return MACRO_FIELDS.concat(MICRO_FIELDS).every(function (f) {
+      const had = item[f] !== undefined, has = raw[f] !== "" && raw[f] !== null && raw[f] !== undefined;
+      if (MACRO_FIELDS.indexOf(f) !== -1) return Number(item[f] || 0) === Number(has ? raw[f] : 0);
+      return had === has && (!had || Number(item[f]) === Number(raw[f]));
+    });
+  }
+
+  // The label numbers to store with the food in this form (see labelBasisFromScan), or undefined.
+  function labelToKeep(namePrefix) {
+    const parse = window.JarvisLabelParse;
+    const base = scanBase[namePrefix];
+    if (!parse || !base) return undefined;
+    const form = {};
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) { const el = $(namePrefix + capitalize(f)); if (el) form[f] = el.value; });
+    return parse.labelBasisFromScan(base, form) || undefined;
+  }
+
+  // Gives a form the label numbers behind a food it was just filled from (an entry being edited, a saved food, a
+  // matched saved food), so typing a new amount offers "Scale the numbers to…" and saving keeps the label numbers.
+  // Nothing is adopted when the food has none, or when how its numbers relate to them can't be told.
+  function adoptBasis(namePrefix, food) {
+    clearScanMarks(namePrefix);
+    const parse = window.JarvisLabelParse;
+    const basis = parse && parse.basisOfFood(food);
+    if (!basis) return;
+    let factor = parse.servingFactor(basis.serving, food.serving);
+    if (factor === null) {
+      // The serving text has no weight to compare; the numbers are the label's own only if they match it exactly.
+      const same = Object.keys(basis.values).every(function (k) { return food[k] === basis.values[k]; });
+      if (!same) return;
+      factor = 1;
+    }
+    scanBase[namePrefix] = { fields: Object.assign({}, basis.values), servingSize: basis.serving, factor: factor, rawText: "" };
+    updateRescaleButton(namePrefix);
+  }
+
   function setScanRaw(namePrefix, text) {
     const wrap = $(namePrefix + "ScanRawWrap");
     const pre = $(namePrefix + "ScanRaw");
@@ -1782,7 +1844,8 @@
       calories: $("foodCalories").value, protein: $("foodProtein").value,
       carbs: $("foodCarbs").value, fat: $("foodFat").value, fiber: $("foodFiber").value,
       sodium: $("foodSodium").value, calcium: $("foodCalcium").value, iron: $("foodIron").value,
-      potassium: $("foodPotassium").value, vitaminC: $("foodVitaminC").value, vitaminD: $("foodVitaminD").value
+      potassium: $("foodPotassium").value, vitaminC: $("foodVitaminC").value, vitaminD: $("foodVitaminD").value,
+      label: labelToKeep("food")
     };
     const existingIdx = savedFoods.findIndex(function (f) { return f.name.trim().toLowerCase() === name.toLowerCase(); });
     if (existingIdx !== -1) {
@@ -1794,7 +1857,7 @@
     }
     saveSavedFoods();
     renderSavedFoods();
-    setAiStatus("foodRememberStatus", "Remembered “" + name + "” — typing this name again will offer to fill these nutrients automatically.");
+    setAiStatus("foodRememberStatus", "Remembered “" + name + "” — typing this name again will offer to fill these nutrients automatically." + (raw.label ? " The label's numbers are kept too, so you can log it at any amount (like 200g) from Add Food → Saved." : ""));
     core.showToast('Remembered "' + name + '".');
   }
 
@@ -1837,6 +1900,7 @@
     });
     const servingInput = $("foodServing");
     if (match.serving && servingInput && !servingInput.value.trim()) servingInput.value = match.serving;
+    adoptBasis("food", match);
     $("foodNameMatchHint").classList.add("hidden");
     window.JarvisCore.showToast('Filled in nutrients saved for "' + match.name + '".');
   }
@@ -2305,22 +2369,66 @@
   function selectFoodForLogging(source, id) {
     const food = findFoodForPicker(source, id);
     if (!food) return;
-    pickerSelection = { source: source, sourceId: id, food: food, meal: guessCurrentMeal(), multiplier: 1 };
+    const parse = window.JarvisLabelParse;
+    pickerSelection = { source: source, sourceId: id, food: food, meal: guessCurrentMeal(), multiplier: 1, basis: parse ? parse.basisOfFood(food) : null, amountText: "" };
     $("pickerMealSelect").value = pickerSelection.meal;
     $("pickerServingsInput").value = "1";
+    $("pickerAmountInput").value = "";
     renderAddFoodModal();
+  }
+
+  // What the picked food comes to: for the amount typed (worked out from its basis, never changing the food itself),
+  // else for the servings. { amount, values, problem }: amount is the typed text when it's being used; problem says
+  // why a typed amount can't be used.
+  function pickerResult() {
+    const sel = pickerSelection;
+    const food = sel.food;
+    const text = sel.amountText.trim();
+    if (sel.basis && text) {
+      const parse = window.JarvisLabelParse;
+      const plan = parse.scalingPlan(sel.basis.serving, text);
+      if (plan.ok) return { amount: text, factor: plan.factor, values: parse.scaleFields(sel.basis.values, plan.factor), problem: null };
+      const per = sel.basis.serving;
+      const problem = plan.reason === "units"
+        ? "These numbers are for " + per + ", so the amount needs to be in the same kind of unit (a weight against a volume can't be worked out)."
+        : plan.reason === "range"
+          ? "That amount is too far from " + per + " to be right. Check it."
+          : "Type it with a unit, like 200g.";
+      return { amount: null, values: null, problem: problem };
+    }
+    const values = {};
+    MACRO_FIELDS.forEach(function (f) { values[f] = (food[f] || 0) * sel.multiplier; });
+    MICRO_FIELDS.forEach(function (f) { if (food[f] !== undefined) values[f] = food[f] * sel.multiplier; });
+    return { amount: null, values: values, problem: null };
   }
 
   function renderPickerConfirm() {
     if (!pickerSelection) return;
     const food = pickerSelection.food;
-    const m = pickerSelection.multiplier;
     $("pickerConfirmName").textContent = food.name;
-    const cal = Math.round((food.calories || 0) * m);
-    const p = Math.round((food.protein || 0) * m * 10) / 10;
-    const c = Math.round((food.carbs || 0) * m * 10) / 10;
-    const f = Math.round((food.fat || 0) * m * 10) / 10;
+    const res = pickerResult();
+    // The amount box is there for foods whose numbers are for a known weight or volume.
+    $("pickerAmountRow").classList.toggle("hidden", !pickerSelection.basis);
+    $("pickerAmountHint").textContent = !pickerSelection.basis ? "" : res.problem
+      ? res.problem
+      : res.amount
+        ? "Worked out from " + pickerSelection.basis.serving + " (×" + Math.round(res.factor * 100) / 100 + "). The saved food itself isn't changed."
+        : "Numbers are for " + pickerSelection.basis.serving + ". Type the amount you had, like 200g, to have them worked out.";
+    $("pickerServingsInput").disabled = !!res.amount;
+    $("pickerConfirmAddBtn").disabled = !!res.problem;
+    if (res.problem) { $("pickerPreview").textContent = ""; return; }
+    const v = res.values;
+    const cal = Math.round(v.calories || 0);
+    const p = Math.round((v.protein || 0) * 10) / 10;
+    const c = Math.round((v.carbs || 0) * 10) / 10;
+    const f = Math.round((v.fat || 0) * 10) / 10;
     $("pickerPreview").textContent = "≈ " + cal + " cal · P " + p + "g · C " + c + "g · F " + f + "g";
+  }
+
+  function handlePickerAmountInput(e) {
+    if (!pickerSelection) return;
+    pickerSelection.amountText = e.target.value;
+    renderPickerConfirm();
   }
 
   function handlePickerMealChange(e) {
@@ -2345,13 +2453,20 @@
     if (!pickerSelection) return;
     const food = pickerSelection.food;
     const m = pickerSelection.multiplier;
-    const raw = {
-      name: food.name,
-      serving: m !== 1 ? (m + "x " + (food.serving || "1 serving")) : (food.serving || "1 serving"),
-      calories: (food.calories || 0) * m, protein: (food.protein || 0) * m, carbs: (food.carbs || 0) * m,
-      fat: (food.fat || 0) * m, fiber: (food.fiber || 0) * m, isFruitVeg: !!food.isFruitVeg
-    };
-    MICRO_FIELDS.forEach(function (f) { if (food[f] !== undefined) raw[f] = food[f] * m; });
+    const res = pickerResult();
+    if (res.problem) { core.showToast(res.problem); return; }
+    // An amount typed here is worked out from the food's basis; otherwise it's the servings multiplier, as before.
+    const raw = res.amount
+      ? Object.assign({ name: food.name, serving: res.amount.slice(0, 40), isFruitVeg: !!food.isFruitVeg }, res.values)
+      : {
+        name: food.name,
+        serving: m !== 1 ? (m + "x " + (food.serving || "1 serving")) : (food.serving || "1 serving"),
+        calories: res.values.calories, protein: res.values.protein, carbs: res.values.carbs,
+        fat: res.values.fat, fiber: res.values.fiber, isFruitVeg: !!food.isFruitVeg
+      };
+    if (!res.amount) MICRO_FIELDS.forEach(function (f) { if (res.values[f] !== undefined) raw[f] = res.values[f]; });
+    // The logged entry keeps the numbers it was worked out from, so it can be worked out again for another amount.
+    if (pickerSelection.basis) raw.label = { serving: pickerSelection.basis.serving, values: pickerSelection.basis.values };
     const day = getDay(core.todayISODate());
     day.meals[pickerSelection.meal].push(sanitizeFoodItem(raw));
     saveLog();
@@ -2467,6 +2582,7 @@
     $("pickerBackBtn").addEventListener("click", handlePickerBack);
     $("pickerMealSelect").addEventListener("change", handlePickerMealChange);
     $("pickerServingsInput").addEventListener("input", handlePickerServingsInput);
+    $("pickerAmountInput").addEventListener("input", handlePickerAmountInput);
     $("pickerConfirmAddBtn").addEventListener("click", handlePickerConfirmAdd);
 
     $("foodForm").addEventListener("submit", handleFoodFormSubmit);
