@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=51">
+<link rel="stylesheet" href="style.css?v=52">
 </head>
 <body>
 
@@ -131,6 +131,20 @@
         <div class="profile-menu-email" id="authAccountEmail"></div>
         <button type="button" class="profile-menu-item hidden" id="authSetup2faBtn" role="menuitem">Set Up 2-Step Verification</button>
         <button type="button" class="profile-menu-item" id="dailyBriefingBtn" role="menuitem">Daily Briefing</button>
+        <div class="backup-block" role="group" aria-labelledby="backupTitle">
+          <div class="backup-title" id="backupTitle">Cloud backup</div>
+          <div class="backup-status" id="backupStatus" role="status" aria-live="polite" data-tone="off">Sign in to back up your food log, tasks, goals and Discipline to your account.</div>
+          <button type="button" class="btn backup-btn hidden" id="backupNowBtn"></button>
+          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, Discipline, groceries, form-check history. Workouts, habits, business and the rest sync separately.</p>
+          <div class="backup-help hidden" id="backupHelp">
+            <p>Backup needs one update to your Firebase security rules, which only you can deploy. In Cloud Shell, run these one at a time:</p>
+            <pre>cd ~/Jarvis
+git checkout main
+git pull
+npx firebase-tools deploy --only firestore:rules</pre>
+            <p>Then tap Try again. Until then everything stays on this phone, as before.</p>
+          </div>
+        </div>
         <button type="button" class="profile-menu-item hidden" id="authLogoutBtn" role="menuitem">Log Out</button>
       </div>
     </div>
@@ -4726,34 +4740,36 @@
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=51"></script>
-<script type="module" src="js/auth.js?v=51"></script>
-<script src="js/app.js?v=51"></script>
-<script src="js/exercises.js?v=51"></script>
-<script src="js/workout.js?v=51"></script>
-<script src="js/nutrition.js?v=51"></script>
-<script src="js/nutrition-label-parse.js?v=51"></script>
-<script src="js/nutrition-label-scan.js?v=51"></script>
-<script src="js/groceries.js?v=51"></script>
-<script src="js/habits.js?v=51"></script>
-<script src="js/discipline-logic.js?v=51"></script>
-<script src="js/discipline-program.js?v=51"></script>
-<script src="js/discipline.js?v=51"></script>
-<script src="functions/lib/reminder-spec.js?v=51"></script>
-<script src="functions/lib/reminder-events.js?v=51"></script>
-<script src="js/reminders.js?v=51"></script>
-<script src="js/business.js?v=51"></script>
-<script src="js/trading.js?v=51"></script>
-<script src="js/blobstore.js?v=51"></script>
-<script src="js/video-api-client.js?v=51"></script>
-<script src="js/video-connections.js?v=51"></script>
-<script src="js/video.js?v=51"></script>
-<script src="js/video-studio.js?v=51"></script>
-<script src="functions/lib/idea-spec.js?v=51"></script>
-<script src="functions/lib/niche-spec.js?v=51"></script>
-<script src="js/marketing-stats.js?v=51"></script>
-<script src="js/niche-research.js?v=51"></script>
-<script src="js/content-intelligence.js?v=51"></script>
-<script src="js/form-check.js?v=51"></script>
+<script src="js/firebase-config.js?v=52"></script>
+<script src="js/backup-logic.js?v=52"></script>
+<script src="js/cloud-backup.js?v=52"></script>
+<script type="module" src="js/auth.js?v=52"></script>
+<script src="js/app.js?v=52"></script>
+<script src="js/exercises.js?v=52"></script>
+<script src="js/workout.js?v=52"></script>
+<script src="js/nutrition.js?v=52"></script>
+<script src="js/nutrition-label-parse.js?v=52"></script>
+<script src="js/nutrition-label-scan.js?v=52"></script>
+<script src="js/groceries.js?v=52"></script>
+<script src="js/habits.js?v=52"></script>
+<script src="js/discipline-logic.js?v=52"></script>
+<script src="js/discipline-program.js?v=52"></script>
+<script src="js/discipline.js?v=52"></script>
+<script src="functions/lib/reminder-spec.js?v=52"></script>
+<script src="functions/lib/reminder-events.js?v=52"></script>
+<script src="js/reminders.js?v=52"></script>
+<script src="js/business.js?v=52"></script>
+<script src="js/trading.js?v=52"></script>
+<script src="js/blobstore.js?v=52"></script>
+<script src="js/video-api-client.js?v=52"></script>
+<script src="js/video-connections.js?v=52"></script>
+<script src="js/video.js?v=52"></script>
+<script src="js/video-studio.js?v=52"></script>
+<script src="functions/lib/idea-spec.js?v=52"></script>
+<script src="functions/lib/niche-spec.js?v=52"></script>
+<script src="js/marketing-stats.js?v=52"></script>
+<script src="js/niche-research.js?v=52"></script>
+<script src="js/content-intelligence.js?v=52"></script>
+<script src="js/form-check.js?v=52"></script>
 </body>
 </html>

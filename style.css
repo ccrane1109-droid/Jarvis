@@ -1276,6 +1276,56 @@ textarea { resize: vertical; min-height: 44px; }
 }
 .profile-menu-item:hover { background: var(--card-hover); }
 
+/* ---------------- Cloud backup panel (account menu) ---------------- */
+
+.backup-block {
+  border-top: 1px solid var(--card-border);
+  margin-top: 6px;
+  padding: 10px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 300px;
+}
+.backup-title { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-faint); }
+.backup-status { font-size: 13px; line-height: 1.4; color: var(--text-dim); }
+.backup-status[data-tone="ok"] { color: var(--green); }
+.backup-status[data-tone="warn"] { color: var(--yellow); }
+.backup-btn {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-color: var(--card-border);
+  min-height: 44px;
+  align-self: stretch;
+}
+.backup-btn:hover:not(:disabled) { background: var(--card-hover); }
+.backup-scope { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-faint); }
+.backup-help { font-size: 12px; line-height: 1.4; color: var(--text-dim); }
+.backup-help p { margin: 0 0 6px; }
+.backup-help pre {
+  margin: 0 0 6px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  white-space: pre-wrap;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.profile-menu-btn { position: relative; }
+.profile-menu-btn.has-backup-issue::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--yellow);
+  border: 2px solid var(--bg-elevated);
+}
+
 /* ---------------- Nutrition: Dashboard hero ---------------- */
 
 .calorie-hero-body {
