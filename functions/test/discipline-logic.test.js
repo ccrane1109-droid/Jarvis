@@ -155,7 +155,7 @@ test("the saved store drops bad dates and junk, keeps real days, and defaults th
   assert.equal(s.settings.phoneLimit, D.DEFAULT_PHONE_LIMIT);
   assert.equal(D.sanitizeStore({ settings: { phoneLimit: 3.5 } }).settings.phoneLimit, 3.5);
   assert.deepEqual(D.sanitizeStore(null), {
-    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, program: { start: null, done: {} }, days: {}
+    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, program: { start: null, done: {} }, drafts: {}, days: {}
   });
   assert.deepEqual(D.sanitizeStore("garbage").days, {});
 });

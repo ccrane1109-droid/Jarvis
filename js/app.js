@@ -297,10 +297,108 @@
     });
   }
 
+  // ---- phone navigation: the bottom tab bar and its "More" sheet ----
+  // The header's tab row (.main-nav-btn) stays the source of truth for which section is open. These buttons press the
+  // matching one there, and follow it whenever anything else switches section (other modules do, e.g. opening a
+  // reminder from a notification), so the bar always shows where you are. When the open section is one of the ones
+  // behind "More", that button takes its name so the current section is still named on screen.
+  const PRIMARY_NAV = ["navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnDiscipline"];
+  const SHORT_NAV_LABELS = { navBtnTrading: "Trading" };
+  const TEXT_FIELD = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=range]):not([type=file]), textarea, select";
+
+  function initBottomNav() {
+    const bar = document.getElementById("bottomNav");
+    const sheet = document.getElementById("moreSheet");
+    const moreBtn = document.getElementById("bottomNavMore");
+    const moreLabel = document.getElementById("bottomNavMoreLabel");
+    if (!bar || !sheet || !moreBtn || !moreLabel) return function () {};
+    let returnFocus = null;
+
+    function markActive(btn, on) {
+      btn.classList.toggle("active", on);
+      if (on) btn.setAttribute("aria-current", "page"); else btn.removeAttribute("aria-current");
+    }
+    function sync() {
+      const current = document.querySelector(".main-nav-btn.active");
+      const id = current ? current.id : "";
+      const inMore = !!id && PRIMARY_NAV.indexOf(id) === -1;
+      Array.prototype.forEach.call(document.querySelectorAll("#bottomNav [data-nav], #moreSheet [data-nav]"), function (b) {
+        markActive(b, b.getAttribute("data-nav") === id);
+      });
+      markActive(moreBtn, inMore);
+      const name = inMore ? (SHORT_NAV_LABELS[id] || current.textContent.trim()) : "More";
+      moreLabel.textContent = name;
+      moreBtn.setAttribute("aria-label", inMore ? current.textContent.trim() + ", more sections" : "More sections");
+    }
+
+    function openSheet() {
+      returnFocus = document.activeElement;
+      sheet.classList.remove("hidden");
+      moreBtn.setAttribute("aria-expanded", "true");
+      const target = sheet.querySelector(".more-item.active") || sheet.querySelector(".more-item");
+      if (target) target.focus();
+    }
+    function closeSheet(restoreFocus) {
+      if (sheet.classList.contains("hidden")) return;
+      sheet.classList.add("hidden");
+      moreBtn.setAttribute("aria-expanded", "false");
+      if (restoreFocus && returnFocus && returnFocus.focus) returnFocus.focus();
+    }
+    function go(id) {
+      const tab = document.getElementById(id);
+      if (!tab) return;
+      const same = tab.classList.contains("active");
+      if (!same) tab.click();
+      const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: 0, behavior: same && !reduce ? "smooth" : "auto" }); // tapping the open section again goes back to its top
+    }
+
+    bar.addEventListener("click", function (e) {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      if (btn === moreBtn) { if (sheet.classList.contains("hidden")) openSheet(); else closeSheet(true); return; }
+      const id = btn.getAttribute("data-nav");
+      if (id) go(id);
+    });
+    sheet.addEventListener("click", function (e) {
+      if (e.target === sheet) { closeSheet(true); return; }
+      const item = e.target.closest("[data-nav]");
+      if (!item) return;
+      closeSheet(false);
+      go(item.getAttribute("data-nav"));
+    });
+    document.addEventListener("keydown", function (e) {
+      if (sheet.classList.contains("hidden")) return;
+      if (e.key === "Escape") { closeSheet(true); return; }
+      if (e.key !== "Tab") return;
+      const items = Array.prototype.slice.call(sheet.querySelectorAll(".more-item"));
+      if (!items.length) return;
+      const at = items.indexOf(document.activeElement);
+      if (e.shiftKey && at <= 0) { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (!e.shiftKey && at === items.length - 1) { e.preventDefault(); items[0].focus(); }
+    });
+
+    // The on-screen keyboard covers the bottom of the page; a fixed bar would sit on top of what is being typed.
+    document.addEventListener("focusin", function (e) {
+      if (e.target.matches && e.target.matches(TEXT_FIELD)) document.body.classList.add("keyboard-open");
+    });
+    document.addEventListener("focusout", function () {
+      window.setTimeout(function () {
+        const a = document.activeElement;
+        if (!a || !a.matches || !a.matches(TEXT_FIELD)) document.body.classList.remove("keyboard-open");
+      }, 80);
+    });
+
+    sync();
+    return sync;
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    let syncBottomNav = function () {};
     const mainNavBtns = Array.prototype.slice.call(document.querySelectorAll(".main-nav-btn"));
     const mainPanels = Array.prototype.slice.call(document.querySelectorAll(".tab-panel"));
-    setupTabGroup(mainNavBtns, mainPanels);
+    setupTabGroup(mainNavBtns, mainPanels, function () { syncBottomNav(); });
+    syncBottomNav = initBottomNav();
 
     const subNavBtns = Array.prototype.slice.call(document.querySelectorAll(".sub-nav-btn"));
     const subPanels = Array.prototype.slice.call(document.querySelectorAll(".sub-panel"));

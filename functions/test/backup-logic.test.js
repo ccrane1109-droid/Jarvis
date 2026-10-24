@@ -16,7 +16,8 @@ const SYNCED = (function () {
 // Keys that stay on the device on purpose: secrets, flags, caches, one-level undo, the backup's own bookkeeping.
 const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisPushCheck", "jarvisRemindersCache", "jarvisMarketingLastSync", "jarvisLastBriefingDate",
   "jarvisVideoConnections", "jarvisInsightSocialKey", "jarvisVideoBlobs", "jarvisGroceryChangelog",
-  "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice"];
+  "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice",
+  "jarvisDisciplineDrafts"]; // unsaved typing in the Discipline forms; stays on the phone
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {
   const used = new Set();
