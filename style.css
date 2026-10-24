@@ -3,6 +3,7 @@
    ========================================================================== */
 
 :root {
+  color-scheme: dark; /* native controls (time and date pickers, selects, scrollbars) draw dark */
   --bg: #0a0e14;
   --bg-elevated: #0f1420;
   --card: #151a24;
@@ -225,6 +226,7 @@ input[type="text"],
 input[type="number"],
 input[type="date"],
 input[type="datetime-local"],
+input[type="time"],
 input[type="search"],
 input[type="password"],
 input[type="email"],
@@ -243,6 +245,25 @@ textarea {
 input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
 }
+
+/* Time fields. Left to the browser they draw a white box (the shared field style above never covered them), with
+   the app's light text on it, and iOS Safari renders them short and centred. Same look as every other field,
+   a full-size touch target, and 16px text so iOS doesn't zoom the page when one is tapped. */
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+  color: var(--text);
+  color-scheme: dark;
+  font-size: 16px;
+  line-height: 1.3;
+  text-align: left;
+}
+input[type="time"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-date-and-time-value { color: var(--text); text-align: left; min-height: 1.3em; }
+input[type="time"]::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.75; cursor: pointer; }
+input[type="time"]:disabled { color: var(--text-faint); opacity: 0.6; }
 
 textarea { resize: vertical; min-height: 44px; }
 
@@ -2050,15 +2071,8 @@ textarea { resize: vertical; min-height: 44px; }
   .filter-row { grid-template-columns: 1fr 1fr; }
   .watchlist-row-inputs { grid-template-columns: 1fr 1fr; }
   .clock-time { font-size: 26px; }
-  /* Single row at every width: brand and the gear button stay fixed-size
-     and visible, the main nav scrolls horizontally between them (it already
-     has overflow-x: auto) instead of wrapping onto its own row. Wrapping
-     used to push the gear button onto an isolated row of its own, which both
-     ate extra vertical space from the sticky header and looked like a
-     floating, disconnected control once content scrolled under it. */
   .header-inner { flex-wrap: nowrap; }
   .brand { flex-shrink: 0; }
-  .main-nav-scroll-wrap { flex: 1 1 auto; min-width: 0; }
   .home-hero { flex-direction: column; align-items: flex-start; }
   .macro-card-grid { grid-template-columns: repeat(2, 1fr); }
   .recipe-ingredient-macro-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2790,3 +2804,112 @@ button.rm-hist-row { cursor: pointer; }
 .dc-day.locked { display: flex; justify-content: space-between; gap: 12px; color: var(--text-faint); }
 .dc-checklist + .field-hint { margin-top: 10px; }
 .dc-day summary .field-hint { white-space: nowrap; margin-top: 0; flex: 0 0 auto; }
+
+
+/* ---------------- Phone navigation: bottom tab bar ---------------- */
+
+/* On a phone eight section names don't fit in one row, so the header's row of tabs used to scroll sideways and the
+   section you were in was usually out of sight. Up to 900px wide the header keeps only the brand and the gear, and
+   the sections move to a bar at the bottom: the four used every day, plus "More" for the rest. The header's own
+   tab row stays in the page (hidden) because it is what the app switches sections with. */
+.bottom-nav { display: none; }
+
+@media (max-width: 900px) {
+  .header-inner { padding: 10px 16px; justify-content: space-between; }
+  .header-inner .nav-scroll-wrap { display: none; }
+
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    gap: 2px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    background: rgba(15, 20, 32, 0.96);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-top: 1px solid var(--card-border);
+    transition: transform 0.18s ease;
+  }
+  .keyboard-open .bottom-nav { transform: translateY(110%); }
+
+  .bottom-nav-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 52px;
+    padding: 6px 2px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    position: relative;
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s, background 0.15s;
+  }
+  .bottom-nav-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bottom-nav-btn svg, .more-item svg {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .bottom-nav-btn svg.icon-fill { fill: currentColor; stroke: none; }
+  .bottom-nav-btn:active { background: var(--card-hover); }
+  .bottom-nav-btn.active { color: #fff; background: var(--accent-dim); }
+  .bottom-nav-btn.active::before {
+    content: "";
+    position: absolute;
+    top: -7px;
+    left: 30%;
+    right: 30%;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--accent);
+  }
+
+  .more-sheet-box { padding-top: 10px; }
+  .more-list { display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; }
+  .more-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 54px;
+    padding: 0 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .more-item:active { background: var(--card-hover); }
+  .more-item.active { border-color: var(--accent); background: var(--accent-dim); color: #fff; }
+
+  .app-main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(78px + env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 380px) {
+  .bottom-nav-btn { font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav, .bottom-nav-btn { transition: none; }
+}

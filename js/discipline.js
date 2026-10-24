@@ -9,17 +9,26 @@
                           days: { "<YYYY-MM-DD>": {
                             type, morning: { priorities[3], keyTask, distraction, plan, savedAt, editedAt } | null,
                             review: { screenHours, phoneLimit, items{}, focus, time, rules[], blocker, notes..., savedAt } | null } } }
-   Saved on this device only (it is not in the cloud-sync list), so nothing
-   here leaves the phone unless you tap Share. A day's score is never stored:
-   it is worked out from the answers each time, except the phone limit, which
-   is kept with the review so changing the limit later never rewrites a past
-   day. The advice text is fixed wording keyed to what you pick. It is not AI.
+   Saved on this device, and backed up to your own account by js/cloud-backup.js
+   once that is switched on (it is not in the older cloud-sync list). Nothing
+   else leaves the phone unless you tap Share. A day's score is worked out
+   from its answers each time, under the scoring-model version the review was
+   saved with, and each review also keeps what it came to when it was saved and
+   the phone limit it was scored against, so changing the limit or the model
+   later never rewrites a past day (see discipline-logic.js).
+   A plan or review that is typed but not saved yet is kept under its own key,
+   jarvisDisciplineDrafts ({ "<YYYY-MM-DD>": { morning, review } }), so a refresh,
+   a switch to another screen, the phone locking or midnight passing never loses
+   it. It stays on this phone (it is not part of the backup) and goes when the
+   plan or review is saved.
+   The advice text is fixed wording keyed to what you pick. It is not AI.
    ========================================================================== */
 
 (function () {
   "use strict";
 
   const LS_KEY = "jarvisDiscipline";
+  const LS_DRAFTS = "jarvisDisciplineDrafts";
   const L = window.JarvisDisciplineLogic;
   const P = window.JarvisDisciplineProgram || null; // the 30-day program; the tracker still works without it
 
@@ -53,7 +62,9 @@
   let selected = "today";        // "today" | "yesterday" | "tomorrow"
   let trendWindow = 7;
   let editingMorning = false;
-  let renderedDate = "";
+  let renderedDate = "";         // the date the review form was last loaded for
+  let morningDate = "";          // the date the morning form is showing, "" when it isn't
+  let draftTimer = null;
   let flow = null;               // the "I'm avoiding it" steps: { step, taskId, taskText, reason, excuse }
   let tickHandle = null;
   let weeklyEdited = false;
@@ -72,9 +83,15 @@
 
   /* ---------------- data ---------------- */
 
-  function load() { store = L.sanitizeStore(core().loadJSON(LS_KEY, null)); }
+  function load() {
+    store = L.sanitizeStore(core().loadJSON(LS_KEY, null));
+    store.drafts = L.sanitizeDrafts(core().loadJSON(LS_DRAFTS, null));
+    if (L.backfillSnapshots(store) > 0) save(); // reviews saved before snapshots existed get one (what they score right now)
+  }
   function save() {
-    if (!core().saveJSON(LS_KEY, store)) core().showToast("Couldn't save. This browser's storage may be full or blocked.");
+    const kept = Object.assign({}, store);
+    delete kept.drafts; // drafts have their own key
+    if (!core().saveJSON(LS_KEY, kept)) core().showToast("Couldn't save. This browser's storage may be full or blocked.");
   }
   function ensureDay(date) {
     if (!store.days[date]) store.days[date] = L.sanitizeDay({});
@@ -108,6 +125,79 @@
     renderAllToday();
   }
 
+  /* ---------------- drafts: nothing typed is lost ---------------- */
+
+  // A plan or review that is typed but not saved is kept in store.drafts on every keystroke (in memory at once, written
+  // to jarvisDisciplineDrafts a moment later and straight away when the app goes to the background), under the date its
+  // form was showing. It is dropped when it matches what is saved or when the form is saved.
+  function canon(v) {
+    return JSON.stringify(v, function (k, x) {
+      if (typeof x === "string") return tidy(x);
+      if (x && typeof x === "object" && !Array.isArray(x)) { const o = {}; Object.keys(x).sort().forEach(function (kk) { o[kk] = x[kk]; }); return o; }
+      return x;
+    });
+  }
+  function hasDraft(date) { const d = store.drafts[date]; return !!d && !!(d.morning || d.review); }
+  function setDraft(date, part, value) {
+    if (value === null) {
+      if (!store.drafts[date]) return;
+      delete store.drafts[date][part];
+      if (!hasDraft(date)) delete store.drafts[date];
+    } else {
+      store.drafts[date] = store.drafts[date] || {};
+      store.drafts[date][part] = value;
+    }
+    window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(flushDrafts, 600);
+  }
+  function flushDrafts() {
+    if (draftTimer === null) return;
+    window.clearTimeout(draftTimer);
+    draftTimer = null;
+    core().saveJSON(LS_DRAFTS, store.drafts);
+  }
+  function setValue(id, v) { const el = $(id); if (el.value !== v) el.value = v; }
+
+  function morningFormValues() {
+    return { key: $("dcKeyTask").value, p: [$("dcPriority1").value, $("dcPriority2").value, $("dcPriority3").value], distraction: $("dcDistraction").value, plan: $("dcPlan").value };
+  }
+  function morningBaseline(day) {
+    const m = day && day.morning;
+    return m ? { key: m.keyTask.text, p: m.priorities.map(function (x) { return x.text; }), distraction: m.distraction, plan: m.plan } : { key: "", p: ["", "", ""], distraction: "", plan: "" };
+  }
+  function captureMorningDraft() {
+    if (!morningDate || $("dcMorningForm").classList.contains("hidden")) return;
+    const cur = morningFormValues();
+    setDraft(morningDate, "morning", canon(cur) === canon(morningBaseline(store.days[morningDate])) ? null : Object.assign({ at: Date.now() }, cur));
+    renderDraftNotes();
+  }
+
+  function reviewFormValues() {
+    const notes = {};
+    Object.keys(NOTE_INPUTS).forEach(function (id) { notes[NOTE_INPUTS[id]] = $(id).value; });
+    return { items: Object.assign({}, draft.items), focus: draft.focus, time: draft.time, rules: Object.assign({}, draft.rules), screenHours: $("dcScreenHours").value, notes: notes };
+  }
+  function reviewBaseline(day) {
+    const base = newDraft(day || null);
+    const r = day && day.review;
+    const notes = {};
+    Object.keys(NOTE_INPUTS).forEach(function (id) { notes[NOTE_INPUTS[id]] = r ? r[NOTE_INPUTS[id]] : ""; });
+    return { items: base.items, focus: base.focus, time: base.time, rules: base.rules, screenHours: r && r.screenHours !== null ? String(r.screenHours) : "", notes: notes };
+  }
+  function captureReviewDraft() {
+    if (!renderedDate) return;
+    const cur = reviewFormValues();
+    setDraft(renderedDate, "review", canon(cur) === canon(reviewBaseline(store.days[renderedDate])) ? null : Object.assign({ at: Date.now() }, cur));
+    renderDraftNotes();
+  }
+
+  function renderDraftNotes() {
+    const m = morningDate && store.drafts[morningDate] && store.drafts[morningDate].morning;
+    const r = renderedDate && store.drafts[renderedDate] && store.drafts[renderedDate].review;
+    $("dcMorningDraftNote").classList.toggle("hidden", !m);
+    $("dcReviewDraftNote").classList.toggle("hidden", !r);
+  }
+
   /* ---------------- Today: header ---------------- */
 
   function renderHeader() {
@@ -129,8 +219,12 @@
 
   function renderNextUp() {
     const card = $("dcNextCard");
-    if (selected !== "today" || store.timer || flow) { card.classList.add("hidden"); return; }
+    if (selected !== "today" || store.timer || flow) { card.classList.add("hidden"); card.removeAttribute("data-sig"); return; }
     const n = L.nextUp({ todayISO: todayISO(), minutes: nowMinutes(), days: store.days, settings: store.settings });
+    // Redrawing the same card would drop focus from its buttons; this also runs on a timer.
+    const sig = JSON.stringify([n.kind, n.title, n.text, n.actions, n.task ? n.task.id : ""]);
+    if (card.getAttribute("data-sig") === sig && !card.classList.contains("hidden")) return;
+    card.setAttribute("data-sig", sig);
     card.classList.remove("hidden");
     card.setAttribute("data-kind", n.kind);
     $("dcNextTitle").textContent = n.title;
@@ -342,12 +436,18 @@
     $("dcMorningEditBtn").classList.toggle("hidden", showForm);
     $("dcMorningSaveBtn").textContent = m ? "Save changes" : "Lock in the plan";
     if (showForm) {
-      $("dcKeyTask").value = m ? m.keyTask.text : "";
-      [0, 1, 2].forEach(function (i) { $("dcPriority" + (i + 1)).value = m ? m.priorities[i].text : ""; });
-      $("dcDistraction").value = m ? m.distraction : "";
-      $("dcPlan").value = m ? m.plan : "";
+      morningDate = selectedDate();
+      const dr = store.drafts[morningDate] && store.drafts[morningDate].morning;
+      const v = dr || morningBaseline(day);
+      setValue("dcKeyTask", v.key);
+      [0, 1, 2].forEach(function (i) { setValue("dcPriority" + (i + 1), v.p[i]); });
+      setValue("dcDistraction", v.distraction);
+      setValue("dcPlan", v.plan);
+      renderDraftNotes();
       return;
     }
+    morningDate = "";
+    renderDraftNotes();
     const rows = [];
     const locked = selected === "tomorrow";
     if (m.keyTask.text) rows.push(checkRow("key", "★ " + m.keyTask.text, m.keyTask.done, true, locked));
@@ -366,7 +466,7 @@
 
   function handleMorningSubmit(e) {
     e.preventDefault();
-    const date = selectedDate();
+    const date = morningDate || selectedDate(); // the day the form is showing, even if midnight has just passed
     const day = ensureDay(date);
     const old = day.morning;
     const keyText = tidy($("dcKeyTask").value);
@@ -387,6 +487,8 @@
     raw.editedAt = !old || changed ? Date.now() : old.editedAt;
     day.morning = L.sanitizeDay({ morning: raw }).morning;
     editingMorning = false;
+    setDraft(date, "morning", null);
+    flushDrafts();
     save();
     renderAllToday();
     core().showToast(old ? "Plan updated." : (selected === "tomorrow" ? "Tomorrow is planned." : "Plan locked in."));
@@ -440,10 +542,20 @@
     const r = day && day.review;
     $("dcScreenHours").value = r && r.screenHours !== null ? r.screenHours : "";
     Object.keys(NOTE_INPUTS).forEach(function (id) { $(id).value = r ? r[NOTE_INPUTS[id]] : ""; });
+    const dr = store.drafts[date] && store.drafts[date].review;
+    if (dr) {
+      Object.keys(dr.items).forEach(function (k) { draft.items[k] = dr.items[k]; });
+      draft.focus = dr.focus;
+      draft.time = dr.time;
+      draft.rules = Object.assign({}, dr.rules);
+      $("dcScreenHours").value = dr.screenHours;
+      Object.keys(NOTE_INPUTS).forEach(function (id) { $(id).value = dr.notes[NOTE_INPUTS[id]] || ""; });
+    }
     $("dcDayType").value = day ? day.type : "normal";
     $("dcMissing").classList.add("hidden");
     renderReviewControls();
     renderedDate = date;
+    renderDraftNotes();
   }
 
   function handleReviewClick(e) {
@@ -464,6 +576,7 @@
       b.setAttribute("aria-pressed", String(on));
     });
     $("dcScreenHours").disabled = draft.items.phone === "na";
+    captureReviewDraft();
   }
 
   function handleDayTypeChange() {
@@ -475,11 +588,12 @@
     save();
     renderReviewControls();
     renderHeader();
+    captureReviewDraft();
   }
 
   function handleReviewSubmit(e) {
     e.preventDefault();
-    const date = selectedDate();
+    const date = renderedDate || selectedDate(); // the day the form is showing, even if midnight has just passed
     const day = ensureDay(date);
     const raw = {
       screenHours: draft.items.phone === "na" ? null : $("dcScreenHours").value,
@@ -499,7 +613,11 @@
       return;
     }
     $("dcMissing").classList.add("hidden");
+    candidate.review.rubric = L.RUBRIC_VERSION;
+    candidate.review.scored = L.scoreSnapshot(check); // what it came to, kept with the review
     day.review = candidate.review;
+    setDraft(date, "review", null);
+    flushDrafts();
     save();
     renderAllToday();
     core().showToast("Scored: " + check.score + " / 100.");
@@ -538,7 +656,9 @@
     } else lines.push("No morning plan was saved, so there was nothing to follow through on.");
     if (day.review.items.phone !== "na") lines.push("Phone: " + day.review.screenHours + "h against your " + day.review.phoneLimit + "h limit.");
     if (r.strong.length) lines.push("Strongest: " + esc(r.strong.join(", ")) + ".");
-    if (m && m.editedAt > day.review.savedAt) lines.push("The plan was changed after this day was scored, so this score reflects the changed plan. Score the day again to clear this note.");
+    const saved = day.review.scored;
+    const drifted = !!saved && saved.score !== r.score;
+    if ((m && m.editedAt > day.review.savedAt) || drifted) lines.push("The plan was changed after this day was scored, so this score reflects the changed plan" + (drifted ? " (it was " + saved.score + " when you saved the review)" : "") + ". Score the day again to clear this note.");
     if (day.review.improve) lines.push("Your note for tomorrow: “" + esc(day.review.improve) + "”");
 
     const prev = L.lastScored(store.days, L.addDays(date, -1));
@@ -633,6 +753,7 @@
     save();
     weeklyEdited = false;
     renderReviewControls();
+    captureReviewDraft();
     renderSetup();
     renderResult();
     core().showToast("Rule removed. Past answers stay in your history.");
@@ -994,6 +1115,23 @@
     };
   }
 
+  function refreshForClock() {
+    if (document.visibilityState !== "visible") return;
+    const t = todayISO();
+    if (selectedDate() === renderedDate) { renderNextUp(); updateClock(); return; }
+    // Midnight passed (or the app came back the next day). Someone part-way through a plan or review stays on the day
+    // they were filling in, which is now "Yesterday"; otherwise the screen moves on to the new today.
+    const old = renderedDate;
+    const stay = hasDraft(old);
+    if (stay) {
+      if (old === t) selected = "today";
+      else if (old === L.addDays(t, -1)) selected = "yesterday";
+      else if (old === L.addDays(t, 1)) selected = "tomorrow";
+    } else editingMorning = false;
+    renderEverything();
+    if (stay && selectedDate() === old) core().showToast("It's a new day, but you're still on " + prettyDate(old) + " because it has unsaved changes.");
+  }
+
   function init() {
     load();
     $("dcDayType").innerHTML = Object.keys(L.DAY_TYPES).map(function (k) { return '<option value="' + k + '">' + esc(L.DAY_TYPES[k].label) + '</option>'; }).join("");
@@ -1032,18 +1170,17 @@
     $("dcLessonToggle").addEventListener("click", function () { lessonOpen = !lessonOpen; renderLessonCard(); });
     $("dcLessonGo").addEventListener("click", function () { $("disciplineSubNavProgram").click(); });
 
-    // An app left open past midnight should roll over to the new day when it comes back to the front;
-    // a timer that ran out while the app was in the background is shown as finished.
+    // The screen follows the clock: past midnight it rolls over to the new day (checked every 30 seconds while the
+    // app is open, and when it comes back to the front), "Next up" changes with the time of day, and a timer that
+    // ran out in the background is shown as finished. Anything typed but unsaved is kept (see drafts).
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState !== "visible") return;
-      if (selectedDate() !== renderedDate) {
-        editingMorning = false;
-        renderEverything();
-      } else {
-        renderNextUp();
-        updateClock();
-      }
+      if (document.visibilityState === "hidden") { flushDrafts(); return; }
+      refreshForClock();
     });
+    window.addEventListener("pagehide", flushDrafts);
+    $("dcMorningForm").addEventListener("input", captureMorningDraft);
+    $("dcReviewForm").addEventListener("input", captureReviewDraft);
+    window.setInterval(refreshForClock, 30000);
 
     renderEverything();
     ensureTicking();

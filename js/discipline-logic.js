@@ -20,6 +20,13 @@
    the trends, so they can't hide. A day is scored only once every item is
    answered; a day with no review has no score (it is never counted as zero).
 
+   Each saved review remembers which version of this model scored it
+   (review.rubric) and what it came to when it was saved (review.scored: the
+   score, the points earned out of the points that were attainable, which items
+   were left out, each category), together with the phone limit it was scored
+   against. Changing the model or a setting later therefore never rewrites a
+   past day; only changing that day's own answers or plan does.
+
    Accountability (what to do next, why you're avoiding something, your own
    rules, the weekly summary) is also plain rules over what was entered, with
    fixed advice text. It is not AI and it never invents numbers.
@@ -48,6 +55,9 @@
     phoneOut: { label: "Phone out of the bedroom", category: "routines", points: 3 },
     training: { label: "Trained or rested as planned", category: "routines", points: 3 }
   };
+  // The version of the scoring model written onto each review when it is saved. A future change to the points
+  // above gets a new number, and a review keeps the number it was scored under.
+  const RUBRIC_VERSION = 1;
   const PHONE_POINTS = 10;
   const FOCUS_POINTS = 10;
   const PLAN_POINTS = 4;
@@ -226,6 +236,22 @@
     };
   }
 
+  // What a review came to when it was saved, or null (an older review that has not been backfilled yet).
+  function sanitizeScored(raw) {
+    if (!raw || typeof raw !== "object" || !Number.isFinite(Number(raw.score)) || !Number.isFinite(Number(raw.possible)) || Number(raw.possible) <= 0) return null;
+    const cats = Array.isArray(raw.categories) ? raw.categories : [];
+    return {
+      score: Math.max(0, Math.min(100, Math.round(Number(raw.score)))),
+      earned: round1(Math.max(0, Number(raw.earned) || 0)),
+      possible: Math.round(Number(raw.possible) * 10) / 10,
+      excused: (Array.isArray(raw.excused) ? raw.excused : []).slice(0, 10).map(function (x) { return clean(x, 60); }).filter(Boolean),
+      categories: cats.slice(0, 12).map(function (c) {
+        return { key: clean(c && c.key, 30), earned: round1(Math.max(0, Number(c && c.earned) || 0)), possible: Math.max(0, Number(c && c.possible) || 0) };
+      }).filter(function (c) { return c.key; }),
+      at: stamp(raw.at)
+    };
+  }
+
   function sanitizeReview(raw) {
     if (!raw || typeof raw !== "object") return null;
     const items = {};
@@ -239,6 +265,8 @@
       output: clean(raw.output, NOTE_MAX),
       blocker: keyOf(REASONS, raw.blocker),
       rules: [],
+      rubric: Number.isInteger(raw.rubric) && raw.rubric >= 1 ? raw.rubric : RUBRIC_VERSION,
+      scored: sanitizeScored(raw.scored),
       savedAt: stamp(raw.savedAt)
     };
     (Array.isArray(raw.rules) ? raw.rules : []).slice(0, MAX_RULES).forEach(function (r) {
@@ -258,6 +286,38 @@
     };
   }
 
+  // Half-finished morning plans and evening reviews, kept per date so nothing typed is lost to a refresh, a switch to
+  // another screen, the phone locking or midnight passing. Only the newest few dates are kept.
+  const DRAFT_KEEP = 10;
+  const DRAFT_NOTE_KEYS = ["output"].concat(NOTE_FIELDS);
+  function sanitizeDrafts(raw) {
+    const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const out = {};
+    Object.keys(src).filter(isISODate).sort().slice(-DRAFT_KEEP).forEach(function (date) {
+      const plain = function (v) { return !!v && typeof v === "object" && !Array.isArray(v); };
+      const d = plain(src[date]) ? src[date] : {};
+      const entry = {};
+      const m = d.morning;
+      if (plain(m)) {
+        const p = Array.isArray(m.p) ? m.p : [];
+        entry.morning = { key: clean(m.key, PRIORITY_MAX), p: [0, 1, 2].map(function (i) { return clean(p[i], PRIORITY_MAX); }), distraction: clean(m.distraction, NOTE_MAX), plan: clean(m.plan, NOTE_MAX), at: stamp(m.at) };
+      }
+      const r = d.review;
+      if (plain(r)) {
+        const items = {};
+        Object.keys(ITEMS).concat(["phone"]).forEach(function (k) { items[k] = state(r.items && r.items[k]); });
+        const rules = {};
+        const rr = r.rules && typeof r.rules === "object" && !Array.isArray(r.rules) ? r.rules : {};
+        Object.keys(rr).slice(0, MAX_RULES * 2).forEach(function (id) { const st = state(rr[id]); const key = clean(id, 40); if (st && key) rules[key] = st; });
+        const notes = {};
+        DRAFT_NOTE_KEYS.forEach(function (k) { notes[k] = clean(r.notes && r.notes[k], NOTE_MAX); });
+        entry.review = { items: items, focus: rating(r.focus), time: rating(r.time), rules: rules, screenHours: clean(r.screenHours, 6), notes: notes, at: stamp(r.at) };
+      }
+      if (entry.morning || entry.review) out[date] = entry;
+    });
+    return out;
+  }
+
   // The whole saved object: { settings: { phoneLimit }, days: { "YYYY-MM-DD": day } }. Bad dates and junk are dropped.
   function sanitizeStore(raw) {
     const r = raw && typeof raw === "object" ? raw : {};
@@ -271,6 +331,7 @@
       settings: { phoneLimit: limit(r.settings && r.settings.phoneLimit), times: sanitizeTimes(r.settings && r.settings.times) },
       rules: sanitizeRules(r.rules), avoid: sanitizeAvoid(r.avoid), timer: sanitizeTimer(r.timer),
       program: sanitizeProgram(r.program),
+      drafts: sanitizeDrafts(r.drafts),
       days: days
     };
   }
@@ -369,6 +430,27 @@
       categories: categories, excused: excused, gap: gap, strong: strong,
       detail: { prioritiesDone: prioritiesDone, prioritiesTotal: prioritiesTotal, keyTaskDone: !!(m && m.keyTask.text && m.keyTask.done), keyTaskSet: !!(m && m.keyTask.text), planned: planned, notesAnswered: answered }
     };
+  }
+
+  // The part of a score that is kept with the review it belongs to.
+  function scoreSnapshot(result) {
+    return sanitizeScored({ score: result.score, earned: result.earned, possible: result.possible, excused: result.excused, categories: result.categories, at: Date.now() });
+  }
+
+  // Reviews saved before snapshots existed have none. Each complete one is stamped with what it scores right now under
+  // its own rubric, which is exactly what the app has been showing for it. Returns how many were stamped.
+  function backfillSnapshots(store) {
+    let n = 0;
+    Object.keys(store.days).forEach(function (date) {
+      const day = store.days[date];
+      if (!day.review || day.review.scored) return;
+      const r = scoreDay(day);
+      if (!r.complete) return;
+      day.review.scored = scoreSnapshot(r);
+      day.review.scored.at = day.review.savedAt;
+      n++;
+    });
+    return n;
   }
 
   // Which items to pre-mark "not today" for a kind of day (before any answer is given).
@@ -612,7 +694,8 @@
     PRIORITY_MAX: PRIORITY_MAX, NOTE_MAX: NOTE_MAX, DEFAULT_PHONE_LIMIT: DEFAULT_PHONE_LIMIT,
     MIN_DAYS_FOR_AVERAGES: MIN_DAYS_FOR_AVERAGES, MIN_DAYS_FOR_WEEKDAYS: MIN_DAYS_FOR_WEEKDAYS,
     isISODate: isISODate, addDays: addDays, weekdayOf: weekdayOf, daysBetween: daysBetween,
-    sanitizeDay: sanitizeDay, sanitizeStore: sanitizeStore,
+    sanitizeDay: sanitizeDay, sanitizeStore: sanitizeStore, sanitizeDrafts: sanitizeDrafts, DRAFT_NOTE_KEYS: DRAFT_NOTE_KEYS,
+    RUBRIC_VERSION: RUBRIC_VERSION, scoreSnapshot: scoreSnapshot, backfillSnapshots: backfillSnapshots,
     scoreDay: scoreDay, unanswered: unanswered, excusedFor: excusedFor,
     reviewStreak: reviewStreak, lastScored: lastScored, trendSummary: trendSummary
   };

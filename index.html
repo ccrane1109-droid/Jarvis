@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>JARVIS</title>
 <meta name="theme-color" content="#0a0e14">
+<meta name="color-scheme" content="dark">
 <meta name="description" content="JARVIS — a personal dashboard for workouts, nutrition, habits, business, plus a Trading Lab paper-trading practice space and an AI Video generation tool.">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=52">
+<link rel="stylesheet" href="style.css?v=53">
 </head>
 <body>
 
@@ -2007,6 +2008,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
             <textarea id="dcPlan" rows="2" maxlength="240" placeholder="If I walk in the door, then my phone goes on the charger and I open my homework."></textarea>
             <p class="field-hint">A plan with a time and a place beats a wish.</p>
           </div>
+          <p class="field-hint hidden" id="dcMorningDraftNote" role="status">Not saved yet. What you've typed is kept on this phone until you save.</p>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="dcMorningSaveBtn">Lock in the plan</button>
           </div>
@@ -2046,6 +2048,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <div class="form-row"><label for="dcDistractions">What caused your distractions?</label><textarea id="dcDistractions" rows="2" maxlength="240"></textarea></div>
           <div class="form-row"><label for="dcWentWell">What did you do well?</label><textarea id="dcWentWell" rows="2" maxlength="240"></textarea></div>
           <div class="form-row"><label for="dcImprove">What will you improve tomorrow?</label><textarea id="dcImprove" rows="2" maxlength="240"></textarea></div>
+          <p class="field-hint hidden" id="dcReviewDraftNote" role="status">Not saved yet. What you've entered is kept on this phone until you score the day.</p>
           <p class="field-hint dc-missing hidden" id="dcMissing" role="alert"></p>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="dcReviewSaveBtn">Score my day</button>
@@ -4736,40 +4739,80 @@ npx firebase-tools deploy --only firestore:rules</pre>
   </div>
 </div>
 
+<!-- Phone navigation: the four sections used every day, plus a sheet for the rest. The header's tab row (.main-nav)
+     stays the source of truth: these buttons press the matching tab there, and follow it when anything else switches tabs. -->
+<nav class="bottom-nav" id="bottomNav" aria-label="Main sections">
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnWorkout">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg><span>Workout</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnNutrition">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c-2-2.2-6-1.6-6 3.2 0 3.6 2.4 8.3 5 8.3.8 0 .9-.3 1-.3s.2.3 1 .3c2.6 0 5-4.7 5-8.3 0-4.8-4-5.4-6-3.2zM12 8c0-2 1-3.5 2.5-4.5"/></svg><span>Nutrition</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnHabits">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg><span>Habits</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnDiscipline">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Discipline</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" id="bottomNavMore" aria-haspopup="dialog" aria-expanded="false" aria-controls="moreSheet" aria-label="More sections">
+    <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-fill"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg><span id="bottomNavMoreLabel">More</span>
+  </button>
+</nav>
+
+<div class="modal-overlay sheet-overlay hidden" id="moreSheet" role="dialog" aria-modal="true" aria-label="More sections">
+  <div class="modal-box sheet-box more-sheet-box">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="more-list">
+      <button type="button" class="more-item" data-nav="navBtnBusiness">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M3 13h18"/></svg><span>Business</span>
+      </button>
+      <button type="button" class="more-item" data-nav="navBtnTrading">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><span>Trading Lab</span>
+      </button>
+      <button type="button" class="more-item" data-nav="navBtnVideo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg><span>AI Video</span>
+      </button>
+      <button type="button" class="more-item" data-nav="navBtnMarketing">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4a1 1 0 001 1h2l7 4V5L7 9H5a1 1 0 00-1 1z"/><path d="M17.5 9a4 4 0 010 6"/></svg><span>Marketing</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=52"></script>
-<script src="js/backup-logic.js?v=52"></script>
-<script src="js/cloud-backup.js?v=52"></script>
-<script type="module" src="js/auth.js?v=52"></script>
-<script src="js/app.js?v=52"></script>
-<script src="js/exercises.js?v=52"></script>
-<script src="js/workout.js?v=52"></script>
-<script src="js/nutrition.js?v=52"></script>
-<script src="js/nutrition-label-parse.js?v=52"></script>
-<script src="js/nutrition-label-scan.js?v=52"></script>
-<script src="js/groceries.js?v=52"></script>
-<script src="js/habits.js?v=52"></script>
-<script src="js/discipline-logic.js?v=52"></script>
-<script src="js/discipline-program.js?v=52"></script>
-<script src="js/discipline.js?v=52"></script>
-<script src="functions/lib/reminder-spec.js?v=52"></script>
-<script src="functions/lib/reminder-events.js?v=52"></script>
-<script src="js/reminders.js?v=52"></script>
-<script src="js/business.js?v=52"></script>
-<script src="js/trading.js?v=52"></script>
-<script src="js/blobstore.js?v=52"></script>
-<script src="js/video-api-client.js?v=52"></script>
-<script src="js/video-connections.js?v=52"></script>
-<script src="js/video.js?v=52"></script>
-<script src="js/video-studio.js?v=52"></script>
-<script src="functions/lib/idea-spec.js?v=52"></script>
-<script src="functions/lib/niche-spec.js?v=52"></script>
-<script src="js/marketing-stats.js?v=52"></script>
-<script src="js/niche-research.js?v=52"></script>
-<script src="js/content-intelligence.js?v=52"></script>
-<script src="js/form-check.js?v=52"></script>
+<script src="js/firebase-config.js?v=53"></script>
+<script src="js/backup-logic.js?v=53"></script>
+<script src="js/cloud-backup.js?v=53"></script>
+<script type="module" src="js/auth.js?v=53"></script>
+<script src="js/app.js?v=53"></script>
+<script src="js/exercises.js?v=53"></script>
+<script src="js/workout.js?v=53"></script>
+<script src="js/nutrition.js?v=53"></script>
+<script src="js/nutrition-label-parse.js?v=53"></script>
+<script src="js/nutrition-label-scan.js?v=53"></script>
+<script src="js/groceries.js?v=53"></script>
+<script src="js/habits.js?v=53"></script>
+<script src="js/discipline-logic.js?v=53"></script>
+<script src="js/discipline-program.js?v=53"></script>
+<script src="js/discipline.js?v=53"></script>
+<script src="functions/lib/reminder-spec.js?v=53"></script>
+<script src="functions/lib/reminder-events.js?v=53"></script>
+<script src="js/reminders.js?v=53"></script>
+<script src="js/business.js?v=53"></script>
+<script src="js/trading.js?v=53"></script>
+<script src="js/blobstore.js?v=53"></script>
+<script src="js/video-api-client.js?v=53"></script>
+<script src="js/video-connections.js?v=53"></script>
+<script src="js/video.js?v=53"></script>
+<script src="js/video-studio.js?v=53"></script>
+<script src="functions/lib/idea-spec.js?v=53"></script>
+<script src="functions/lib/niche-spec.js?v=53"></script>
+<script src="js/marketing-stats.js?v=53"></script>
+<script src="js/niche-research.js?v=53"></script>
+<script src="js/content-intelligence.js?v=53"></script>
+<script src="js/form-check.js?v=53"></script>
 </body>
 </html>
