@@ -266,6 +266,14 @@
     };
   }
 
+  // How the Habits routine stood when a review was saved: counts only, or null (no habits, or an older review).
+  function sanitizeRoutineCounts(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const total = Math.round(Number(raw.total)), done = Math.round(Number(raw.done)), open = Math.round(Number(raw.open));
+    if (!(total >= 1 && total <= 200 && done >= 0 && open >= 0 && done + open === total)) return null;
+    return { done: done, open: open, total: total };
+  }
+
   // What a review came to when it was saved, or null (an older review that has not been backfilled yet).
   function sanitizeScored(raw) {
     if (!raw || typeof raw !== "object" || !Number.isFinite(Number(raw.score)) || !Number.isFinite(Number(raw.possible)) || Number(raw.possible) <= 0) return null;
@@ -295,6 +303,7 @@
       output: clean(raw.output, NOTE_MAX),
       blocker: keyOf(REASONS, raw.blocker),
       extras: { routine: state(raw.extras && raw.extras.routine), managed: state(raw.extras && raw.extras.managed) },
+      habits: sanitizeRoutineCounts(raw.habits),
       rules: [],
       rubric: Number.isInteger(raw.rubric) && raw.rubric >= 1 ? raw.rubric : RUBRIC_VERSION,
       scored: sanitizeScored(raw.scored),
@@ -599,6 +608,7 @@
   // and whether the review is done. -> { kind, title, text, why, task, actions: [primary buttons], more: [other
   // things that could be done now] }. Plain rules and fixed wording; it only ever suggests, nothing is sent or forced.
   //   input.missions (optional): { total, done, nextText } for today's program missions that still need a tick
+  //   input.routine  (optional): { open, text } from the Habits routine: how many habits are still open today, and a line naming them
   function nextUp(input) {
     const days = input.days;
     const times = sanitizeTimes(input.settings && input.settings.times);
@@ -610,6 +620,7 @@
     const tomorrowPlanned = hasPlanItems(sanitizeDay(days[addDays(input.todayISO, 1)]).morning);
     const scoredToday = isScored(days, input.todayISO);
     const mission = input.missions && input.missions.total > input.missions.done ? input.missions : null;
+    const routine = input.routine && input.routine.open > 0 ? input.routine : null;
 
     // Everything else that makes sense right now, so the person can always pick something other than the suggestion.
     function others(primary) {
@@ -617,6 +628,7 @@
       if (!planned) list.push("plan");
       if (!scoredToday) list.push("review");
       if (planned && openItems(today.morning)) list.push("avoid");
+      if (routine) list.push("routine");
       if (mission) list.push("mission");
       if (!tomorrowPlanned) list.push("planTomorrow");
       return list.filter(function (k) { return primary.indexOf(k) === -1; });
@@ -644,6 +656,7 @@
     for (let i = 0; i < 3; i++) {
       if (m.priorities[i].text && !m.priorities[i].done) return make({ kind: "next", title: m.priorities[i].text, text: "Next on your list.", why: "One thing at a time. Finish it, tick it, then look at the next.", task: { id: "p" + i, text: m.priorities[i].text }, actions: ["start", "avoid"] });
     }
+    if (routine) return make({ kind: "routine", title: routine.open === 1 ? "One habit left today" : routine.open + " habits left today", text: routine.text, why: "Your routine lives in Habits. A tick there takes seconds, and the day then counts as kept.", task: null, actions: ["routine"] });
     if (mission) return make({ kind: "mission", title: "Today's mission is still open", text: mission.nextText, why: "Missions are the small, practical part of the 30-day program. A tick takes seconds.", task: null, actions: ["mission"] });
     return make({ kind: "allDone", title: "Everything you planned is done", text: "Your planned actions are complete. Review at " + times.review + ", and look at tomorrow's priorities when you're ready.", why: "Nothing else is due. Rest counts.", task: null, actions: [] });
   }

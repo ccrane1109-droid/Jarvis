@@ -33,6 +33,9 @@
   const LS_DRAFTS = "jarvisDisciplineDrafts";
   const L = window.JarvisDisciplineLogic;
   const P = window.JarvisDisciplineProgram || null; // the 30-day program; the tracker still works without it
+  const H = window.JarvisDisciplineHabits || null;  // reads the routine kept in Habits; the tracker still works without it
+  const LS_HABITS = "jarvisHabits";                  // owned by habits.js: Discipline only ever reads it
+  const LS_TASKS = "jarvisTasks";
 
   const ITEM_QUESTIONS = {
     school: "Did you complete your school responsibilities?",
@@ -59,7 +62,7 @@
     routines: "Bed on time 4, phone out of the bedroom 3, trained or rested as planned 3.",
     reflection: "A morning plan saved 4, the four evening questions answered 6."
   };
-  const ACTION_LABELS = { plan: "Plan my day", scoreYesterday: "Score yesterday", start: "Start 2 minutes", avoid: "I'm avoiding it", review: "Open the review", planTomorrow: "Plan tomorrow", mission: "See today's missions" };
+  const ACTION_LABELS = { plan: "Plan my day", scoreYesterday: "Score yesterday", start: "Start 2 minutes", avoid: "I'm avoiding it", review: "Open the review", planTomorrow: "Plan tomorrow", mission: "See today's missions", routine: "Open my habits" };
   const DAY_PREFIX = { today: "Today · ", yesterday: "Yesterday · ", tomorrow: "Tomorrow · " };
   const NUDGES = [
     { key: "plan", title: "Lock in today's plan", timeKey: "planBy", type: "daily" },
@@ -248,6 +251,111 @@
   /* ---------------- Today: next up ---------------- */
 
   // Today's program missions that only a tick can complete (the automatic ones tick themselves).
+  /* ---------------- paired with Habits: read-only ---------------- */
+
+  function routineOn(date) {
+    if (!H) return null;
+    const habits = H.normalizeHabits(core().loadJSON(LS_HABITS, []));
+    return { habits: habits, routine: H.routineFor(habits, date) };
+  }
+
+  function openHabitsTab() {
+    $("navBtnHabits").click();
+    $("habitsSubNavToday").click();
+    const nav = $("navBtnHabits");
+    if (nav && nav.scrollIntoView) window.scrollTo(0, 0);
+  }
+
+  function routineLine(routine) {
+    const open = routine.items.filter(function (i) { return i.state === "open"; }).map(function (i) { return i.name; });
+    return open.slice(0, 3).join(", ") + (open.length > 3 ? " and " + (open.length - 3) + " more" : "") + ".";
+  }
+
+  function routineForNext() {
+    const r = routineOn(todayISO());
+    return r && r.routine.total ? { open: r.routine.open, text: routineLine(r.routine) } : null;
+  }
+
+  function stateLabel(i) { return i.state === "done" ? "Done" : i.state === "met" ? "Week's target met" : "To do"; }
+
+  function renderRoutineCard() {
+    const card = $("dcRoutineCard");
+    if (!H || selected !== "today") { card.classList.add("hidden"); return; }
+    const r = routineOn(todayISO());
+    const c = H.coach(r.habits, r.routine, todayISO());
+    card.classList.remove("hidden");
+    $("dcCoachText").textContent = c.text;
+    $("dcCoachLeft").textContent = c.left;
+    $("dcCoachLeft").classList.toggle("hidden", !c.left);
+    $("dcOpenHabits").textContent = r.habits.length ? "Open Habits" : "Add habits";
+    const shown = r.routine.items.slice(0, 6);
+    $("dcRoutineList").innerHTML = shown.map(function (i) {
+      const meta = [];
+      if (i.dailyTarget > 1) meta.push(i.count + " of " + i.dailyTarget + " today");
+      if (i.daily && i.streak >= 2) meta.push(i.streak + "-day streak");
+      meta.push(i.weekDone + " of " + i.weekTarget + " this week");
+      return '<div class="dc-routine-row ' + i.state + '"><span class="dc-box" aria-hidden="true">' + (i.state === "done" ? "✓" : i.state === "met" ? "•" : "") + '</span>' +
+        '<span class="dc-routine-name">' + esc(i.name) + '</span><span class="dc-routine-meta">' + esc(stateLabel(i)) + '<br>' + esc(meta.join(" · ")) + '</span></div>';
+    }).join("") + (r.routine.items.length > shown.length ? '<div class="dc-routine-more">+ ' + (r.routine.items.length - shown.length) + ' more in Habits</div>' : "");
+  }
+
+  // The same routine as it stood on the day being reviewed, with a button that copies Habits' answer into the review.
+  function renderRoutineReview() {
+    const box = $("dcRoutineReview");
+    const r = routineOn(renderedDate || selectedDate());
+    if (!r || !r.routine.total) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    const rt = r.routine;
+    const left = rt.items.filter(function (i) { return i.state === "open"; }).map(function (i) { return i.name; });
+    $("dcRoutineReviewBody").innerHTML = '<span><strong>' + (rt.done + rt.met) + ' of ' + rt.total + '</strong> habits kept' + (left.length ? " · still open: " + esc(left.slice(0, 4).join(", ")) : " · nothing open") + '</span>' +
+      '<span class="field-hint">Read from Habits. You decide the answer below.</span>';
+  }
+
+  // The Habits tab's own check-in: the coach line and where today's plan and review stand.
+  function renderHabitsStrip() {
+    const card = $("habitsDisciplineCard");
+    if (!card) return;
+    if (!H) { card.classList.add("hidden"); return; }
+    const today = todayISO();
+    const r = routineOn(today);
+    const c = H.coach(r.habits, r.routine, today);
+    const day = store.days[today];
+    const m = day && day.morning;
+    const rs = reviewStatus(today);
+    card.classList.remove("hidden");
+    $("habitsCoachText").textContent = c.text;
+    $("habitsCoachLeft").textContent = c.left;
+    $("habitsCoachLeft").classList.toggle("hidden", !c.left);
+    const planText = m && m.keyTask.text ? "Main win: " + m.keyTask.text + (m.keyTask.done ? " (done)" : " (not done yet)") : m ? "Today's plan is saved" : "No plan for today yet";
+    $("habitsDisciplinePlan").textContent = planText + ". Review: " + rs.text.toLowerCase() + ".";
+  }
+
+  // Unfinished Habits to-do items for the day being planned, offered as priorities (copied, never linked or changed).
+  let importList = [];
+  function renderImport() {
+    const box = $("dcImport");
+    if (!H || !morningDate || planStep !== 2) { box.classList.add("hidden"); return; }
+    const have = TEXT_IDS.map(function (id) { return tidy($(id).value).toLowerCase(); });
+    importList = H.openTasks(core().loadJSON(LS_TASKS, []), morningDate, 8).filter(function (t) { return have.indexOf(t.text.toLowerCase()) === -1; }).slice(0, 5);
+    box.classList.toggle("hidden", !importList.length);
+    $("dcImportChips").innerHTML = importList.map(function (t, i) {
+      return '<button type="button" class="dc-chip" data-import="' + i + '">+ ' + esc(t.text) + (t.due ? ' <small>(' + esc(timeLabel(t.due)) + ')</small>' : "") + '</button>';
+    }).join("");
+  }
+
+  function importTask(i) {
+    const t = importList[i];
+    if (!t) return;
+    const slot = TEXT_IDS.findIndex(function (id) { return tidy($(id).value) === ""; });
+    if (slot === -1) { core().showToast("All four slots are filled. Clear one to add this."); return; }
+    $(TEXT_IDS[slot]).value = t.text;
+    if (t.due && !$(DUE_IDS[slot]).value) $(DUE_IDS[slot]).value = t.due;
+    if (t.category && !$(CAT_IDS[slot]).value) $(CAT_IDS[slot]).value = t.category;
+    captureMorningDraft();
+    renderImport();
+    core().showToast(slot === 0 ? "Added as your main win." : "Added as priority " + slot + ".");
+  }
+
   function manualMissions() {
     if (!P) return null;
     const pd = P.programDay(store.program.start, todayISO());
@@ -265,7 +373,7 @@
   function renderNextUp() {
     const card = $("dcNextCard");
     if (selected !== "today" || store.timer || flow) { card.classList.add("hidden"); card.removeAttribute("data-sig"); return; }
-    const n = L.nextUp({ todayISO: todayISO(), minutes: nowMinutes(), days: store.days, settings: store.settings, missions: manualMissions() });
+    const n = L.nextUp({ todayISO: todayISO(), minutes: nowMinutes(), days: store.days, settings: store.settings, missions: manualMissions(), routine: routineForNext() });
     // Redrawing the same card would drop focus from its buttons; this also runs on a timer.
     const sig = JSON.stringify([n.kind, n.title, n.text, n.why, n.actions, n.more, n.task ? n.task.id : ""]);
     if (card.getAttribute("data-sig") === sig && !card.classList.contains("hidden")) return;
@@ -293,6 +401,7 @@
     else if (act === "start") startTimer({ task: planItemText(taskId), taskId: taskId, reason: "", excuse: "", entryAt: 0, minutes: L.START_MINUTES });
     else if (act === "avoid") openFlow(taskId);
     else if (act === "mission") $("disciplineSubNavProgram").click();
+    else if (act === "routine") openHabitsTab();
   }
 
   function planItemText(taskId) {
@@ -496,6 +605,7 @@
     $("dcMorningSaveBtn").classList.toggle("btn-primary", planStep === 4);
     $("dcMorningSaveBtn").classList.toggle("btn-secondary", planStep !== 4);
     renderExamples();
+    renderImport();
     if (focus) {
       const first = $("dcMorningForm").querySelector('.dc-step[data-step="' + planStep + '"] input[type="text"], .dc-step[data-step="' + planStep + '"] textarea');
       if (first) first.focus();
@@ -620,6 +730,8 @@
     const pr = e.target.closest("[data-promote]");
     const resp = e.target.closest("[data-resp]");
     const ex = e.target.closest("[data-example]");
+    const imp = e.target.closest("[data-import]");
+    if (imp) { importTask(Number(imp.getAttribute("data-import"))); return; }
     if (mv) {
       const row = Number(mv.getAttribute("data-row"));
       const other = mv.getAttribute("data-move") === "up" ? row - 1 : row + 1;
@@ -736,6 +848,7 @@
         segButtons(["done", "not", "na"], draft.rules[r.id] || null, function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
     }).join("");
     renderPlanResults();
+    renderRoutineReview();
     updateReviewProgress();
   }
 
@@ -889,6 +1002,7 @@
       screenHours: draft.items.phone === "na" ? null : $("dcScreenHours").value,
       phoneLimit: day.review ? day.review.phoneLimit : store.settings.phoneLimit,
       items: draft.items, extras: draft.extras, focus: draft.focus, time: draft.time,
+      habits: (function () { const r = routineOn(date); return r ? H.snapshot(r.routine) : null; })(),
       rules: store.rules.map(function (r) { return { id: r.id, text: r.text, state: draft.rules[r.id] || null }; }),
       blocker: day.review ? day.review.blocker : "",
       savedAt: Date.now() // each time the day is scored
@@ -1052,6 +1166,10 @@
     $("dcOverviewBar").setAttribute("aria-valuenow", String(done));
     const chips = [m ? chip("Plan saved", "ok") : chip("No plan yet", "todo")];
     if (selected !== "tomorrow") { const rs = reviewStatus(date); chips.push(chip(rs.state === "scored" ? rs.text : "Review: " + rs.text.toLowerCase(), rs.state === "scored" ? "ok" : "")); }
+    if (selected !== "tomorrow") {
+      const rr = routineOn(date);
+      if (rr && rr.routine.total) chips.push(chip("Routine " + (rr.routine.done + rr.routine.met) + "/" + rr.routine.total, rr.routine.open === 0 ? "ok" : ""));
+    }
     const prog = selected === "today" ? programToday() : null;
     if (prog) {
       chips.push(chip("Program day " + prog.day + " of 30"));
@@ -1076,6 +1194,8 @@
       rows.push(progressRow("Today's missions", prog.progress.done + " of " + prog.progress.total, prog.progress.total ? Math.round(100 * prog.progress.done / prog.progress.total) : 0));
       rows.push(progressRow("30-day program", "Day " + prog.day + " of 30", Math.round(100 * prog.day / 30)));
     }
+    const rr = routineOn(todayISO());
+    if (rr && rr.routine.total) rows.push(progressRow("Routine (from Habits)", (rr.routine.done + rr.routine.met) + " of " + rr.routine.total + " kept", Math.round(100 * (rr.routine.done + rr.routine.met) / rr.routine.total)));
     rows.push(progressRow("Daily review", rs.text, null));
     $("dcProgressBody").innerHTML = rows.join("");
   }
@@ -1084,6 +1204,8 @@
     renderHeader();
     renderOverview();
     renderNextUp();
+    renderRoutineCard();
+    renderHabitsStrip();
     renderFlow();
     renderLessonCard();
     renderMorning();
@@ -1495,7 +1617,7 @@
   function refreshForClock() {
     if (document.visibilityState !== "visible") return;
     const t = todayISO();
-    if (selectedDate() === renderedDate) { renderNextUp(); updateClock(); renderReviewMode(); return; }
+    if (selectedDate() === renderedDate) { renderNextUp(); updateClock(); renderReviewMode(); renderRoutineCard(); renderHabitsStrip(); return; }
     // Midnight passed (or the app came back the next day). Someone part-way through a plan or review stays on the day
     // they were filling in, which is now "Yesterday"; otherwise the screen moves on to the new today.
     const old = renderedDate;
@@ -1521,6 +1643,25 @@
     });
     $("dcNextActions").addEventListener("click", handleNextAction);
     $("dcNextMoreActions").addEventListener("click", handleNextAction);
+
+    // Paired with Habits: open each from the other, and refresh whenever the routine may have changed (switching to
+    // Discipline, ticking a habit or a task in Habits). Discipline reads Habits' own saved data and never writes it.
+    $("dcOpenHabits").addEventListener("click", openHabitsTab);
+    $("habitsOpenDiscipline").addEventListener("click", function () { $("navBtnDiscipline").click(); $("disciplineSubNavToday").click(); window.scrollTo(0, 0); });
+    $("dcRoutineUse").addEventListener("click", function () {
+      const r = routineOn(renderedDate || selectedDate());
+      const answer = r && H.suggestAnswer(r.routine);
+      if (!answer) return;
+      draft.extras.routine = answer;
+      renderReviewControls();
+      captureReviewDraft();
+      core().showToast("Filled in from Habits: " + ANSWER_LABELS[answer] + ". You can change it.");
+    });
+    $("navBtnDiscipline").addEventListener("click", function () { renderOverview(); renderNextUp(); renderRoutineCard(); renderProgressCard(); renderRoutineReview(); });
+    ["navBtnHabits", "habitsSubNavToday"].forEach(function (id) { $(id).addEventListener("click", renderHabitsStrip); });
+    // On the lists themselves, so this runs after Habits has handled the tap and redrawn (its own handler is registered first).
+    ["todayHabitsList", "taskList"].forEach(function (id) { $(id).addEventListener("click", renderHabitsStrip); });
+    TEXT_IDS.forEach(function (id) { $(id).addEventListener("input", renderImport); });
     $("dcSeeTrends").addEventListener("click", function () { $("disciplineSubNavTrends").click(); });
 
     // Planning steps: options for the category selects, the suggestion buttons, and moving between steps.

@@ -2888,6 +2888,24 @@ button.rm-hist-row { cursor: pointer; }
   .dc-fill, .dc-step-pips span { transition: none; }
 }
 
+/* Discipline x Habits: the routine card, coach line and the Habits check-in strip */
+
+.dc-routine, .dc-strip { border-left: 4px solid var(--green); }
+.dc-coach { font-size: 15px; line-height: 1.45; margin: 4px 0 6px; color: var(--text); }
+.dc-routine-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 6px; }
+.dc-routine-row {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px;
+  background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+}
+.dc-routine-row .dc-box { flex: 0 0 22px; width: 22px; height: 22px; }
+.dc-routine-row.done { border-color: rgba(51, 209, 122, 0.45); }
+.dc-routine-row.done .dc-box { background: var(--green); border-color: var(--green); }
+.dc-routine-row.met .dc-box { border-color: var(--green); color: var(--green); }
+.dc-routine-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
+.dc-routine-meta { flex: 0 0 auto; font-size: 12px; color: var(--text-dim); text-align: right; }
+.dc-routine-more { font-size: 13px; color: var(--text-faint); padding: 2px 4px; }
+
+
 /* ---------------- Phone navigation: bottom tab bar ---------------- */
 
 /* On a phone eight section names don't fit in one row, so the header's row of tabs used to scroll sideways and the

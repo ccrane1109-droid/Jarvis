@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=54">
+<link rel="stylesheet" href="style.css?v=55">
 </head>
 <body>
 
@@ -1657,6 +1657,16 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Today ---------- -->
     <div id="habits-today" class="habits-sub-panel active" role="tabpanel" aria-labelledby="habitsSubNavToday">
+      <div class="card dc-strip hidden" id="habitsDisciplineCard" aria-labelledby="habitsDisciplineTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="habitsDisciplineTitle">Discipline check-in</h2>
+          <button type="button" class="btn-icon" id="habitsOpenDiscipline">Open Discipline</button>
+        </div>
+        <p class="dc-coach" id="habitsCoachText"></p>
+        <p class="field-hint" id="habitsCoachLeft"></p>
+        <p class="dc-line" id="habitsDisciplinePlan"></p>
+      </div>
+
       <div class="card">
         <div class="day-selector-row">
           <button type="button" class="btn-icon" id="daySelectorPrevWeekBtn" aria-label="Previous week">&larr;</button>
@@ -1983,6 +1993,17 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </details>
       </div>
 
+      <div class="card dc-routine hidden" id="dcRoutineCard" aria-labelledby="dcRoutineTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="dcRoutineTitle">Your routine</h2>
+          <button type="button" class="btn-icon" id="dcOpenHabits">Open Habits</button>
+        </div>
+        <p class="dc-coach" id="dcCoachText"></p>
+        <p class="field-hint" id="dcCoachLeft"></p>
+        <div class="dc-routine-list" id="dcRoutineList"></div>
+        <p class="field-hint">Kept in Habits. Discipline only reads it, so tick things off there.</p>
+      </div>
+
       <div class="card dc-flow hidden" id="dcFlowCard" aria-live="polite">
         <div id="dcFlow"></div>
       </div>
@@ -2031,6 +2052,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <section class="dc-step hidden" data-step="2" aria-labelledby="dcStep2Title">
             <h3 class="dc-step-title" id="dcStep2Title">Supporting priorities</h3>
             <p class="field-hint">Up to three more things that would make today better. Leave any blank.</p>
+            <div class="dc-examples hidden" id="dcImport"><span class="field-hint">From your Habits to-do list for this day (tap to add):</span><div class="dc-chips dc-chips-row" id="dcImportChips"></div></div>
             <div class="dc-prio-row" data-row="0">
               <label for="dcPriority1">Priority 1</label>
               <input type="text" id="dcPriority1" maxlength="100" autocomplete="off" placeholder="e.g. Read chapter 4">
@@ -2140,6 +2162,11 @@ npx firebase-tools deploy --only firestore:rules</pre>
                 <p class="field-hint">Read it from Settings &rarr; Screen Time. JARVIS can't see it for you.</p>
               </div>
               <div id="dcItemsB"></div>
+              <div class="dc-q hidden" id="dcRoutineReview">
+                <span class="dc-q-label">Your routine in Habits <small>(today's check-ins)</small></span>
+                <div class="dc-plan-results" id="dcRoutineReviewBody"></div>
+                <button type="button" class="btn btn-secondary" id="dcRoutineUse">Use what Habits says for &ldquo;followed your routine&rdquo;</button>
+              </div>
               <div id="dcExtrasQ">
                 <span class="dc-q-label">Also worth noting <small>(shown in Trends, not part of the score)</small></span>
                 <div id="dcExtras"></div>
@@ -4904,36 +4931,37 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=54"></script>
-<script src="js/backup-logic.js?v=54"></script>
-<script src="js/cloud-backup.js?v=54"></script>
-<script type="module" src="js/auth.js?v=54"></script>
-<script src="js/app.js?v=54"></script>
-<script src="js/exercises.js?v=54"></script>
-<script src="js/workout.js?v=54"></script>
-<script src="js/nutrition.js?v=54"></script>
-<script src="js/nutrition-label-parse.js?v=54"></script>
-<script src="js/nutrition-label-scan.js?v=54"></script>
-<script src="js/groceries.js?v=54"></script>
-<script src="js/habits.js?v=54"></script>
-<script src="js/discipline-logic.js?v=54"></script>
-<script src="js/discipline-program.js?v=54"></script>
-<script src="js/discipline.js?v=54"></script>
-<script src="functions/lib/reminder-spec.js?v=54"></script>
-<script src="functions/lib/reminder-events.js?v=54"></script>
-<script src="js/reminders.js?v=54"></script>
-<script src="js/business.js?v=54"></script>
-<script src="js/trading.js?v=54"></script>
-<script src="js/blobstore.js?v=54"></script>
-<script src="js/video-api-client.js?v=54"></script>
-<script src="js/video-connections.js?v=54"></script>
-<script src="js/video.js?v=54"></script>
-<script src="js/video-studio.js?v=54"></script>
-<script src="functions/lib/idea-spec.js?v=54"></script>
-<script src="functions/lib/niche-spec.js?v=54"></script>
-<script src="js/marketing-stats.js?v=54"></script>
-<script src="js/niche-research.js?v=54"></script>
-<script src="js/content-intelligence.js?v=54"></script>
-<script src="js/form-check.js?v=54"></script>
+<script src="js/firebase-config.js?v=55"></script>
+<script src="js/backup-logic.js?v=55"></script>
+<script src="js/cloud-backup.js?v=55"></script>
+<script type="module" src="js/auth.js?v=55"></script>
+<script src="js/app.js?v=55"></script>
+<script src="js/exercises.js?v=55"></script>
+<script src="js/workout.js?v=55"></script>
+<script src="js/nutrition.js?v=55"></script>
+<script src="js/nutrition-label-parse.js?v=55"></script>
+<script src="js/nutrition-label-scan.js?v=55"></script>
+<script src="js/groceries.js?v=55"></script>
+<script src="js/habits.js?v=55"></script>
+<script src="js/discipline-logic.js?v=55"></script>
+<script src="js/discipline-program.js?v=55"></script>
+<script src="js/discipline-habits.js?v=55"></script>
+<script src="js/discipline.js?v=55"></script>
+<script src="functions/lib/reminder-spec.js?v=55"></script>
+<script src="functions/lib/reminder-events.js?v=55"></script>
+<script src="js/reminders.js?v=55"></script>
+<script src="js/business.js?v=55"></script>
+<script src="js/trading.js?v=55"></script>
+<script src="js/blobstore.js?v=55"></script>
+<script src="js/video-api-client.js?v=55"></script>
+<script src="js/video-connections.js?v=55"></script>
+<script src="js/video.js?v=55"></script>
+<script src="js/video-studio.js?v=55"></script>
+<script src="functions/lib/idea-spec.js?v=55"></script>
+<script src="functions/lib/niche-spec.js?v=55"></script>
+<script src="js/marketing-stats.js?v=55"></script>
+<script src="js/niche-research.js?v=55"></script>
+<script src="js/content-intelligence.js?v=55"></script>
+<script src="js/form-check.js?v=55"></script>
 </body>
 </html>
