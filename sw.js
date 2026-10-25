@@ -15,53 +15,53 @@
    fresh index.html, leaving brand-new CSS classes completely unstyled.
    ========================================================================== */
 
-const CACHE_NAME = "jarvis-cache-v53";
+const CACHE_NAME = "jarvis-cache-v54";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=53",
+  "./style.css?v=54",
   "./manifest.json",
   "./icon.svg",
   "./js/vendor/qrcode/qrcode.js",
   "./js/vendor/qrcode/qrcode_UTF8.js",
-  "./js/firebase-config.js?v=53",
-  "./js/backup-logic.js?v=53",
-  "./js/cloud-backup.js?v=53",
-  "./js/auth.js?v=53",
-  "./js/app.js?v=53",
-  "./js/exercises.js?v=53",
-  "./js/workout.js?v=53",
-  "./js/form-check.js?v=53",
-  "./js/nutrition.js?v=53",
-  "./js/nutrition-label-parse.js?v=53",
-  "./js/nutrition-label-scan.js?v=53",
-  "./js/groceries.js?v=53",
-  "./js/habits.js?v=53",
-  "./js/discipline-logic.js?v=53",
-  "./js/discipline-program.js?v=53",
-  "./js/discipline.js?v=53",
-  "./functions/lib/reminder-spec.js?v=53",
-  "./functions/lib/reminder-events.js?v=53",
-  "./js/reminders.js?v=53",
-  "./js/push-handlers.js?v=53",
+  "./js/firebase-config.js?v=54",
+  "./js/backup-logic.js?v=54",
+  "./js/cloud-backup.js?v=54",
+  "./js/auth.js?v=54",
+  "./js/app.js?v=54",
+  "./js/exercises.js?v=54",
+  "./js/workout.js?v=54",
+  "./js/form-check.js?v=54",
+  "./js/nutrition.js?v=54",
+  "./js/nutrition-label-parse.js?v=54",
+  "./js/nutrition-label-scan.js?v=54",
+  "./js/groceries.js?v=54",
+  "./js/habits.js?v=54",
+  "./js/discipline-logic.js?v=54",
+  "./js/discipline-program.js?v=54",
+  "./js/discipline.js?v=54",
+  "./functions/lib/reminder-spec.js?v=54",
+  "./functions/lib/reminder-events.js?v=54",
+  "./js/reminders.js?v=54",
+  "./js/push-handlers.js?v=54",
   "./icon-192.png",
   "./apple-touch-icon.png",
-  "./js/business.js?v=53",
-  "./js/trading.js?v=53",
-  "./js/blobstore.js?v=53",
-  "./js/video-api-client.js?v=53",
-  "./js/video-connections.js?v=53",
-  "./js/video.js?v=53",
-  "./js/video-studio.js?v=53",
-  "./functions/lib/idea-spec.js?v=53",
-  "./functions/lib/niche-spec.js?v=53",
-  "./js/marketing-stats.js?v=53",
-  "./js/niche-research.js?v=53",
-  "./js/content-intelligence.js?v=53"
+  "./js/business.js?v=54",
+  "./js/trading.js?v=54",
+  "./js/blobstore.js?v=54",
+  "./js/video-api-client.js?v=54",
+  "./js/video-connections.js?v=54",
+  "./js/video.js?v=54",
+  "./js/video-studio.js?v=54",
+  "./functions/lib/idea-spec.js?v=54",
+  "./functions/lib/niche-spec.js?v=54",
+  "./js/marketing-stats.js?v=54",
+  "./js/niche-research.js?v=54",
+  "./js/content-intelligence.js?v=54"
 ];
 
 // Push notifications (reminders). The rules live in js/push-handlers.js so they can be tested.
-importScripts("./js/push-handlers.js?v=53");
+importScripts("./js/push-handlers.js?v=54");
 
 // Every push must show a notification, even a damaged one: Apple removes the push
 // permission from a web app that keeps receiving pushes that show nothing.

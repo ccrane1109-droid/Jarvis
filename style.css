@@ -2697,7 +2697,7 @@ button.rm-hist-row { cursor: pointer; }
 .dc-title-row { margin-top: 12px; flex-wrap: wrap; gap: 8px; }
 .dc-badges { display: flex; gap: 6px; flex-wrap: wrap; }
 .dc-nudge { margin-top: 8px; color: var(--yellow); }
-#dcItems { display: flex; flex-direction: column; gap: 14px; }
+#dcItemsA, #dcItemsB, #dcExtras, #dcRules { display: flex; flex-direction: column; gap: 14px; }
 .dc-q { display: flex; flex-direction: column; gap: 6px; }
 .dc-stats { margin-top: 12px; }
 .dc-q-label, .dc-q label { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -2805,6 +2805,88 @@ button.rm-hist-row { cursor: pointer; }
 .dc-checklist + .field-hint { margin-top: 10px; }
 .dc-day summary .field-hint { white-space: nowrap; margin-top: 0; flex: 0 0 auto; }
 
+
+/* Discipline: Today as a command centre (overview, guided planning, three-part review, progress) */
+
+.dc-overview { border-left: 4px solid var(--accent); }
+.dc-ov-win { font-size: 22px; font-weight: 700; line-height: 1.25; margin: 4px 0 14px; overflow-wrap: anywhere; }
+.dc-ov-win.empty { color: var(--text-faint); font-weight: 600; }
+.dc-ov-progress, .dc-step-bar { display: flex; align-items: center; gap: 12px; }
+.dc-ov-progress .dc-track, .dc-step-bar .dc-track { flex: 1 1 auto; min-width: 0; }
+.dc-ov-count { font-size: 13px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dc-fill { transition: width 0.3s ease; }
+.dc-ov-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.dc-ov-chip {
+  font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+  background: var(--bg-elevated); border: 1px solid var(--card-border); color: var(--text-dim);
+}
+.dc-ov-chip.ok { color: var(--green); background: var(--green-dim); border-color: rgba(51, 209, 122, 0.35); }
+.dc-ov-chip.todo { color: var(--text); border-color: var(--accent-dim); }
+
+.dc-next-why { color: var(--text-faint); font-size: 13px; margin: -6px 0 12px; }
+.dc-more { margin-top: 10px; }
+.dc-detail summary small { margin-left: 6px; color: var(--text-faint); }
+.dc-card-tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.dc-more summary, .dc-detail summary { cursor: pointer; color: var(--text-dim); font-size: 13px; min-height: 44px; display: flex; align-items: center; }
+.dc-more .dc-next-actions { margin-top: 4px; }
+
+.dc-steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.dc-step-pips { display: flex; gap: 6px; }
+.dc-step-pips span { flex: 1 1 0; height: 4px; border-radius: 2px; background: var(--card-border); transition: background 0.2s; }
+.dc-step-pips span.on { background: var(--accent); }
+.dc-step-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.dc-step { display: flex; flex-direction: column; gap: 12px; }
+.dc-step-title { font-size: 18px; font-weight: 700; }
+.dc-prio-row { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--card-border); }
+.dc-prio-row:last-child { border-bottom: none; }
+.dc-detail { margin-top: 2px; }
+.dc-detail[open] { padding-bottom: 6px; }
+.dc-row-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.dc-row-tools .btn-icon { min-height: 44px; }
+.dc-chips-row { flex-direction: row; flex-wrap: wrap; }
+.dc-chips-row .dc-chip { flex: 1 1 100%; }
+.dc-examples { display: flex; flex-direction: column; gap: 4px; }
+.dc-step-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dc-step-actions .btn { flex: 1 1 110px; min-height: 44px; }
+
+.dc-rtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.dc-rtab {
+  min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 6px 4px;
+  background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+  color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.dc-rtab.active { border-color: var(--accent); background: var(--accent-dim); color: #fff; }
+.dc-rtab-n {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--card-border); color: var(--text); font-size: 12px; font-weight: 700; flex: none;
+}
+.dc-rtab.done .dc-rtab-n { background: var(--green); color: var(--bg); }
+.dc-plan-results { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); font-size: 14px; color: var(--text-dim); }
+.dc-plan-results strong { color: var(--text); }
+
+.dc-task-row { display: flex; flex-direction: column; gap: 4px; }
+.dc-task-meta { display: flex; gap: 6px; flex-wrap: wrap; padding-left: 4px; }
+.dc-tag { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--card-border); color: var(--text-dim); }
+.dc-task-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.dc-task-tools .btn-icon { min-height: 44px; min-width: 44px; }
+.dc-plan-extra { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+
+.dc-progress-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.dc-progress-row .dc-cat-head { margin-bottom: 0; }
+.dc-result-saved { padding: 8px 12px; margin-bottom: 12px; border-radius: var(--radius-sm); background: var(--green-dim); color: var(--green); font-size: 14px; font-weight: 600; }
+.dc-breakdown { font-size: 13px; color: var(--text-dim); margin: 0 0 12px; }
+
+@media (max-width: 400px) {
+  .dc-rtab { flex-direction: column; gap: 2px; font-size: 12px; padding: 6px 2px; min-height: 52px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-step:not(.hidden) { animation: dcStepIn 0.18s ease; }
+  @keyframes dcStepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dc-fill, .dc-step-pips span { transition: none; }
+}
 
 /* ---------------- Phone navigation: bottom tab bar ---------------- */
 

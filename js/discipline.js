@@ -7,8 +7,10 @@
                           avoid: [ { at, date, task, reason, excuse, outcome } ],   "I'm avoiding it" log
                           timer: { task, taskId, reason, excuse, entryAt, startedAt, minutes, endsAt } | null,
                           days: { "<YYYY-MM-DD>": {
-                            type, morning: { priorities[3], keyTask, distraction, plan, savedAt, editedAt } | null,
-                            review: { screenHours, phoneLimit, items{}, focus, time, rules[], blocker, notes..., savedAt } | null } } }
+                            type, morning: { keyTask, priorities[3] (each { text, done, due, category }), distraction, response,
+                                             plan, savedAt, editedAt } | null,
+                            review: { screenHours, phoneLimit, items{}, extras{ routine, managed }, focus, time, rules[], blocker,
+                                      notes..., rubric, scored{}, savedAt } | null } } }
    Saved on this device, and backed up to your own account by js/cloud-backup.js
    once that is switched on (it is not in the older cloud-sync list). Nothing
    else leaves the phone unless you tap Share. A day's score is worked out
@@ -33,12 +35,19 @@
   const P = window.JarvisDisciplineProgram || null; // the 30-day program; the tracker still works without it
 
   const ITEM_QUESTIONS = {
-    school: "Did you finish your school work?",
-    gratiel: "Did you do a Gratiel block that made something (not just research)?",
+    school: "Did you complete your school responsibilities?",
+    gratiel: "Did you make meaningful progress on your business (Gratiel)? Something made, not just research.",
     bedOnTime: "Were you in bed on time last night?",
     phoneOut: "Was your phone out of the bedroom last night?",
-    training: "Did you train or rest as planned today?"
+    training: "Did you complete your planned training or rest?"
   };
+  const EXTRA_QUESTIONS = { routine: "Did you follow your planned routine?", managed: "Did you manage your distractions?" };
+  // Which review section each required answer lives in, so a missing answer can take you to it.
+  const REVIEW_SECTION = { focus: 1, time: 1, school: 1, gratiel: 1, phone: 2, bedOnTime: 2, phoneOut: 2, training: 2 };
+  const PLAN_STEPS = ["Main win", "Supporting priorities", "Distraction", "If-then plan"];
+  const TEXT_IDS = ["dcKeyTask", "dcPriority1", "dcPriority2", "dcPriority3"];
+  const DUE_IDS = ["dcKeyDue", "dcDue1", "dcDue2", "dcDue3"];
+  const CAT_IDS = ["dcKeyCat", "dcCat1", "dcCat2", "dcCat3"];
   const MISSING_TEXT = { focus: "your focus rating", time: "your plan rating", phone: "your screen time (or mark it Not today)" };
   const ANSWER_LABELS = { done: "Yes", not: "No", na: "Not today" };
   const NOTE_INPUTS = { dcOutput: "output", dcProcrastinated: "procrastinated", dcDistractions: "distractions", dcWentWell: "wentWell", dcImprove: "improve" };
@@ -50,7 +59,7 @@
     routines: "Bed on time 4, phone out of the bedroom 3, trained or rested as planned 3.",
     reflection: "A morning plan saved 4, the four evening questions answered 6."
   };
-  const ACTION_LABELS = { plan: "Plan my day", scoreYesterday: "Score yesterday", start: "Start 2 minutes", avoid: "I'm avoiding it", review: "Open the review", planTomorrow: "Plan tomorrow" };
+  const ACTION_LABELS = { plan: "Plan my day", scoreYesterday: "Score yesterday", start: "Start 2 minutes", avoid: "I'm avoiding it", review: "Open the review", planTomorrow: "Plan tomorrow", mission: "See today's missions" };
   const DAY_PREFIX = { today: "Today · ", yesterday: "Yesterday · ", tomorrow: "Tomorrow · " };
   const NUDGES = [
     { key: "plan", title: "Lock in today's plan", timeKey: "planBy", type: "daily" },
@@ -62,6 +71,11 @@
   let selected = "today";        // "today" | "yesterday" | "tomorrow"
   let trendWindow = 7;
   let editingMorning = false;
+  let planStep = 1;              // which of the four planning steps is showing
+  let reviewStep = 1;            // which of the three review sections is showing
+  let editingReview = false;     // a saved review reopened for changes
+  let reviewOpened = false;      // the review was opened by hand (it opens by itself in the evening)
+  let reordering = false;        // the saved plan is showing its move buttons
   let renderedDate = "";         // the date the review form was last loaded for
   let morningDate = "";          // the date the morning form is showing, "" when it isn't
   let draftTimer = null;
@@ -115,12 +129,18 @@
     if (!r) L.excusedFor(day ? day.type : "normal").forEach(function (k) { items[k] = "na"; });
     const rules = {};
     if (r) r.rules.forEach(function (x) { if (x.state) rules[x.id] = x.state; });
-    return { items: items, focus: r ? r.focus : null, time: r ? r.time : null, rules: rules };
+    const extras = { routine: r ? r.extras.routine : null, managed: r ? r.extras.managed : null };
+    return { items: items, extras: extras, focus: r ? r.focus : null, time: r ? r.time : null, rules: rules };
   }
 
   function selectDay(which) {
     selected = which;
     editingMorning = false;
+    editingReview = false;
+    reviewOpened = false;
+    reordering = false;
+    planStep = 1;
+    reviewStep = 1;
     loadReviewForm();
     renderAllToday();
   }
@@ -159,11 +179,21 @@
   function setValue(id, v) { const el = $(id); if (el.value !== v) el.value = v; }
 
   function morningFormValues() {
-    return { key: $("dcKeyTask").value, p: [$("dcPriority1").value, $("dcPriority2").value, $("dcPriority3").value], distraction: $("dcDistraction").value, plan: $("dcPlan").value };
+    return {
+      key: $("dcKeyTask").value, p: [$("dcPriority1").value, $("dcPriority2").value, $("dcPriority3").value],
+      d: DUE_IDS.map(function (id) { return $(id).value; }), c: CAT_IDS.map(function (id) { return $(id).value; }),
+      distraction: $("dcDistraction").value, response: $("dcResponse").value, plan: $("dcPlan").value
+    };
   }
   function morningBaseline(day) {
     const m = day && day.morning;
-    return m ? { key: m.keyTask.text, p: m.priorities.map(function (x) { return x.text; }), distraction: m.distraction, plan: m.plan } : { key: "", p: ["", "", ""], distraction: "", plan: "" };
+    if (!m) return { key: "", p: ["", "", ""], d: ["", "", "", ""], c: ["", "", "", ""], distraction: "", response: "", plan: "" };
+    const all = [m.keyTask].concat(m.priorities);
+    return {
+      key: m.keyTask.text, p: m.priorities.map(function (x) { return x.text; }),
+      d: all.map(function (x) { return x.due; }), c: all.map(function (x) { return x.category; }),
+      distraction: m.distraction, response: m.response, plan: m.plan
+    };
   }
   function captureMorningDraft() {
     if (!morningDate || $("dcMorningForm").classList.contains("hidden")) return;
@@ -175,14 +205,14 @@
   function reviewFormValues() {
     const notes = {};
     Object.keys(NOTE_INPUTS).forEach(function (id) { notes[NOTE_INPUTS[id]] = $(id).value; });
-    return { items: Object.assign({}, draft.items), focus: draft.focus, time: draft.time, rules: Object.assign({}, draft.rules), screenHours: $("dcScreenHours").value, notes: notes };
+    return { items: Object.assign({}, draft.items), extras: Object.assign({}, draft.extras), focus: draft.focus, time: draft.time, rules: Object.assign({}, draft.rules), screenHours: $("dcScreenHours").value, notes: notes };
   }
   function reviewBaseline(day) {
     const base = newDraft(day || null);
     const r = day && day.review;
     const notes = {};
     Object.keys(NOTE_INPUTS).forEach(function (id) { notes[NOTE_INPUTS[id]] = r ? r[NOTE_INPUTS[id]] : ""; });
-    return { items: base.items, focus: base.focus, time: base.time, rules: base.rules, screenHours: r && r.screenHours !== null ? String(r.screenHours) : "", notes: notes };
+    return { items: base.items, extras: base.extras, focus: base.focus, time: base.time, rules: base.rules, screenHours: r && r.screenHours !== null ? String(r.screenHours) : "", notes: notes };
   }
   function captureReviewDraft() {
     if (!renderedDate) return;
@@ -217,21 +247,38 @@
 
   /* ---------------- Today: next up ---------------- */
 
+  // Today's program missions that only a tick can complete (the automatic ones tick themselves).
+  function manualMissions() {
+    if (!P) return null;
+    const pd = P.programDay(store.program.start, todayISO());
+    if (pd.status !== "active") return null;
+    const manual = P.dayProgress(pd.day, programContext(pd.day)).items.filter(function (m) { return !m.auto; });
+    if (!manual.length) return null;
+    const open = manual.filter(function (m) { return !m.done; });
+    return { total: manual.length, done: manual.length - open.length, nextText: open.length ? open[0].text : "" };
+  }
+
+  function actionButton(a, task, primary) {
+    return '<button type="button" class="btn ' + (primary && a !== "avoid" ? "btn-primary" : "btn-secondary") + '" data-act="' + a + '"' + (task ? ' data-task="' + esc(task.id) + '"' : "") + '>' + ACTION_LABELS[a] + '</button>';
+  }
+
   function renderNextUp() {
     const card = $("dcNextCard");
     if (selected !== "today" || store.timer || flow) { card.classList.add("hidden"); card.removeAttribute("data-sig"); return; }
-    const n = L.nextUp({ todayISO: todayISO(), minutes: nowMinutes(), days: store.days, settings: store.settings });
+    const n = L.nextUp({ todayISO: todayISO(), minutes: nowMinutes(), days: store.days, settings: store.settings, missions: manualMissions() });
     // Redrawing the same card would drop focus from its buttons; this also runs on a timer.
-    const sig = JSON.stringify([n.kind, n.title, n.text, n.actions, n.task ? n.task.id : ""]);
+    const sig = JSON.stringify([n.kind, n.title, n.text, n.why, n.actions, n.more, n.task ? n.task.id : ""]);
     if (card.getAttribute("data-sig") === sig && !card.classList.contains("hidden")) return;
     card.setAttribute("data-sig", sig);
     card.classList.remove("hidden");
     card.setAttribute("data-kind", n.kind);
     $("dcNextTitle").textContent = n.title;
     $("dcNextText").textContent = n.text;
-    $("dcNextActions").innerHTML = n.actions.map(function (a) {
-      return '<button type="button" class="btn ' + (a === "avoid" ? "btn-secondary" : "btn-primary") + '" data-act="' + a + '"' + (n.task ? ' data-task="' + esc(n.task.id) + '"' : "") + '>' + ACTION_LABELS[a] + '</button>';
-    }).join("");
+    $("dcNextWhy").textContent = n.why || "";
+    $("dcNextWhy").classList.toggle("hidden", !n.why);
+    $("dcNextActions").innerHTML = n.actions.map(function (a) { return actionButton(a, n.task, true); }).join("");
+    $("dcNextMoreActions").innerHTML = n.more.map(function (a) { return actionButton(a, null, false); }).join("");
+    $("dcNextMore").classList.toggle("hidden", !n.more.length);
   }
 
   function handleNextAction(e) {
@@ -239,12 +286,13 @@
     if (!btn) return;
     const act = btn.getAttribute("data-act");
     const taskId = btn.getAttribute("data-task") || "";
-    if (act === "plan") { bringIntoView("dcMorningCard"); if (!$("dcMorningForm").classList.contains("hidden")) $("dcKeyTask").focus({ preventScroll: true }); }
+    if (act === "plan") { bringIntoView("dcMorningCard"); if (!$("dcMorningForm").classList.contains("hidden")) showPlanStep(1, true); }
     else if (act === "scoreYesterday") { selectDay("yesterday"); bringIntoView("dcReviewCard"); }
-    else if (act === "review") bringIntoView("dcReviewCard");
+    else if (act === "review") { reviewOpened = true; renderReviewMode(); renderReviewHint(); bringIntoView("dcReviewCard"); }
     else if (act === "planTomorrow") { selectDay("tomorrow"); bringIntoView("dcMorningCard"); }
     else if (act === "start") startTimer({ task: planItemText(taskId), taskId: taskId, reason: "", excuse: "", entryAt: 0, minutes: L.START_MINUTES });
     else if (act === "avoid") openFlow(taskId);
+    else if (act === "mission") $("disciplineSubNavProgram").click();
   }
 
   function planItemText(taskId) {
@@ -426,37 +474,91 @@
 
   /* ---------------- Today: morning plan ---------------- */
 
+  function timeLabel(hhmm) {
+    const p = String(hhmm).split(":").map(Number);
+    return new Date(2000, 0, 1, p[0], p[1]).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+  function categoryLabel(key) {
+    const c = L.TASK_CATEGORIES.filter(function (x) { return x.key === key; })[0];
+    return c ? c.label : "";
+  }
+
+  // Which planning step is showing, with its progress, buttons and (on the last step) the example if-then plans.
+  function showPlanStep(n, focus) {
+    planStep = Math.max(1, Math.min(4, n));
+    Array.prototype.forEach.call($("dcMorningForm").querySelectorAll(".dc-step"), function (sec) {
+      sec.classList.toggle("hidden", Number(sec.getAttribute("data-step")) !== planStep);
+    });
+    Array.prototype.forEach.call($("dcMorningPips").children, function (pip, i) { pip.classList.toggle("on", i < planStep); });
+    $("dcMorningStepLabel").textContent = "Step " + planStep + " of 4 · " + PLAN_STEPS[planStep - 1];
+    $("dcStepBack").classList.toggle("hidden", planStep === 1);
+    $("dcStepNext").classList.toggle("hidden", planStep === 4);
+    $("dcMorningSaveBtn").classList.toggle("btn-primary", planStep === 4);
+    $("dcMorningSaveBtn").classList.toggle("btn-secondary", planStep !== 4);
+    renderExamples();
+    if (focus) {
+      const first = $("dcMorningForm").querySelector('.dc-step[data-step="' + planStep + '"] input[type="text"], .dc-step[data-step="' + planStep + '"] textarea');
+      if (first) first.focus();
+    }
+  }
+
+  // Example if-then plans are offered only while the box is empty, so they can never replace what was typed.
+  function renderExamples() {
+    $("dcExamples").classList.toggle("hidden", planStep !== 4 || tidy($("dcPlan").value) !== "");
+  }
+
+  function taskRow(id, item, isKey, locked, idx) {
+    const meta = [];
+    if (item.due) meta.push('<span class="dc-tag">Due ' + esc(timeLabel(item.due)) + '</span>');
+    if (item.category) meta.push('<span class="dc-tag">' + esc(categoryLabel(item.category)) + '</span>');
+    const label = esc(item.text);
+    const tools = reordering && !isKey
+      ? '<div class="dc-task-tools"><button type="button" class="btn-icon" data-sum-move="up" data-row="' + idx + '"' + (idx === 0 ? " disabled" : "") + ' aria-label="Move up: ' + label + '">↑</button>' +
+        '<button type="button" class="btn-icon" data-sum-move="down" data-row="' + idx + '"' + (idx === 2 ? " disabled" : "") + ' aria-label="Move down: ' + label + '">↓</button>' +
+        '<button type="button" class="btn-icon" data-sum-promote="' + idx + '" aria-label="Make this the main win: ' + label + '">★ Make main win</button></div>'
+      : "";
+    return '<div class="dc-task-row">' + checkRow(id, (isKey ? "★ " : "") + item.text, item.done, isKey, locked) +
+      (meta.length ? '<div class="dc-task-meta">' + meta.join("") + '</div>' : "") + tools + '</div>';
+  }
+
   function renderMorning() {
     const day = store.days[selectedDate()];
     const m = day && day.morning;
     const showForm = !m || editingMorning;
-    $("dcMorningTitle").textContent = selected === "tomorrow" ? "Plan for tomorrow" : "Morning plan";
+    const tomorrow = selected === "tomorrow";
+    $("dcMorningTitle").textContent = showForm ? (tomorrow ? "Plan for tomorrow" : "Morning plan") : (tomorrow ? "Tomorrow's priorities" : "Priorities");
     $("dcMorningForm").classList.toggle("hidden", !showForm);
     $("dcMorningSummary").classList.toggle("hidden", showForm);
     $("dcMorningEditBtn").classList.toggle("hidden", showForm);
+    $("dcMorningReorderBtn").classList.toggle("hidden", showForm || !m || m.priorities.filter(function (p) { return !!p.text; }).length < 1);
+    $("dcMorningReorderBtn").textContent = reordering ? "Done" : "Reorder";
+    $("dcMorningReorderBtn").setAttribute("aria-pressed", String(reordering));
     $("dcMorningSaveBtn").textContent = m ? "Save changes" : "Lock in the plan";
     if (showForm) {
       morningDate = selectedDate();
       const dr = store.drafts[morningDate] && store.drafts[morningDate].morning;
       const v = dr || morningBaseline(day);
-      setValue("dcKeyTask", v.key);
-      [0, 1, 2].forEach(function (i) { setValue("dcPriority" + (i + 1), v.p[i]); });
+      TEXT_IDS.forEach(function (id, i) { setValue(id, i === 0 ? v.key : v.p[i - 1]); });
+      DUE_IDS.forEach(function (id, i) { setValue(id, v.d[i] || ""); });
+      CAT_IDS.forEach(function (id, i) { setValue(id, v.c[i] || ""); });
       setValue("dcDistraction", v.distraction);
+      setValue("dcResponse", v.response || "");
       setValue("dcPlan", v.plan);
       renderDraftNotes();
+      showPlanStep(planStep, false);
       return;
     }
     morningDate = "";
     renderDraftNotes();
     const rows = [];
-    const locked = selected === "tomorrow";
-    if (m.keyTask.text) rows.push(checkRow("key", "★ " + m.keyTask.text, m.keyTask.done, true, locked));
-    m.priorities.forEach(function (p, i) { if (p.text) rows.push(checkRow("p" + i, p.text, p.done, false, locked)); });
+    if (m.keyTask.text) rows.push(taskRow("key", m.keyTask, true, tomorrow, -1));
+    m.priorities.forEach(function (p, i) { if (p.text) rows.push(taskRow("p" + i, p, false, tomorrow, i)); });
     $("dcMorningSummary").innerHTML =
-      '<p class="field-hint">' + (locked ? "You can tick these off tomorrow." : "Tap each one as you finish it.") + '</p>' +
+      '<p class="field-hint">' + (tomorrow ? "You can tick these off tomorrow." : "Tap each one as you finish it.") + '</p>' +
       '<div class="dc-checklist">' + rows.join("") + '</div>' +
-      (m.distraction ? '<p class="dc-line"><strong>Distraction to watch:</strong> ' + esc(m.distraction) + '</p>' : "") +
-      (m.plan ? '<p class="dc-line"><strong>Your plan:</strong> ' + esc(m.plan) + '</p>' : "");
+      '<div class="dc-plan-extra">' +
+      (m.distraction ? '<p class="dc-line"><strong>Distraction to watch:</strong> ' + esc(m.distraction) + (m.response ? " <strong>→</strong> " + esc(m.response) : "") + '</p>' : "") +
+      (m.plan ? '<p class="dc-line"><strong>Your plan:</strong> ' + esc(m.plan) + '</p>' : "") + '</div>';
   }
 
   function checkRow(id, text, done, key, locked) {
@@ -469,24 +571,34 @@
     const date = morningDate || selectedDate(); // the day the form is showing, even if midnight has just passed
     const day = ensureDay(date);
     const old = day.morning;
-    const keyText = tidy($("dcKeyTask").value);
-    const texts = [1, 2, 3].map(function (i) { return tidy($("dcPriority" + i).value); });
+    const v = morningFormValues();
+    const keyText = tidy(v.key);
+    const texts = v.p.map(tidy);
     if (!keyText && !texts.some(function (t) { return t; })) {
       core().showToast("Add at least one priority.");
-      $("dcKeyTask").focus();
+      showPlanStep(1, true);
       return;
     }
+    // A tick follows the item by its words, so reordering the list in the form never loses one.
+    const wasDone = function (text) {
+      if (!old || !text) return false;
+      if (old.keyTask.text === text) return old.keyTask.done;
+      const hit = old.priorities.filter(function (p) { return p.text === text; })[0];
+      return !!hit && hit.done;
+    };
     const raw = {
-      keyTask: { text: keyText, done: !!old && old.keyTask.text === tidy(keyText) && old.keyTask.done },
-      priorities: texts.map(function (t, i) { return { text: t, done: !!old && old.priorities[i].text === tidy(t) && old.priorities[i].done }; }),
-      distraction: $("dcDistraction").value, plan: $("dcPlan").value,
+      keyTask: { text: keyText, done: wasDone(keyText), due: v.d[0], category: v.c[0] },
+      priorities: texts.map(function (t, i) { return { text: t, done: wasDone(t), due: v.d[i + 1], category: v.c[i + 1] }; }),
+      distraction: v.distraction, response: v.response, plan: v.plan,
       savedAt: old ? old.savedAt : Date.now()
     };
-    // Only a change to the key task or priorities counts as editing the plan.
-    const changed = !!old && (old.keyTask.text !== keyText || old.priorities.some(function (p, i) { return p.text !== texts[i]; }));
-    raw.editedAt = !old || changed ? Date.now() : old.editedAt;
+    // Only a different key task or a different set of priorities counts as editing the plan (not just their order).
+    const sameSet = !!old && old.keyTask.text === keyText &&
+      old.priorities.map(function (p) { return p.text; }).filter(Boolean).sort().join("\u0001") === texts.filter(Boolean).sort().join("\u0001");
+    raw.editedAt = !old || !sameSet ? Date.now() : old.editedAt;
     day.morning = L.sanitizeDay({ morning: raw }).morning;
     editingMorning = false;
+    planStep = 1;
     setDraft(date, "morning", null);
     flushDrafts();
     save();
@@ -494,18 +606,98 @@
     core().showToast(old ? "Plan updated." : (selected === "tomorrow" ? "Tomorrow is planned." : "Plan locked in."));
   }
 
+  // Swaps two of the four planning rows (0 = main win, 1-3 = supporting) in the form, tick-free, before anything is saved.
+  function swapPlanRows(a, b) {
+    [TEXT_IDS, DUE_IDS, CAT_IDS].forEach(function (ids) {
+      const x = $(ids[a]), y = $(ids[b]);
+      const t = x.value; x.value = y.value; y.value = t;
+    });
+    captureMorningDraft();
+  }
+
+  function handleMorningFormClick(e) {
+    const mv = e.target.closest("[data-move]");
+    const pr = e.target.closest("[data-promote]");
+    const resp = e.target.closest("[data-resp]");
+    const ex = e.target.closest("[data-example]");
+    if (mv) {
+      const row = Number(mv.getAttribute("data-row"));
+      const other = mv.getAttribute("data-move") === "up" ? row - 1 : row + 1;
+      if (other < 0 || other > 2) return;
+      swapPlanRows(row + 1, other + 1);
+      core().showToast(mv.getAttribute("data-move") === "up" ? "Moved up." : "Moved down.");
+    } else if (pr) {
+      swapPlanRows(0, Number(pr.getAttribute("data-promote")) + 1);
+      core().showToast("That is now your main win.");
+    } else if (resp) {
+      const box = $("dcResponse");
+      const chosen = L.DISTRACTION_RESPONSES[Number(resp.getAttribute("data-resp"))];
+      if (tidy(box.value) !== "" && L.DISTRACTION_RESPONSES.indexOf(tidy(box.value)) === -1) { core().showToast("Your own wording is kept. Clear the box to use a suggestion."); return; }
+      box.value = chosen;
+      captureMorningDraft();
+    } else if (ex) {
+      const box = $("dcPlan");
+      if (tidy(box.value) !== "") return; // never over what was typed
+      box.value = L.IF_THEN_EXAMPLES[Number(ex.getAttribute("data-example"))];
+      captureMorningDraft();
+      renderExamples();
+      box.focus();
+    }
+  }
+
+  function startEditing(step) {
+    editingMorning = true;
+    reordering = false;
+    planStep = step;
+    renderMorning();
+    showPlanStep(step, true);
+  }
+
   function handleMorningSummaryClick(e) {
-    const btn = e.target.closest(".dc-check");
-    if (!btn || btn.disabled) return;
     const day = store.days[selectedDate()];
     if (!day || !day.morning) return;
+    const edit = e.target.closest("[data-edit-step]");
+    const move = e.target.closest("[data-sum-move]");
+    const promote = e.target.closest("[data-sum-promote]");
+    if (edit) { startEditing(Number(edit.getAttribute("data-edit-step"))); return; }
+    if (move && !move.disabled) {
+      const row = Number(move.getAttribute("data-row"));
+      const dir = move.getAttribute("data-sum-move") === "up" ? -1 : 1;
+      day.morning = L.moveTask(day.morning, row, dir);
+      save();
+      refreshPlanViews();
+      const again = $("dcMorningSummary").querySelector('[data-sum-move="' + move.getAttribute("data-sum-move") + '"][data-row="' + (row + dir) + '"]:not([disabled])')
+        || $("dcMorningSummary").querySelector('[data-sum-move][data-row="' + (row + dir) + '"]:not([disabled])');
+      if (again) again.focus();
+      return;
+    }
+    if (promote) {
+      day.morning = L.promoteTask(day.morning, Number(promote.getAttribute("data-sum-promote")));
+      save();
+      refreshPlanViews();
+      core().showToast("That is now your main win.");
+      return;
+    }
+    const btn = e.target.closest(".dc-check");
+    if (!btn || btn.disabled) return;
     const id = btn.getAttribute("data-check");
     const item = id === "key" ? day.morning.keyTask : day.morning.priorities[Number(id.slice(1))];
     if (!item) return;
     item.done = !item.done;
     save();
+    refreshPlanViews();
+    // keep the keyboard on the item that was just ticked
+    const same = $("dcMorningSummary").querySelector('.dc-check[data-check="' + id + '"]');
+    if (same && document.activeElement === document.body) same.focus();
+  }
+
+  // Everything that shows the plan, after it changed without leaving the page.
+  function refreshPlanViews() {
     renderMorning();
+    renderOverview();
+    renderProgressCard();
     renderResult();
+    renderPlanResults();
     renderNextUp();
   }
 
@@ -517,15 +709,25 @@
     }).join("");
   }
 
+  function itemHtml(k) {
+    return '<div class="dc-q"><span class="dc-q-label">' + esc(ITEM_QUESTIONS[k]) + '</span>' +
+      '<div class="segmented-control dc-seg" data-item="' + k + '" role="group" aria-label="' + esc(L.ITEMS[k].label) + '">' +
+      segButtons(["done", "not", "na"], draft.items[k], function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
+  }
+
   function renderReviewControls() {
     $("dcFocus").innerHTML = segButtons([1, 2, 3, 4, 5], draft.focus, String);
     $("dcTime").innerHTML = segButtons([1, 2, 3, 4, 5], draft.time, String);
     $("dcPhoneNa").innerHTML = segButtons(["", "na"], draft.items.phone === "na" ? "na" : "", function (v) { return v ? "Not today" : "Count it"; });
     $("dcScreenHours").disabled = draft.items.phone === "na";
-    $("dcItems").innerHTML = Object.keys(L.ITEMS).map(function (k) {
-      return '<div class="dc-q"><span class="dc-q-label">' + esc(ITEM_QUESTIONS[k]) + '</span>' +
-        '<div class="segmented-control dc-seg" data-item="' + k + '" role="group" aria-label="' + esc(L.ITEMS[k].label) + '">' +
-        segButtons(["done", "not", "na"], draft.items[k], function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
+    const day = store.days[renderedDate || selectedDate()];
+    $("dcPhoneTarget").textContent = "(your limit: " + (day && day.review ? day.review.phoneLimit : store.settings.phoneLimit) + " h)";
+    $("dcItemsA").innerHTML = ["school", "gratiel"].map(itemHtml).join("");
+    $("dcItemsB").innerHTML = ["bedOnTime", "phoneOut", "training"].map(itemHtml).join("");
+    $("dcExtras").innerHTML = Object.keys(L.EXTRA_ITEMS).map(function (k) {
+      return '<div class="dc-q"><span class="dc-q-label">' + esc(EXTRA_QUESTIONS[k]) + '</span>' +
+        '<div class="segmented-control dc-seg" data-extra="' + k + '" role="group" aria-label="' + esc(L.EXTRA_ITEMS[k].label) + '">' +
+        segButtons(["done", "not", "na"], draft.extras[k], function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
     }).join("");
     $("dcRulesQ").classList.toggle("hidden", !store.rules.length);
     $("dcRules").innerHTML = store.rules.map(function (r) {
@@ -533,6 +735,90 @@
         '<div class="segmented-control dc-seg" data-rule="' + esc(r.id) + '" role="group" aria-label="' + esc(r.text) + '">' +
         segButtons(["done", "not", "na"], draft.rules[r.id] || null, function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
     }).join("");
+    renderPlanResults();
+    updateReviewProgress();
+  }
+
+  // What the plan says about the day under review: read from the plan, never asked twice.
+  function renderPlanResults() {
+    const day = store.days[renderedDate || selectedDate()];
+    const m = day && day.morning;
+    const box = $("dcPlanResults");
+    if (!m || !L.hasPlanItems(m)) {
+      box.innerHTML = '<span>No plan was saved for this day, so Following through has nothing to earn. You can still score the day.</span>';
+      return;
+    }
+    const sup = m.priorities.filter(function (p) { return !!p.text; });
+    const rows = [];
+    if (m.keyTask.text) rows.push('<span><strong>Main win:</strong> ' + esc(m.keyTask.text) + ' · ' + (m.keyTask.done ? "done ✓" : "not done") + '</span>');
+    if (sup.length) rows.push('<span><strong>Supporting priorities:</strong> ' + sup.filter(function (p) { return p.done; }).length + ' of ' + sup.length + ' done</span>');
+    rows.push('<span class="field-hint">Tick things off in your plan above; this follows it.</span>');
+    box.innerHTML = rows.join("");
+  }
+
+  // Which required answers are still missing, read from the form as it stands.
+  function formMissing() {
+    const raw = $("dcScreenHours").value;
+    const n = raw === "" ? null : Number(raw);
+    return L.unanswered({ focus: draft.focus, time: draft.time, screenHours: n !== null && isFinite(n) && n >= 0 && n <= 24 ? n : null, items: draft.items });
+  }
+
+  function updateReviewProgress() {
+    const missing = formMissing();
+    const total = 3 + Object.keys(L.ITEMS).length;
+    const answered = total - missing.length;
+    $("dcReviewFill").style.width = Math.round(100 * answered / total) + "%";
+    $("dcReviewBar").setAttribute("aria-valuemax", String(total));
+    $("dcReviewBar").setAttribute("aria-valuenow", String(answered));
+    $("dcReviewCount").textContent = answered + " of " + total + " answered";
+    const wrote = Object.keys(NOTE_INPUTS).some(function (id) { return tidy($(id).value) !== ""; });
+    Array.prototype.forEach.call($("dcReviewTabs").querySelectorAll(".dc-rtab"), function (tab) {
+      const n = Number(tab.getAttribute("data-rstep"));
+      const done = n === 3 ? wrote : !missing.some(function (k) { return REVIEW_SECTION[k] === n; });
+      tab.classList.toggle("done", done);
+      tab.querySelector(".dc-rtab-n").textContent = done ? "✓" : String(n);
+    });
+  }
+
+  // Which of the three review sections is showing (all three stay in the form, so nothing is lost moving between them).
+  function showReviewStep(n, focus) {
+    reviewStep = Math.max(1, Math.min(3, n));
+    Array.prototype.forEach.call($("dcReviewForm").querySelectorAll(".dc-step"), function (sec) {
+      sec.classList.toggle("hidden", Number(sec.getAttribute("data-rstep")) !== reviewStep);
+    });
+    Array.prototype.forEach.call($("dcReviewTabs").querySelectorAll(".dc-rtab"), function (tab) {
+      const on = Number(tab.getAttribute("data-rstep")) === reviewStep;
+      tab.classList.toggle("active", on);
+      tab.setAttribute("aria-pressed", String(on));
+    });
+    $("dcReviewBack").classList.toggle("hidden", reviewStep === 1);
+    $("dcReviewNext").classList.toggle("hidden", reviewStep === 3);
+    $("dcReviewSaveBtn").classList.toggle("btn-primary", reviewStep === 3);
+    $("dcReviewSaveBtn").classList.toggle("btn-secondary", reviewStep !== 3);
+    if (focus) {
+      const first = $("dcReviewForm").querySelector('.dc-step[data-rstep="' + reviewStep + '"] .segmented-btn, .dc-step[data-rstep="' + reviewStep + '"] input, .dc-step[data-rstep="' + reviewStep + '"] textarea');
+      if (first) first.focus({ preventScroll: false });
+    }
+  }
+
+  // A scored day shows its result and an Edit button; the form comes back when it is reopened.
+  // The review opens by itself in the evening, for a past day, or once something is typed; before that it waits behind a
+  // button so the morning screen isn't a wall of forms. A scored day shows its result and an Edit button instead.
+  function reviewAutoOpen() {
+    if (selected !== "today") return true;
+    const d = store.drafts[selectedDate()];
+    return nowMinutes() >= L.minutesOf(store.settings.times.review) || !!(d && d.review);
+  }
+
+  function renderReviewMode() {
+    const day = store.days[selectedDate()];
+    const scored = !!day && L.scoreDay(day).complete;
+    const open = scored ? editingReview : (reviewOpened || reviewAutoOpen());
+    $("dcReviewWrap").classList.toggle("hidden", !open);
+    $("dcReviewCollapsed").classList.toggle("hidden", open || scored);
+    $("dcReviewEditBtn").classList.toggle("hidden", open || !scored);
+    $("dcReviewHint").classList.toggle("hidden", !open && !scored);
+    $("dcReviewCollapsedText").textContent = "Best done in the evening, from " + timeLabel(store.settings.times.review) + ". Start it now if today is already done.";
   }
 
   function loadReviewForm() {
@@ -545,6 +831,7 @@
     const dr = store.drafts[date] && store.drafts[date].review;
     if (dr) {
       Object.keys(dr.items).forEach(function (k) { draft.items[k] = dr.items[k]; });
+      draft.extras = Object.assign({}, dr.extras);
       draft.focus = dr.focus;
       draft.time = dr.time;
       draft.rules = Object.assign({}, dr.rules);
@@ -553,9 +840,10 @@
     }
     $("dcDayType").value = day ? day.type : "normal";
     $("dcMissing").classList.add("hidden");
-    renderReviewControls();
     renderedDate = date;
+    renderReviewControls();
     renderDraftNotes();
+    showReviewStep(reviewStep, false);
   }
 
   function handleReviewClick(e) {
@@ -566,6 +854,7 @@
     let current;
     if (group.hasAttribute("data-rating")) { draft[group.getAttribute("data-rating")] = Number(raw); current = Number(raw); }
     else if (group.hasAttribute("data-rule")) { draft.rules[group.getAttribute("data-rule")] = raw; current = raw; }
+    else if (group.hasAttribute("data-extra")) { draft.extras[group.getAttribute("data-extra")] = raw; current = raw; }
     else if (group.getAttribute("data-item") === "phone") { draft.items.phone = raw === "na" ? "na" : null; current = raw; }
     else { draft.items[group.getAttribute("data-item")] = raw; current = raw; }
     $("dcMissing").classList.add("hidden");
@@ -576,6 +865,7 @@
       b.setAttribute("aria-pressed", String(on));
     });
     $("dcScreenHours").disabled = draft.items.phone === "na";
+    updateReviewProgress();
     captureReviewDraft();
   }
 
@@ -598,7 +888,7 @@
     const raw = {
       screenHours: draft.items.phone === "na" ? null : $("dcScreenHours").value,
       phoneLimit: day.review ? day.review.phoneLimit : store.settings.phoneLimit,
-      items: draft.items, focus: draft.focus, time: draft.time,
+      items: draft.items, extras: draft.extras, focus: draft.focus, time: draft.time,
       rules: store.rules.map(function (r) { return { id: r.id, text: r.text, state: draft.rules[r.id] || null }; }),
       blocker: day.review ? day.review.blocker : "",
       savedAt: Date.now() // each time the day is scored
@@ -610,12 +900,15 @@
       const names = check.missing.map(function (k) { return MISSING_TEXT[k] || (L.ITEMS[k] ? L.ITEMS[k].label.toLowerCase() : k); });
       $("dcMissing").textContent = "Answer these first: " + names.join(", ") + ".";
       $("dcMissing").classList.remove("hidden");
+      showReviewStep(Math.min.apply(null, check.missing.map(function (k) { return REVIEW_SECTION[k] || 1; })), false);
       return;
     }
     $("dcMissing").classList.add("hidden");
     candidate.review.rubric = L.RUBRIC_VERSION;
     candidate.review.scored = L.scoreSnapshot(check); // what it came to, kept with the review
     day.review = candidate.review;
+    editingReview = false;
+    reviewStep = 1;
     setDraft(date, "review", null);
     flushDrafts();
     save();
@@ -656,6 +949,11 @@
     } else lines.push("No morning plan was saved, so there was nothing to follow through on.");
     if (day.review.items.phone !== "na") lines.push("Phone: " + day.review.screenHours + "h against your " + day.review.phoneLimit + "h limit.");
     if (r.strong.length) lines.push("Strongest: " + esc(r.strong.join(", ")) + ".");
+    else {
+      const best = r.categories.filter(function (c) { return c.possible; }).sort(function (a, b) { return b.earned / b.possible - a.earned / a.possible; })[0];
+      if (best) lines.push("Strongest area: " + esc(best.label) + " (" + best.earned + " of " + best.possible + " points).");
+    }
+    if (r.gap && L.AREA_RULES[r.gap.key]) lines.push("Most useful improvement: " + esc(r.gap.label) + ". One rule to try: “" + esc(L.AREA_RULES[r.gap.key]) + "”");
     const saved = day.review.scored;
     const drifted = !!saved && saved.score !== r.score;
     if ((m && m.editedAt > day.review.savedAt) || drifted) lines.push("The plan was changed after this day was scored, so this score reflects the changed plan" + (drifted ? " (it was " + saved.score + " when you saved the review)" : "") + ". Score the day again to clear this note.");
@@ -663,16 +961,23 @@
 
     const prev = L.lastScored(store.days, L.addDays(date, -1));
     const compare = prev ? (r.score - prev.score === 0 ? "Same as the last scored day" : (r.score > prev.score ? "Up " : "Down ") + Math.abs(r.score - prev.score) + " from the last scored day") + " (" + prev.score + " on " + prettyDate(prev.date) + ")." : "";
+    const recent = L.trendSummary(store.days, L.addDays(date, -1), 7);
+    const average = recent.enough ? "Your average over the last " + recent.scoredDays + " scored days is " + recent.average + "; this day is " + (r.score >= recent.average ? "+" : "−") + Math.abs(Math.round(r.score - recent.average)) + " from it." : "";
     const excused = r.excused.length ? "Not counted today: " + esc(r.excused.join(", ")) + ". Scored out of " + r.possible + " attainable points." : "";
+    const when = new Date(day.review.savedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
     box.innerHTML =
+      '<div class="dc-result-saved" role="status">Review saved · ' + esc(when) + '</div>' +
       '<div class="dc-score-row"><div class="dc-score-num">' + r.score + '<small>/100</small></div>' +
       '<div class="dc-score-side"><div class="dc-score-label">Discipline score</div>' +
       (compare ? '<div class="field-hint">' + compare + '</div>' : "") +
+      (average ? '<div class="field-hint">' + average + '</div>' : "") +
       (excused ? '<div class="field-hint">' + excused + '</div>' : "") + '</div></div>' +
+      '<p class="dc-breakdown">How it adds up: ' + r.earned + ' of ' + r.possible + ' attainable points, which is ' + r.score + ' out of 100.</p>' +
       '<div class="dc-cats">' + r.categories.map(function (c) {
         const pct = c.possible ? Math.round(100 * c.earned / c.possible) : 0;
-        return '<div class="dc-cat"><div class="dc-cat-head"><span>' + esc(c.label) + '</span><span>' + (c.possible ? c.earned + " / " + c.possible : "not counted") + '</span></div>' +
+        const note = c.key === "followThrough" && !(m && r.detail.planned) ? " · no plan saved" : "";
+        return '<div class="dc-cat"><div class="dc-cat-head"><span>' + esc(c.label) + '</span><span>' + (c.possible ? c.earned + " / " + c.possible + note : "not counted") + '</span></div>' +
           '<div class="dc-track"><div class="dc-fill" style="width:' + pct + '%"></div></div></div>';
       }).join("") + '</div>' +
       '<ul class="dc-lines">' + lines.map(function (l) { return "<li>" + l + "</li>"; }).join("") + '</ul>' +
@@ -700,22 +1005,94 @@
     const day = store.days[selectedDate()];
     const scored = !!day && L.scoreDay(day).complete;
     let msg;
-    if (scored) msg = "Scored. You can change any answer and score again.";
-    else if (selected === "today" && new Date().getHours() < 17) msg = "Best filled in this evening, but you can score the day any time. Answer every item; “Not today” leaves an item out.";
-    else msg = "Answer every item to get your score. “Not today” leaves an item out.";
+    if (scored && editingReview) msg = "Editing a saved review. Change any answer, then score the day again.";
+    else if (scored) msg = "Scored. You can edit this review any time.";
+    else if (selected === "today" && new Date().getHours() < 17) msg = "Best filled in this evening, but you can score the day any time. “Not today” leaves an item out.";
+    else msg = "Three short sections. “Not today” leaves an item out of the score.";
     $("dcReviewHint").textContent = msg;
   }
 
   // Refreshes everything on Today except the review form itself, so typed answers are never wiped.
+  /* ---------------- Today: overview and progress ---------------- */
+
+  function chip(text, kind) { return '<span class="dc-ov-chip' + (kind ? " " + kind : "") + '">' + esc(text) + '</span>'; }
+
+  function programToday() {
+    if (!P) return null;
+    const pd = P.programDay(store.program.start, todayISO());
+    if (pd.status !== "active") return null;
+    return { day: pd.day, progress: P.dayProgress(pd.day, programContext(pd.day)) };
+  }
+
+  function reviewStatus(date) {
+    const day = store.days[date];
+    const r = day ? L.scoreDay(day) : null;
+    if (r && r.complete) return { state: "scored", text: "Scored " + r.score + " / 100" };
+    const d = store.drafts[date] && store.drafts[date].review;
+    if (d) return { state: "partial", text: "In progress, not scored yet" };
+    return { state: "missing", text: "Not scored yet" };
+  }
+
+  function renderOverview() {
+    const date = selectedDate();
+    const day = store.days[date];
+    const m = day && day.morning;
+    const items = [];
+    if (m) { if (m.keyTask.text) items.push(m.keyTask); m.priorities.forEach(function (p) { if (p.text) items.push(p); }); }
+    const done = items.filter(function (i) { return i.done; }).length;
+    $("dcOverviewKicker").textContent = (selected === "today" ? "Today's" : selected === "yesterday" ? "Yesterday's" : "Tomorrow's") + " main win";
+    const title = $("dcOverviewTitle");
+    if (m && m.keyTask.text) { title.textContent = m.keyTask.text; title.classList.remove("empty"); }
+    else if (items.length) { title.textContent = "No main win chosen yet. First on the list: " + items[0].text; title.classList.add("empty"); }
+    else { title.textContent = "Not planned yet"; title.classList.add("empty"); }
+    $("dcOverviewCount").textContent = done + " of " + items.length + " done";
+    $("dcOverviewBar").parentNode.classList.toggle("hidden", !items.length);
+    $("dcOverviewFill").style.width = items.length ? Math.round(100 * done / items.length) + "%" : "0%";
+    $("dcOverviewBar").setAttribute("aria-valuemax", String(Math.max(1, items.length)));
+    $("dcOverviewBar").setAttribute("aria-valuenow", String(done));
+    const chips = [m ? chip("Plan saved", "ok") : chip("No plan yet", "todo")];
+    if (selected !== "tomorrow") { const rs = reviewStatus(date); chips.push(chip(rs.state === "scored" ? rs.text : "Review: " + rs.text.toLowerCase(), rs.state === "scored" ? "ok" : "")); }
+    const prog = selected === "today" ? programToday() : null;
+    if (prog) {
+      chips.push(chip("Program day " + prog.day + " of 30"));
+      chips.push(chip("Missions " + prog.progress.done + "/" + prog.progress.total, prog.progress.done === prog.progress.total ? "ok" : ""));
+    }
+    $("dcOverviewChips").innerHTML = chips.join("");
+  }
+
+  function progressRow(label, value, pct) {
+    return '<div class="dc-progress-row"><div class="dc-cat-head"><span>' + esc(label) + '</span><span>' + esc(value) + '</span></div>' +
+      (pct === null ? "" : '<div class="dc-track"><div class="dc-fill" style="width:' + pct + '%"></div></div>') + '</div>';
+  }
+
+  function renderProgressCard() {
+    const card = $("dcProgressCard");
+    if (selected !== "today") { card.classList.add("hidden"); return; }
+    card.classList.remove("hidden");
+    const prog = programToday();
+    const rs = reviewStatus(todayISO());
+    const rows = [];
+    if (prog) {
+      rows.push(progressRow("Today's missions", prog.progress.done + " of " + prog.progress.total, prog.progress.total ? Math.round(100 * prog.progress.done / prog.progress.total) : 0));
+      rows.push(progressRow("30-day program", "Day " + prog.day + " of 30", Math.round(100 * prog.day / 30)));
+    }
+    rows.push(progressRow("Daily review", rs.text, null));
+    $("dcProgressBody").innerHTML = rows.join("");
+  }
+
   function renderAllToday() {
     renderHeader();
+    renderOverview();
     renderNextUp();
     renderFlow();
     renderLessonCard();
     renderMorning();
     $("dcReviewCard").classList.toggle("hidden", selected === "tomorrow");
+    renderReviewMode();
     renderReviewHint();
+    renderPlanResults();
     renderResult();
+    renderProgressCard();
   }
 
   /* ---------------- rules ---------------- */
@@ -1118,7 +1495,7 @@
   function refreshForClock() {
     if (document.visibilityState !== "visible") return;
     const t = todayISO();
-    if (selectedDate() === renderedDate) { renderNextUp(); updateClock(); return; }
+    if (selectedDate() === renderedDate) { renderNextUp(); updateClock(); renderReviewMode(); return; }
     // Midnight passed (or the app came back the next day). Someone part-way through a plan or review stays on the day
     // they were filling in, which is now "Yesterday"; otherwise the screen moves on to the new today.
     const old = renderedDate;
@@ -1127,7 +1504,7 @@
       if (old === t) selected = "today";
       else if (old === L.addDays(t, -1)) selected = "yesterday";
       else if (old === L.addDays(t, 1)) selected = "tomorrow";
-    } else editingMorning = false;
+    } else { editingMorning = false; editingReview = false; reviewOpened = false; reordering = false; planStep = 1; reviewStep = 1; }
     renderEverything();
     if (stay && selectedDate() === old) core().showToast("It's a new day, but you're still on " + prettyDate(old) + " because it has unsaved changes.");
   }
@@ -1143,9 +1520,39 @@
       selectDay(which === "yesterday" || which === "tomorrow" ? which : "today");
     });
     $("dcNextActions").addEventListener("click", handleNextAction);
+    $("dcNextMoreActions").addEventListener("click", handleNextAction);
+    $("dcSeeTrends").addEventListener("click", function () { $("disciplineSubNavTrends").click(); });
+
+    // Planning steps: options for the category selects, the suggestion buttons, and moving between steps.
+    const categoryOptions = '<option value="">None</option>' + L.TASK_CATEGORIES.map(function (c) { return '<option value="' + c.key + '">' + esc(c.label) + '</option>'; }).join("");
+    CAT_IDS.forEach(function (id) { $(id).innerHTML = categoryOptions; });
+    $("dcResponseChips").innerHTML = L.DISTRACTION_RESPONSES.map(function (t, i) { return '<button type="button" class="dc-chip" data-resp="' + i + '">' + esc(t) + '</button>'; }).join("");
+    $("dcExampleChips").innerHTML = L.IF_THEN_EXAMPLES.map(function (t, i) { return '<button type="button" class="dc-chip" data-example="' + i + '">' + esc(t) + '</button>'; }).join("");
+    $("dcMorningForm").addEventListener("click", handleMorningFormClick);
+    $("dcStepNext").addEventListener("click", function () { showPlanStep(planStep + 1, true); });
+    $("dcStepBack").addEventListener("click", function () { showPlanStep(planStep - 1, true); });
+    // Enter in a one-line field moves to the next step instead of saving a half-made plan.
+    $("dcMorningForm").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || planStep === 4 || !e.target.matches('input[type="text"], input[type="time"]')) return;
+      e.preventDefault();
+      showPlanStep(planStep + 1, true);
+    });
+    $("dcPlan").addEventListener("input", renderExamples);
+
+    // Review sections.
+    $("dcReviewTabs").addEventListener("click", function (e) {
+      const tab = e.target.closest("[data-rstep]");
+      if (tab) showReviewStep(Number(tab.getAttribute("data-rstep")), false);
+    });
+    $("dcReviewNext").addEventListener("click", function () { showReviewStep(reviewStep + 1, true); });
+    $("dcReviewBack").addEventListener("click", function () { showReviewStep(reviewStep - 1, true); });
+    $("dcReviewOpenBtn").addEventListener("click", function () { reviewOpened = true; renderReviewMode(); renderReviewHint(); showReviewStep(1, true); });
+    $("dcReviewEditBtn").addEventListener("click", function () { editingReview = true; renderReviewMode(); renderReviewHint(); showReviewStep(1, true); });
+    $("dcReviewForm").addEventListener("input", updateReviewProgress);
     $("dcFlow").addEventListener("click", function (e) { if (store.timer) handleTimerClick(e); else handleFlowClick(e); });
     $("dcMorningForm").addEventListener("submit", handleMorningSubmit);
-    $("dcMorningEditBtn").addEventListener("click", function () { editingMorning = true; renderMorning(); $("dcKeyTask").focus(); });
+    $("dcMorningEditBtn").addEventListener("click", function () { startEditing(1); });
+    $("dcMorningReorderBtn").addEventListener("click", function () { reordering = !reordering; renderMorning(); });
     $("dcMorningSummary").addEventListener("click", handleMorningSummaryClick);
     $("dcReviewForm").addEventListener("click", handleReviewClick);
     $("dcReviewForm").addEventListener("submit", handleReviewSubmit);
@@ -1179,6 +1586,7 @@
     });
     window.addEventListener("pagehide", flushDrafts);
     $("dcMorningForm").addEventListener("input", captureMorningDraft);
+    $("dcMorningForm").addEventListener("change", captureMorningDraft); // selects and time fields
     $("dcReviewForm").addEventListener("input", captureReviewDraft);
     window.setInterval(refreshForClock, 30000);
 

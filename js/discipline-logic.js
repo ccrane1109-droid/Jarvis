@@ -20,6 +20,10 @@
    the trends, so they can't hide. A day is scored only once every item is
    answered; a day with no review has no score (it is never counted as zero).
 
+   Two more review questions (followed your planned routine, managed your
+   distractions) are recorded and shown in Trends but are not part of the score:
+   the model above is unchanged.
+
    Each saved review remembers which version of this model scored it
    (review.rubric) and what it came to when it was saved (review.scored: the
    score, the points earned out of the points that were attainable, which items
@@ -63,6 +67,30 @@
   const PLAN_POINTS = 4;
   const NOTES_POINTS = 6;
   const NOTE_FIELDS = ["procrastinated", "distractions", "wentWell", "improve"];
+
+  // Optional tag on a priority, so Trends can say where the day's effort went. A fixed list keeps the counts clean.
+  const TASK_CATEGORIES = [
+    { key: "school", label: "School" }, { key: "business", label: "Business" }, { key: "training", label: "Training" },
+    { key: "personal", label: "Personal" }, { key: "other", label: "Other" }
+  ];
+  // Plain starting points for the planning steps. They are offered, never filled in over what you typed, and not advice from AI.
+  const DISTRACTION_RESPONSES = [
+    "Phone in another room while I work",
+    "Block the app or site for the day",
+    "Work somewhere else",
+    "Work in 25-minute blocks with the phone away"
+  ];
+  const IF_THEN_EXAMPLES = [
+    "If I get home from school, then I put my phone away and start my homework.",
+    "If I reach for my phone, then I do two minutes of my main win first.",
+    "If it is 3:45 pm, then I start my main win before anything else.",
+    "If I finish dinner, then I plan tomorrow and charge my phone outside my room."
+  ];
+  // Review questions that are recorded and shown in Trends but are not part of the score (the model is unchanged).
+  const EXTRA_ITEMS = {
+    routine: { label: "Followed your planned routine" },
+    managed: { label: "Managed your distractions" }
+  };
 
   // Which items a kind of day usually excuses. Only a starting point: each can still be changed.
   const DAY_TYPES = {
@@ -213,22 +241,24 @@
     return { start: isISODate(r.start) ? r.start : null, done: done };
   }
 
+  // One planned item: its text, whether it is done, and an optional due time and category.
+  function sanitizeTask(raw) {
+    const p = raw && typeof raw === "object" ? raw : {};
+    const text = clean(p.text, PRIORITY_MAX);
+    return { text: text, done: !!text && p.done === true, due: text ? timeOfDay(p.due, "") : "", category: text ? keyOf(TASK_CATEGORIES, p.category) : "" };
+  }
+
   function sanitizeMorning(raw) {
     if (!raw || typeof raw !== "object") return null;
     const list = Array.isArray(raw.priorities) ? raw.priorities : [];
     const priorities = [];
-    for (let i = 0; i < 3; i++) {
-      const p = list[i] || {};
-      const text = clean(p.text, PRIORITY_MAX);
-      priorities.push({ text: text, done: !!text && p.done === true });
-    }
-    const key = raw.keyTask || {};
-    const keyText = clean(key.text, PRIORITY_MAX);
+    for (let i = 0; i < 3; i++) priorities.push(sanitizeTask(list[i]));
     const savedAt = stamp(raw.savedAt);
     return {
       priorities: priorities,
-      keyTask: { text: keyText, done: !!keyText && key.done === true },
+      keyTask: sanitizeTask(raw.keyTask),
       distraction: clean(raw.distraction, NOTE_MAX),
+      response: clean(raw.response, 120),
       plan: clean(raw.plan, NOTE_MAX),
       savedAt: savedAt,
       // When the priorities last changed. A plan changed after its day was scored is flagged on the score card.
@@ -264,6 +294,7 @@
       time: rating(raw.time),
       output: clean(raw.output, NOTE_MAX),
       blocker: keyOf(REASONS, raw.blocker),
+      extras: { routine: state(raw.extras && raw.extras.routine), managed: state(raw.extras && raw.extras.managed) },
       rules: [],
       rubric: Number.isInteger(raw.rubric) && raw.rubric >= 1 ? raw.rubric : RUBRIC_VERSION,
       scored: sanitizeScored(raw.scored),
@@ -300,7 +331,12 @@
       const m = d.morning;
       if (plain(m)) {
         const p = Array.isArray(m.p) ? m.p : [];
-        entry.morning = { key: clean(m.key, PRIORITY_MAX), p: [0, 1, 2].map(function (i) { return clean(p[i], PRIORITY_MAX); }), distraction: clean(m.distraction, NOTE_MAX), plan: clean(m.plan, NOTE_MAX), at: stamp(m.at) };
+        const d4 = Array.isArray(m.d) ? m.d : [], c4 = Array.isArray(m.c) ? m.c : [];
+        entry.morning = {
+          key: clean(m.key, PRIORITY_MAX), p: [0, 1, 2].map(function (i) { return clean(p[i], PRIORITY_MAX); }),
+          d: [0, 1, 2, 3].map(function (i) { return timeOfDay(d4[i], ""); }), c: [0, 1, 2, 3].map(function (i) { return keyOf(TASK_CATEGORIES, c4[i]); }),
+          distraction: clean(m.distraction, NOTE_MAX), response: clean(m.response, 120), plan: clean(m.plan, NOTE_MAX), at: stamp(m.at)
+        };
       }
       const r = d.review;
       if (plain(r)) {
@@ -311,7 +347,8 @@
         Object.keys(rr).slice(0, MAX_RULES * 2).forEach(function (id) { const st = state(rr[id]); const key = clean(id, 40); if (st && key) rules[key] = st; });
         const notes = {};
         DRAFT_NOTE_KEYS.forEach(function (k) { notes[k] = clean(r.notes && r.notes[k], NOTE_MAX); });
-        entry.review = { items: items, focus: rating(r.focus), time: rating(r.time), rules: rules, screenHours: clean(r.screenHours, 6), notes: notes, at: stamp(r.at) };
+        const extras = { routine: state(r.extras && r.extras.routine), managed: state(r.extras && r.extras.managed) };
+        entry.review = { items: items, extras: extras, focus: rating(r.focus), time: rating(r.time), rules: rules, screenHours: clean(r.screenHours, 6), notes: notes, at: stamp(r.at) };
       }
       if (entry.morning || entry.review) out[date] = entry;
     });
@@ -558,6 +595,10 @@
   //   input: { todayISO, minutes (since midnight, local), days, settings: { times } }
   //   -> { kind, title, text, task: { id, text } | null, actions: [...] }   actions are ids the screen knows:
   //      "plan", "scoreYesterday", "start", "avoid", "review", "planTomorrow"
+  // What to do next, from the time of day, the saved times, today's plan, what is still open, the program's missions
+  // and whether the review is done. -> { kind, title, text, why, task, actions: [primary buttons], more: [other
+  // things that could be done now] }. Plain rules and fixed wording; it only ever suggests, nothing is sent or forced.
+  //   input.missions (optional): { total, done, nextText } for today's program missions that still need a tick
   function nextUp(input) {
     const days = input.days;
     const times = sanitizeTimes(input.settings && input.settings.times);
@@ -565,30 +606,72 @@
     const today = sanitizeDay(days[input.todayISO]);
     const yesterday = addDays(input.todayISO, -1);
     const evening = input.minutes >= minutesOf(times.review);
+    const planned = hasPlanItems(today.morning);
+    const tomorrowPlanned = hasPlanItems(sanitizeDay(days[addDays(input.todayISO, 1)]).morning);
+    const scoredToday = isScored(days, input.todayISO);
+    const mission = input.missions && input.missions.total > input.missions.done ? input.missions : null;
 
-    if (!first) return { kind: "plan", title: "Start with a morning plan", text: "Two minutes: the one task that makes today a win, and up to three more.", task: null, actions: ["plan"] };
+    // Everything else that makes sense right now, so the person can always pick something other than the suggestion.
+    function others(primary) {
+      const list = [];
+      if (!planned) list.push("plan");
+      if (!scoredToday) list.push("review");
+      if (planned && openItems(today.morning)) list.push("avoid");
+      if (mission) list.push("mission");
+      if (!tomorrowPlanned) list.push("planTomorrow");
+      return list.filter(function (k) { return primary.indexOf(k) === -1; });
+    }
+    function make(o) { o.more = others(o.actions); return o; }
+
+    if (!first) return make({ kind: "plan", title: "Start with a morning plan", text: "Two minutes: the one task that makes today a win, and up to three more.", why: "A decision made before the day starts is the easiest one to keep.", task: null, actions: ["plan"] });
     if (yesterday >= first && !isScored(days, yesterday)) {
-      return { kind: "missed", title: "Score yesterday first", text: "One miss is data, two is a pattern. A rough, honest review is enough.", task: null, actions: ["scoreYesterday"] };
+      return make({ kind: "missed", title: "Score yesterday first", text: "One miss is data, two is a pattern. A rough, honest review is enough.", why: "Without it there is a gap in your record, and Trends can only show what you entered.", task: null, actions: ["scoreYesterday"] });
     }
-    if (isScored(days, input.todayISO)) {
-      const tomorrow = sanitizeDay(days[addDays(input.todayISO, 1)]);
-      if (!hasPlanItems(tomorrow.morning)) return { kind: "planTomorrow", title: "Plan tomorrow tonight", text: "Decide the key task and a start time now, so tomorrow's first minutes are already settled.", task: null, actions: ["planTomorrow"] };
-      return { kind: "done", title: "Today is done and tomorrow is planned", text: "Protect your sleep.", task: null, actions: [] };
+    if (scoredToday) {
+      if (!tomorrowPlanned) return make({ kind: "planTomorrow", title: "Plan tomorrow tonight", text: "Decide the key task and a start time now, so tomorrow's first minutes are already settled.", why: "It takes away tomorrow's first decision, which is usually the hardest.", task: null, actions: ["planTomorrow"] });
+      return make({ kind: "done", title: "Today is done and tomorrow is planned", text: "Protect your sleep.", why: "Sleep is part of the system, not a reward for finishing it.", task: null, actions: [] });
     }
-    if (!hasPlanItems(today.morning)) {
-      if (evening) return { kind: "review", title: "No plan was set today", text: "Score the day anyway, honestly. The review is where the learning is.", task: null, actions: ["review"] };
-      return { kind: "plan", title: "Lock in today's plan", text: "Two minutes. Decide what makes today a win before the day decides for you.", task: null, actions: ["plan"] };
+    if (!planned) {
+      if (evening) return make({ kind: "review", title: "No plan was set today", text: "Score the day anyway, honestly. The review is where the learning is.", why: "A day without a plan is still a day you can learn from.", task: null, actions: ["review"] });
+      return make({ kind: "plan", title: "Lock in today's plan", text: "Two minutes. Decide what makes today a win before the day decides for you.", why: "Unplanned time tends to go to whatever is easiest, not whatever matters.", task: null, actions: ["plan"] });
     }
-    if (evening) return { kind: "review", title: "Evening review time", text: "Score your day while it's fresh. Then plan tomorrow.", task: null, actions: ["review"] };
+    if (evening) return make({ kind: "review", title: "Evening review time", text: "Score your day while it's fresh. Then plan tomorrow.", why: "Your answers are what Trends is built from; the sooner you write them, the more accurate they are.", task: null, actions: ["review"] });
     const m = today.morning;
     if (m.keyTask.text && !m.keyTask.done) {
       const late = input.minutes >= minutesOf(times.afterSchool);
-      return { kind: "win", title: m.keyTask.text, text: late ? "This is what makes today a win. Start it before anything else." : "This is what makes today a win.", task: { id: "key", text: m.keyTask.text }, actions: ["start", "avoid"] };
+      return make({ kind: "win", title: m.keyTask.text, text: late ? "This is what makes today a win. Start it before anything else." : "This is what makes today a win.", why: "Starting is the hard part. Two minutes counts, and most of the time you keep going.", task: { id: "key", text: m.keyTask.text }, actions: ["start", "avoid"] });
     }
     for (let i = 0; i < 3; i++) {
-      if (m.priorities[i].text && !m.priorities[i].done) return { kind: "next", title: m.priorities[i].text, text: "Next on your list.", task: { id: "p" + i, text: m.priorities[i].text }, actions: ["start", "avoid"] };
+      if (m.priorities[i].text && !m.priorities[i].done) return make({ kind: "next", title: m.priorities[i].text, text: "Next on your list.", why: "One thing at a time. Finish it, tick it, then look at the next.", task: { id: "p" + i, text: m.priorities[i].text }, actions: ["start", "avoid"] });
     }
-    return { kind: "allDone", title: "Everything you planned is done", text: "Review at " + times.review + ". Protect your sleep.", task: null, actions: [] };
+    if (mission) return make({ kind: "mission", title: "Today's mission is still open", text: mission.nextText, why: "Missions are the small, practical part of the 30-day program. A tick takes seconds.", task: null, actions: ["mission"] });
+    return make({ kind: "allDone", title: "Everything you planned is done", text: "Your planned actions are complete. Review at " + times.review + ", and look at tomorrow's priorities when you're ready.", why: "Nothing else is due. Rest counts.", task: null, actions: [] });
+  }
+
+  function openItems(m) {
+    return !!m && ((!!m.keyTask.text && !m.keyTask.done) || m.priorities.some(function (p) { return !!p.text && !p.done; }));
+  }
+
+  /* ---------------- reordering a plan ---------------- */
+
+  function cloneMorning(m) { return JSON.parse(JSON.stringify(m)); }
+
+  // Moves a supporting priority up (dir -1) or down (+1) among the three slots. Its tick, due time and tag go with it.
+  function moveTask(morning, index, dir) {
+    const to = index + dir;
+    if (!morning || index < 0 || index > 2 || to < 0 || to > 2) return morning;
+    const out = cloneMorning(morning);
+    const t = out.priorities[index]; out.priorities[index] = out.priorities[to]; out.priorities[to] = t;
+    return out; // the same items in a new order: not an edit of the plan, and it changes no score
+  }
+
+  // Makes a supporting priority the main win, and the old main win takes its place.
+  function promoteTask(morning, index) {
+    if (!morning || index < 0 || index > 2 || !morning.priorities[index].text) return morning;
+    const out = cloneMorning(morning);
+    const t = out.keyTask; out.keyTask = out.priorities[index]; out.priorities[index] = t;
+    out.editedAt = Date.now();
+    return out;
   }
 
   // The start timer: how long is left, and whether it has run out.
@@ -694,7 +777,9 @@
     PRIORITY_MAX: PRIORITY_MAX, NOTE_MAX: NOTE_MAX, DEFAULT_PHONE_LIMIT: DEFAULT_PHONE_LIMIT,
     MIN_DAYS_FOR_AVERAGES: MIN_DAYS_FOR_AVERAGES, MIN_DAYS_FOR_WEEKDAYS: MIN_DAYS_FOR_WEEKDAYS,
     isISODate: isISODate, addDays: addDays, weekdayOf: weekdayOf, daysBetween: daysBetween,
-    sanitizeDay: sanitizeDay, sanitizeStore: sanitizeStore, sanitizeDrafts: sanitizeDrafts, DRAFT_NOTE_KEYS: DRAFT_NOTE_KEYS,
+    sanitizeDay: sanitizeDay, sanitizeStore: sanitizeStore,
+    TASK_CATEGORIES: TASK_CATEGORIES, DISTRACTION_RESPONSES: DISTRACTION_RESPONSES, IF_THEN_EXAMPLES: IF_THEN_EXAMPLES, EXTRA_ITEMS: EXTRA_ITEMS,
+    moveTask: moveTask, promoteTask: promoteTask, hasPlanItems: hasPlanItems, openItems: openItems, sanitizeDrafts: sanitizeDrafts, DRAFT_NOTE_KEYS: DRAFT_NOTE_KEYS,
     RUBRIC_VERSION: RUBRIC_VERSION, scoreSnapshot: scoreSnapshot, backfillSnapshots: backfillSnapshots,
     scoreDay: scoreDay, unanswered: unanswered, excusedFor: excusedFor,
     reviewStreak: reviewStreak, lastScored: lastScored, trendSummary: trendSummary
