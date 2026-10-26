@@ -169,14 +169,14 @@ test("the Discipline store merges rules, the avoiding log, days and program prog
     settings: { phoneLimit: 4 }, timer: { startedAt: 5 },
     rules: [{ id: "a", text: "Phone on the charger" }, { id: "b", text: "Homework first" }],
     avoid: [{ at: 30, date: "2026-10-22" }, { at: 10, date: "2026-10-21" }],
-    program: { start: "2026-10-22", done: { "1": [2], "2": [0] } },
+    program: { start: "2026-10-22", done: { "1": [2], "2": [0] }, reflections: { "1": "local words", "2": "only here" } },
     days: { "2026-10-22": day(50, "local"), "2026-10-21": day(10, "local-old") }
   };
   const cloud = {
     settings: { phoneLimit: 5 }, timer: null,
     rules: [{ id: "x", text: "phone on the CHARGER" }, { id: "c", text: "In bed by 9" }],
     avoid: [{ at: 20, date: "2026-10-21" }, { at: 10, date: "2026-10-21" }],
-    program: { start: "2026-10-20", done: { "1": [0], "3": [1] } },
+    program: { start: "2026-10-22", done: { "1": [0], "3": [1] }, reflections: { "1": "cloud words", "3": "only there" } },
     days: { "2026-10-22": day(40, "cloud-older"), "2026-10-21": day(99, "cloud-newer"), "2026-10-19": day(5, "cloud-only") }
   };
   const m = B.mergeDiscipline(local, cloud);
@@ -186,11 +186,24 @@ test("the Discipline store merges rules, the avoiding log, days and program prog
   assert.deepEqual(m.timer, { startedAt: 5 }, "this device's running timer");
   assert.equal(m.program.start, "2026-10-22");
   assert.deepEqual(m.program.done, { "1": [0, 2], "2": [0], "3": [1] }, "ticked missions from both");
+  assert.deepEqual(m.program.reflections, { "1": "local words", "2": "only here", "3": "only there" }, "reflections from both, this device's wording where both wrote one");
   assert.equal(m.days["2026-10-22"].morning.keyTask.text, "local", "the day touched last wins: this device's");
   assert.equal(m.days["2026-10-21"].morning.keyTask.text, "cloud-newer", "...or the cloud's");
   assert.ok(m.days["2026-10-19"], "a day only the cloud had is kept");
   const many = B.mergeDiscipline({ rules: [1, 2, 3].map((n) => ({ text: "l" + n })) }, { rules: [1, 2, 3].map((n) => ({ text: "c" + n })) });
   assert.equal(many.rules.length, 5, "never more than 5 rules");
+});
+
+test("two different program runs are not mixed: the later start is the current run", () => {
+  const oldRun = { start: "2026-10-01", done: { "1": [1], "5": [0] }, reflections: { "1": "from the old run" } };
+  const newRun = { start: "2026-11-02", done: { "2": [0] }, reflections: { "2": "from the new run" } };
+  [[newRun, oldRun], [oldRun, newRun]].forEach(([local, cloud]) => {
+    const m = B.mergeDiscipline({ program: local }, { program: cloud });
+    assert.deepEqual(m.program, { start: "2026-11-02", done: { "2": [0] }, reflections: { "2": "from the new run" } }, "the restarted run stands alone, whichever copy is local");
+  });
+  assert.deepEqual(B.mergeDiscipline({ program: { start: null, done: {} } }, { program: oldRun }).program.start, "2026-10-01", "no start on this device: the other copy's run");
+  assert.deepEqual(B.mergeDiscipline({ program: oldRun }, { program: { start: null, done: {} } }).program.reflections, { "1": "from the old run" });
+  assert.deepEqual(B.mergeDiscipline({ days: {} }, { days: {}, program: oldRun }).program.done, { "1": [1], "5": [0] }, "a copy with no program at all takes the other's");
 });
 
 test("merging two stored copies: unreadable text is handled, and nothing is dropped", () => {
