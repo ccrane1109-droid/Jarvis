@@ -165,7 +165,7 @@
     if (value === null) {
       if (!store.drafts[date]) return;
       delete store.drafts[date][part];
-      if (!hasDraft(date)) delete store.drafts[date];
+      if (!Object.keys(store.drafts[date]).length) delete store.drafts[date];
     } else {
       store.drafts[date] = store.drafts[date] || {};
       store.drafts[date][part] = value;
@@ -1443,25 +1443,75 @@
 
   /* ---------------- the 30-day program ---------------- */
 
+  let progOpen = {};      // days opened in the list ({ "3": true }), kept when the page redraws
+  let progConfirm = null; // "restart" while the restart question shows; { remove: day } while a reflection's removal does
+
   function programContext(dayNumber) {
-    return { date: P.dateOfDay(store.program.start, dayNumber), days: store.days, rules: store.rules, manualDone: store.program.done[String(dayNumber)] || [] };
+    return { date: P.dateOfDay(store.program.start, dayNumber), days: store.days, rules: store.rules, avoid: store.avoid, manualDone: store.program.done[String(dayNumber)] || [] };
+  }
+  function savedReflection(n) { return store.program.reflections[String(n)] || ""; }
+  function reflectDraft(n) {
+    const d = store.drafts[P.dateOfDay(store.program.start, n)];
+    return d && typeof d.reflect === "string" ? d.reflect : null;
+  }
+  function daysWord(n) { return n + (n === 1 ? " day" : " days"); }
+
+  // "Unlocks Fri, Oct 30 (tomorrow)" for a lesson that has not opened yet.
+  function unlockText(n) {
+    const u = P.unlock(store.program.start, n, todayISO());
+    return "Unlocks " + prettyDate(u.date) + (u.inDays === 1 ? " (tomorrow)" : u.inDays > 1 && u.inDays <= 6 ? " (in " + daysWord(u.inDays) + ")" : "");
   }
 
-  function lessonHtml(entry) {
-    return '<p class="dc-lesson-p"><strong>The idea.</strong> ' + esc(entry.principle) + '</p>' +
-      '<p class="dc-lesson-p"><strong>Why it matters.</strong> ' + esc(entry.why) + '</p>' +
-      '<p class="dc-lesson-p"><strong>Picture this.</strong> ' + esc(entry.example) + '</p>' +
-      '<p class="dc-lesson-p dc-do"><strong>Try it now.</strong> ' + esc(entry.apply) + '</p>';
+  function reflectionHtml(n, entry) {
+    const saved = savedReflection(n);
+    const draft = reflectDraft(n);
+    const value = draft !== null ? draft : saved;
+    const id = "dcReflect" + n;
+    const removing = !!progConfirm && progConfirm.remove === n;
+    return '<section class="dc-lesson-sec dc-reflect" data-reflect-day="' + n + '">' +
+      '<h3 class="dc-lesson-h">Reflection <small>optional · private</small></h3>' +
+      '<p class="dc-lesson-p" id="' + id + 'Q">' + esc(entry.reflect) + '</p>' +
+      '<textarea id="' + id + '" class="dc-reflect-input" rows="3" maxlength="' + L.REFLECT_MAX + '" data-day="' + n + '" aria-labelledby="' + id + 'Q" aria-describedby="' + id + 'S" placeholder="A sentence or two is plenty.">' + esc(value) + '</textarea>' +
+      '<div class="dc-reflect-foot"><span class="field-hint" id="' + id + 'S" aria-live="polite"></span><span class="field-hint" id="' + id + 'C"></span></div>' +
+      (removing
+        ? '<div class="dc-reflect-confirm" role="group" aria-label="Remove this reflection"><p class="dc-line"><strong>Remove this reflection?</strong> The text is deleted from this device. This can\'t be undone.</p>' +
+          '<div class="form-actions"><button type="button" class="btn btn-danger" data-reflect-remove-yes="' + n + '">Yes, remove it</button><button type="button" class="btn btn-secondary" data-reflect-remove-no="' + n + '">Keep it</button></div></div>'
+        : '<div class="form-actions"><button type="button" class="btn btn-secondary" data-reflect-save="' + n + '">Save reflection</button>' +
+          '<button type="button" class="btn-icon danger' + (saved ? "" : " hidden") + '" data-reflect-remove="' + n + '">Remove</button></div>') +
+      '</section>';
   }
 
-  function missionRows(progress, interactive) {
+  // The lesson in its five parts. mode "field" adds a box for the reflection; otherwise the question is just shown.
+  function lessonHtml(entry, mode) {
+    return P.SECTIONS.map(function (sec) {
+      if (sec.key === "reflect" && mode === "field") return reflectionHtml(entry.day, entry);
+      return '<section class="dc-lesson-sec' + (sec.key === "apply" ? " dc-do" : "") + '"><h3 class="dc-lesson-h">' + esc(sec.label) + (sec.key === "reflect" ? ' <small>optional</small>' : "") + '</h3>' +
+        '<p class="dc-lesson-p">' + esc(entry[sec.key]) + '</p>' + (sec.key === "reflect" ? '<p class="field-hint">Answer it in the Program tab. Your answer stays private.</p>' : "") + '</section>';
+    }).join("");
+  }
+
+  // Updates a reflection's status line, counter and buttons from what is in its box (no redraw, so typing is never interrupted).
+  function syncReflection(n) {
+    const box = $("dcReflect" + n);
+    if (!box) return;
+    const text = tidy(box.value).slice(0, L.REFLECT_MAX);
+    const saved = savedReflection(n);
+    $("dcReflect" + n + "S").textContent = text && text === saved ? "Saved" : text ? "Not saved yet" : saved ? "Your saved reflection is kept. Tap Remove to delete it." : "";
+    $("dcReflect" + n + "C").textContent = text.length + "/" + L.REFLECT_MAX;
+    const save = document.querySelector('[data-reflect-save="' + n + '"]');
+    if (save) save.disabled = !text || text === saved;
+    const rm = document.querySelector('[data-reflect-remove="' + n + '"]');
+    if (rm) rm.classList.toggle("hidden", !saved);
+  }
+
+  function missionRows(progress, n) {
     return '<div class="dc-checklist">' + progress.items.map(function (m, i) {
-      if (m.auto || !interactive) {
-        return '<div class="dc-check' + (m.done ? " done" : "") + ' auto" role="checkbox" aria-checked="' + m.done + '" aria-disabled="true">' +
-          '<span class="dc-box" aria-hidden="true">' + (m.done ? "✓" : "") + '</span><span class="dc-check-text">' + esc(m.text) + (m.auto ? ' <small class="dc-auto">checked for you</small>' : "") + '</span></div>';
-      }
-      return '<button type="button" class="dc-check' + (m.done ? " done" : "") + '" role="checkbox" aria-checked="' + m.done + '" data-mission="' + i + '">' +
-        '<span class="dc-box" aria-hidden="true">' + (m.done ? "✓" : "") + '</span><span class="dc-check-text">' + esc(m.text) + '</span></button>';
+      const how = "dcHow" + n + "x" + i;
+      const body = '<span class="dc-box" aria-hidden="true">' + (m.done ? "✓" : "") + '</span><span class="dc-check-body"><span class="dc-check-text">' + esc(m.text) + '</span><span class="dc-kind">' + (m.auto ? "Auto-checked" : "You tick it") + '</span></span>';
+      const control = m.auto
+        ? '<div class="dc-check auto' + (m.done ? " done" : "") + '" role="checkbox" aria-checked="' + m.done + '" aria-disabled="true" aria-describedby="' + how + '">' + body + '</div>'
+        : '<button type="button" class="dc-check' + (m.done ? " done" : "") + '" role="checkbox" aria-checked="' + m.done + '" data-mission="' + i + '" data-day="' + n + '" aria-describedby="' + how + '">' + body + '</button>';
+      return '<div class="dc-mission">' + control + '<p class="dc-how" id="' + how + '">' + esc(m.how) + '</p>' + (m.needs ? '<p class="dc-needs">' + esc(m.needs) + '</p>' : "") + '</div>';
     }).join("") + '</div>';
   }
 
@@ -1475,95 +1525,275 @@
     card.classList.remove("hidden");
     $("dcLessonKicker").textContent = "Day " + pd.day + " of 30 · Today's principle";
     $("dcLessonTitle").textContent = entry.title;
-    $("dcLessonBody").innerHTML = lessonOpen ? lessonHtml(entry) : "";
+    $("dcLessonBody").innerHTML = lessonOpen ? lessonHtml(entry, "read") : "";
     $("dcLessonBody").classList.toggle("hidden", !lessonOpen);
     $("dcLessonToggle").textContent = lessonOpen ? "Hide the lesson" : "Read the lesson";
     $("dcLessonToggle").setAttribute("aria-expanded", String(lessonOpen));
     $("dcLessonMissions").textContent = "Missions today: " + progress.done + " of " + progress.total + " done.";
   }
 
+  function programIntroHtml(future) {
+    return '<h2 class="card-title">30-day discipline program</h2>' +
+      (future
+        ? '<p class="dc-line">Your program is set to start on <strong>' + esc(prettyDate(store.program.start, true)) + '</strong>, which is later than this device\'s date. Day 1 opens then. If you changed time zone or the clock, this is why.</p>'
+        : '<p class="dc-line">One short lesson and two or three missions a day, for 30 days. A lesson has five parts: the principle, why it works, an everyday example, one thing to do today, and an optional question to reflect on.</p>') +
+      '<ul class="dc-lines"><li><strong>Auto-checked</strong> missions tick themselves when what you entered in JARVIS shows it, and say what they look at.</li>' +
+      '<li><strong>You tick it</strong> missions are on your word: JARVIS can\'t see your phone or your day, only what you type here.</li>' +
+      '<li>Each day opens at midnight on this device\'s calendar. Later lessons stay locked.</li></ul>' +
+      '<ul class="dc-lines">' + P.WEEKS.map(function (w) { return "<li><strong>Days " + w.days[0] + "-" + w.days[1] + ": " + esc(w.name) + "</strong><br><span class=\"field-hint\">" + esc(w.focus) + " Phone target: " + w.phone + "h.</span></li>"; }).join("") + '</ul>' +
+      (future
+        ? '<p class="field-hint">To begin on today\'s date instead, use “Start over from today” in Program settings below.</p>'
+        : '<div class="form-actions"><button type="button" class="btn btn-primary" data-prog="start">Start today as day 1</button></div><p class="field-hint">You can restart any time, and it asks first. Nothing here changes your plans, reviews or rules.</p>');
+  }
+
+  function statHtml(label, value) { return '<div class="dc-stat"><dt>' + esc(label) + '</dt><dd>' + value + '</dd></div>'; }
+
   function renderProgram() {
     if (!P) { $("dcProgHead").innerHTML = '<div class="empty-state">The program isn\'t available right now.</div>'; return; }
+    const open = document.activeElement;
+    const focusKey = open && $("discipline-program").contains(open) ? focusKeyOf(open) : "";
     const today = todayISO();
-    const pd = P.programDay(store.program.start, today);
-    const head = $("dcProgHead"), missions = $("dcProgMissions"), lesson = $("dcProgLesson");
-    missions.classList.toggle("hidden", pd.status !== "active");
-    lesson.classList.toggle("hidden", pd.status !== "active");
+    const ov = P.overview(store.program, today, programContext);
+    const head = $("dcProgHead"), missions = $("dcProgMissions"), lesson = $("dcProgLesson"), manage = $("dcProgManage");
+    const started = ov.status !== "notStarted";
+    missions.classList.toggle("hidden", ov.status !== "active");
+    lesson.classList.toggle("hidden", ov.status !== "active");
+    if (ov.status !== "active") { missions.innerHTML = ""; lesson.innerHTML = ""; } // nothing stale left behind to share ids with the list
+    manage.classList.toggle("hidden", !started && !store.program.start);
 
-    if (pd.status === "notStarted") {
-      head.innerHTML = '<h2 class="card-title">30-day discipline program</h2>' +
-        '<p class="dc-line">One short lesson and two or three missions a day. Missions JARVIS can check from your own entries are checked for you; the rest you tick yourself.</p>' +
-        '<ul class="dc-lines">' + P.WEEKS.map(function (w) { return "<li><strong>Days " + w.days[0] + "-" + w.days[1] + ": " + esc(w.name) + "</strong><br><span class=\"field-hint\">" + esc(w.focus) + " Phone target: " + w.phone + "h.</span></li>"; }).join("") + '</ul>' +
-        '<div class="form-actions"><button type="button" class="btn btn-primary" data-prog="start">Start today as day 1</button></div>' +
-        '<p class="field-hint">You can restart any time. Nothing here changes your plans, reviews or rules.</p>';
-    } else if (pd.status === "complete") {
+    if (ov.status === "notStarted") {
+      head.innerHTML = programIntroHtml(!!store.program.start);
+    } else if (ov.status === "complete") {
       const end = P.dateOfDay(store.program.start, 30);
       const t = L.trendSummary(store.days, end, 30);
-      let done = 0, total = 0;
-      for (let n = 1; n <= 30; n++) { const p = P.dayProgress(n, programContext(n)); done += p.done; total += p.total; }
       head.innerHTML = '<h2 class="card-title">Program complete</h2>' +
-        '<p class="dc-line">You reached the end of day 30. Over those 30 days you scored <strong>' + t.scoredDays + '</strong> days' + (t.enough ? ', averaging <strong>' + t.average + '</strong>' : '') + ' and completed <strong>' + done + ' of ' + total + '</strong> missions.</p>' +
-        '<p class="field-hint">Those are your own numbers. Keep what worked; your rules, plans and history are unchanged.</p>' +
-        '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="restart">Start the program again</button></div>';
+        '<p class="dc-line">You reached the end of day 30. Over those 30 days you scored <strong>' + t.scoredDays + '</strong> days' + (t.enough ? ', averaging <strong>' + t.average + '</strong>' : '') + ' and completed <strong>' + ov.missionsDone + ' of ' + ov.missionsTotal + '</strong> missions.</p>' +
+        '<dl class="dc-stats-grid">' + statHtml("Days with every mission done", ov.finished + " of 30") + statHtml("Reflections written", String(ov.reflections)) + '</dl>' +
+        '<p class="field-hint">Those are your own numbers. Keep what worked; your rules, plans and history are unchanged. Every lesson below stays open to read.</p>';
     } else {
-      const week = P.weekOf(pd.day);
-      const target = P.phoneTarget(pd.day);
-      head.innerHTML = '<div class="card-title-row"><h2 class="card-title">Day ' + pd.day + ' of 30</h2><span class="badge badge-accent">Week ' + week.n + '</span></div>' +
+      const week = ov.week;
+      const target = P.phoneTarget(ov.day);
+      const t = ov.today;
+      head.innerHTML = '<div class="card-title-row"><h2 class="card-title">Day ' + ov.day + ' of 30</h2><span class="badge badge-accent">Week ' + week.n + ' of ' + P.WEEKS.length + '</span></div>' +
         '<p class="dc-line"><strong>' + esc(week.name) + '.</strong> ' + esc(week.focus) + '</p>' +
-        '<div class="dc-track"><div class="dc-fill" style="width:' + Math.round(100 * pd.day / 30) + '%"></div></div>' +
+        '<div class="dc-ov-progress"><div class="dc-track" role="progressbar" aria-label="Program progress" aria-valuemin="0" aria-valuemax="30" aria-valuenow="' + ov.day + '"><div class="dc-fill" style="width:' + Math.round(100 * ov.day / 30) + '%"></div></div><span class="dc-ov-count">Day ' + ov.day + ' of 30</span></div>' +
+        '<dl class="dc-stats-grid">' + statHtml("Today's principle", esc(ov.title)) + statHtml("Missions today", t.done + " of " + t.total) +
+        statHtml("Completed days", ov.finished + " of " + ov.unlocked) + statHtml("Reflections", ov.reflections + " written") + '</dl>' +
+        '<p class="field-hint">A day is completed when every one of its missions is done.</p>' +
         '<p class="dc-line">This week\'s phone target: <strong>' + target + 'h</strong> a day. Your limit is ' + store.settings.phoneLimit + 'h.</p>' +
         (store.settings.phoneLimit !== target ? '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="target">Use ' + target + 'h as my limit</button></div>' : "") +
-        '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="restart">Restart the program</button></div>';
-      const progress = P.dayProgress(pd.day, programContext(pd.day));
-      missions.innerHTML = '<h2 class="card-title">Today\'s missions (' + progress.done + ' of ' + progress.total + ')</h2>' + missionRows(progress, true) +
-        '<p class="field-hint">Ones marked “checked for you” tick themselves when your entries show it. Tap the others when you have done them.</p>';
-      lesson.innerHTML = '<h2 class="card-title">Day ' + pd.day + ': ' + esc(P.DAYS[pd.day - 1].title) + '</h2>' + lessonHtml(P.DAYS[pd.day - 1]) +
-        '<p class="field-hint">Fixed wording, not AI. Researchers are named only where the finding is well known.</p>';
+        (ov.upcoming.length ? '<h3 class="dc-lesson-h dc-coming">Coming up</h3><ul class="dc-lines dc-coming-list">' + ov.upcoming.map(function (u) {
+          return "<li><strong>Day " + u.day + ": " + esc(u.title) + "</strong><br><span class=\"field-hint\">" + esc(unlockText(u.day)) + "</span></li>";
+        }).join("") + '</ul>' : "");
+      const progress = ov.today;
+      missions.innerHTML = '<h2 class="card-title">Today\'s missions (' + progress.done + ' of ' + progress.total + ')</h2>' +
+        '<div class="dc-track" role="progressbar" aria-label="Missions done today" aria-valuemin="0" aria-valuemax="' + progress.total + '" aria-valuenow="' + progress.done + '"><div class="dc-fill" style="width:' + Math.round(100 * progress.done / progress.total) + '%"></div></div>' +
+        missionRows(progress, ov.day);
+      const entry = P.DAYS[ov.day - 1];
+      lesson.innerHTML = '<div class="dc-next-kicker">Day ' + ov.day + ' · Today\'s lesson</div><h2 class="card-title">' + esc(entry.title) + '</h2>' + lessonHtml(entry, "field") +
+        '<p class="field-hint">Fixed wording, not AI. Researchers are named only where the finding is well known, and examples are imagined situations, not stories about real people.</p>';
     }
 
-    $("dcProgDays").innerHTML = P.DAYS.map(function (entry) {
-      const n = entry.day;
-      if (pd.status === "notStarted" || (pd.status === "active" && n > pd.day)) {
-        return '<div class="dc-day locked"><span>Day ' + n + '</span><span class="field-hint">' + (pd.status === "notStarted" ? "Week " + P.weekOf(n).n : "Unlocks " + prettyDate(P.dateOfDay(store.program.start, n))) + '</span></div>';
-      }
-      const p = P.dayProgress(n, programContext(n));
-      return '<details class="dc-day"><summary><span>Day ' + n + ' · ' + esc(entry.title) + '</span><span class="field-hint">' + (n === pd.day && pd.status === "active" ? "Today · " : "") + p.done + ' of ' + p.total + '</span></summary>' +
-        lessonHtml(entry) + missionRows(p, false) + '</details>';
+    $("dcProgDaysHint").textContent = ov.status === "notStarted"
+      ? (store.program.start ? "Each day opens on its date, at midnight on this device's calendar." : "Each day opens at midnight on this device's calendar once you start.")
+      : "Open any day to read it again. Each later day opens at midnight on this device's calendar.";
+    $("dcProgDays").innerHTML = P.WEEKS.map(function (w) {
+      const current = ov.status === "active" && ov.week && ov.week.n === w.n;
+      return '<section class="dc-week"><h3 class="dc-week-h">Week ' + w.n + ': ' + esc(w.name) + ' <small>Days ' + w.days[0] + '-' + w.days[1] + (current ? ' · this week' : '') + '</small></h3>' +
+        P.DAYS.filter(function (d) { return d.day >= w.days[0] && d.day <= w.days[1]; }).map(function (entry) { return dayRowHtml(entry, ov); }).join("") + '</section>';
     }).join("");
+
+    renderManage(ov);
+    restoreFocus(focusKey);
+    P.DAYS.forEach(function (d) { if ($("dcReflect" + d.day)) syncReflection(d.day); });
+  }
+
+  function dayRowHtml(entry, ov) {
+    const n = entry.day;
+    const isToday = ov.status === "active" && n === ov.day;
+    if (ov.status === "notStarted" || (ov.status === "active" && n > ov.day)) {
+      return '<div class="dc-day locked"><span class="dc-day-name">Day ' + n + ' · ' + esc(entry.title) + '</span><span class="dc-day-state">Locked · ' + (ov.status === "notStarted" && !store.program.start ? "opens on day " + n : esc(unlockText(n))) + '</span></div>';
+    }
+    const p = P.dayProgress(n, programContext(n));
+    const state = (isToday ? "Today · " : p.done === p.total ? "Done · " : "") + p.done + ' of ' + p.total;
+    if (isToday) return '<div class="dc-day today"><span class="dc-day-name">Day ' + n + ' · ' + esc(entry.title) + '</span><span class="dc-day-state">' + state + '</span></div>';
+    return '<details class="dc-day' + (p.done === p.total ? " complete" : "") + '" data-day="' + n + '"' + (progOpen[String(n)] ? " open" : "") + '><summary><span class="dc-day-name">Day ' + n + ' · ' + esc(entry.title) + '</span><span class="dc-day-state">' + state + '</span></summary>' +
+      lessonHtml(entry, "field") + '<h3 class="dc-lesson-h">Missions</h3>' + missionRows(p, n) + '</details>';
+  }
+
+  // The bottom card: when the program began and ended, and the restart (which always asks first, and says what it resets).
+  function renderManage(ov) {
+    const box = $("dcProgManage");
+    if (!store.program.start) { box.innerHTML = ""; return; }
+    const doneTicks = Object.keys(store.program.done).reduce(function (n, k) { return n + store.program.done[k].length; }, 0);
+    const reflections = Object.keys(store.program.reflections).length;
+    const today = todayISO();
+    if (progConfirm === "restart") {
+      box.innerHTML = '<h2 class="card-title" id="dcRestartTitle" tabindex="-1">Restart the program from today?</h2>' +
+        '<div class="dc-restart" role="group" aria-labelledby="dcRestartTitle">' +
+        '<h3 class="dc-lesson-h">This resets</h3><ul class="dc-lines">' +
+        '<li>' + (ov.status === "active" ? 'Where you are: day ' + ov.day + ' goes back to <strong>day 1 on ' + esc(prettyDate(today)) + '</strong>.'
+          : ov.status === "complete" ? 'The finished program begins again, with <strong>day 1 on ' + esc(prettyDate(today)) + '</strong>.'
+          : 'Your start date (' + esc(prettyDate(store.program.start)) + ') moves to today: <strong>day 1 is ' + esc(prettyDate(today)) + '</strong>.') + '</li>' +
+        '<li>The missions you ticked yourself: <strong>' + doneTicks + '</strong> ' + (doneTicks === 1 ? 'tick' : 'ticks') + '.</li>' +
+        '<li>Your program reflections: <strong>' + reflections + '</strong> written' + (reflections ? ' (they will be deleted)' : '') + '.</li></ul>' +
+        '<h3 class="dc-lesson-h">This stays exactly as it is</h3><ul class="dc-lines">' +
+        '<li>Your plans, evening reviews and scores, with their history.</li><li>Your rules, your “I\'m avoiding it” log, your Habits and your settings.</li></ul>' +
+        '<p class="field-hint">Missions JARVIS checks for you will look at your entries on the new dates, so an entry you already made today can count toward day 1.</p>' +
+        (reflections ? '<div class="form-actions"><button type="button" class="btn btn-secondary" data-prog="copy">Copy my reflections first</button></div>' : "") +
+        '<div class="form-actions"><button type="button" class="btn btn-danger" data-prog="restart-yes">Yes, restart from today</button><button type="button" class="btn btn-secondary" data-prog="restart-no">Keep my progress</button></div></div>';
+      return;
+    }
+    const end = P.dateOfDay(store.program.start, 30);
+    box.innerHTML = '<h2 class="card-title">Program settings</h2>' +
+      '<p class="dc-line">' + (ov.status === "notStarted" ? 'Set to start on ' : 'Started ') + '<strong>' + esc(prettyDate(store.program.start)) + '</strong>. Day 30 ' + (end < today ? 'was ' : 'is ') + '<strong>' + esc(prettyDate(end)) + '</strong>.</p>' +
+      '<div class="form-actions"><button type="button" class="btn btn-secondary" id="dcProgRestartBtn" data-prog="restart">' + (ov.status === "complete" ? "Start the program again…" : ov.status === "notStarted" ? "Start over from today…" : "Restart the program…") + '</button></div>' +
+      '<p class="field-hint">Restarting asks first and shows exactly what it resets.</p>';
+  }
+
+  // Redrawing the page replaces its buttons; this puts the keyboard back on the one that was in use.
+  function focusKeyOf(el) {
+    if (el.hasAttribute("data-mission")) return '[data-mission="' + el.getAttribute("data-mission") + '"][data-day="' + el.getAttribute("data-day") + '"]';
+    if (el.id && /^dcReflect\d+$/.test(el.id)) return "#" + el.id;
+    const keys = ["data-reflect-save", "data-reflect-remove", "data-reflect-remove-yes", "data-reflect-remove-no", "data-prog"];
+    for (let i = 0; i < keys.length; i++) if (el.hasAttribute(keys[i])) return "[" + keys[i] + '="' + el.getAttribute(keys[i]) + '"]';
+    return "";
+  }
+  function restoreFocus(sel) {
+    if (!sel) return;
+    const el = document.querySelector("#discipline-program " + sel);
+    if (el && !el.disabled) el.focus({ preventScroll: true });
+  }
+
+  function reflectionsText() {
+    const lines = [];
+    P.DAYS.forEach(function (d) {
+      const t = savedReflection(d.day);
+      if (t) lines.push("Day " + d.day + ": " + d.title + "\n" + d.reflect + "\n" + t);
+    });
+    return lines.join("\n\n");
+  }
+
+  function saveProgram() { store.program = L.sanitizeProgram(store.program); save(); }
+
+  function startProgram(today) {
+    store.program = { start: today, done: {}, reflections: {} };
+    Object.keys(store.drafts).forEach(function (d) { setDraft(d, "reflect", null); });
+    flushDrafts();
+    saveProgram();
+  }
+
+  function handleMissionTick(btn) {
+    const pd = P.programDay(store.program.start, todayISO());
+    const n = Number(btn.getAttribute("data-day")), i = Number(btn.getAttribute("data-mission"));
+    const entry = P.DAYS[n - 1];
+    // only a mission the person ticks, on a day that has opened
+    if (pd.status === "notStarted" || !entry || n > Math.min(pd.day, 30) || !entry.missions[i] || entry.missions[i].a) return;
+    const key = String(n);
+    const list = (store.program.done[key] || []).slice();
+    const at = list.indexOf(i);
+    if (at === -1) list.push(i); else list.splice(at, 1);
+    store.program.done[key] = list.sort();
+    if (!list.length) delete store.program.done[key];
+    saveProgram();
+    renderProgram();
+    renderLessonCard();
+    renderNextUp();
+  }
+
+  // Which reflection button was pressed: { act: "save" | "remove" | "remove-yes" | "remove-no", n } or null.
+  function reflectAction(e) {
+    const acts = ["save", "remove", "remove-yes", "remove-no"];
+    for (let i = 0; i < acts.length; i++) {
+      const el = e.target.closest("[data-reflect-" + acts[i] + "]");
+      if (el) return { act: acts[i], n: Number(el.getAttribute("data-reflect-" + acts[i])) };
+    }
+    return null;
+  }
+
+  function handleReflectionClick(e) {
+    const a = reflectAction(e);
+    if (!a) return false;
+    const n = a.n;
+    const pd = P.programDay(store.program.start, todayISO());
+    if (pd.status === "notStarted" || !P.DAYS[n - 1] || n > Math.min(pd.day, 30)) return true;
+    const date = P.dateOfDay(store.program.start, n);
+    if (a.act === "save") {
+      const box = $("dcReflect" + n);
+      const text = tidy(box ? box.value : "").slice(0, L.REFLECT_MAX);
+      if (!text) return true;
+      store.program.reflections[String(n)] = text;
+      setDraft(date, "reflect", null);
+      flushDrafts();
+      saveProgram();
+      renderProgram(); // the overview counts reflections too
+      const field = $("dcReflect" + n);
+      if (field) field.focus({ preventScroll: true });
+      core().showToast("Reflection saved.");
+    } else if (a.act === "remove") {
+      progConfirm = { remove: n };
+      renderProgram();
+      const keep = document.querySelector('[data-reflect-remove-no="' + n + '"]');
+      if (keep) keep.focus({ preventScroll: true });
+    } else if (a.act === "remove-yes") {
+      delete store.program.reflections[String(n)];
+      setDraft(date, "reflect", null);
+      flushDrafts();
+      progConfirm = null;
+      saveProgram();
+      renderProgram();
+      core().showToast("Reflection removed.");
+    } else {
+      progConfirm = null;
+      renderProgram();
+      const rm = document.querySelector('[data-reflect-remove="' + n + '"]');
+      if (rm) rm.focus({ preventScroll: true });
+    }
+    return true;
   }
 
   function handleProgramClick(e) {
     if (!P) return;
-    const act = e.target.closest("[data-prog]");
     const mission = e.target.closest("[data-mission]");
-    const today = todayISO();
-    if (mission) {
-      const pd = P.programDay(store.program.start, today);
-      if (pd.status !== "active") return;
-      const key = String(pd.day);
-      const i = Number(mission.getAttribute("data-mission"));
-      const list = (store.program.done[key] || []).slice();
-      const at = list.indexOf(i);
-      if (at === -1) list.push(i); else list.splice(at, 1);
-      store.program.done[key] = list.sort();
-      if (!list.length) delete store.program.done[key];
-      store.program = L.sanitizeProgram(store.program);
-      save();
-      renderProgram();
-      renderLessonCard();
-      return;
-    }
+    if (mission) { handleMissionTick(mission); return; }
+    if (handleReflectionClick(e)) return;
+    const act = e.target.closest("[data-prog]");
     if (!act) return;
+    const today = todayISO();
     const what = act.getAttribute("data-prog");
     if (what === "start") {
-      store.program = { start: today, done: {} };
-      save();
+      startProgram(today);
       core().showToast("Day 1 starts today.");
     } else if (what === "restart") {
-      if (!window.confirm("Restart the program from today? The missions you ticked in this run are cleared. Your plans, reviews and rules stay.")) return;
-      store.program = { start: today, done: {} };
-      save();
+      progConfirm = "restart";
+      renderProgram();
+      const t = $("dcRestartTitle");
+      if (t) { t.focus({ preventScroll: true }); bringIntoView("dcProgManage"); }
+      return;
+    } else if (what === "restart-no") {
+      progConfirm = null;
+      renderProgram();
+      const b = $("dcProgRestartBtn");
+      if (b) b.focus({ preventScroll: true });
+      return;
+    } else if (what === "restart-yes") {
+      progConfirm = null;
+      progOpen = {};
+      startProgram(today);
+      renderProgram();
+      renderLessonCard();
+      renderNextUp();
+      const h = document.querySelector("#dcProgHead h2");
+      if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); bringIntoView("dcProgHead"); }
       core().showToast("Restarted. Today is day 1.");
+      return;
+    } else if (what === "copy") {
+      const text = reflectionsText();
+      const clip = navigator.clipboard;
+      if (!text) { core().showToast("There is nothing to copy."); return; }
+      if (!clip || typeof clip.writeText !== "function") { core().showToast("Copying isn't available here. Select your reflections and copy them yourself."); return; }
+      clip.writeText(text).then(function () { core().showToast("Your reflections are copied."); }, function () { core().showToast("Couldn't copy. Nothing was changed."); });
+      return;
     } else if (what === "target") {
       const target = P.phoneTarget(P.programDay(store.program.start, today).day);
       store.settings.phoneLimit = target;
@@ -1575,6 +1805,27 @@
     renderProgram();
     renderLessonCard();
     renderNextUp();
+  }
+
+  // Typing in a reflection: kept as a draft on every keystroke, and the status updates without redrawing the page.
+  function handleProgramInput(e) {
+    const box = e.target.closest(".dc-reflect-input");
+    if (!box || !P) return;
+    const n = Number(box.getAttribute("data-day"));
+    const date = P.dateOfDay(store.program.start, n);
+    const text = tidy(box.value).slice(0, L.REFLECT_MAX);
+    setDraft(date, "reflect", text === savedReflection(n) && box.value === text ? null : box.value.slice(0, L.REFLECT_MAX));
+    syncReflection(n);
+  }
+
+  function handleProgramKey(e) {
+    if (e.key === "Escape" && progConfirm) {
+      const was = progConfirm;
+      progConfirm = null;
+      renderProgram();
+      const back = was === "restart" ? $("dcProgRestartBtn") : document.querySelector('[data-reflect-remove="' + was.remove + '"]');
+      if (back) back.focus({ preventScroll: true });
+    }
   }
 
   /* ---------------- wiring ---------------- */
@@ -1715,6 +1966,14 @@
     $("dcRulesManager").addEventListener("click", handleRulesManagerClick);
     $("dcNudges").addEventListener("click", handleNudgeClick);
     $("discipline-program").addEventListener("click", handleProgramClick);
+    $("discipline-program").addEventListener("input", handleProgramInput);
+    $("discipline-program").addEventListener("keydown", handleProgramKey);
+    // <details> doesn't bubble "toggle", so listen on the way down: opened days stay open when the page redraws.
+    $("dcProgDays").addEventListener("toggle", function (e) {
+      const d = e.target;
+      if (!d || !d.matches || !d.matches("details[data-day]")) return;
+      if (d.open) progOpen[d.getAttribute("data-day")] = true; else delete progOpen[d.getAttribute("data-day")];
+    }, true);
     $("dcLessonToggle").addEventListener("click", function () { lessonOpen = !lessonOpen; renderLessonCard(); });
     $("dcLessonGo").addEventListener("click", function () { $("disciplineSubNavProgram").click(); });
 

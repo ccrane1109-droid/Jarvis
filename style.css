@@ -2792,19 +2792,63 @@ button.rm-hist-row { cursor: pointer; }
 /* Discipline: 30-day program */
 
 .dc-lesson { border-left: 4px solid var(--accent-dim); }
-.dc-lesson-p { font-size: 14px; color: var(--text-dim); margin: 8px 0; line-height: 1.5; }
-.dc-lesson-p strong { color: var(--text); }
-.dc-lesson-p.dc-do { color: var(--text); }
+.dc-lesson-sec { margin: 14px 0; }
+.dc-lesson-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 700; margin: 0 0 4px; }
+.dc-lesson-h small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; }
+.dc-lesson-p { font-size: 15px; color: var(--text-dim); margin: 0; line-height: 1.55; overflow-wrap: anywhere; }
+.dc-lesson-sec.dc-do { padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--bg-elevated); border-radius: 6px; }
+.dc-lesson-sec.dc-do .dc-lesson-p { color: var(--text); }
+.dc-lesson-sec .field-hint { margin-top: 6px; }
+.dc-reflect-input { width: 100%; margin-top: 8px; }
+.dc-reflect-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px; min-height: 18px; }
+.dc-reflect-foot .field-hint { margin-top: 0; }
+.dc-reflect .form-actions { margin-top: 8px; align-items: center; }
+.dc-reflect .btn { min-height: 44px; }
+.dc-reflect-confirm { margin-top: 8px; padding: 10px 12px; border-left: 3px solid var(--red); background: var(--bg-elevated); border-radius: 6px; }
+
 .dc-check.auto { cursor: default; }
-.dc-auto { display: inline-block; margin-left: 4px; font-size: 11px; color: var(--text-faint); }
+.dc-check-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dc-kind { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint); }
+.dc-mission + .dc-mission { margin-top: 2px; }
+.dc-how { font-size: 13px; color: var(--text-dim); margin: 6px 4px 0; line-height: 1.45; overflow-wrap: anywhere; }
+.dc-needs { font-size: 13px; color: var(--yellow); margin: 4px 4px 0; }
+.dc-prog-overview .dc-stats-grid, .dc-lesson + .card .dc-stats-grid { margin-top: 12px; }
+.dc-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0 0; }
+.dc-stat { padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); min-width: 0; }
+.dc-stat dt { font-size: 12px; color: var(--text-faint); font-weight: 600; }
+.dc-stat dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.dc-stats-grid + .field-hint { margin-top: 8px; }
+.dc-coming { margin-top: 16px; }
+.dc-coming-list { margin-top: 6px; }
+#dcProgMissions .dc-track { margin: 8px 0 12px; }
+.dc-restart { margin-top: 4px; }
+.dc-restart .dc-lines { margin: 6px 0 12px; }
+.dc-restart .btn { min-height: 44px; }
+
+.dc-week { margin-top: 16px; }
+.dc-week:first-child { margin-top: 8px; }
+.dc-week-h { font-size: 14px; font-weight: 700; margin: 0 0 4px; overflow-wrap: anywhere; }
+.dc-week-h small { font-weight: 400; color: var(--text-faint); margin-left: 6px; }
 .dc-day { padding: 10px 0; border-bottom: 1px solid var(--card-border); }
 .dc-day:last-child { border-bottom: none; }
 .dc-day summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; font-weight: 600; min-height: 44px; }
-.dc-day summary span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.dc-day.locked { display: flex; justify-content: space-between; gap: 12px; color: var(--text-faint); }
+.dc-day-name { min-width: 0; overflow-wrap: anywhere; }
+.dc-day-state { font-size: 12px; font-weight: 400; color: var(--text-faint); text-align: right; flex: 0 1 auto; }
+.dc-day summary .dc-day-state { white-space: nowrap; }
+.dc-day.complete summary .dc-day-state { color: var(--green); }
+.dc-day.locked, .dc-day.today { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; }
+.dc-day.locked { color: var(--text-faint); }
+.dc-day.today .dc-day-name { font-weight: 700; }
+.dc-day.today .dc-day-state { color: var(--accent); font-weight: 600; }
 .dc-checklist + .field-hint { margin-top: 10px; }
-.dc-day summary .field-hint { white-space: nowrap; margin-top: 0; flex: 0 0 auto; }
+.dc-day > .dc-lesson-h { margin-top: 14px; }
 
+@media (max-width: 400px) {
+  .dc-day.locked, .dc-day.today { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .dc-day.locked .dc-day-state, .dc-day.today .dc-day-state { text-align: left; }
+  .dc-day summary { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .dc-day summary .dc-day-state { white-space: normal; text-align: left; }
+}
 
 /* Discipline: Today as a command centre (overview, guided planning, three-part review, progress) */
 

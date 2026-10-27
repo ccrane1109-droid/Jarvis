@@ -136,6 +136,7 @@
 
   const PRIORITY_MAX = 100;
   const NOTE_MAX = 240;
+  const REFLECT_MAX = 240; // one optional answer per program day
   const DEFAULT_PHONE_LIMIT = 5;
   const MIN_NOTE_CHARS = 3;
   const MIN_DAYS_FOR_AVERAGES = 3;
@@ -228,7 +229,8 @@
     };
   }
 
-  // The 30-day program: the day it started, and which of each day's own-word missions were ticked ({ "3": [0, 2] }).
+  // The 30-day program: the day it started, which of each day's own-word missions were ticked ({ "3": [0, 2] }), and the
+  // optional reflection written for each day ({ "3": "text" }). Both are keyed by program day (1-30).
   function sanitizeProgram(raw) {
     const r = raw && typeof raw === "object" ? raw : {};
     const done = {};
@@ -238,7 +240,25 @@
       const picked = r.done[k].filter(function (i, at, all) { return Number.isInteger(i) && i >= 0 && i <= 9 && all.indexOf(i) === at; });
       if (picked.length) done[String(n)] = picked.sort();
     });
-    return { start: isISODate(r.start) ? r.start : null, done: done };
+    const reflections = {};
+    const rf = r.reflections && typeof r.reflections === "object" && !Array.isArray(r.reflections) ? r.reflections : {};
+    Object.keys(rf).forEach(function (k) {
+      const n = Number(k);
+      const text = typeof rf[k] === "string" ? clean(rf[k], REFLECT_MAX) : "";
+      if (Number.isInteger(n) && n >= 1 && n <= 30 && text) reflections[String(n)] = text;
+    });
+    return { start: isISODate(r.start) ? r.start : null, done: done, reflections: reflections };
+  }
+
+  // The calendar day (on this device) a rule was added, read from its id, or null if the id doesn't say. Rules made by
+  // this app get "r" + the time in base 36 (8 characters until 2059) + an optional counter.
+  function ruleAddedDate(rule) {
+    const m = rule && typeof rule.id === "string" ? rule.id.match(/^r([0-9a-z]{8})/) : null;
+    const ms = m ? parseInt(m[1], 36) : NaN;
+    if (!(ms > 1577836800000 && ms < 4102444800000)) return null; // between 2020 and 2100, else it isn't one of ours
+    const d = new Date(ms);
+    const p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
   }
 
   // One planned item: its text, whether it is done, and an optional due time and category.
@@ -359,7 +379,8 @@
         const extras = { routine: state(r.extras && r.extras.routine), managed: state(r.extras && r.extras.managed) };
         entry.review = { items: items, extras: extras, focus: rating(r.focus), time: rating(r.time), rules: rules, screenHours: clean(r.screenHours, 6), notes: notes, at: stamp(r.at) };
       }
-      if (entry.morning || entry.review) out[date] = entry;
+      if (typeof d.reflect === "string") entry.reflect = clean(d.reflect, REFLECT_MAX); // an unsaved program reflection for the program day on this date
+      if (entry.morning || entry.review || entry.reflect !== undefined) out[date] = entry;
     });
     return out;
   }
@@ -787,7 +808,7 @@
     nextUp: nextUp, timerState: timerState, avoidSummary: avoidSummary, blockerSummary: blockerSummary, ruleSummary: ruleSummary,
     suggestRules: suggestRules, weeklyText: weeklyText, shortDate: shortDate, firstUseDate: firstUseDate,
     CATEGORIES: CATEGORIES, ITEMS: ITEMS, DAY_TYPES: DAY_TYPES, NOTE_FIELDS: NOTE_FIELDS,
-    PRIORITY_MAX: PRIORITY_MAX, NOTE_MAX: NOTE_MAX, DEFAULT_PHONE_LIMIT: DEFAULT_PHONE_LIMIT,
+    PRIORITY_MAX: PRIORITY_MAX, NOTE_MAX: NOTE_MAX, REFLECT_MAX: REFLECT_MAX, ruleAddedDate: ruleAddedDate, DEFAULT_PHONE_LIMIT: DEFAULT_PHONE_LIMIT,
     MIN_DAYS_FOR_AVERAGES: MIN_DAYS_FOR_AVERAGES, MIN_DAYS_FOR_WEEKDAYS: MIN_DAYS_FOR_WEEKDAYS,
     isISODate: isISODate, addDays: addDays, weekdayOf: weekdayOf, daysBetween: daysBetween,
     sanitizeDay: sanitizeDay, sanitizeStore: sanitizeStore,

@@ -187,8 +187,23 @@
     return out;
   }
 
+  // The 30-day program. Two copies that started on different days are two different runs (day 3 of one is not day 3 of
+  // the other), so the later start wins whole: that is what a restart looks like, and mixing the ticks would show
+  // missions as done that were never done in the new run. The same start: ticks and reflections from both, this
+  // device's wording where both wrote one.
+  function mergeProgram(lp, cp) {
+    const start = lp.start && cp.start ? (lp.start >= cp.start ? lp.start : cp.start) : (lp.start || cp.start || null);
+    const takeL = !cp.start || (lp.start && lp.start >= cp.start), takeC = !lp.start || (cp.start && cp.start >= lp.start);
+    const L = takeL ? lp : {}, C = takeC ? cp : {};
+    const done = {};
+    Object.keys(Object.assign({}, C.done, L.done)).forEach(function (d) {
+      done[d] = Array.from(new Set([].concat((L.done && L.done[d]) || [], (C.done && C.done[d]) || []))).sort();
+    });
+    return { start: start, done: done, reflections: Object.assign({}, C.reflections, L.reflections) };
+  }
+
   // The Discipline tracker's store: rules by text, the avoiding log by time, each day as a whole (the one touched
-  // last), program progress combined, and this device's settings and running timer.
+  // last), the 30-day program (see mergeProgram), and this device's settings and running timer.
   function mergeDiscipline(local, cloud) {
     if (!isObj(local)) return isObj(cloud) ? cloud : local;
     if (!isObj(cloud)) return local;
@@ -206,12 +221,7 @@
     });
     out.avoid = avoid.sort(function (x, y) { return num(x.at) - num(y.at); }).slice(-300);
     out.timer = local.timer || null;
-    const lp = isObj(local.program) ? local.program : {}, cp = isObj(cloud.program) ? cloud.program : {};
-    const done = {};
-    Object.keys(Object.assign({}, cp.done, lp.done)).forEach(function (d) {
-      done[d] = Array.from(new Set([].concat((lp.done && lp.done[d]) || [], (cp.done && cp.done[d]) || []))).sort();
-    });
-    out.program = { start: lp.start || cp.start || null, done: done };
+    out.program = mergeProgram(isObj(local.program) ? local.program : {}, isObj(cloud.program) ? cloud.program : {});
     const touched = function (day) {
       return isObj(day) ? Math.max(num(day.review && day.review.savedAt), num(day.morning && day.morning.savedAt), num(day.morning && day.morning.editedAt)) : 0;
     };

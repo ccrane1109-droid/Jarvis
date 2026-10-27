@@ -155,7 +155,7 @@ test("the saved store drops bad dates and junk, keeps real days, and defaults th
   assert.equal(s.settings.phoneLimit, D.DEFAULT_PHONE_LIMIT);
   assert.equal(D.sanitizeStore({ settings: { phoneLimit: 3.5 } }).settings.phoneLimit, 3.5);
   assert.deepEqual(D.sanitizeStore(null), {
-    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, program: { start: null, done: {} }, drafts: {}, days: {}
+    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, program: { start: null, done: {}, reflections: {} }, drafts: {}, days: {}
   });
   assert.deepEqual(D.sanitizeStore("garbage").days, {});
 });
@@ -482,9 +482,42 @@ test("a timer remembers its task and avoid-log entry, and ignores a task id that
 });
 
 test("the program state keeps a real start date and only valid ticks", () => {
-  assert.deepEqual(D.sanitizeProgram(null), { start: null, done: {} });
+  assert.deepEqual(D.sanitizeProgram(null), { start: null, done: {}, reflections: {} });
   assert.equal(D.sanitizeProgram({ start: "2026-02-30" }).start, null, "not a real date");
   assert.equal(D.sanitizeProgram({ start: "2026-10-22" }).start, "2026-10-22");
   const p = D.sanitizeProgram({ start: "2026-10-22", done: { "1": [2, 0, 2, "x", -1, 99], "31": [0], "0": [0], "3": [], "7": "no", "x": [1] } });
   assert.deepEqual(p.done, { "1": [0, 2] }, "days outside 1-30, empty and junk are dropped; ticks are unique and sorted");
+});
+
+test("program reflections are kept per day as short plain text, and junk is dropped", () => {
+  const long = "x".repeat(400);
+  const p = D.sanitizeProgram({ start: "2026-10-22", reflections: { "1": "  I   noticed\n it  ", "2": "", "3": "   ", "30": "last", "31": "too late", "0": "zero", "x": "nope", "4": 42, "5": ["a"], "6": long } });
+  assert.deepEqual(Object.keys(p.reflections), ["1", "6", "30"]);
+  assert.equal(p.reflections["1"], "I noticed it", "whitespace is tidied");
+  assert.equal(p.reflections["6"].length, D.REFLECT_MAX, "and long text is cut to the limit");
+  assert.deepEqual(D.sanitizeProgram({ reflections: ["a", "b"] }).reflections, {}, "an array is not a map of days");
+  assert.deepEqual(D.sanitizeProgram({ reflections: "text" }).reflections, {});
+  assert.deepEqual(D.sanitizeProgram(D.sanitizeProgram(p)), D.sanitizeProgram(p), "cleaning twice changes nothing");
+  assert.deepEqual(D.sanitizeStore({ program: { start: "2026-10-22", reflections: { "2": "kept" } } }).program.reflections, { "2": "kept" }, "the saved store keeps them");
+});
+
+test("an unsaved reflection is kept as a draft under its date", () => {
+  const d = D.sanitizeDrafts({ "2026-10-22": { reflect: "  half   written " }, "2026-10-23": { reflect: "" }, "2026-10-24": { reflect: 5 }, "2026-10-25": { reflect: "x".repeat(500) } });
+  assert.deepEqual(Object.keys(d), ["2026-10-22", "2026-10-23", "2026-10-25"], "an empty draft is real (it clears a saved one); a non-text one is dropped");
+  assert.equal(d["2026-10-22"].reflect, "half written");
+  assert.equal(d["2026-10-23"].reflect, "");
+  assert.equal(d["2026-10-25"].reflect.length, D.REFLECT_MAX);
+});
+
+test("when a rule was added is read from its id, and only from ids made by the app", () => {
+  const local = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi).getTime();
+  const idAt = (ms, extra) => "r" + ms.toString(36) + (extra || "");
+  assert.equal(D.ruleAddedDate({ id: idAt(local(2026, 10, 22, 8, 30)) }), "2026-10-22");
+  assert.equal(D.ruleAddedDate({ id: idAt(local(2026, 10, 22, 23, 59), "2") }), "2026-10-22", "the counter on the end is ignored");
+  assert.equal(D.ruleAddedDate({ id: idAt(local(2026, 10, 23, 0, 1)) }), "2026-10-23", "just after midnight is the next calendar day");
+  ["", "r", "rabc", "x" + local(2026, 1, 1, 1, 1).toString(36), "r00000001", "R" + local(2026, 1, 1, 1, 1).toString(36)].forEach((id) => assert.equal(D.ruleAddedDate({ id: id }), null, JSON.stringify(id)));
+  assert.equal(D.ruleAddedDate(null), null);
+  assert.equal(D.ruleAddedDate({ id: 5 }), null);
+  const made = D.sanitizeRules([{ text: "A rule" }]);
+  assert.match(D.ruleAddedDate(made[0]), /^\d{4}-\d{2}-\d{2}$/, "a rule given an id by sanitizeRules is dated too");
 });
