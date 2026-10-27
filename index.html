@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=56">
+<link rel="stylesheet" href="style.css?v=57">
 </head>
 <body>
 
@@ -2231,32 +2231,49 @@ npx firebase-tools deploy --only firestore:rules</pre>
       </div>
       <div class="card">
         <h2 class="card-title">Daily score</h2>
-        <div class="dc-chart" id="dcChart" role="img" aria-label="Daily discipline scores"></div>
-        <div class="dc-chart-axis" id="dcChartAxis"></div>
+        <div id="dcChart"></div>
+        <details class="dc-detail"><summary>Show the numbers</summary><div id="dcChartList"></div></details>
+        <p class="field-hint">Always 0 to 100. A day with no review is a gap, never a zero.</p>
       </div>
       <div class="card">
         <h2 class="card-title">Where the points go</h2>
         <div id="dcCategories"></div>
+        <p class="field-hint" id="dcCategoriesNote"></p>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Your days</h2>
+        <div id="dcHeatmap"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">This week and last week</h2>
+        <div id="dcCompare"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Habits and rules</h2>
+        <div id="dcConsistency"></div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">What your entries say</h2>
+        <div id="dcInsights"></div>
       </div>
       <div class="card">
         <h2 class="card-title">When you avoid things</h2>
         <div id="dcAvoidStats"></div>
       </div>
-      <div class="card">
-        <h2 class="card-title">Your rules</h2>
-        <div id="dcRuleStats"></div>
-      </div>
-      <div class="card">
+      <div class="card" id="dcWeeklyCard">
         <h2 class="card-title">Weekly review</h2>
-        <p class="field-hint">The last 7 days, a rule to try next, and a summary you can send to someone you answer to. Nothing is sent unless you tap Share.</p>
+        <p class="field-hint">The last 7 days. Nothing is sent anywhere unless you tap Share.</p>
+        <div id="dcWeeklyReport"></div>
         <h3 class="checklist-title">Try next week</h3>
         <div id="dcWeeklySuggestions"></div>
         <h3 class="checklist-title">Your week, to share</h3>
+        <fieldset class="dc-share-options" id="dcShareOptions"><legend class="field-hint">Include</legend></fieldset>
         <textarea id="dcWeeklyText" rows="7" aria-label="Your weekly summary. You can edit it before sharing."></textarea>
-        <p class="field-hint">Numbers and your rules only. Your reflections and task names are never included. Edit it however you like first.</p>
+        <p class="field-hint" id="dcShareHint">Numbers only, unless you tick “in my own words”. Task names, reflections and notes are never included. Edit it however you like first.</p>
         <div class="form-actions dc-share-row">
           <button type="button" class="btn btn-primary" id="dcShareBtn">Share my week</button>
           <button type="button" class="btn btn-secondary" id="dcCopyBtn">Copy</button>
+          <button type="button" class="btn btn-secondary hidden" id="dcRebuildBtn">Rebuild from my choices</button>
         </div>
       </div>
       <div class="card">
@@ -4933,37 +4950,39 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=56"></script>
-<script src="js/backup-logic.js?v=56"></script>
-<script src="js/cloud-backup.js?v=56"></script>
-<script type="module" src="js/auth.js?v=56"></script>
-<script src="js/app.js?v=56"></script>
-<script src="js/exercises.js?v=56"></script>
-<script src="js/workout.js?v=56"></script>
-<script src="js/nutrition.js?v=56"></script>
-<script src="js/nutrition-label-parse.js?v=56"></script>
-<script src="js/nutrition-label-scan.js?v=56"></script>
-<script src="js/groceries.js?v=56"></script>
-<script src="js/habits.js?v=56"></script>
-<script src="js/discipline-logic.js?v=56"></script>
-<script src="js/discipline-program.js?v=56"></script>
-<script src="js/discipline-habits.js?v=56"></script>
-<script src="js/discipline.js?v=56"></script>
-<script src="functions/lib/reminder-spec.js?v=56"></script>
-<script src="functions/lib/reminder-events.js?v=56"></script>
-<script src="js/reminders.js?v=56"></script>
-<script src="js/business.js?v=56"></script>
-<script src="js/trading.js?v=56"></script>
-<script src="js/blobstore.js?v=56"></script>
-<script src="js/video-api-client.js?v=56"></script>
-<script src="js/video-connections.js?v=56"></script>
-<script src="js/video.js?v=56"></script>
-<script src="js/video-studio.js?v=56"></script>
-<script src="functions/lib/idea-spec.js?v=56"></script>
-<script src="functions/lib/niche-spec.js?v=56"></script>
-<script src="js/marketing-stats.js?v=56"></script>
-<script src="js/niche-research.js?v=56"></script>
-<script src="js/content-intelligence.js?v=56"></script>
-<script src="js/form-check.js?v=56"></script>
+<script src="js/firebase-config.js?v=57"></script>
+<script src="js/backup-logic.js?v=57"></script>
+<script src="js/cloud-backup.js?v=57"></script>
+<script type="module" src="js/auth.js?v=57"></script>
+<script src="js/app.js?v=57"></script>
+<script src="js/exercises.js?v=57"></script>
+<script src="js/workout.js?v=57"></script>
+<script src="js/nutrition.js?v=57"></script>
+<script src="js/nutrition-label-parse.js?v=57"></script>
+<script src="js/nutrition-label-scan.js?v=57"></script>
+<script src="js/groceries.js?v=57"></script>
+<script src="js/habits.js?v=57"></script>
+<script src="js/discipline-logic.js?v=57"></script>
+<script src="js/discipline-program.js?v=57"></script>
+<script src="js/discipline-habits.js?v=57"></script>
+<script src="js/discipline-insights.js?v=57"></script>
+<script src="js/discipline-charts.js?v=57"></script>
+<script src="js/discipline.js?v=57"></script>
+<script src="functions/lib/reminder-spec.js?v=57"></script>
+<script src="functions/lib/reminder-events.js?v=57"></script>
+<script src="js/reminders.js?v=57"></script>
+<script src="js/business.js?v=57"></script>
+<script src="js/trading.js?v=57"></script>
+<script src="js/blobstore.js?v=57"></script>
+<script src="js/video-api-client.js?v=57"></script>
+<script src="js/video-connections.js?v=57"></script>
+<script src="js/video.js?v=57"></script>
+<script src="js/video-studio.js?v=57"></script>
+<script src="functions/lib/idea-spec.js?v=57"></script>
+<script src="functions/lib/niche-spec.js?v=57"></script>
+<script src="js/marketing-stats.js?v=57"></script>
+<script src="js/niche-research.js?v=57"></script>
+<script src="js/content-intelligence.js?v=57"></script>
+<script src="js/form-check.js?v=57"></script>
 </body>
 </html>

@@ -305,8 +305,6 @@
   }
 
   const hasText = function (t) { return !!t && !!t.text; };
-  const IF_WORD = /\b(if|when|whenever|after|once)\b/i;
-  const THEN_WORD = /\b(then|i will|i'll|i am going to|i'm going to)\b/i;
 
   // Is one mission done? Automatic ones look at what was entered for that day; the rest are ticked by hand.
   //   ctx: { date, days, rules, avoid, manualDone: [indexes ticked], dayNumber }
@@ -317,7 +315,7 @@
     const planned = !!morning && (hasText(morning.keyTask) || morning.priorities.some(hasText));
     const scored = L.scoreDay(day).complete;
     if (m.a === "plan") return planned;
-    if (m.a === "ifThen") return !!morning && IF_WORD.test(morning.plan) && THEN_WORD.test(morning.plan);
+    if (m.a === "ifThen") return !!morning && L.hasIfThen(morning.plan);
     if (m.a === "timed") {
       if (!morning) return false;
       const items = [morning.keyTask].concat(morning.priorities).filter(hasText);
