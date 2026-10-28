@@ -2766,14 +2766,15 @@ button.rm-hist-row { cursor: pointer; }
   position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; aspect-ratio: 1 / 1; min-height: 34px;
   border-radius: 6px; border: 1px solid var(--card-border); background: var(--bg-elevated);
 }
-.dc-heat-d { position: absolute; top: 2px; left: 4px; font-size: 9px; line-height: 1; color: var(--text-faint); }
+.dc-heat-d { position: absolute; top: 2px; left: 4px; font-size: 10px; line-height: 1; color: var(--text-faint); }
+.dc-heat-cell.s-scored .dc-heat-d, .dc-heat-cell.s-scored .dc-heat-n { color: #fff; }
 .dc-heat-n { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
-.dc-heat-cell.s-outside, .dc-heat-cell.s-future { background: transparent; border-style: dashed; opacity: 0.4; }
+.dc-heat-cell.s-outside, .dc-heat-cell.s-future { background: transparent; border-style: dashed; }
 .dc-heat-cell.s-planned { border-style: dashed; border-color: var(--text-faint); }
 .dc-heat-cell.s-scored.b1, .dc-heat-sw.s-scored.b1 { background: rgba(79, 140, 255, 0.18); border-color: rgba(79, 140, 255, 0.35); }
 .dc-heat-cell.s-scored.b2, .dc-heat-sw.s-scored.b2 { background: rgba(79, 140, 255, 0.36); border-color: rgba(79, 140, 255, 0.55); }
 .dc-heat-cell.s-scored.b3, .dc-heat-sw.s-scored.b3 { background: rgba(79, 140, 255, 0.62); border-color: rgba(79, 140, 255, 0.8); }
-.dc-heat-cell.s-scored.b4, .dc-heat-sw.s-scored.b4 { background: #3f78e6; border-color: var(--accent-hover); }
+.dc-heat-cell.s-scored.b4, .dc-heat-sw.s-scored.b4 { background: #2a66d4; border-color: var(--accent-hover); }
 .dc-heat-cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
 .dc-heat-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; font-size: 11px; color: var(--text-dim); }
 .dc-heat-legend span { display: inline-flex; align-items: center; gap: 4px; }
@@ -3106,4 +3107,105 @@ button.rm-hist-row { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .bottom-nav, .bottom-nav-btn { transition: none; }
+}
+
+/* ==========================================================================
+   Discipline, phase 5: Setup groups, rules, switches, reminders, focus and motion
+   ========================================================================== */
+
+/* Contrast: on the dark cards the shared faint grey and the white-on-bright-blue pair fall under 4.5:1. These are
+   adjusted inside Discipline only, so other modules look exactly as before. */
+#panel-discipline { --text-faint: #8b93a7; }
+#panel-discipline .badge-accent { color: #9ec1ff; }
+#panel-discipline .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+#panel-discipline .btn-primary:hover { background: #2a66d4; border-color: #2a66d4; }
+
+.dc-group { margin-top: 22px; }
+.dc-group:first-child { margin-top: 4px; }
+.dc-group-title { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin: 0 4px 8px; }
+.dc-group > .card { margin-top: 12px; }
+.dc-group > .card:first-of-type { margin-top: 0; }
+.dc-group .card-title { font-size: 16px; }
+.dc-error { color: var(--red); font-size: 13px; min-height: 0; margin: 6px 0 0; overflow-wrap: anywhere; }
+.dc-error:empty { display: none; }
+input[aria-invalid="true"] { border-color: var(--red); }
+.dc-warn { color: var(--yellow); }
+.dc-used { margin-top: 4px; }
+.dc-used li { font-size: 13px; }
+
+/* on / off switch */
+.dc-switch {
+  position: relative; flex: 0 0 52px; width: 52px; height: 32px; padding: 0; border-radius: 999px; cursor: pointer;
+  background: var(--bg-elevated); border: 2px solid var(--text-faint);
+}
+.dc-switch-knob { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--text-dim); }
+.dc-switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.dc-switch[aria-checked="true"] .dc-switch-knob { left: 23px; background: #fff; }
+#dcRuleBuild, #dcRuleFree { display: flex; flex-direction: column; gap: 12px; }
+#dcRuleBuild.hidden, #dcRuleFree.hidden { display: none; }
+.dc-detail summary::before { content: "▸"; display: inline-block; width: 16px; color: var(--accent); }
+.dc-detail[open] > summary::before { content: "▾"; }
+#dcDayPills .segmented-btn, #dcWindowPills .segmented-btn, #dcRuleMode .segmented-btn { min-height: 44px; }
+.dc-switch-row { display: flex; align-items: center; gap: 12px; min-height: 48px; margin: 8px 0; }
+.dc-switch-row > span { min-width: 0; overflow-wrap: anywhere; }
+.dc-rule-row .dc-switch { margin: 6px 0; }
+/* the touch area is bigger than the 32px track */
+.dc-switch::after { content: ""; position: absolute; inset: -8px -4px; }
+
+/* rules */
+.dc-rule-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; }
+.dc-rule-row { gap: 10px; flex-wrap: wrap; }
+.dc-rule-row .dc-rule-text { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.dc-rule-row.off .dc-rule-text { color: var(--text-dim); }
+.dc-off-tag { font-size: 11px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; margin-left: 4px; }
+.dc-rule-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+.dc-rule-actions .btn-icon { min-height: 44px; min-width: 44px; }
+.dc-rule-row.editing, .dc-rule-row.confirming { display: block; }
+.dc-rule-edit label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.dc-rule-edit input { width: 100%; }
+.dc-rule-row .form-actions { margin-top: 10px; }
+.dc-rule-row .form-actions .btn { min-height: 44px; }
+.dc-rule-preview { font-size: 13px; color: var(--text-dim); min-height: 18px; margin: 4px 0 0; overflow-wrap: anywhere; }
+#dcRuleMode { margin-bottom: 12px; }
+#dcRuleForm .checklist-title { margin: 14px 0 8px; }
+#dcRulesManager:focus { outline: none; }
+
+/* reminders */
+.dc-rem-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; }
+.dc-states { margin: 8px 0 0; font-size: 13px; }
+.dc-states dt { font-weight: 700; color: var(--text); margin-top: 8px; }
+.dc-states dd { margin: 2px 0 0; color: var(--text-dim); }
+#dcPushCard .form-actions .btn { min-height: 44px; }
+.dc-loading .nr-status-badge { opacity: 0.7; }
+
+/* Keyboard focus: a clear ring on everything in Discipline and the bottom bar, only for keyboard use */
+#panel-discipline :is(button, a, input, select, textarea, summary, [tabindex], [role="switch"], [role="checkbox"]):focus-visible,
+#bottomNav button:focus-visible, #moreSheet button:focus-visible {
+  outline: 2px solid var(--accent-hover); outline-offset: 2px;
+}
+#panel-discipline .segmented-btn:focus-visible { outline-offset: -2px; }
+
+/* Comfortable touch targets: every button and disclosure in Discipline is at least 44px tall */
+#panel-discipline .btn, #panel-discipline .btn-icon { min-height: 44px; }
+#panel-discipline summary { min-height: 44px; display: flex; align-items: center; }
+
+/* Reduced motion: no transitions or animations anywhere in Discipline or the bottom bar */
+@media (prefers-reduced-motion: reduce) {
+  #panel-discipline, #panel-discipline *, #bottomNav, #bottomNav *, #moreSheet, #moreSheet * { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
+/* Motion: short and quiet. Nothing here runs when the phone is set to reduce motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .discipline-sub-panel.active { animation: dcPanelIn 0.16s ease-out; }
+  @keyframes dcPanelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  #panel-discipline .btn, #panel-discipline .dc-chip, #panel-discipline .segmented-btn, #panel-discipline .dc-check, #panel-discipline .btn-icon {
+    transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  #panel-discipline .btn:active, #panel-discipline .dc-chip:active, #panel-discipline .segmented-btn:active, #panel-discipline .dc-check:active { transform: scale(0.98); }
+  .dc-switch, .dc-switch-knob { transition: background-color 0.15s ease, border-color 0.15s ease, left 0.15s ease; }
+  .dc-box { transition: background-color 0.15s ease, border-color 0.15s ease; }
+  .dc-check.pop .dc-box { animation: dcPop 0.2s ease-out; }
+  @keyframes dcPop { 0% { transform: scale(0.7); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  .dc-loading .nr-status-badge { animation: dcPulse 1.1s ease-in-out infinite; }
+  @keyframes dcPulse { 50% { opacity: 0.4; } }
 }

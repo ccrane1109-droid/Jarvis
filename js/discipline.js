@@ -2,8 +2,8 @@
    JARVIS — Discipline tracker (screens). The rules live in discipline-logic.js.
 
    localStorage key:
-     jarvisDiscipline — { settings: { phoneLimit, times: { planBy, afterSchool, review } },
-                          rules: [ { id, text } ],                      your own if-then rules
+     jarvisDiscipline — { settings: { phoneLimit, times: { planBy, afterSchool, review }, lessonOnToday },
+                          rules: [ { id, text, enabled } ],             your own rules (at most 5; a turned-off rule keeps its place and history)
                           avoid: [ { at, date, task, reason, excuse, outcome } ],   "I'm avoiding it" log
                           timer: { task, taskId, reason, excuse, entryAt, startedAt, minutes, endsAt } | null,
                           days: { "<YYYY-MM-DD>": {
@@ -67,9 +67,9 @@
   const ACTION_LABELS = { plan: "Plan my day", scoreYesterday: "Score yesterday", start: "Start 2 minutes", avoid: "I'm avoiding it", review: "Open the review", planTomorrow: "Plan tomorrow", mission: "See today's missions", routine: "Open my habits" };
   const DAY_PREFIX = { today: "Today · ", yesterday: "Yesterday · ", tomorrow: "Tomorrow · " };
   const NUDGES = [
-    { key: "plan", title: "Lock in today's plan", timeKey: "planBy", type: "daily" },
-    { key: "school", title: "Phone on the charger. Homework first.", timeKey: "afterSchool", type: "weekly", days: [1, 2, 3, 4, 5] },
-    { key: "review", title: "Evening review: score your day", timeKey: "review", type: "daily" }
+    { key: "plan", title: "Lock in today's plan", timeKey: "planBy", what: "plan time", type: "daily" },
+    { key: "school", title: "Phone on the charger. Homework first.", timeKey: "afterSchool", what: "after-school time", type: "weekly", days: [1, 2, 3, 4, 5] },
+    { key: "review", title: "Evening review: score your day", timeKey: "review", what: "evening review time", type: "daily" }
   ];
 
   let store = emptyStore();
@@ -243,7 +243,7 @@
     ["today", "yesterday", "tomorrow"].forEach(function (k) {
       const b = $("dcDay" + k.charAt(0).toUpperCase() + k.slice(1));
       b.classList.toggle("active", selected === k);
-      b.setAttribute("aria-selected", String(selected === k));
+      b.setAttribute("aria-pressed", String(selected === k));
     });
     const streak = L.reviewStreak(store.days, todayISO());
     $("dcStreakBadge").textContent = streak ? streak + " day streak" : "No streak yet";
@@ -804,6 +804,7 @@
     // keep the keyboard on the item that was just ticked
     const same = $("dcMorningSummary").querySelector('.dc-check[data-check="' + id + '"]');
     if (same && document.activeElement === document.body) same.focus();
+    popTick('#dcMorningSummary .dc-check[data-check="' + id + '"]');
   }
 
   // Everything that shows the plan, after it changed without leaving the page.
@@ -844,15 +845,25 @@
         '<div class="segmented-control dc-seg" data-extra="' + k + '" role="group" aria-label="' + esc(L.EXTRA_ITEMS[k].label) + '">' +
         segButtons(["done", "not", "na"], draft.extras[k], function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
     }).join("");
-    $("dcRulesQ").classList.toggle("hidden", !store.rules.length);
-    $("dcRules").innerHTML = store.rules.map(function (r) {
-      return '<div class="dc-q"><span class="dc-q-label">' + esc(r.text) + '</span>' +
+    const asked = reviewRuleList(renderedDate || selectedDate());
+    $("dcRulesQ").classList.toggle("hidden", !asked.length);
+    $("dcRules").innerHTML = asked.map(function (r) {
+      return '<div class="dc-q"><span class="dc-q-label">' + esc(r.text) + (r.past ? ' <small>(not asked now)</small>' : "") + '</span>' +
         '<div class="segmented-control dc-seg" data-rule="' + esc(r.id) + '" role="group" aria-label="' + esc(r.text) + '">' +
         segButtons(["done", "not", "na"], draft.rules[r.id] || null, function (v) { return ANSWER_LABELS[v]; }) + '</div></div>';
     }).join("");
     renderPlanResults();
     renderRoutineReview();
     updateReviewProgress();
+  }
+
+  // The rules to answer for a day: the ones that are on now, plus any this day's saved review already has an answer for
+  // (a rule turned off or removed since). Re-scoring a past day therefore never drops an answer that was given.
+  function reviewRuleList(date) {
+    const list = L.activeRules(store.rules).map(function (r) { return { id: r.id, text: r.text, past: false }; });
+    const day = store.days[date];
+    if (day && day.review) day.review.rules.forEach(function (sr) { if (!list.some(function (x) { return x.id === sr.id; })) list.push({ id: sr.id, text: sr.text, past: true }); });
+    return list;
   }
 
   // What the plan says about the day under review: read from the plan, never asked twice.
@@ -1006,7 +1017,7 @@
       phoneLimit: day.review ? day.review.phoneLimit : store.settings.phoneLimit,
       items: draft.items, extras: draft.extras, focus: draft.focus, time: draft.time,
       habits: (function () { const r = routineOn(date); return r ? H.snapshot(r.routine) : null; })(),
-      rules: store.rules.map(function (r) { return { id: r.id, text: r.text, state: draft.rules[r.id] || null }; }),
+      rules: reviewRuleList(date).map(function (r) { return { id: r.id, text: r.text, state: draft.rules[r.id] || null }; }),
       blocker: day.review ? day.review.blocker : "",
       savedAt: Date.now() // each time the day is scored
     };
@@ -1040,7 +1051,7 @@
 
   function fixHtml(day) {
     const picked = reasonOf(day.review.blocker);
-    const have = store.rules.some(function (x) { return picked && x.text.toLowerCase() === picked.rule.toLowerCase(); });
+    const have = store.rules.some(function (x) { return picked && L.ruleKey(x.text) === L.ruleKey(picked.rule); });
     return '<div class="dc-fix"><h3 class="checklist-title">What got in the way?</h3>' +
       '<div class="dc-chips">' + L.REASONS.map(function (r) { return chipHtml("data-fix", r.key, r.label, picked && picked.key === r.key); }).join("") + '</div>' +
       (picked ? '<p class="dc-do"><strong>Try this:</strong> ' + esc(picked.rule) + '</p>' +
@@ -1222,41 +1233,201 @@
 
   /* ---------------- rules ---------------- */
 
-  // Returns false (with a message) when the rule can't be added.
+  let ruleMode = "build";   // "build" (When ..., I will ...) or "free" (any words)
+  let editingRule = "";     // the id of the rule whose words are being edited
+  let removingRule = "";    // the id of the rule whose removal is being asked about
+
+  // Adds a rule if it passes the same checks as the Setup form. Returns false (with a message) when it can't.
   function addRule(text) {
-    const t = tidy(text).slice(0, L.RULE_MAX);
-    if (!t) { core().showToast("Type the rule first."); return false; }
-    if (store.rules.some(function (r) { return r.text.toLowerCase() === t.toLowerCase(); })) { core().showToast("You already have that rule."); return false; }
-    if (store.rules.length >= L.MAX_RULES) { core().showToast("You have " + L.MAX_RULES + " rules. Remove one in Setup first."); return false; }
-    store.rules = L.sanitizeRules(store.rules.concat([{ id: "r" + Date.now().toString(36), text: t }]));
+    const c = L.checkRule(text, store.rules);
+    if (!c.ok) { core().showToast(c.error); return false; }
+    store.rules = L.sanitizeRules(store.rules.concat([{ id: "r" + Date.now().toString(36), text: c.text, enabled: true }]));
     save();
     renderReviewControls();
     renderResult();
     renderSetup();
     renderTrends();
+    renderNextUp();
+    renderLessonCard();
     return true;
   }
 
+  function ruleById(id) { return store.rules.filter(function (r) { return r.id === id; })[0] || null; }
+
+  function ruleRowHtml(r) {
+    const name = esc(r.text);
+    if (removingRule === r.id) {
+      return '<li class="dc-rule-row confirming"><div role="group" aria-label="Remove this rule?"><div><strong>Remove “' + name + '”?</strong>' +
+        '<div class="field-hint">Your past answers stay in your history. If you only want a break from it, turn it off instead.</div></div>' +
+        '<div class="form-actions"><button type="button" class="btn btn-danger" data-rule-del-yes="' + esc(r.id) + '">Yes, remove it</button>' +
+        '<button type="button" class="btn btn-secondary" data-rule-del-no="' + esc(r.id) + '">Keep it</button></div></div></li>';
+    }
+    if (editingRule === r.id) {
+      return '<li class="dc-rule-row editing"><form class="dc-rule-edit" data-rule-save="' + esc(r.id) + '" novalidate>' +
+        '<label for="dcRuleEdit">Edit this rule</label><input type="text" id="dcRuleEdit" maxlength="' + L.RULE_MAX + '" autocomplete="off" value="' + name + '" aria-describedby="dcRuleEditError">' +
+        '<p class="dc-error" id="dcRuleEditError" role="alert"></p>' +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary">Save</button><button type="button" class="btn btn-secondary" data-rule-edit-cancel="' + esc(r.id) + '">Cancel</button></div>' +
+        '<p class="field-hint">Your past answers stay in your history and keep counting toward this rule.</p></form></li>';
+    }
+    return '<li class="dc-rule-row' + (r.enabled ? "" : " off") + '">' +
+      '<button type="button" class="dc-switch" role="switch" aria-checked="' + r.enabled + '" data-rule-toggle="' + esc(r.id) + '" aria-label="Ask me this rule each evening: ' + name + '"><span class="dc-switch-knob" aria-hidden="true"></span></button>' +
+      '<span class="dc-rule-text">' + name + (r.enabled ? "" : ' <small class="dc-off-tag">off</small>') + '</span>' +
+      '<span class="dc-rule-actions"><button type="button" class="btn-icon" data-rule-edit="' + esc(r.id) + '" aria-label="Edit rule: ' + name + '">Edit</button>' +
+      '<button type="button" class="btn-icon danger" data-rule-del="' + esc(r.id) + '" aria-label="Remove rule: ' + name + '">Remove</button></span></li>';
+  }
+
   function renderRulesManager() {
+    const on = L.activeRules(store.rules).length;
     $("dcRulesManager").innerHTML = store.rules.length
-      ? '<div class="dc-rule-list">' + store.rules.map(function (r) {
-        return '<div class="dc-rule-row"><span>' + esc(r.text) + '</span><button type="button" class="btn-icon danger" data-rule-del="' + esc(r.id) + '" aria-label="Remove rule: ' + esc(r.text) + '">Remove</button></div>';
-      }).join("") + '</div><p class="field-hint">' + store.rules.length + ' of ' + L.MAX_RULES + ' rules.</p>'
+      ? '<ul class="dc-rule-list" aria-label="Your rules">' + store.rules.map(ruleRowHtml).join("") + '</ul><p class="field-hint">' + store.rules.length + ' of ' + L.MAX_RULES + ' rules, ' + on + ' on.</p>'
       : '<div class="empty-state">No rules yet. Add one below, or pick one from the Weekly review in Trends.</div>';
+    $("dcRuleAddBtn").disabled = false;
+  }
+
+  // A short pop on the box just ticked. The class is taken off again, so redrawing the page later doesn't replay it.
+  function popTick(selector) {
+    const el = document.querySelector(selector);
+    if (!el || !el.classList.contains("done")) return;
+    el.classList.add("pop");
+    window.setTimeout(function () { el.classList.remove("pop"); }, 300);
+  }
+
+  function focusSoon(selector) {
+    const el = document.querySelector(selector);
+    if (el) el.focus({ preventScroll: true });
   }
 
   function handleRulesManagerClick(e) {
+    const toggle = e.target.closest("[data-rule-toggle]");
+    const edit = e.target.closest("[data-rule-edit]");
+    const cancel = e.target.closest("[data-rule-edit-cancel]");
     const del = e.target.closest("[data-rule-del]");
-    if (!del) return;
-    const id = del.getAttribute("data-rule-del");
-    store.rules = store.rules.filter(function (r) { return r.id !== id; });
-    delete draft.rules[id];
+    const yes = e.target.closest("[data-rule-del-yes]");
+    const no = e.target.closest("[data-rule-del-no]");
+    if (toggle) {
+      const r = ruleById(toggle.getAttribute("data-rule-toggle"));
+      if (!r) return;
+      r.enabled = !r.enabled;
+      save();
+      toggle.setAttribute("aria-checked", String(r.enabled));
+      const row = toggle.closest(".dc-rule-row");
+      row.classList.toggle("off", !r.enabled);
+      const text = row.querySelector(".dc-rule-text");
+      const tag = text.querySelector(".dc-off-tag");
+      if (r.enabled && tag) tag.remove();
+      if (!r.enabled && !tag) { const t = document.createElement("small"); t.className = "dc-off-tag"; t.textContent = "off"; text.appendChild(document.createTextNode(" ")); text.appendChild(t); }
+      const count = $("dcRulesManager").querySelector(".dc-rule-list + .field-hint");
+      if (count) count.textContent = store.rules.length + " of " + L.MAX_RULES + " rules, " + L.activeRules(store.rules).length + " on.";
+      renderReviewControls();
+      renderTrends();
+      renderNextUp();
+      core().showToast(r.enabled ? "Rule on. You'll be asked it in the evening review." : "Rule off. It keeps its history and you won't be asked it.");
+    } else if (edit) {
+      editingRule = edit.getAttribute("data-rule-edit");
+      removingRule = "";
+      renderRulesManager();
+      focusSoon("#dcRuleEdit");
+    } else if (cancel) {
+      editingRule = "";
+      renderRulesManager();
+      focusSoon('[data-rule-edit="' + cancel.getAttribute("data-rule-edit-cancel") + '"]');
+    } else if (del) {
+      removingRule = del.getAttribute("data-rule-del");
+      editingRule = "";
+      renderRulesManager();
+      focusSoon('[data-rule-del-no="' + removingRule + '"]');
+    } else if (no) {
+      const id = no.getAttribute("data-rule-del-no");
+      removingRule = "";
+      renderRulesManager();
+      focusSoon('[data-rule-del="' + id + '"]');
+    } else if (yes) {
+      const id = yes.getAttribute("data-rule-del-yes");
+      store.rules = store.rules.filter(function (r) { return r.id !== id; });
+      delete draft.rules[id];
+      removingRule = "";
+      save();
+      renderReviewControls();
+      captureReviewDraft();
+      renderSetup();
+      renderResult();
+      renderTrends();
+      const m = $("dcRulesManager");
+      m.setAttribute("tabindex", "-1");
+      m.focus({ preventScroll: true });
+      core().showToast("Rule removed. Past answers stay in your history.");
+    }
+  }
+
+  function handleRuleEditSubmit(e) {
+    const form = e.target.closest("[data-rule-save]");
+    if (!form) return;
+    e.preventDefault();
+    const id = form.getAttribute("data-rule-save");
+    const r = ruleById(id);
+    if (!r) return;
+    const c = L.checkRule($("dcRuleEdit").value, store.rules, id);
+    if (!c.ok) { $("dcRuleEditError").textContent = c.error; $("dcRuleEdit").setAttribute("aria-invalid", "true"); $("dcRuleEdit").focus(); return; }
+    const changed = c.text !== r.text;
+    r.text = c.text;
+    editingRule = "";
     save();
+    renderRulesManager();
     renderReviewControls();
-    captureReviewDraft();
-    renderSetup();
-    renderResult();
-    core().showToast("Rule removed. Past answers stay in your history.");
+    renderTrends();
+    focusSoon('[data-rule-edit="' + id + '"]');
+    core().showToast(changed ? "Rule updated. Past answers stay with it." : "Nothing changed.");
+  }
+
+  /* ---- adding a rule: the builder and free text ---- */
+
+  function setRuleMode(mode) {
+    ruleMode = mode === "free" ? "free" : "build";
+    document.querySelectorAll("#dcRuleMode [data-rule-mode]").forEach(function (b) {
+      const on = b.getAttribute("data-rule-mode") === ruleMode;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    $("dcRuleBuild").classList.toggle("hidden", ruleMode !== "build");
+    $("dcRuleFree").classList.toggle("hidden", ruleMode !== "free");
+    showRuleError("");
+    updateRulePreview();
+  }
+
+  function showRuleError(msg, fieldId) {
+    $("dcRuleError").textContent = msg || "";
+    ["dcRuleWhen", "dcRuleWill", "dcRuleInput"].forEach(function (id) {
+      const f = $(id);
+      if (msg && id === fieldId) { f.setAttribute("aria-invalid", "true"); f.setAttribute("aria-describedby", "dcRuleError"); }
+      else { f.removeAttribute("aria-invalid"); f.removeAttribute("aria-describedby"); }
+    });
+    if (msg && fieldId) $(fieldId).focus();
+  }
+
+  function updateRulePreview() {
+    const box = $("dcRulePreview");
+    if (ruleMode !== "build") { box.textContent = ""; return; }
+    const typed = tidy($("dcRuleWhen").value) || tidy($("dcRuleWill").value);
+    const c = L.composeRule($("dcRuleWhen").value, $("dcRuleWill").value);
+    box.textContent = c.ok ? "It will read: " + c.text : typed ? "Fill in both boxes to see the rule." : "";
+  }
+
+  function handleRuleSubmit(e) {
+    e.preventDefault();
+    let text, field = "dcRuleInput";
+    if (ruleMode === "build") {
+      const c = L.composeRule($("dcRuleWhen").value, $("dcRuleWill").value);
+      if (!c.ok) { showRuleError(c.error, c.field === "action" ? "dcRuleWill" : "dcRuleWhen"); return; }
+      text = c.text;
+      field = "dcRuleWhen";
+    } else text = $("dcRuleInput").value;
+    const chk = L.checkRule(text, store.rules);
+    if (!chk.ok) { showRuleError(chk.error, field); return; }
+    showRuleError("");
+    addRule(chk.text);
+    ["dcRuleWhen", "dcRuleWill", "dcRuleInput"].forEach(function (id) { $(id).value = ""; });
+    updateRulePreview();
+    core().showToast("Rule added. You'll answer it each evening.");
   }
 
   /* ---------------- Trends ---------------- */
@@ -1347,7 +1518,7 @@
     html += rs.answered
       ? '<p class="dc-line">You kept your rules <strong>' + rs.rate + '%</strong> of the time (' + rs.kept + ' of ' + rs.answered + ' answers)' + (prev.rules.answered ? '. The ' + trendWindow + ' days before: ' + prev.rules.rate + '%' : "") + '.</p>' +
         listRows(rs.byRule.map(function (r) { return { label: r.text, value: r.kept + " of " + r.answered, pct: Math.round(100 * r.kept / r.answered) }; }))
-      : '<div class="empty-state">' + (store.rules.length ? "Answer your rules in tonight’s review and they show up here." : "Add a rule in Setup, then answer it each evening.") + '</div>';
+      : '<div class="empty-state">' + (L.activeRules(store.rules).length ? "Answer your rules in tonight’s review and they show up here." : store.rules.length ? "Your rules are all turned off. Turn one on in Setup and answer it each evening." : "Add a rule in Setup, then answer it each evening.") + '</div>';
     $("dcConsistency").innerHTML = html;
   }
 
@@ -1444,6 +1615,8 @@
     const ov = IN.overview(store.days, today, trendWindow);
     $("dcWindow7").classList.toggle("active", trendWindow === 7);
     $("dcWindow30").classList.toggle("active", trendWindow === 30);
+    $("dcWindow7").setAttribute("aria-pressed", String(trendWindow === 7));
+    $("dcWindow30").setAttribute("aria-pressed", String(trendWindow === 30));
     $("dcStats").innerHTML = trendStatsHtml(ov);
     renderTrendNotes(ov.cur);
 
@@ -1504,17 +1677,123 @@
 
   /* ---------------- Setup ---------------- */
 
+  const DX = window.JarvisDisciplineDelivery || null; // what Setup can honestly say about reminders
+  let remBusy = false;   // a "Check now" or "Send a test" is in flight
+
+  function reminders() { return window.JarvisReminders && typeof window.JarvisReminders.snapshot === "function" ? window.JarvisReminders : null; }
+  function nice(iso) {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+  function niceIn(iso, zone) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const opts = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+    try { return d.toLocaleString("en-US", Object.assign({ timeZone: zone || undefined }, opts)); } catch (e) { return d.toLocaleString("en-US", opts); }
+  }
+
+  function renderProgPref() {
+    if (!P) { $("dcProgPref").textContent = "The program isn't available right now."; $("dcAdoptTarget").classList.add("hidden"); $("dcOpenProgram").classList.add("hidden"); return; }
+    const pd = P.programDay(store.program.start, todayISO());
+    let line;
+    if (pd.status === "notStarted") line = store.program.start ? "The program is set to start on " + prettyDate(store.program.start, true) + "." : "The program hasn't started yet. You can start it from the Program tab.";
+    else if (pd.status === "complete") line = "You finished the 30 days.";
+    else line = "You're on day " + pd.day + " of 30, week " + P.weekOf(pd.day).n + " (" + P.weekOf(pd.day).name + "). This week's phone target is " + P.phoneTarget(pd.day) + "h and your limit is " + store.settings.phoneLimit + "h.";
+    $("dcProgPref").textContent = line;
+    const target = pd.status === "active" ? P.phoneTarget(pd.day) : null;
+    const adopt = $("dcAdoptTarget");
+    adopt.classList.toggle("hidden", target === null || target === store.settings.phoneLimit);
+    if (target !== null) adopt.textContent = "Use " + target + "h as my limit";
+    const sw = $("dcLessonSwitch");
+    sw.setAttribute("aria-checked", String(store.settings.lessonOnToday));
+    sw.classList.toggle("on", store.settings.lessonOnToday);
+  }
+
+  function adoptPhoneTarget() {
+    const pd = P.programDay(store.program.start, todayISO());
+    if (pd.status !== "active") return;
+    const target = P.phoneTarget(pd.day);
+    store.settings.phoneLimit = target;
+    save();
+    renderHeader();
+    renderSetup();
+    core().showToast("Phone limit is now " + target + "h.");
+  }
+
+  function renderRemindersSetup() {
+    const R = reminders();
+    const badge = $("dcPushBadge");
+    if (!R || !DX) {
+      badge.className = "nr-status-badge nr-status-off";
+      badge.textContent = "Not available";
+      $("dcPushText").textContent = "Reminders aren't available in this version of JARVIS.";
+      $("dcPushAlt").textContent = "";
+      $("dcZoneNote").textContent = "";
+      $("dcRemFresh").textContent = "";
+      $("dcNudges").innerHTML = "";
+      ["dcPushCheck", "dcPushTest", "dcPushOpen"].forEach(function (id) { $(id).classList.add("hidden"); });
+      return;
+    }
+    const snap = R.snapshot();
+    $("dcPushCard").classList.toggle("dc-loading", remBusy);
+    const st = DX.pushStatus(snap, nice);
+    badge.className = "nr-status-badge nr-status-" + st.cls;
+    badge.textContent = "";
+    const icon = document.createElement("span");
+    icon.className = "nr-status-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = st.icon;
+    badge.appendChild(icon);
+    badge.appendChild(document.createTextNode(" " + st.label));
+    $("dcPushText").textContent = st.text;
+    $("dcPushAlt").textContent = st.alternative;
+    $("dcZoneNote").textContent = DX.zoneNote(snap);
+    $("dcPushTest").classList.toggle("hidden", !st.canTest);
+    $("dcPushCheck").classList.toggle("hidden", !snap.signedIn);
+    $("dcPushOpen").classList.remove("hidden");
+    ["dcPushCheck", "dcPushTest"].forEach(function (id) { $(id).disabled = remBusy; });
+    $("dcRemFresh").textContent = DX.freshness(snap, nice);
+    $("dcStates").innerHTML = DX.STATES.map(function (s) { return "<dt>" + esc(s.label) + "</dt><dd>" + esc(s.text) + "</dd>"; }).join("");
+
+    const known = snap.signedIn && snap.available && (snap.loaded || snap.fromCache) ? snap.reminders : null;
+    $("dcNudges").innerHTML = NUDGES.map(function (n) {
+      const wanted = store.settings.times[n.timeKey];
+      const status = snap.signedIn === false ? { state: "signed-out", reminder: null, scheduled: false, label: "Needs your JARVIS account", note: "" } : DX.nudgeStatus({ title: n.title, wantedTime: wanted, what: n.what }, known);
+      const when = (n.type === "weekly" ? "Weekdays" : "Every day") + " at " + DX.formatTime(wanted);
+      const tone = status.state === "saved" ? "ok" : status.state === "off" ? "bad" : "off";
+      const icon2 = status.state === "saved" ? "✓" : status.state === "off" ? "✕" : "⊘";
+      const next = status.scheduled ? ' <span class="field-hint">Next: ' + esc(niceIn(status.reminder.nextFireAt, status.reminder.timezone)) + '</span>' : "";
+      const button = status.state === "signed-out" ? "" : status.reminder ? '<button type="button" class="btn btn-secondary" data-nudge-edit="' + esc(status.reminder.id) + '">Edit reminder</button>'
+          : '<button type="button" class="btn btn-secondary" data-nudge="' + n.key + '">Add reminder</button>';
+      return '<div class="dc-nudge-row"><div><strong>' + esc(n.title) + '</strong><div class="field-hint">Suggested: ' + esc(when) + '</div>' +
+        '<div class="dc-rem-state"><span class="nr-status-badge nr-status-' + tone + '"><span class="nr-status-icon" aria-hidden="true">' + icon2 + '</span> ' + esc(status.label) + '</span>' + next + '</div>' +
+        (status.note ? '<div class="field-hint dc-warn">' + esc(status.note) + '</div>' : "") + '</div>' + button + '</div>';
+    }).join("");
+  }
+
+  function renderDataCard() {
+    const B = window.JarvisBackup;
+    let line = "Backup isn't available in this version.";
+    if (B && typeof B.describe === "function") {
+      const sess = typeof B.current === "function" ? B.current() : null;
+      line = B.describe(sess ? sess.status() : { state: "off", waiting: 0, lastOkAt: null }).text;
+    }
+    $("dcDataCard").innerHTML = '<p class="dc-line">Your plans, reviews and scores, rules, program progress and reflections, and your “I\'m avoiding it” log are saved on this phone.</p>' +
+      '<p class="dc-line"><strong>Backup:</strong> ' + esc(line) + '</p>' +
+      '<p class="field-hint">Backup copies them to your own JARVIS account. Its status is also in the gear menu at the top, with a button to try again. Half-typed plans, reviews and reflections (drafts) stay on this phone only and are not backed up. Nothing is shared unless you tap Share in the weekly review.</p>';
+  }
+
   function renderSetup() {
     $("dcPhoneLimit").value = store.settings.phoneLimit;
     const times = store.settings.times;
     $("dcTimePlan").value = times.planBy;
     $("dcTimeSchool").value = times.afterSchool;
     $("dcTimeReview").value = times.review;
-    $("dcNudges").innerHTML = NUDGES.map(function (n) {
-      return '<div class="dc-nudge-row"><div><strong>' + esc(n.title) + '</strong><div class="field-hint">' + (n.type === "weekly" ? "Weekdays" : "Every day") + " at " + esc(times[n.timeKey]) + '</div></div>' +
-        '<button type="button" class="btn btn-secondary" data-nudge="' + n.key + '">Add reminder</button></div>';
-    }).join("");
+    $("dcTimesNote").textContent = L.timeOrderNote(times);
+    renderProgPref();
     renderRulesManager();
+    renderRemindersSetup();
+    renderDataCard();
     $("dcRubric").innerHTML = '<ul class="dc-lines">' + L.CATEGORIES.map(function (c) {
       return "<li><strong>" + esc(c.label) + " — " + c.max + "</strong><br><span class=\"field-hint\">" + esc(RUBRIC_DETAIL[c.key]) + "</span></li>";
     }).join("") + "</ul>";
@@ -1522,37 +1801,103 @@
 
   function handleSetupSubmit(e) {
     e.preventDefault();
-    const n = Number($("dcPhoneLimit").value);
-    if (!(isFinite(n) && n >= 0.5 && n <= 24)) { core().showToast("Enter a limit between 0.5 and 24 hours."); return; }
+    const raw = $("dcPhoneLimit").value;
+    const n = Number(raw);
+    if (raw === "" || !(isFinite(n) && n >= 0.5 && n <= 24)) {
+      $("dcLimitError").textContent = "Enter a limit between 0.5 and 24 hours.";
+      $("dcPhoneLimit").setAttribute("aria-invalid", "true");
+      $("dcPhoneLimit").focus();
+      return;
+    }
+    $("dcLimitError").textContent = "";
+    $("dcPhoneLimit").removeAttribute("aria-invalid");
     store.settings.phoneLimit = Math.round(n * 10) / 10;
     save();
     renderHeader();
+    renderProgPref();
     core().showToast("Phone limit saved: " + store.settings.phoneLimit + "h.");
   }
 
   function handleTimesSubmit(e) {
     e.preventDefault();
     const entered = { planBy: $("dcTimePlan").value, afterSchool: $("dcTimeSchool").value, review: $("dcTimeReview").value };
-    if (!entered.planBy || !entered.afterSchool || !entered.review) { core().showToast("Set all three times."); return; }
+    if (!entered.planBy || !entered.afterSchool || !entered.review) {
+      $("dcTimesNote").textContent = "Set all three times.";
+      $("dcTimesNote").classList.add("dc-warn");
+      (!entered.planBy ? $("dcTimePlan") : !entered.afterSchool ? $("dcTimeSchool") : $("dcTimeReview")).focus();
+      return;
+    }
     store.settings.times = L.sanitizeTimes(entered);
     save();
+    $("dcTimesNote").classList.remove("dc-warn");
     renderSetup();
     renderNextUp();
-    core().showToast("Times saved.");
-  }
-
-  function handleRuleSubmit(e) {
-    e.preventDefault();
-    if (addRule($("dcRuleInput").value)) $("dcRuleInput").value = "";
+    core().showToast("Times saved. Reminders you already saved are unchanged.");
   }
 
   function handleNudgeClick(e) {
-    const btn = e.target.closest("[data-nudge]");
-    if (!btn) return;
-    const n = NUDGES.filter(function (x) { return x.key === btn.getAttribute("data-nudge"); })[0];
-    const reminders = window.JarvisReminders;
-    if (!n || !reminders || typeof reminders.openNew !== "function") { core().showToast("Reminders aren't available right now."); return; }
-    reminders.openNew({ title: n.title, times: [store.settings.times[n.timeKey]], type: n.type, days: n.days || null });
+    const R = reminders();
+    const edit = e.target.closest("[data-nudge-edit]");
+    const add = e.target.closest("[data-nudge]");
+    if (!R) { if (edit || add) core().showToast("Reminders aren't available right now."); return; }
+    if (edit) { R.openEdit(edit.getAttribute("data-nudge-edit")); return; }
+    if (!add) return;
+    const n = NUDGES.filter(function (x) { return x.key === add.getAttribute("data-nudge"); })[0];
+    if (!n) return;
+    // Look again first, so a reminder saved since this list was drawn (or one the phone never looked for) is edited
+    // instead of added twice. If the list has never been loaded, ask the server before opening anything.
+    const open = function () {
+      const existing = DX && DX.matchReminder(n.title, R.snapshot().reminders);
+      if (existing) { R.openEdit(existing.id); return; }
+      R.openNew({ title: n.title, times: [store.settings.times[n.timeKey]], type: n.type, days: n.days || null });
+    };
+    const snap = R.snapshot();
+    if (snap.signedIn && !(snap.loaded || snap.fromCache) && typeof R.refresh === "function") {
+      add.disabled = true;
+      R.refresh().then(open, open).then(function () { add.disabled = false; renderRemindersSetup(); });
+    } else open();
+  }
+
+  function checkReminders() {
+    const R = reminders();
+    if (!R || remBusy) return;
+    remBusy = true;
+    $("dcPushResult").textContent = "Checking with your server…";
+    renderRemindersSetup();
+    R.refresh().then(function () {
+      const snap = R.snapshot();
+      $("dcPushResult").textContent = snap.error ? snap.error : "Checked. " + snap.reminders.length + (snap.reminders.length === 1 ? " reminder is" : " reminders are") + " saved on your server.";
+    }).catch(function () {
+      $("dcPushResult").textContent = "Couldn't check right now. Try again in a moment.";
+    }).then(function () {
+      remBusy = false;
+      renderRemindersSetup();
+    });
+  }
+
+  function sendTestNow() {
+    const R = reminders();
+    if (!R || remBusy) return;
+    remBusy = true;
+    $("dcPushResult").textContent = "Sending…";
+    renderRemindersSetup();
+    R.sendTest().then(function (text) {
+      $("dcPushResult").textContent = text;
+    }).catch(function () {
+      $("dcPushResult").textContent = "Couldn't send a test right now.";
+    }).then(function () {
+      remBusy = false;
+      renderRemindersSetup();
+    });
+  }
+
+  function openRemindersScreen() {
+    const nav = $("navBtnHabits");
+    if (nav) nav.click();
+    const tab = $("habitsSubNavReminders");
+    if (tab) tab.click();
+    const card = $("rmNotifCard");
+    if (card && card.scrollIntoView) card.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
   }
 
   /* ---------------- the 30-day program ---------------- */
@@ -1633,7 +1978,7 @@
     const card = $("dcLessonCard");
     if (!P) { card.classList.add("hidden"); return; }
     const pd = P.programDay(store.program.start, todayISO());
-    if (selected !== "today" || pd.status !== "active") { card.classList.add("hidden"); return; }
+    if (selected !== "today" || pd.status !== "active" || !store.settings.lessonOnToday) { card.classList.add("hidden"); return; }
     const entry = P.DAYS[pd.day - 1];
     const progress = P.dayProgress(pd.day, programContext(pd.day));
     card.classList.remove("hidden");
@@ -1813,6 +2158,7 @@
     renderProgram();
     renderLessonCard();
     renderNextUp();
+    popTick('#discipline-program [data-mission="' + i + '"][data-day="' + n + '"]');
   }
 
   // Which reflection button was pressed: { act: "save" | "remove" | "remove-yes" | "remove-no", n } or null.
@@ -1909,12 +2255,7 @@
       clip.writeText(text).then(function () { core().showToast("Your reflections are copied."); }, function () { core().showToast("Couldn't copy. Nothing was changed."); });
       return;
     } else if (what === "target") {
-      const target = P.phoneTarget(P.programDay(store.program.start, today).day);
-      store.settings.phoneLimit = target;
-      save();
-      renderHeader();
-      renderSetup();
-      core().showToast("Phone limit is now " + target + "h.");
+      adoptPhoneTarget();
     }
     renderProgram();
     renderLessonCard();
@@ -1996,7 +2337,10 @@
     if (stay && selectedDate() === old) core().showToast("It's a new day, but you're still on " + prettyDate(old) + " because it has unsaved changes.");
   }
 
+  let started = false;
   function init() {
+    if (started) return; // listeners are added once, however many times the app asks
+    started = true;
     load();
     $("dcDayType").innerHTML = Object.keys(L.DAY_TYPES).map(function (k) { return '<option value="' + k + '">' + esc(L.DAY_TYPES[k].label) + '</option>'; }).join("");
 
@@ -2079,7 +2423,30 @@
     $("dcSetupForm").addEventListener("submit", handleSetupSubmit);
     $("dcTimesForm").addEventListener("submit", handleTimesSubmit);
     $("dcRuleForm").addEventListener("submit", handleRuleSubmit);
+    $("dcRuleMode").addEventListener("click", function (e) { const b = e.target.closest("[data-rule-mode]"); if (b) setRuleMode(b.getAttribute("data-rule-mode")); });
+    ["dcRuleWhen", "dcRuleWill", "dcRuleInput"].forEach(function (id) { $(id).addEventListener("input", function () { if ($("dcRuleError").textContent) showRuleError(""); updateRulePreview(); }); });
     $("dcRulesManager").addEventListener("click", handleRulesManagerClick);
+    $("dcRulesManager").addEventListener("submit", handleRuleEditSubmit);
+    $("dcRulesManager").addEventListener("keydown", function (e) {
+      if (e.key !== "Escape" || (!editingRule && !removingRule)) return;
+      const id = editingRule || removingRule;
+      const was = editingRule ? "edit" : "del";
+      editingRule = ""; removingRule = "";
+      renderRulesManager();
+      focusSoon('[data-rule-' + was + '="' + id + '"]');
+    });
+    $("dcLessonSwitch").addEventListener("click", function () {
+      store.settings.lessonOnToday = !store.settings.lessonOnToday;
+      save();
+      renderProgPref();
+      renderLessonCard();
+      core().showToast(store.settings.lessonOnToday ? "Today's lesson will show on the Today screen." : "Today's lesson is hidden on the Today screen. It's still in the Program tab.");
+    });
+    $("dcAdoptTarget").addEventListener("click", adoptPhoneTarget);
+    $("dcOpenProgram").addEventListener("click", function () { $("disciplineSubNavProgram").click(); });
+    $("dcPushCheck").addEventListener("click", checkReminders);
+    $("dcPushTest").addEventListener("click", sendTestNow);
+    $("dcPushOpen").addEventListener("click", openRemindersScreen);
     $("dcNudges").addEventListener("click", handleNudgeClick);
     $("discipline-program").addEventListener("click", handleProgramClick);
     $("discipline-program").addEventListener("input", handleProgramInput);

@@ -343,3 +343,16 @@ test("shareText: each section can be left out, and nothing selected leaves only 
   const empty = I.shareText(I.weeklyReport({ days: {}, avoid: [], rules: [], today: TODAY }));
   assert.match(empty, /No scored days this week\./);
 });
+
+test("weeklyReport: a rule that is turned off is not tracked or shared, and its words are not offered again", () => {
+  const days = week([5, 4, 3, 2, 1], () => day({ review: rev({ focus: 1, time: 1, rules: [{ id: "a", text: "Homework first", state: "done" }] }) }));
+  const rules = [{ id: "a", text: "Homework first", enabled: true }, { id: "b", text: "Paused one", enabled: false }];
+  const r = I.weeklyReport({ days: days, avoid: [], rules: rules, today: TODAY });
+  assert.deepEqual(r.tracking.map((t) => t.text), ["Homework first"], "only the rule that is on is tracked");
+  assert.deepEqual(r.rules, ["Homework first"]);
+  assert.match(I.shareText(r, { wording: true }), /What I'm working on: Homework first$/m);
+  assert.doesNotMatch(I.shareText(r, { wording: true }), /Paused one/);
+  const starter = L.AREA_RULES.focus;
+  const paused = I.weeklyReport({ days: days, avoid: [], rules: [{ id: "c", text: starter, enabled: false }], today: TODAY });
+  assert.ok(!paused.recommendations.some((x) => x.text === starter), "a rule that is turned off is still a rule you have, so it is not suggested again");
+});

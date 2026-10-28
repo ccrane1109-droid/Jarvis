@@ -155,7 +155,7 @@ test("the saved store drops bad dates and junk, keeps real days, and defaults th
   assert.equal(s.settings.phoneLimit, D.DEFAULT_PHONE_LIMIT);
   assert.equal(D.sanitizeStore({ settings: { phoneLimit: 3.5 } }).settings.phoneLimit, 3.5);
   assert.deepEqual(D.sanitizeStore(null), {
-    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES }, rules: [], avoid: [], timer: null, program: { start: null, done: {}, reflections: {} }, drafts: {}, days: {}
+    settings: { phoneLimit: D.DEFAULT_PHONE_LIMIT, times: D.DEFAULT_TIMES, lessonOnToday: true }, rules: [], avoid: [], timer: null, program: { start: null, done: {}, reflections: {} }, drafts: {}, days: {}
   });
   assert.deepEqual(D.sanitizeStore("garbage").days, {});
 });
@@ -501,4 +501,89 @@ test("when a rule was added is read from its id, and only from ids made by the a
   assert.equal(D.ruleAddedDate({ id: 5 }), null);
   const made = D.sanitizeRules([{ text: "A rule" }]);
   assert.match(D.ruleAddedDate(made[0]), /^\d{4}-\d{2}-\d{2}$/, "a rule given an id by sanitizeRules is dated too");
+});
+
+test("rules keep whether they are on, and a rule saved before that existed is on", () => {
+  const r = D.sanitizeRules([{ id: "a", text: "Old rule" }, { id: "b", text: "Paused rule", enabled: false }, { id: "c", text: "Explicit", enabled: true }, { id: "d", text: "Junk flag", enabled: "no" }]);
+  assert.deepEqual(r.map((x) => [x.text, x.enabled]), [["Old rule", true], ["Paused rule", false], ["Explicit", true], ["Junk flag", true]], "only an explicit false turns a rule off");
+  assert.deepEqual(D.sanitizeRules(D.sanitizeRules(r)), r, "cleaning twice changes nothing");
+  assert.deepEqual(D.activeRules(r).map((x) => x.id), ["a", "c", "d"], "a turned-off rule is not asked in the review");
+  assert.deepEqual(D.activeRules(undefined), []);
+  assert.equal(r.length, 4, "a turned-off rule still holds its place");
+});
+
+test("two rules are the same rule when only case, spacing or punctuation differs", () => {
+  assert.equal(D.ruleKey("Phone on the charger."), D.ruleKey("  phone ON the   charger!! "));
+  assert.notEqual(D.ruleKey("Phone on the charger"), D.ruleKey("Phone on the desk"));
+  assert.deepEqual(D.sanitizeRules([{ id: "a", text: "Phone on the charger." }, { id: "b", text: "phone on the  charger" }, { id: "c", text: "Homework first" }]).map((x) => x.id), ["a", "c"]);
+  assert.equal(D.ruleKey(null), "");
+});
+
+test("the rule builder writes “When …, I will ….” and says what is missing", () => {
+  assert.deepEqual(D.composeRule("I get home from school", "put my phone on the charger"), { ok: true, text: "When I get home from school, I will put my phone on the charger." });
+  assert.equal(D.composeRule("When I get home, ", "I will put it away.").text, "When I get home, I will put it away.", "a lead the person typed themselves is not doubled");
+  assert.equal(D.composeRule("if it is 4pm", "then I'll start homework").text, "When it is 4pm, I will start homework.");
+  const noTrigger = D.composeRule("", "do something");
+  assert.deepEqual([noTrigger.ok, noTrigger.field], [false, "trigger"]);
+  const noAction = D.composeRule("I get home", " ... ");
+  assert.deepEqual([noAction.ok, noAction.field], [false, "action"]);
+  assert.match(noAction.error, /what you will do/);
+  const tooLong = D.composeRule("x".repeat(60), "y".repeat(60));
+  assert.equal(tooLong.ok, false);
+  assert.match(tooLong.error, /can be 100/);
+  assert.equal(D.composeRule("a b", "c d").text, "When a b, I will c d.", "short but real");
+});
+
+test("a rule written with the builder reads back into its two parts", () => {
+  const made = D.composeRule("my phone buzzes", "finish the sentence first").text;
+  assert.deepEqual(D.parseRule(made), { trigger: "my phone buzzes", action: "finish the sentence first" });
+  assert.equal(D.parseRule("Phone on the charger by 9"), null, "free text is not forced into the builder");
+  assert.equal(D.parseRule(""), null);
+  assert.equal(D.parseRule(null), null);
+});
+
+test("checkRule: empty, short, long, repeated and too many are each refused with a reason", () => {
+  const have = [{ id: "a", text: "Phone on the charger", enabled: true }, { id: "b", text: "Homework first", enabled: false }];
+  assert.deepEqual(D.checkRule("  ", have), { ok: false, error: "Type the rule first." });
+  assert.match(D.checkRule("abc", have).error, /too short/);
+  assert.match(D.checkRule("x".repeat(101), have).error, /101 characters and a rule can be 100/);
+  assert.equal(D.checkRule("phone on the CHARGER.", have).error, "You already have that rule.");
+  assert.match(D.checkRule("homework first", have).error, /turned off\. Turn it on instead/);
+  assert.deepEqual(D.checkRule("  Read   before bed ", have), { ok: true, text: "Read before bed" });
+  assert.equal(D.checkRule("Phone on the charger", have, "a").ok, true, "the rule being edited doesn't clash with itself");
+  assert.equal(D.checkRule("Homework first", have, "a").ok, false, "but it can't take another rule's words");
+  const five = ["a", "b", "c", "d", "e"].map((x) => ({ id: x, text: "Rule " + x, enabled: true }));
+  assert.match(D.checkRule("Another rule", five).error, /5 rules, which is the most/);
+  assert.equal(D.checkRule("Rule a, reworded", five, "a").ok, true, "editing is fine when full");
+});
+
+test("the times only get a note, never a block, when they are out of the usual order", () => {
+  assert.equal(D.timeOrderNote({ planBy: "06:30", afterSchool: "15:45", review: "20:30" }), "");
+  assert.match(D.timeOrderNote({ planBy: "16:00", afterSchool: "15:45", review: "20:30" }), /plan, after school, evening review/);
+  assert.match(D.timeOrderNote({ planBy: "06:30", afterSchool: "15:45", review: "15:45" }), /usually run in this order/);
+  assert.equal(D.timeOrderNote(undefined), "", "the defaults are in order");
+});
+
+test("the lesson-on-Today preference is on unless it was turned off", () => {
+  assert.equal(D.sanitizeStore({}).settings.lessonOnToday, true);
+  assert.equal(D.sanitizeStore({ settings: { lessonOnToday: false } }).settings.lessonOnToday, false);
+  assert.equal(D.sanitizeStore({ settings: { lessonOnToday: "false" } }).settings.lessonOnToday, true, "junk leaves the default");
+});
+
+test("a rule you reworded keeps one history under its latest wording", () => {
+  const days = {
+    [dminus(3)]: day({}, { rules: [{ id: "r1", text: "Phone away at 9", state: "done" }, { id: "r2", text: "Read before bed", state: "not" }] }),
+    [dminus(2)]: day({}, { rules: [{ id: "r1", text: "Phone away at 9", state: "not" }, { id: "r2", text: "Read before bed", state: "done" }] }),
+    [dminus(1)]: day({}, { rules: [{ id: "r1", text: "Phone in the kitchen at 9", state: "done" }, { id: "r2", text: "Read before bed", state: "done" }] }),
+    [TODAY]: day({}, { rules: [{ id: "r1b", text: "Phone in the kitchen at 9.", state: "done" }] }) // deleted and added again with the same words: a new id
+  };
+  const r = D.ruleSummary(days, TODAY, 7);
+  assert.deepEqual(r.byRule.map((x) => [x.text, x.answered, x.kept]), [["Phone in the kitchen at 9.", 4, 3], ["Read before bed", 3, 2]], "one line per rule: the old wording's answers count toward the new, as do the re-added rule's");
+  assert.deepEqual([r.answered, r.kept], [7, 5]);
+});
+
+test("a saved review keeps the answers for more rules than are on now", () => {
+  const rules = Array.from({ length: 8 }, (_, i) => ({ id: "x" + i, text: "Rule " + i, state: "done" }));
+  assert.equal(D.sanitizeDay({ review: { rules: rules } }).review.rules.length, 8, "up to twice the limit, for rules turned off or removed since");
+  assert.equal(D.sanitizeDay({ review: { rules: rules.concat(rules) } }).review.rules.length, 10);
 });

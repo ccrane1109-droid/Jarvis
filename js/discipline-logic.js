@@ -189,17 +189,67 @@
   }
   function keyOf(list, key) { return list.some(function (x) { return x.key === key; }) ? key : ""; }
 
-  // Your own rules: [{ id, text }], at most MAX_RULES, no blanks or repeats.
+  // What makes two rules "the same": case, spaces and punctuation are ignored, so "Phone on the charger." and
+  // "phone on the  charger" are one rule.
+  function ruleKey(text) {
+    return String(text === undefined || text === null ? "" : text).toLowerCase().replace(/[^a-z0-9\u00c0-\uffff' ]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  // Your own rules: [{ id, text, enabled }], at most MAX_RULES, no blanks or repeats. A rule with no "enabled" (saved
+  // before rules could be turned off) is on. A turned-off rule keeps its place and its history; it just isn't asked.
   function sanitizeRules(raw) {
     const out = [];
     (Array.isArray(raw) ? raw : []).forEach(function (r) {
       const text = clean(r && r.text, RULE_MAX);
       if (!text || out.length >= MAX_RULES) return;
-      if (out.some(function (x) { return x.text.toLowerCase() === text.toLowerCase(); })) return;
+      if (out.some(function (x) { return ruleKey(x.text) === ruleKey(text); })) return;
       const id = typeof (r && r.id) === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(r.id) && !out.some(function (x) { return x.id === r.id; }) ? r.id : "r" + Date.now().toString(36) + out.length;
-      out.push({ id: id, text: text });
+      out.push({ id: id, text: text, enabled: !(r && r.enabled === false) });
     });
     return out;
+  }
+
+  // "When [trigger], I will [action]." from the two boxes of the rule builder.
+  //   -> { ok: true, text } | { ok: false, error, field: "trigger" | "action" }
+  function composeRule(trigger, action) {
+    const strip = function (v, lead) { return clean(v, 400).replace(lead, "").replace(/[\s.,;:!?]+$/g, "").trim(); };
+    const t = strip(trigger, /^(when|whenever|if|after|once)\s+/i);
+    const a = strip(action, /^(then\s+)?(i will|i'll|i am going to|i'm going to)\s+/i);
+    if (t.length < 3) return { ok: false, field: "trigger", error: "Say what sets it off, like “I get home from school”." };
+    if (a.length < 3) return { ok: false, field: "action", error: "Say what you will do, like “put my phone on the charger”." };
+    const text = "When " + t + ", I will " + a + ".";
+    if (text.length > RULE_MAX) return { ok: false, field: "trigger", error: "That comes to " + text.length + " characters and a rule can be " + RULE_MAX + ". Shorten the trigger or the action." };
+    return { ok: true, text: text };
+  }
+
+  // The reverse, so a rule written with the builder opens in the builder: { trigger, action } or null.
+  function parseRule(text) {
+    const m = String(text || "").match(/^When (.+?), I will (.+?)\.?$/);
+    return m ? { trigger: m[1], action: m[2] } : null;
+  }
+
+  // Is this text OK as a rule? exceptId leaves one rule out of the repeat check (the one being edited).
+  //   -> { ok: true, text } | { ok: false, error }
+  function checkRule(text, rules, exceptId) {
+    const typed = clean(text, 1000);
+    if (!typed) return { ok: false, error: "Type the rule first." };
+    if (typed.length < 6) return { ok: false, error: "That's too short to be a rule. Say what you will do, and when." };
+    if (typed.length > RULE_MAX) return { ok: false, error: "That's " + typed.length + " characters and a rule can be " + RULE_MAX + ". Shorten it." };
+    const list = rules || [];
+    const twin = list.filter(function (r) { return r.id !== exceptId && ruleKey(r.text) === ruleKey(typed); })[0];
+    if (twin) return { ok: false, error: twin.enabled === false ? "You already have that rule, and it's turned off. Turn it on instead." : "You already have that rule." };
+    if (!exceptId && list.length >= MAX_RULES) return { ok: false, error: "You have " + MAX_RULES + " rules, which is the most. Remove one first." };
+    return { ok: true, text: typed };
+  }
+
+  // The rules that are asked in the evening review.
+  function activeRules(rules) { return (rules || []).filter(function (r) { return r.enabled !== false; }); }
+
+  // A gentle note when the three times are not in the usual order. It never blocks saving.
+  function timeOrderNote(times) {
+    const t = sanitizeTimes(times);
+    const plan = minutesOf(t.planBy), school = minutesOf(t.afterSchool), review = minutesOf(t.review);
+    return plan < school && school < review ? "" : "These usually run in this order: plan, after school, evening review. Yours don't, which is fine if you meant it.";
   }
 
   // Times you sat down to start something you were avoiding, and what came of it.
@@ -329,7 +379,7 @@
       scored: sanitizeScored(raw.scored),
       savedAt: stamp(raw.savedAt)
     };
-    (Array.isArray(raw.rules) ? raw.rules : []).slice(0, MAX_RULES).forEach(function (r) {
+    (Array.isArray(raw.rules) ? raw.rules : []).slice(0, MAX_RULES * 2).forEach(function (r) {
       const text = clean(r && r.text, RULE_MAX);
       if (text) review.rules.push({ id: clean(r.id, 40), text: text, state: state(r.state) });
     });
@@ -395,7 +445,7 @@
       if (day.morning || day.review || day.type !== "normal") days[date] = day;
     });
     return {
-      settings: { phoneLimit: limit(r.settings && r.settings.phoneLimit), times: sanitizeTimes(r.settings && r.settings.times) },
+      settings: { phoneLimit: limit(r.settings && r.settings.phoneLimit), times: sanitizeTimes(r.settings && r.settings.times), lessonOnToday: !(r.settings && r.settings.lessonOnToday === false) },
       rules: sanitizeRules(r.rules), avoid: sanitizeAvoid(r.avoid), timer: sanitizeTimer(r.timer),
       program: sanitizeProgram(r.program),
       drafts: sanitizeDrafts(r.drafts),
@@ -750,16 +800,22 @@
     return countBy(list, function (x) { return x.blocker; }, REASONS);
   }
 
-  // How often your own rules were kept, from the evening answers ("not today" answers are left out).
+  // How often your own rules were kept, from the evening answers ("not today" answers are left out). Answers are grouped by
+  // the rule they belong to, so a rule you reworded keeps one history under its latest wording, and a rule deleted and
+  // added again with the same words is one rule too.
   function ruleSummary(days, todayISO, windowDays) {
+    const dates = Object.keys(days).filter(function (d) { return inWindow(d, todayISO, windowDays) && days[d].review; }).sort();
+    const latest = {};
+    dates.forEach(function (d) { (days[d].review.rules || []).forEach(function (r) { if (r.id) latest[r.id] = r.text; }); });
     const by = {};
     let answered = 0, kept = 0;
-    Object.keys(days).forEach(function (d) {
-      if (!inWindow(d, todayISO, windowDays) || !days[d].review) return;
+    dates.forEach(function (d) {
       (days[d].review.rules || []).forEach(function (r) {
         if (r.state !== "done" && r.state !== "not") return;
-        const k = r.text.toLowerCase();
-        if (!by[k]) by[k] = { text: r.text, answered: 0, kept: 0 };
+        const text = (r.id && latest[r.id]) || r.text;
+        const k = ruleKey(text);
+        if (!by[k]) by[k] = { text: text, answered: 0, kept: 0 };
+        by[k].text = text;
         by[k].answered++; answered++;
         if (r.state === "done") { by[k].kept++; kept++; }
       });
@@ -770,8 +826,8 @@
   // Up to three rules worth trying: aimed at the weakest scoring areas once there is data, otherwise starter ideas.
   //   -> [{ text, why, starter }]. Rules you already have are never offered again.
   function suggestRules(trend, rules) {
-    const have = (rules || []).map(function (r) { return r.text.toLowerCase(); });
-    const fresh = function (text) { return have.indexOf(text.toLowerCase()) === -1; };
+    const have = (rules || []).map(function (r) { return ruleKey(r.text); });
+    const fresh = function (text) { return have.indexOf(ruleKey(text)) === -1; };
     const out = [];
     if (trend && trend.categories) {
       trend.categories.filter(function (c) { return c.pct !== null && c.pct < 100; }).sort(function (a, b) { return a.pct - b.pct; }).forEach(function (c) {
@@ -790,7 +846,7 @@
 
   return {
     REASONS: REASONS, EXCUSES: EXCUSES, DEFAULT_TIMES: DEFAULT_TIMES, MAX_RULES: MAX_RULES, RULE_MAX: RULE_MAX, START_MINUTES: START_MINUTES, AREA_RULES: AREA_RULES,
-    sanitizeRules: sanitizeRules, sanitizeProgram: sanitizeProgram, sanitizeAvoid: sanitizeAvoid, sanitizeTimer: sanitizeTimer, sanitizeTimes: sanitizeTimes, minutesOf: minutesOf,
+    sanitizeRules: sanitizeRules, ruleKey: ruleKey, composeRule: composeRule, parseRule: parseRule, checkRule: checkRule, activeRules: activeRules, timeOrderNote: timeOrderNote, sanitizeProgram: sanitizeProgram, sanitizeAvoid: sanitizeAvoid, sanitizeTimer: sanitizeTimer, sanitizeTimes: sanitizeTimes, minutesOf: minutesOf,
     nextUp: nextUp, timerState: timerState, avoidSummary: avoidSummary, blockerSummary: blockerSummary, ruleSummary: ruleSummary,
     suggestRules: suggestRules, shortDate: shortDate, firstUseDate: firstUseDate,
     CATEGORIES: CATEGORIES, ITEMS: ITEMS, DAY_TYPES: DAY_TYPES, NOTE_FIELDS: NOTE_FIELDS,

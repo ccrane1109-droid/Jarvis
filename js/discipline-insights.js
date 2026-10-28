@@ -267,7 +267,9 @@
   // The last 7 days as a report: what the numbers were, what went well, what to improve, and up to two rules worth trying.
   //   input: { days, avoid, rules, today }
   function weeklyReport(input) {
-    const today = input.today, days = input.days, rules = input.rules || [];
+    const today = input.today, days = input.days;
+    const allRules = input.rules || [];              // every rule, turned on or off: none is offered twice
+    const rules = L.activeRules(allRules);           // the ones being asked and tracked now
     const cmp = weekCompare(days, today);
     const cur = cmp.cur, prev = cmp.prev;
     const av = L.avoidSummary(input.avoid || [], today, 7);
@@ -293,9 +295,9 @@
 
     // Up to two rules to try, each with the reason taken from the week's own numbers. Rules you already have are not offered again.
     const recs = [];
-    const have = function (text) { return rules.some(function (r) { return r.text.toLowerCase() === text.toLowerCase(); }); };
+    const have = function (text) { return allRules.some(function (r) { return L.ruleKey(r.text) === L.ruleKey(text); }); };
     const base = cur.enough ? cur : stats(days, today, today, INSIGHT_DAYS);
-    L.suggestRules({ categories: base.categories }, rules).slice(0, 2).forEach(function (s) { recs.push({ text: s.text, why: s.why + (cur.enough || s.starter ? "" : " (last " + INSIGHT_DAYS + " days)"), source: s.starter ? "starter" : "weakest" }); });
+    L.suggestRules({ categories: base.categories }, allRules).slice(0, 2).forEach(function (s) { recs.push({ text: s.text, why: s.why + (cur.enough || s.starter ? "" : " (last " + INSIGHT_DAYS + " days)"), source: s.starter ? "starter" : "weakest" }); });
     if (av.total >= MIN_SCORED && av.reasons.length && av.reasons[0].count >= 2) {
       const reason = L.REASONS.filter(function (r) { return r.key === av.reasons[0].key; })[0];
       if (reason && !have(reason.rule) && !recs.some(function (r) { return r.text === reason.rule; })) {
@@ -305,7 +307,7 @@
     const recommendations = recs.slice(0, 2);
     // The rules already being tracked, and how they went this week (answered in the evening review).
     const tracking = rules.map(function (r) {
-      const b = cur.rules.byRule.filter(function (x) { return x.text.toLowerCase() === r.text.toLowerCase(); })[0];
+      const b = cur.rules.byRule.filter(function (x) { return L.ruleKey(x.text) === L.ruleKey(r.text); })[0];
       return { text: r.text, kept: b ? b.kept : 0, answered: b ? b.answered : 0 };
     });
 

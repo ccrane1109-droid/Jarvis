@@ -333,7 +333,7 @@
 
   // Something the person has to do before an automatic mission can ever tick, or "".
   function missionNeeds(m, ctx) {
-    if (m.a === "rulesAnswered" && !(ctx.rules || []).length) return "Needs a rule. Add one in Setup first.";
+    if (m.a === "rulesAnswered" && !L.activeRules(ctx.rules).length) return "Needs a rule that is turned on. Add one in Setup first.";
     return "";
   }
 

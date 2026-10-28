@@ -208,10 +208,14 @@
     if (!isObj(local)) return isObj(cloud) ? cloud : local;
     if (!isObj(cloud)) return local;
     const out = Object.assign({}, cloud, local);
-    const rules = [], seen = {};
+    // A rule is one rule by its id (so a rule reworded or switched off on one device is not doubled by the other copy)
+    // and by its words, ignoring case and punctuation. This device's copy is read first, so its version wins.
+    const rules = [], seen = {}, seenId = {};
+    const wordsKey = function (t) { return t.toLowerCase().replace(/[^a-z0-9\u00c0-\uffff' ]+/g, " ").replace(/\s+/g, " ").trim(); };
     (Array.isArray(local.rules) ? local.rules : []).concat(Array.isArray(cloud.rules) ? cloud.rules : []).forEach(function (r) {
-      const k = isObj(r) && typeof r.text === "string" ? r.text.toLowerCase() : null;
-      if (k !== null && !seen[k] && rules.length < 5) { seen[k] = true; rules.push(r); }
+      const k = isObj(r) && typeof r.text === "string" ? wordsKey(r.text) : null;
+      const id = isObj(r) && typeof r.id === "string" && r.id ? r.id : null;
+      if (k !== null && !seen[k] && !(id && seenId[id]) && rules.length < 5) { seen[k] = true; if (id) seenId[id] = true; rules.push(r); }
     });
     out.rules = rules;
     const avoid = [], at = {};
