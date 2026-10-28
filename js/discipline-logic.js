@@ -619,6 +619,11 @@
     const dates = Object.keys(days).filter(function (d) { return days[d].morning || days[d].review; }).sort();
     return dates.length ? dates[0] : null;
   }
+  // Does a plan note read as an if-then: a trigger word ("if", "when", "after"...) and an action ("then", "I will"...)?
+  // It checks the wording, not whether the plan is followed.
+  const IF_WORD = /\b(if|when|whenever|after|once)\b/i;
+  const THEN_WORD = /\b(then|i will|i'll|i am going to|i'm going to)\b/i;
+  function hasIfThen(text) { return typeof text === "string" && IF_WORD.test(text) && THEN_WORD.test(text); }
   function hasPlanItems(m) { return !!m && (!!m.keyTask.text || m.priorities.some(function (p) { return !!p.text; })); }
 
   // The one thing to do right now, from the time of day and what has actually been entered.
@@ -783,37 +788,18 @@
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   function shortDate(iso) { return MONTHS[Number(iso.slice(5, 7)) - 1] + " " + Number(iso.slice(8, 10)); }
 
-  // Plain text for sharing the week with someone you answer to. Numbers and your rules only: no reflections.
-  function weeklyText(input) {
-    const today = input.todayISO;
-    const t = trendSummary(input.days, today, 7);
-    const lines = ["My week on JARVIS Discipline (" + shortDate(addDays(today, -6)) + " to " + shortDate(today) + "):"];
-    if (!t.scoredDays) lines.push("No scored days yet this week.");
-    else {
-      lines.push("Scored days: " + t.scoredDays + " of 7." + (t.enough ? " Average score: " + t.average + "." : "") + (t.best ? " Best: " + t.best.score + "." : ""));
-      lines.push("Review streak: " + reviewStreak(input.days, today) + " days.");
-      if (t.phone.days) lines.push("Phone: averaged " + t.phone.averageHours + "h a day, over my limit on " + t.phone.overLimit + " of " + t.phone.days + " days.");
-    }
-    const rs = ruleSummary(input.days, today, 7);
-    if (rs.answered) lines.push("Rules kept: " + rs.kept + " of " + rs.answered + " answers.");
-    const av = avoidSummary(input.avoid || [], today, 7);
-    if (av.started + av.dropped) lines.push("When I avoided something, I started anyway " + av.started + " of " + (av.started + av.dropped) + " times.");
-    if ((input.rules || []).length) lines.push("What I'm working on: " + input.rules.slice(0, 3).map(function (r) { return r.text; }).join(" "));
-    return lines.join("\n");
-  }
-
   return {
     REASONS: REASONS, EXCUSES: EXCUSES, DEFAULT_TIMES: DEFAULT_TIMES, MAX_RULES: MAX_RULES, RULE_MAX: RULE_MAX, START_MINUTES: START_MINUTES, AREA_RULES: AREA_RULES,
     sanitizeRules: sanitizeRules, sanitizeProgram: sanitizeProgram, sanitizeAvoid: sanitizeAvoid, sanitizeTimer: sanitizeTimer, sanitizeTimes: sanitizeTimes, minutesOf: minutesOf,
     nextUp: nextUp, timerState: timerState, avoidSummary: avoidSummary, blockerSummary: blockerSummary, ruleSummary: ruleSummary,
-    suggestRules: suggestRules, weeklyText: weeklyText, shortDate: shortDate, firstUseDate: firstUseDate,
+    suggestRules: suggestRules, shortDate: shortDate, firstUseDate: firstUseDate,
     CATEGORIES: CATEGORIES, ITEMS: ITEMS, DAY_TYPES: DAY_TYPES, NOTE_FIELDS: NOTE_FIELDS,
     PRIORITY_MAX: PRIORITY_MAX, NOTE_MAX: NOTE_MAX, REFLECT_MAX: REFLECT_MAX, ruleAddedDate: ruleAddedDate, DEFAULT_PHONE_LIMIT: DEFAULT_PHONE_LIMIT,
     MIN_DAYS_FOR_AVERAGES: MIN_DAYS_FOR_AVERAGES, MIN_DAYS_FOR_WEEKDAYS: MIN_DAYS_FOR_WEEKDAYS,
     isISODate: isISODate, addDays: addDays, weekdayOf: weekdayOf, daysBetween: daysBetween,
     sanitizeDay: sanitizeDay, sanitizeStore: sanitizeStore,
     TASK_CATEGORIES: TASK_CATEGORIES, DISTRACTION_RESPONSES: DISTRACTION_RESPONSES, IF_THEN_EXAMPLES: IF_THEN_EXAMPLES, EXTRA_ITEMS: EXTRA_ITEMS,
-    moveTask: moveTask, promoteTask: promoteTask, hasPlanItems: hasPlanItems, openItems: openItems, sanitizeDrafts: sanitizeDrafts, DRAFT_NOTE_KEYS: DRAFT_NOTE_KEYS,
+    moveTask: moveTask, promoteTask: promoteTask, hasPlanItems: hasPlanItems, hasIfThen: hasIfThen, openItems: openItems, sanitizeDrafts: sanitizeDrafts, DRAFT_NOTE_KEYS: DRAFT_NOTE_KEYS,
     RUBRIC_VERSION: RUBRIC_VERSION, scoreSnapshot: scoreSnapshot, backfillSnapshots: backfillSnapshots,
     scoreDay: scoreDay, unanswered: unanswered, excusedFor: excusedFor,
     reviewStreak: reviewStreak, lastScored: lastScored, trendSummary: trendSummary

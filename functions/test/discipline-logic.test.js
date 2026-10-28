@@ -440,25 +440,6 @@ test("rule suggestions aim at the weakest areas once there is data, and never re
   assert.equal(D.suggestRules({ categories: trend.categories.map((c) => Object.assign({}, c, { pct: 100 })) }, []).every((x) => x.starter), true);
 });
 
-test("the weekly text has numbers and rules, no private reflections, and is honest when there is nothing", () => {
-  const days = {
-    [TODAY]: day({}, { screenHours: 6, improve: "PRIVATE-NOTE-ONE", procrastinated: "PRIVATE-NOTE-TWO", rules: [{ id: "1", text: "Homework first", state: "done" }] }),
-    [dminus(1)]: scoredDay({ screenHours: 4 }), [dminus(2)]: scoredDay({ screenHours: 3 })
-  };
-  const avoid = D.sanitizeAvoid([{ at: 1, date: TODAY, task: "PRIVATE-TASK", reason: "big", outcome: "started" }, { at: 2, date: TODAY, task: "x", reason: "big", outcome: "dropped" }]);
-  const text = D.weeklyText({ todayISO: TODAY, days: days, avoid: avoid, rules: [{ id: "1", text: "Homework first" }, { id: "2", text: "Phone on the charger." }] });
-  assert.match(text, /^My week on JARVIS Discipline \(Oct 16 to Oct 22\):/);
-  assert.match(text, /Scored days: 3 of 7\. Average score: \d+\. Best: \d+\./);
-  assert.match(text, /Review streak: 3 days\./);
-  assert.match(text, /Phone: averaged 4\.3h a day, over my limit on 1 of 3 days\./);
-  assert.match(text, /Rules kept: 1 of 1 answers\./);
-  assert.match(text, /started anyway 1 of 2 times/);
-  assert.match(text, /What I'm working on: Homework first Phone on the charger\./);
-  assert.doesNotMatch(text, /PRIVATE/, "reflections and task names never leave");
-  const empty = D.weeklyText({ todayISO: TODAY, days: {}, avoid: [], rules: [] });
-  assert.equal(empty, "My week on JARVIS Discipline (Oct 16 to Oct 22):\nNo scored days yet this week.");
-});
-
 test("the advice text is complete: every reason and excuse has words for it", () => {
   assert.equal(D.REASONS.length, 6);
   D.REASONS.forEach((r) => assert.ok(r.key && r.label && r.first.length > 20 && r.rule.length > 20, r.key));

@@ -34,6 +34,8 @@
   const L = window.JarvisDisciplineLogic;
   const P = window.JarvisDisciplineProgram || null; // the 30-day program; the tracker still works without it
   const H = window.JarvisDisciplineHabits || null;  // reads the routine kept in Habits; the tracker still works without it
+  const IN = window.JarvisDisciplineInsights || null; // what the saved days add up to (Trends and the weekly review)
+  const CH = window.JarvisDisciplineCharts || null;   // draws the Trends charts
   const LS_HABITS = "jarvisHabits";                  // owned by habits.js: Discipline only ever reads it
   const LS_TASKS = "jarvisTasks";
 
@@ -84,7 +86,8 @@
   let draftTimer = null;
   let flow = null;               // the "I'm avoiding it" steps: { step, taskId, taskText, reason, excuse }
   let tickHandle = null;
-  let weeklyEdited = false;
+  let weeklyEdited = false; // the shared text was edited by hand: it is kept until you rebuild it or the day changes
+  let weeklyDate = "";
   let lessonOpen = false;
   let draft = newDraft(null);    // the review form's button answers while it's being filled in
 
@@ -1227,7 +1230,6 @@
     if (store.rules.length >= L.MAX_RULES) { core().showToast("You have " + L.MAX_RULES + " rules. Remove one in Setup first."); return false; }
     store.rules = L.sanitizeRules(store.rules.concat([{ id: "r" + Date.now().toString(36), text: t }]));
     save();
-    weeklyEdited = false;
     renderReviewControls();
     renderResult();
     renderSetup();
@@ -1250,7 +1252,6 @@
     store.rules = store.rules.filter(function (r) { return r.id !== id; });
     delete draft.rules[id];
     save();
-    weeklyEdited = false;
     renderReviewControls();
     captureReviewDraft();
     renderSetup();
@@ -1263,65 +1264,103 @@
   function listRows(rows) {
     return '<div class="dc-cats">' + rows.map(function (r) {
       return '<div class="dc-cat"><div class="dc-cat-head"><span>' + esc(r.label) + '</span><span>' + esc(r.value) + '</span></div>' +
-        (r.pct === undefined ? "" : '<div class="dc-track"><div class="dc-fill" style="width:' + r.pct + '%"></div></div>') + '</div>';
+        (r.pct === undefined || r.pct === null ? "" : '<div class="dc-track"><div class="dc-fill" style="width:' + r.pct + '%"></div></div>') + '</div>';
     }).join("") + '</div>';
   }
 
-  function renderWeekly() {
-    const today = todayISO();
-    const sugg = L.suggestRules(L.trendSummary(store.days, today, 30), store.rules);
-    $("dcWeeklySuggestions").innerHTML = sugg.length ? sugg.map(function (s, i) {
-      return '<div class="dc-sugg"><div><strong>' + esc(s.text) + '</strong><div class="field-hint">' + esc(s.why) + '</div></div>' +
-        '<button type="button" class="btn btn-secondary" data-sugg="' + i + '"' + (store.rules.length >= L.MAX_RULES ? " disabled" : "") + '>Add as a rule</button></div>';
-    }).join("") : '<div class="empty-state">Nothing new to suggest right now.</div>';
-    $("dcWeeklySuggestions").setAttribute("data-texts", JSON.stringify(sugg.map(function (s) { return s.text; })));
-    if (!weeklyEdited) $("dcWeeklyText").value = L.weeklyText({ todayISO: today, days: store.days, avoid: store.avoid, rules: store.rules });
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many || one + "s"); }
+  function change(d, unit) { return d === 0 ? "no change" : (d > 0 ? "up " : "down ") + Math.abs(d) + (unit || ""); }
+
+  function trendStatsHtml(ov) {
+    const cur = ov.cur, w = trendWindow;
+    const box = function (value, label, sub) {
+      return '<div class="stat-box"><span class="stat-value">' + esc(value) + '</span><span class="stat-label">' + esc(label) + '</span>' + (sub ? '<span class="stat-sub">' + esc(sub) + '</span>' : "") + '</div>';
+    };
+    const averageSub = ov.delta !== null
+      ? (ov.delta === 0 ? "same as the " + w + " days before" : change(ov.delta) + " from the " + w + " days before")
+      : cur.enough ? "" : "needs " + IN.MIN_SCORED + " scored days";
+    return box(cur.enough ? cur.average : "—", "Average score", averageSub) +
+      box(cur.best ? cur.best.score : "—", "Best day", cur.best ? prettyDate(cur.best.date) : "") +
+      box(cur.worst ? cur.worst.score : "—", "Lowest day", cur.worst ? prettyDate(cur.worst.date) : "") +
+      box(ov.streak, "Day streak", "scored days in a row") +
+      box(cur.reviewed.of ? cur.reviewed.done + " of " + cur.reviewed.of : "—", "Days reviewed", "today counts once scored") +
+      box(cur.plans.of ? cur.plans.done + " of " + cur.plans.of : "—", "Days planned", "with a saved plan") +
+      box(cur.keyTask.of ? cur.keyTask.done + " of " + cur.keyTask.of : "—", "Main win finished", cur.keyTask.of ? cur.keyTask.rate + "% of days with one" : "no main win set") +
+      box(cur.phone.days ? cur.phone.averageHours + "h" : "—", "Screen time a day", cur.phone.days ? "over your limit on " + cur.phone.overLimit + " of " + cur.phone.days : "none logged");
   }
 
-  function renderTrends() {
-    const today = todayISO();
-    const t = L.trendSummary(store.days, today, trendWindow);
-    $("dcWindow7").classList.toggle("active", trendWindow === 7);
-    $("dcWindow30").classList.toggle("active", trendWindow === 30);
-    const box = function (value, label) { return '<div class="stat-box"><span class="stat-value">' + value + '</span><span class="stat-label">' + label + '</span></div>'; };
-    $("dcStats").innerHTML =
-      box(t.enough ? t.average : "—", "Average score") +
-      box(t.best ? t.best.score : "—", "Best day") +
-      box(t.worst ? t.worst.score : "—", "Lowest day") +
-      box(L.reviewStreak(store.days, today), "Day streak") +
-      box(t.missed, "Days without a review") +
-      box(t.excusedDays, "Days with items “not today”");
-
+  function renderTrendNotes(cur) {
     const notes = [];
-    if (!t.enough) notes.push("Needs " + L.MIN_DAYS_FOR_AVERAGES + " scored days for averages. You have " + t.scoredDays + " in this window.");
-    else {
-      if (t.weakest) notes.push("Weakest area: " + t.weakest.label + " (" + t.weakest.pct + "% of what was attainable, on average).");
-      if (t.phone.days) notes.push("Phone: averaged " + t.phone.averageHours + "h over " + t.phone.days + " days; over the limit on " + t.phone.overLimit + ".");
-      if (t.weakestWeekday) notes.push("Lowest weekday: " + ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][t.weakestWeekday.weekday] + " (average " + t.weakestWeekday.average + " over " + t.weakestWeekday.days + " days).");
-      else notes.push("Weekday patterns need " + L.MIN_DAYS_FOR_WEEKDAYS + " scored days in the window.");
-    }
-    notes.push("Only days you scored are averaged; a day with no review is never counted as zero.");
+    if (!cur.enough) notes.push("Needs " + IN.MIN_SCORED + " scored days for averages. You have " + cur.scoredDays + " in this window.");
+    notes.push("Only days you scored are averaged. A day with no review is never counted as zero.");
+    if (cur.excusedDays) notes.push(plural(cur.excusedDays, "scored day") + " had items marked “not today”, which are left out of those days' scores.");
     $("dcTrendNote").textContent = notes.join("\n");
+  }
 
-    // Bars: one column per day, empty where there is no score.
-    $("dcChart").innerHTML = t.daily.map(function (d) {
-      const label = prettyDate(d.date) + ": " + (d.score === null ? (d.planned ? "plan only, no review" : "no entry") : d.score + " / 100");
-      return '<div class="dc-col' + (d.score === null ? " empty" : "") + (d.planned && d.score === null ? " planned" : "") + (d.date === today ? " today" : "") + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' +
-        (d.score === null ? "" : (trendWindow === 7 ? '<span class="dc-bar-num">' + d.score + '</span>' : "") + '<div class="dc-bar" style="height:' + Math.max(d.score, 2) + '%"></div>') + '</div>';
-    }).join("");
-    const first = t.daily[0].date, last = t.daily[t.daily.length - 1].date;
-    $("dcChartAxis").innerHTML = trendWindow === 7
-      ? t.daily.map(function (d) { return "<span>" + ["S", "M", "T", "W", "T", "F", "S"][L.weekdayOf(d.date)] + "</span>"; }).join("")
-      : "<span>" + esc(prettyDate(first)) + "</span><span>" + esc(prettyDate(last)) + "</span>";
+  function renderCategories(ov) {
+    const cur = ov.cur, prev = ov.prev;
+    if (!cur.categories) {
+      $("dcCategories").innerHTML = '<div class="empty-state">Needs ' + IN.MIN_SCORED + ' scored days in this window.</div>';
+      $("dcCategoriesNote").textContent = "";
+      return;
+    }
+    $("dcCategories").innerHTML = '<div class="dc-cats">' + cur.categories.map(function (c) {
+      const before = prev.categories ? prev.categories.filter(function (x) { return x.key === c.key; })[0] : null;
+      const d = before && before.pct !== null && c.pct !== null ? c.pct - before.pct : null;
+      const weak = !!cur.weakest && cur.weakest.key === c.key;
+      return '<div class="dc-cat' + (weak ? " weak" : "") + '"><div class="dc-cat-head"><span>' + esc(c.label) + (weak ? ' <small class="dc-weak-tag">weakest</small>' : "") + '</span>' +
+        '<span>' + (c.pct === null ? "—" : c.pct + "%") + (d !== null ? ' <small class="dc-delta ' + (d > 0 ? "up" : d < 0 ? "down" : "") + '">' + (d === 0 ? "no change" : (d > 0 ? "▲ up " : "▼ down ") + Math.abs(d) + (Math.abs(d) === 1 ? " pt" : " pts")) + '</small>' : "") + '</span></div>' +
+        '<div class="dc-track"><div class="dc-fill" style="width:' + (c.pct || 0) + '%"></div></div></div>';
+    }).join("") + '</div>';
+    const notes = ["Each bar is the share of attainable points earned, averaged over your scored days." + (prev.categories ? " The change is against the " + trendWindow + " days before." : "")];
+    if (cur.noPlanDays) notes.push(plural(cur.noPlanDays, "scored day") + " had no plan saved. Those count as 0 for Following through.");
+    $("dcCategoriesNote").textContent = notes.join(" ");
+  }
 
-    $("dcCategories").innerHTML = t.categories
-      ? t.categories.map(function (c) {
-        return '<div class="dc-cat"><div class="dc-cat-head"><span>' + esc(c.label) + '</span><span>' + (c.pct === null ? "—" : c.pct + "%") + '</span></div>' +
-          '<div class="dc-track"><div class="dc-fill" style="width:' + (c.pct || 0) + '%"></div></div></div>';
-      }).join("")
-      : '<div class="empty-state">Needs ' + L.MIN_DAYS_FOR_AVERAGES + ' scored days in this window.</div>';
+  function renderCompare() {
+    const c = IN.weekCompare(store.days, todayISO());
+    $("dcCompare").innerHTML = '<table class="dc-compare"><thead><tr><th scope="col"><span class="visually-hidden">Measure</span></th><th scope="col">Last 7 days</th><th scope="col">The 7 before</th><th scope="col">Change</th></tr></thead><tbody>' +
+      c.rows.map(function (r) {
+        return '<tr><th scope="row">' + esc(r.label) + '</th><td>' + esc(r.cur) + '</td><td>' + esc(r.prev) + '</td><td>' + (r.change ? esc(r.change) : "") + '</td></tr>';
+      }).join("") + '</tbody></table>' +
+      '<p class="field-hint">' + (c.comparable ? "A change is shown when both weeks have at least " + IN.MIN_SCORED + " scored days." : "A change needs at least " + IN.MIN_SCORED + " scored days in both weeks, so none is shown yet.") + ' A dash means there was nothing to count.</p>';
+  }
 
-    // Avoiding: why, and how often you started anyway.
+  function renderConsistency(ov) {
+    const cur = ov.cur, prev = ov.prev;
+    let html = '<h3 class="checklist-title">Habits</h3>';
+    html += cur.habits.days
+      ? '<p class="dc-line">You finished all your Habits on <strong>' + cur.habits.allDone + ' of ' + cur.habits.days + '</strong> days you scored, and on average <strong>' + cur.habits.avgPct + '%</strong> of them.</p>' +
+        listRows([{ label: "Habits done, on average", value: cur.habits.avgPct + "%", pct: cur.habits.avgPct }]) +
+        '<p class="field-hint">Counted from what Habits showed when you saved each review. Habits itself is never changed from here.</p>'
+      : '<div class="empty-state">No Habits were counted when you scored these days. Add habits in Habits and they show up here after your next review.</div>';
+
+    html += '<h3 class="checklist-title">Your routine and distractions</h3>';
+    const rows = [];
+    if (cur.routine.answered) rows.push({ label: "Followed your planned routine", value: cur.routine.yes + " of " + cur.routine.answered + " (" + cur.routine.rate + "%)", pct: cur.routine.rate });
+    if (cur.managed.answered) rows.push({ label: "Managed your distractions", value: cur.managed.yes + " of " + cur.managed.answered + " (" + cur.managed.rate + "%)", pct: cur.managed.rate });
+    html += rows.length ? listRows(rows) + '<p class="field-hint">Yes answers out of the days you answered. These two questions are recorded but are not part of your score.</p>'
+      : '<div class="empty-state">Not answered yet. They are the last two questions in the evening review.</div>';
+
+    html += '<h3 class="checklist-title">Your rules</h3>';
+    const rs = cur.rules;
+    html += rs.answered
+      ? '<p class="dc-line">You kept your rules <strong>' + rs.rate + '%</strong> of the time (' + rs.kept + ' of ' + rs.answered + ' answers)' + (prev.rules.answered ? '. The ' + trendWindow + ' days before: ' + prev.rules.rate + '%' : "") + '.</p>' +
+        listRows(rs.byRule.map(function (r) { return { label: r.text, value: r.kept + " of " + r.answered, pct: Math.round(100 * r.kept / r.answered) }; }))
+      : '<div class="empty-state">' + (store.rules.length ? "Answer your rules in tonight’s review and they show up here." : "Add a rule in Setup, then answer it each evening.") + '</div>';
+    $("dcConsistency").innerHTML = html;
+  }
+
+  function renderInsights() {
+    const r = IN.insights(store.days, store.avoid, store.rules, todayISO());
+    $("dcInsights").innerHTML = r.items.length
+      ? '<ul class="dc-insight-list">' + r.items.map(function (i) { return '<li><div>' + esc(i.text) + '</div><div class="field-hint">' + esc(i.basis) + '</div></li>'; }).join("") + '</ul>' +
+        '<p class="field-hint">Patterns in your own entries over the last ' + IN.INSIGHT_DAYS + ' days, whichever window is showing above. They show what went together, not what caused what. Plain rules over your numbers, not AI.</p>'
+      : '<div class="empty-state">' + esc(r.needs) + '</div>';
+  }
+
+  function renderAvoidCard() {
+    const today = todayISO();
     const av = L.avoidSummary(store.avoid, today, trendWindow);
     const bl = L.blockerSummary(store.days, today, trendWindow);
     let avoidHtml = "";
@@ -1334,14 +1373,89 @@
       avoidHtml += '<h3 class="checklist-title">What got in the way on days a priority was missed</h3>' + listRows(bl.map(function (r) { return { label: r.label, value: r.count + (r.count === 1 ? " day" : " days") }; }));
     }
     $("dcAvoidStats").innerHTML = avoidHtml || '<div class="empty-state">Nothing yet. When you tap “I\'m avoiding it” or say what got in the way, the reasons show up here.</div>';
+  }
 
-    // Your rules.
-    const rs = L.ruleSummary(store.days, today, trendWindow);
-    $("dcRuleStats").innerHTML = rs.answered
-      ? '<p class="dc-line">You kept your rules <strong>' + rs.rate + '%</strong> of the time (' + rs.kept + ' of ' + rs.answered + ' answers).</p>' +
-        listRows(rs.byRule.map(function (r) { return { label: r.text, value: r.kept + " of " + r.answered, pct: Math.round(100 * r.kept / r.answered) }; }))
-      : '<div class="empty-state">' + (store.rules.length ? "Answer your rules in tonight’s review and they show up here." : "Add a rule in Setup, then answer it each evening.") + '</div>';
+  /* ---------------- the weekly review ---------------- */
 
+  const SHARE_HINT = "Numbers only, unless you tick “in my own words”. Task names, reflections and notes are never included. Edit it however you like first.";
+  const SHARE_HINT_EDITED = "You've edited the text, so the options above won't change it. Tap “Rebuild from my choices” to apply them (that replaces your edits).";
+  let shareOptions = null; // { scores, phone, habits, rules, avoid, wording }: what to include in the shared text
+  function shareChoices() {
+    if (!shareOptions) {
+      shareOptions = {};
+      IN.SHARE_SECTIONS.forEach(function (s) { shareOptions[s.key] = s.on; });
+    }
+    return shareOptions;
+  }
+  function weeklyReport() { return IN.weeklyReport({ days: store.days, avoid: store.avoid, rules: store.rules, today: todayISO() }); }
+  function bullets(list, empty) {
+    return list.length ? '<ul class="dc-lines">' + list.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>" : '<p class="field-hint">' + esc(empty) + "</p>";
+  }
+
+  function renderWeekly() {
+    const rep = weeklyReport();
+    const cur = rep.cur;
+    const head = !cur.scoredDays
+      ? "No scored days in the last 7 days yet."
+      : "You scored " + cur.scoredDays + " of the last 7 days" + (cur.enough ? ", averaging " + cur.average : "") +
+        (rep.comparable ? (rep.delta === 0 ? ", the same as the week before (" + rep.prev.average + ")." : ", " + change(rep.delta) + " from the week before (" + rep.prev.average + ").") : ".");
+    $("dcWeeklyReport").innerHTML = '<p class="dc-line">' + esc(head) + '</p>' +
+      '<h3 class="checklist-title">What went well</h3>' + bullets(rep.went, "Nothing stands out yet. It fills in as you score more days.") +
+      '<h3 class="checklist-title">To improve</h3>' + bullets(rep.improve, cur.enough ? "Nothing needs fixing this week." : "Needs " + IN.MIN_SCORED + " scored days in the last 7.") +
+      (rep.tracking.length ? '<h3 class="checklist-title">Rules you are tracking</h3>' + bullets(rep.tracking.map(function (t) {
+        return t.answered ? t.text + ": kept " + t.kept + " of " + t.answered + " this week." : t.text + ": no answers yet this week.";
+      }), "") : "");
+
+    const full = store.rules.length >= L.MAX_RULES;
+    $("dcWeeklySuggestions").innerHTML = rep.recommendations.length ? rep.recommendations.map(function (s, i) {
+      return '<div class="dc-sugg"><div><strong>' + esc(s.text) + '</strong><div class="field-hint">' + esc(s.why) + '</div></div>' +
+        '<button type="button" class="btn btn-secondary" data-sugg="' + i + '"' + (full ? " disabled" : "") + '>Track as a rule</button></div>';
+    }).join("") + '<p class="field-hint">' + (full ? "You have " + L.MAX_RULES + " rules. Remove one in Setup to add another. " : "") + 'A rule you track shows up in your evening review, and its results show up here and in Trends. Nothing is added unless you tap.</p>'
+      : '<div class="empty-state">Nothing new to suggest right now.</div>';
+    $("dcWeeklySuggestions").setAttribute("data-texts", JSON.stringify(rep.recommendations.map(function (s) { return s.text; })));
+
+    const opts = shareChoices();
+    const box = $("dcShareOptions");
+    box.innerHTML = '<legend class="field-hint">Include</legend>' + IN.SHARE_SECTIONS.map(function (s) {
+      return '<label class="dc-opt"><input type="checkbox" data-share="' + s.key + '"' + (opts[s.key] ? " checked" : "") + '><span>' + esc(s.label) + '</span></label>';
+    }).join("");
+    if (weeklyEdited && weeklyDate !== todayISO()) weeklyEdited = false; // an edit from an earlier day is about an earlier week
+    if (!weeklyEdited) $("dcWeeklyText").value = IN.shareText(rep, opts);
+    $("dcRebuildBtn").classList.toggle("hidden", !weeklyEdited);
+    $("dcShareHint").textContent = weeklyEdited ? SHARE_HINT_EDITED : SHARE_HINT;
+  }
+
+  function handleShareOption(e) {
+    const box = e.target.closest("[data-share]");
+    if (!box) return;
+    shareChoices()[box.getAttribute("data-share")] = box.checked;
+    renderWeekly();
+  }
+
+  function handleRebuild() {
+    weeklyEdited = false;
+    renderWeekly();
+    core().showToast("Rebuilt from your choices.");
+  }
+
+  function renderTrends() {
+    if (!IN || !CH) { $("dcStats").innerHTML = '<div class="empty-state">Trends aren\'t available right now.</div>'; return; }
+    const today = todayISO();
+    const ov = IN.overview(store.days, today, trendWindow);
+    $("dcWindow7").classList.toggle("active", trendWindow === 7);
+    $("dcWindow30").classList.toggle("active", trendWindow === 30);
+    $("dcStats").innerHTML = trendStatsHtml(ov);
+    renderTrendNotes(ov.cur);
+
+    const series = IN.series(store.days, today, trendWindow);
+    $("dcChart").innerHTML = CH.lineChart(series, today);
+    $("dcChartList").innerHTML = CH.chartList(series);
+    renderCategories(ov);
+    $("dcHeatmap").innerHTML = CH.heatmap(IN.calendar(store.days, today, trendWindow), today);
+    renderCompare();
+    renderConsistency(ov);
+    renderInsights();
+    renderAvoidCard();
     renderWeekly();
 
     const dates = Object.keys(store.days).filter(function (d) { return store.days[d].morning || store.days[d].review; }).sort().reverse().slice(0, 14);
@@ -1360,7 +1474,7 @@
     let texts = [];
     try { texts = JSON.parse($("dcWeeklySuggestions").getAttribute("data-texts") || "[]"); } catch (err) { texts = []; }
     const text = texts[Number(add.getAttribute("data-sugg"))];
-    if (text && addRule(text)) core().showToast("Added to your rules. You'll answer it each evening.");
+    if (text && addRule(text)) core().showToast("Now tracked. You'll answer it each evening.");
   }
 
   function copyText(text) {
@@ -1841,7 +1955,7 @@
   function onSubTabChange(targetId) {
     if (targetId === "discipline-today") { if (selectedDate() !== renderedDate) loadReviewForm(); renderAllToday(); }
     if (targetId === "discipline-program") renderProgram();
-    if (targetId === "discipline-trends") { weeklyEdited = false; renderTrends(); }
+    if (targetId === "discipline-trends") renderTrends();
     if (targetId === "discipline-setup") renderSetup();
   }
 
@@ -1957,7 +2071,9 @@
       renderTrends();
     });
     $("dcWeeklySuggestions").addEventListener("click", handleWeeklyClick);
-    $("dcWeeklyText").addEventListener("input", function () { weeklyEdited = true; });
+    $("dcWeeklyText").addEventListener("input", function () { weeklyEdited = true; weeklyDate = todayISO(); $("dcRebuildBtn").classList.remove("hidden"); $("dcShareHint").textContent = SHARE_HINT_EDITED; });
+    $("dcShareOptions").addEventListener("change", handleShareOption);
+    $("dcRebuildBtn").addEventListener("click", handleRebuild);
     $("dcShareBtn").addEventListener("click", handleShare);
     $("dcCopyBtn").addEventListener("click", handleCopy);
     $("dcSetupForm").addEventListener("submit", handleSetupSubmit);

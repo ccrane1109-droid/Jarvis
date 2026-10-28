@@ -2742,15 +2742,65 @@ button.rm-hist-row { cursor: pointer; }
 .dc-lines { margin: 14px 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--text-dim); }
 
 .dc-insights { white-space: pre-line; margin-top: 4px; }
-.dc-chart { display: flex; align-items: flex-end; gap: 3px; height: 140px; padding-top: 18px; }
-.dc-col { position: relative; flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
-.dc-bar { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; }
-.dc-col.today .dc-bar { background: var(--accent-hover); }
-.dc-col.empty::after { content: ""; width: 100%; border-bottom: 2px dashed var(--card-border); }
-.dc-col.planned::after { border-bottom-color: var(--text-faint); }
-.dc-bar-num { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
-.dc-chart-axis { display: flex; justify-content: space-between; gap: 3px; font-size: 11px; color: var(--text-faint); margin-top: 6px; }
-.dc-chart-axis span { flex: 0 1 auto; }
+/* Trends: the daily-score line chart, the calendar, the comparison and the insights */
+.dc-linechart { width: 100%; height: auto; display: block; }
+.dc-grid { stroke: var(--card-border); stroke-width: 1; }
+.dc-axis-text { fill: var(--text-faint); font-size: 10px; }
+.dc-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dc-dot { fill: var(--accent); stroke: var(--card); stroke-width: 1.5; }
+.dc-dot.today { fill: var(--accent-hover); stroke: var(--text); }
+.dc-plan-dot { fill: none; stroke: var(--text-faint); stroke-width: 1.2; }
+.dc-datalist { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+.stat-sub { display: block; font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+.dc-cat.weak .dc-fill { background: var(--yellow); }
+.dc-weak-tag { font-size: 11px; font-weight: 600; color: var(--yellow); margin-left: 4px; }
+.dc-delta { font-size: 11px; font-weight: 600; color: var(--text-faint); margin-left: 4px; }
+.dc-delta.up { color: var(--green); }
+.dc-delta.down { color: var(--red); }
+
+.dc-heat-head, .dc-heat-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.dc-heat-head span { font-size: 11px; color: var(--text-faint); text-align: center; }
+.dc-heat-row { margin-top: 4px; }
+.dc-heat-cell {
+  position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; aspect-ratio: 1 / 1; min-height: 34px;
+  border-radius: 6px; border: 1px solid var(--card-border); background: var(--bg-elevated);
+}
+.dc-heat-d { position: absolute; top: 2px; left: 4px; font-size: 9px; line-height: 1; color: var(--text-faint); }
+.dc-heat-n { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.dc-heat-cell.s-outside, .dc-heat-cell.s-future { background: transparent; border-style: dashed; opacity: 0.4; }
+.dc-heat-cell.s-planned { border-style: dashed; border-color: var(--text-faint); }
+.dc-heat-cell.s-scored.b1, .dc-heat-sw.s-scored.b1 { background: rgba(79, 140, 255, 0.18); border-color: rgba(79, 140, 255, 0.35); }
+.dc-heat-cell.s-scored.b2, .dc-heat-sw.s-scored.b2 { background: rgba(79, 140, 255, 0.36); border-color: rgba(79, 140, 255, 0.55); }
+.dc-heat-cell.s-scored.b3, .dc-heat-sw.s-scored.b3 { background: rgba(79, 140, 255, 0.62); border-color: rgba(79, 140, 255, 0.8); }
+.dc-heat-cell.s-scored.b4, .dc-heat-sw.s-scored.b4 { background: #3f78e6; border-color: var(--accent-hover); }
+.dc-heat-cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
+.dc-heat-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 12px; font-size: 11px; color: var(--text-dim); }
+.dc-heat-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.dc-heat-sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--card-border); background: var(--bg-elevated); }
+.dc-heat-sw.s-planned { border-style: dashed; border-color: var(--text-faint); }
+
+.dc-compare { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.dc-compare th, .dc-compare td { padding: 8px 4px; text-align: right; border-bottom: 1px solid var(--card-border); overflow-wrap: anywhere; }
+.dc-compare thead th { font-size: 11px; font-weight: 600; color: var(--text-faint); vertical-align: bottom; }
+.dc-compare tbody th { text-align: left; font-weight: 600; color: var(--text); width: 34%; }
+.dc-compare td { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.dc-compare td:last-child { color: var(--text); }
+.dc-compare tbody tr:last-child th, .dc-compare tbody tr:last-child td { border-bottom: none; }
+
+.dc-insight-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.dc-insight-list li { padding-left: 12px; border-left: 3px solid var(--accent-dim); font-size: 14px; overflow-wrap: anywhere; }
+.dc-insight-list .field-hint { margin-top: 4px; }
+
+.dc-share-options { border: 0; margin: 8px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dc-share-options legend { padding: 0; margin-bottom: 4px; }
+.dc-opt { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; cursor: pointer; }
+.dc-opt input { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.dc-opt span { min-width: 0; overflow-wrap: anywhere; }
+.dc-cats + .field-hint, .dc-insight-list + .field-hint, .dc-sugg + .field-hint, .dc-lines + .field-hint, .dc-compare + .field-hint { margin-top: 10px; }
+#dcWeeklyReport .dc-lines { margin-top: 4px; }
+#dcWeeklyCard .checklist-title { margin-top: 16px; }
+
 .dc-recent-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--card-border); }
 .dc-recent-row:last-child { border-bottom: none; }
 .dc-recent-score { font-size: 22px; font-weight: 800; color: var(--accent); }
