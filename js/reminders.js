@@ -309,19 +309,22 @@
     });
   }
 
+  // What a "test now" answer means, in words. Accepted means the push service took it from the server; it does not mean it appeared.
+  function testResultText(res) {
+    if (res.accepted > 0) {
+      return "Sent. The push service accepted it for " + res.accepted + " of " + res.devices + (res.devices === 1 ? " phone" : " phones") + ". Did a notification appear on your phone? If not, check the iPhone's Settings → Notifications → JARVIS and Focus mode.";
+    }
+    if (res.gone) return "The push service says this phone isn't registered any more. Turn notifications off and on again.";
+    return "The push service didn't accept it" + (res.errors && res.errors[0] ? ": " + res.errors[0] : ".") + (res.retryable ? " This may be temporary. Try again in a minute." : "");
+  }
+
   function testNow() {
     if (push.busy) return;
     push.busy = true;
     setPushStatus("Sending…");
     renderPush();
     callN({ action: "test", delaySeconds: 0 }).then(function (res) {
-      if (res.accepted > 0) {
-        setPushStatus("Sent. The push service accepted it for " + res.accepted + " of " + res.devices + (res.devices === 1 ? " phone" : " phones") + ". Did a notification appear on your phone? If not, check the iPhone's Settings → Notifications → JARVIS and Focus mode.");
-      } else if (res.gone) {
-        setPushStatus("The push service says this phone isn't registered any more. Turn notifications off and on again.");
-      } else {
-        setPushStatus("The push service didn't accept it" + (res.errors && res.errors[0] ? ": " + res.errors[0] : ".") + (res.retryable ? " This may be temporary. Try again in a minute." : ""));
-      }
+      setPushStatus(testResultText(res));
     }).catch(function (err) {
       setPushStatus(describeError(err));
     }).then(function () {
@@ -1407,10 +1410,66 @@
     return true;
   }
 
+  // For Discipline's Setup: what this phone already knows, with no network call. The reminders are the read-only copy
+  // kept on the device (as of the last time the Reminders screen loaded), so Setup can say "saved" only for what the
+  // server has confirmed, and "not loaded yet" when it hasn't been asked.
+  function snapshot() {
+    return {
+      available: !!spec, signedIn: signedIn(), loaded: state.loaded, fromCache: state.fromCache, cachedAt: state.cachedAt, error: state.error,
+      reminders: spec ? state.reminders.map(function (r) {
+        return { id: r.id, title: r.title, enabled: !!r.enabled, category: r.category, schedule: r.schedule, timezone: r.timezone, nextFireAt: r.nextFireAt };
+      }) : [],
+      settings: state.settings, deviceZone: deviceZone(),
+      push: { mode: pushMode(), permission: permission(), ios: isIos(), standalone: isStandalone(), supported: canPush(), check: readCheck(), loaded: push.loaded, error: push.error }
+    };
+  }
+
+  // Asks the server again (reminders and this phone's notification registration). Resolves when both have answered.
+  function refresh() {
+    if (!spec) return Promise.resolve();
+    return Promise.all([load(), refreshPush()]).then(function () { return null; });
+  }
+
+  // Goes to Reminders and opens one reminder for editing. false when there isn't one.
+  function openEdit(id) {
+    const r = state.reminders.find(function (x) { return x.id === id; });
+    if (!r) return false;
+    const nav = $("navBtnHabits");
+    if (nav) nav.click();
+    const tab = $("habitsSubNavReminders");
+    if (tab) tab.click();
+    if (!signedIn()) { core().showToast("Log in to your JARVIS account to edit reminders."); return false; }
+    openForm(r, r.category, "rmNewBtn");
+    return true;
+  }
+
+  // Sends a test notification now, with JARVIS open. Resolves with the words to show, never claims it appeared.
+  function sendTest() {
+    if (push.busy) return Promise.resolve("A test is already running.");
+    push.busy = true;
+    renderPush();
+    return callN({ action: "test", delaySeconds: 0 }).then(function (res) {
+      const text = testResultText(res);
+      setPushStatus(text);
+      return text;
+    }).catch(function (err) {
+      const text = describeError(err);
+      setPushStatus(text);
+      return text;
+    }).then(function (text) {
+      push.busy = false;
+      return refreshPush().then(function () { return text; });
+    });
+  }
+
   window.JarvisReminders = {
     init: init,
     render: render,
     openNew: openNew,
+    snapshot: snapshot,
+    refresh: refresh,
+    openEdit: openEdit,
+    sendTest: sendTest,
     helpers: { relative: relative, describeError: describeError, cleanReminder: cleanReminder }
   };
 })();

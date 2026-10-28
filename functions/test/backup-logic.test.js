@@ -194,6 +194,13 @@ test("the Discipline store merges rules, the avoiding log, days and program prog
   assert.equal(many.rules.length, 5, "never more than 5 rules");
 });
 
+test("a rule reworded or switched off on one device is not doubled by the other copy", () => {
+  const local = { rules: [{ id: "r1", text: "Phone in the kitchen at 9", enabled: false }, { id: "r2", text: "Read before bed", enabled: true }] };
+  const cloud = { rules: [{ id: "r1", text: "Phone on the charger", enabled: true }, { id: "r2", text: "read before bed.", enabled: true }, { id: "r3", text: "In bed by 10", enabled: true }] };
+  const m = B.mergeDiscipline(local, cloud);
+  assert.deepEqual(m.rules.map((r) => [r.id, r.text, r.enabled]), [["r1", "Phone in the kitchen at 9", false], ["r2", "Read before bed", true], ["r3", "In bed by 10", true]], "one rule per id, this device's wording and on/off setting win, and punctuation doesn't make a second rule");
+});
+
 test("two different program runs are not mixed: the later start is the current run", () => {
   const oldRun = { start: "2026-10-01", done: { "1": [1], "5": [0] }, reflections: { "1": "from the old run" } };
   const newRun = { start: "2026-11-02", done: { "2": [0] }, reflections: { "2": "from the new run" } };

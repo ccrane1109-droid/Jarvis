@@ -188,7 +188,9 @@ test("a mission that can never tick without something else says what that is", (
   const ans = P.DAYS.findIndex((d) => d.missions.some((m) => m.a === "rulesAnswered")) + 1;
   assert.ok(ans > 0);
   const none = P.dayProgress(ans, ctx({}, {})).items.filter((i) => i.kind === "rulesAnswered")[0];
-  assert.match(none.needs, /Needs a rule\. Add one in Setup/);
+  assert.match(none.needs, /Needs a rule that is turned on\. Add one in Setup/);
+  const paused = P.dayProgress(ans, ctx({}, { rules: [{ id: "a", text: "Rule", enabled: false }] })).items.filter((i) => i.kind === "rulesAnswered")[0];
+  assert.match(paused.needs, /turned on/, "a rule that is turned off can't be answered, so it doesn't count");
   assert.equal(P.dayProgress(ans, withRule).items.filter((i) => i.kind === "rulesAnswered")[0].needs, "", "nothing missing once there is a rule");
   P.dayProgress(1, ctx({}, {})).items.forEach((i) => assert.equal(i.needs, "", "other missions need nothing"));
   const answered = { "2026-10-22": { type: "normal", morning: morning(), review: review({ rules: [{ id: "a", text: "Rule", state: "done" }] }) } };
