@@ -39,7 +39,7 @@
     "jarvisNutritionLog", "jarvisNutritionSavedFoods", "jarvisNutritionRecipes", "jarvisNutritionGoals",
     "jarvisNutritionProfile", "jarvisNutritionCheckins",
     "jarvisTasks", "jarvisGoals",
-    "jarvisDiscipline",
+    "jarvisDiscipline", "jarvisWakeCheck",
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
     "jarvisFormCheckHistory"
   ];
@@ -238,6 +238,23 @@
     return out;
   }
 
+  // The Wake check's store: the settings from whichever copy was saved last (this device's on a tie), and each morning
+  // as a whole record. When both copies have the same morning, the one with more of it done wins (both phrases typed,
+  // then one, then a placeholder for a missed morning), and this device's on a tie.
+  function wakeProgress(d) { return isObj(d) ? (d.second ? 2 : d.first ? 1 : 0) : -1; }
+  function mergeWakeCheck(local, cloud) {
+    if (!isObj(local)) return isObj(cloud) ? cloud : local;
+    if (!isObj(cloud)) return local;
+    const stamp = function (s) { const t = isObj(s) && typeof s.updatedAt === "string" ? Date.parse(s.updatedAt) : NaN; return isNaN(t) ? 0 : t; };
+    const ls = isObj(local.settings) ? local.settings : null, cs = isObj(cloud.settings) ? cloud.settings : null;
+    const days = {}, ld = isObj(local.days) ? local.days : {}, cd = isObj(cloud.days) ? cloud.days : {};
+    Object.keys(ld).concat(Object.keys(cd)).forEach(function (k) {
+      if (k in days) return;
+      days[k] = !(k in cd) ? ld[k] : !(k in ld) ? cd[k] : wakeProgress(cd[k]) > wakeProgress(ld[k]) ? cd[k] : ld[k];
+    });
+    return { settings: !ls ? cs : !cs ? ls : stamp(cs) > stamp(ls) ? cs : ls, days: days };
+  }
+
   const STRATEGY = {
     jarvisNutritionLog: mergeDateMeals,
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
@@ -245,7 +262,8 @@
     jarvisGroceryPantry: mergeMapNewest,
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,
-    jarvisDiscipline: mergeDiscipline
+    jarvisDiscipline: mergeDiscipline,
+    jarvisWakeCheck: mergeWakeCheck
   };
 
   // Two stored copies of one key -> { ok, text }. If one can't be read, the other is used; if neither can, ok is false.
@@ -264,6 +282,6 @@
     BACKUP_KEYS: BACKUP_KEYS, CHUNK_CHARS: CHUNK_CHARS,
     hashText: hashText, chunkText: chunkText, partId: partId, assemble: assemble, isEmptyText: isEmptyText,
     decide: decide, mergeText: mergeText,
-    mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline
+    mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeWakeCheck: mergeWakeCheck
   };
 });

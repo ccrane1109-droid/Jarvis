@@ -519,6 +519,11 @@
       } catch (err) {
         if (window.console) console.error("Discipline tab failed to start", err);
       }
+      try {
+        if (window.JarvisWakeCheck && typeof window.JarvisWakeCheck.init === "function") window.JarvisWakeCheck.init();
+      } catch (err) {
+        if (window.console) console.error("Wake check failed to start", err);
+      }
       maybeAutoShowBriefing();
     }
 
