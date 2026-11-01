@@ -33,7 +33,7 @@ test("the backup list overlaps neither the original sync nor the secrets", () =>
   assert.equal(new Set(B.BACKUP_KEYS).size, B.BACKUP_KEYS.length, "no repeats");
   assert.deepEqual(B.BACKUP_KEYS.filter((k) => SYNCED.includes(k)), [], "no key is stored in two places");
   assert.deepEqual(B.BACKUP_KEYS.filter((k) => /Connections|SocialKey|Blobs/.test(k)), [], "no secrets");
-  ["jarvisNutritionLog", "jarvisNutritionSavedFoods", "jarvisTasks", "jarvisGoals", "jarvisDiscipline", "jarvisGroceryPantry"].forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k));
+  ["jarvisNutritionLog", "jarvisNutritionSavedFoods", "jarvisTasks", "jarvisGoals", "jarvisDiscipline", "jarvisWakeCheck", "jarvisGroceryPantry"].forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k));
 });
 
 test("every backed-up key has a merge rule that fits its shape", () => {
@@ -220,4 +220,42 @@ test("merging two stored copies: unreadable text is handled, and nothing is drop
   const r = B.mergeText("jarvisTasks", "[{\"id\":\"l\"}]", "[{\"id\":\"c\"}]");
   assert.deepEqual(JSON.parse(r.text).map((x) => x.id), ["l", "c"]);
   assert.equal(B.mergeText("jarvisSomethingNew", "{\"a\":1}", "{\"b\":2}").text, "{\"b\":2,\"a\":1}".replace("{\"b\":2,\"a\":1}", JSON.stringify({ b: 2, a: 1 })), "an unknown key still merges as settings, keeping both");
+});
+
+/* ---------------- the Wake check ---------------- */
+
+const wake = (o) => Object.assign({ wake: "07:00", delay: 5, window: 10, first: null, due: null, second: null }, o || {});
+const both = wake({ first: "2026-11-02T12:01:00.000Z", due: "2026-11-02T12:06:00.000Z", second: "2026-11-02T12:07:00.000Z" });
+const onlyFirst = wake({ first: "2026-11-02T12:01:00.000Z", due: "2026-11-02T12:06:00.000Z" });
+
+test("Wake check: every morning from both copies is kept, and the one with more done wins", () => {
+  const local = { settings: { time: "07:00", updatedAt: "2026-11-01T10:00:00.000Z" }, days: { "2026-11-02": onlyFirst, "2026-11-03": wake(), "2026-11-04": both } };
+  const cloud = { settings: { time: "06:30", updatedAt: "2026-11-01T09:00:00.000Z" }, days: { "2026-11-02": both, "2026-11-03": onlyFirst, "2026-11-05": wake() } };
+  const m = B.mergeWakeCheck(local, cloud);
+  assert.deepEqual(Object.keys(m.days).sort(), ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"], "no morning is dropped");
+  assert.equal(m.days["2026-11-02"].second, both.second, "both phrases typed beats only the first");
+  assert.equal(m.days["2026-11-03"].first, onlyFirst.first, "one phrase beats a missed placeholder");
+  assert.deepEqual(B.mergeWakeCheck(cloud, local).days["2026-11-04"], both, "the same whichever copy is local");
+  const tie = B.mergeWakeCheck({ days: { "2026-11-06": wake({ wake: "07:00" }) } }, { days: { "2026-11-06": wake({ wake: "06:00" }) } });
+  assert.equal(tie.days["2026-11-06"].wake, "07:00", "a tie goes to this device");
+});
+
+test("Wake check: settings come from the copy saved last, this device's on a tie or when only one has a time", () => {
+  const a = { settings: { time: "07:00", updatedAt: "2026-11-01T10:00:00.000Z" }, days: {} };
+  const b = { settings: { time: "06:30", updatedAt: "2026-11-01T11:00:00.000Z" }, days: {} };
+  assert.equal(B.mergeWakeCheck(a, b).settings.time, "06:30");
+  assert.equal(B.mergeWakeCheck(b, a).settings.time, "06:30");
+  assert.equal(B.mergeWakeCheck(a, { settings: { time: "05:00", updatedAt: a.settings.updatedAt }, days: {} }).settings.time, "07:00", "tie: this device");
+  assert.equal(B.mergeWakeCheck(a, { days: {} }).settings.time, "07:00");
+  assert.equal(B.mergeWakeCheck({ days: {} }, a).settings.time, "07:00");
+  assert.equal(B.mergeWakeCheck(null, a), a);
+  assert.equal(B.mergeWakeCheck(a, null), a);
+});
+
+test("Wake check: merging stored text uses its own rule and keeps both devices' mornings", () => {
+  const l = JSON.stringify({ settings: { time: "07:00" }, days: { "2026-11-02": both } });
+  const c = JSON.stringify({ settings: { time: "07:00" }, days: { "2026-11-03": onlyFirst } });
+  const r = B.mergeText("jarvisWakeCheck", l, c);
+  assert.equal(r.ok, true);
+  assert.deepEqual(Object.keys(JSON.parse(r.text).days).sort(), ["2026-11-02", "2026-11-03"]);
 });

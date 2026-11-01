@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=58">
+<link rel="stylesheet" href="style.css?v=59">
 </head>
 <body>
 
@@ -136,7 +136,7 @@
           <div class="backup-title" id="backupTitle">Cloud backup</div>
           <div class="backup-status" id="backupStatus" role="status" aria-live="polite" data-tone="off">Sign in to back up your food log, tasks, goals and Discipline to your account.</div>
           <button type="button" class="btn backup-btn hidden" id="backupNowBtn"></button>
-          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, Discipline, groceries, form-check history. Workouts, habits, business and the rest sync separately.</p>
+          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, Discipline, Wake check, groceries, form-check history. Workouts, habits, business and the rest sync separately.</p>
           <div class="backup-help hidden" id="backupHelp">
             <p>Backup needs one update to your Firebase security rules, which only you can deploy. In Cloud Shell, run these one at a time:</p>
             <pre>cd ~/Jarvis
@@ -1649,6 +1649,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <nav class="sub-nav habits-sub-nav" role="tablist" aria-label="Habits sections">
       <button type="button" class="habits-sub-nav-btn active" data-subtarget="habits-today" role="tab" aria-selected="true" aria-controls="habits-today" id="habitsSubNavToday">Today</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-wake" role="tab" aria-selected="false" aria-controls="habits-wake" id="habitsSubNavWake">Wake</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-week" role="tab" aria-selected="false" aria-controls="habits-week" id="habitsSubNavWeek">Week</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-goals" role="tab" aria-selected="false" aria-controls="habits-goals" id="habitsSubNavGoals">Goals</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-stats" role="tab" aria-selected="false" aria-controls="habits-stats" id="habitsSubNavStats">Stats</button>
@@ -1657,6 +1658,14 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Today ---------- -->
     <div id="habits-today" class="habits-sub-panel active" role="tabpanel" aria-labelledby="habitsSubNavToday">
+      <div class="card dc-strip hidden" id="wkStrip" aria-labelledby="wkStripTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="wkStripTitle">Wake check</h2>
+          <button type="button" class="btn-icon" id="wkStripOpen">Open Wake check</button>
+        </div>
+        <p class="dc-line" id="wkStripText"></p>
+      </div>
+
       <div class="card dc-strip hidden" id="habitsDisciplineCard" aria-labelledby="habitsDisciplineTitle">
         <div class="card-title-row">
           <h2 class="card-title" id="habitsDisciplineTitle">Discipline check-in</h2>
@@ -1936,6 +1945,70 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <button type="button" class="nr-btn nr-btn-ghost" id="rmSettingsMoveBtn">Save and move all reminders to this zone</button>
         </div>
         <p class="nr-status-line" id="rmSettingsStatus" role="status"></p>
+      </section>
+
+    </div>
+
+    <!-- ---------- Sub-panel: Wake check ---------- -->
+    <div id="habits-wake" class="habits-sub-panel wk-scope" role="tabpanel" aria-labelledby="habitsSubNavWake">
+      <section class="card" aria-labelledby="wkTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="wkTitle">Wake check</h2>
+          <span class="badge badge-neutral" id="wkBadge">Off</span>
+        </div>
+        <div id="wkStatus"></div>
+        <p class="visually-hidden" id="wkAnnounce" role="status" aria-live="polite"></p>
+        <p class="field-hint wk-honest">Your Clock alarm does the ringing. JARVIS only records that you typed the phrases in time. It can't tell whether you're really awake, and it can't stop you silencing an alarm.</p>
+      </section>
+
+      <section class="card" aria-labelledby="wkStreakTitle">
+        <h3 class="card-title" id="wkStreakTitle">Streak</h3>
+        <div class="wk-stats" id="wkStats"></div>
+        <ol class="wk-days" id="wkDays" aria-label="Last 14 days"></ol>
+        <p class="field-hint">A morning counts when you typed both phrases in time. Days the check isn't scheduled don't count for or against you.</p>
+      </section>
+
+      <section class="card" aria-labelledby="wkSetupTitle">
+        <h3 class="card-title" id="wkSetupTitle">Set up</h3>
+        <form id="wkForm" class="stacked-form" novalidate>
+          <div class="dc-switch-row">
+            <button type="button" class="dc-switch" role="switch" id="wkEnabled" aria-checked="false" aria-labelledby="wkEnabledLabel"><span class="dc-switch-knob" aria-hidden="true"></span></button>
+            <span id="wkEnabledLabel">Wake check is on</span>
+          </div>
+          <div class="form-row">
+            <label for="wkTime">Time your alarm rings</label>
+            <input type="time" id="wkTime">
+          </div>
+          <div class="form-row">
+            <span class="wk-label" id="wkDaysLabel">Days</span>
+            <div class="wk-day-pills" id="wkDayPills" role="group" aria-labelledby="wkDaysLabel"></div>
+          </div>
+          <div class="form-row">
+            <label for="wkPhrase1">First phrase (typed after the alarm)</label>
+            <input type="text" id="wkPhrase1" maxlength="60" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          </div>
+          <div class="form-row">
+            <label for="wkPhrase2">Check-in phrase</label>
+            <input type="text" id="wkPhrase2" maxlength="60" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          </div>
+          <div class="form-row two-col">
+            <div><label for="wkDelay">Minutes until the check-in</label><input type="number" id="wkDelay" min="1" max="60" step="1" inputmode="numeric"></div>
+            <div><label for="wkWindow">Minutes to answer each one</label><input type="number" id="wkWindow" min="3" max="30" step="1" inputmode="numeric"></div>
+          </div>
+          <div class="dc-switch-row">
+            <button type="button" class="dc-switch" role="switch" id="wkStrict" aria-checked="false" aria-labelledby="wkStrictLabel"><span class="dc-switch-knob" aria-hidden="true"></span></button>
+            <span id="wkStrictLabel">Capital letters must match</span>
+          </div>
+          <p class="dc-error" id="wkError" role="alert"></p>
+          <div class="form-actions"><button type="submit" class="btn btn-primary">Save</button></div>
+        </form>
+        <ul class="dc-lines wk-notes">
+          <li>Set a repeating alarm in the <strong>Clock</strong> app for the same time. JARVIS can't ring your phone.</li>
+          <li>JARVIS can't send you a notification for the check-in yet. For now, keep this screen open or set an iPhone timer.</li>
+          <li>The first phrase counts from your alarm time until the minutes to answer run out. Typing it starts the countdown to the check-in.</li>
+          <li>Changing the time or the days starts counting from now. Mornings already finished keep the time they had.</li>
+          <li>A curly &rsquo; and a straight ' are treated as the same, and so are extra spaces. Pasting is turned off on the answer box.</li>
+        </ul>
       </section>
     </div>
   </section>
@@ -5016,40 +5089,42 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=58"></script>
-<script src="js/backup-logic.js?v=58"></script>
-<script src="js/cloud-backup.js?v=58"></script>
-<script type="module" src="js/auth.js?v=58"></script>
-<script src="js/app.js?v=58"></script>
-<script src="js/exercises.js?v=58"></script>
-<script src="js/workout.js?v=58"></script>
-<script src="js/nutrition.js?v=58"></script>
-<script src="js/nutrition-label-parse.js?v=58"></script>
-<script src="js/nutrition-label-scan.js?v=58"></script>
-<script src="js/groceries.js?v=58"></script>
-<script src="js/habits.js?v=58"></script>
-<script src="js/discipline-logic.js?v=58"></script>
-<script src="js/discipline-program.js?v=58"></script>
-<script src="js/discipline-habits.js?v=58"></script>
-<script src="js/discipline-insights.js?v=58"></script>
-<script src="js/discipline-charts.js?v=58"></script>
-<script src="js/discipline-delivery.js?v=58"></script>
-<script src="js/discipline.js?v=58"></script>
-<script src="functions/lib/reminder-spec.js?v=58"></script>
-<script src="functions/lib/reminder-events.js?v=58"></script>
-<script src="js/reminders.js?v=58"></script>
-<script src="js/business.js?v=58"></script>
-<script src="js/trading.js?v=58"></script>
-<script src="js/blobstore.js?v=58"></script>
-<script src="js/video-api-client.js?v=58"></script>
-<script src="js/video-connections.js?v=58"></script>
-<script src="js/video.js?v=58"></script>
-<script src="js/video-studio.js?v=58"></script>
-<script src="functions/lib/idea-spec.js?v=58"></script>
-<script src="functions/lib/niche-spec.js?v=58"></script>
-<script src="js/marketing-stats.js?v=58"></script>
-<script src="js/niche-research.js?v=58"></script>
-<script src="js/content-intelligence.js?v=58"></script>
-<script src="js/form-check.js?v=58"></script>
+<script src="js/firebase-config.js?v=59"></script>
+<script src="js/backup-logic.js?v=59"></script>
+<script src="js/cloud-backup.js?v=59"></script>
+<script type="module" src="js/auth.js?v=59"></script>
+<script src="js/app.js?v=59"></script>
+<script src="js/exercises.js?v=59"></script>
+<script src="js/workout.js?v=59"></script>
+<script src="js/nutrition.js?v=59"></script>
+<script src="js/nutrition-label-parse.js?v=59"></script>
+<script src="js/nutrition-label-scan.js?v=59"></script>
+<script src="js/groceries.js?v=59"></script>
+<script src="js/habits.js?v=59"></script>
+<script src="js/discipline-logic.js?v=59"></script>
+<script src="js/discipline-program.js?v=59"></script>
+<script src="js/discipline-habits.js?v=59"></script>
+<script src="js/discipline-insights.js?v=59"></script>
+<script src="js/discipline-charts.js?v=59"></script>
+<script src="js/discipline-delivery.js?v=59"></script>
+<script src="js/discipline.js?v=59"></script>
+<script src="js/wakecheck-logic.js?v=59"></script>
+<script src="js/wakecheck.js?v=59"></script>
+<script src="functions/lib/reminder-spec.js?v=59"></script>
+<script src="functions/lib/reminder-events.js?v=59"></script>
+<script src="js/reminders.js?v=59"></script>
+<script src="js/business.js?v=59"></script>
+<script src="js/trading.js?v=59"></script>
+<script src="js/blobstore.js?v=59"></script>
+<script src="js/video-api-client.js?v=59"></script>
+<script src="js/video-connections.js?v=59"></script>
+<script src="js/video.js?v=59"></script>
+<script src="js/video-studio.js?v=59"></script>
+<script src="functions/lib/idea-spec.js?v=59"></script>
+<script src="functions/lib/niche-spec.js?v=59"></script>
+<script src="js/marketing-stats.js?v=59"></script>
+<script src="js/niche-research.js?v=59"></script>
+<script src="js/content-intelligence.js?v=59"></script>
+<script src="js/form-check.js?v=59"></script>
 </body>
 </html>
