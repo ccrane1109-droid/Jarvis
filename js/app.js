@@ -501,6 +501,11 @@
       if (started) return;
       started = true;
       if (window.JarvisWorkout && typeof window.JarvisWorkout.init === "function") window.JarvisWorkout.init();
+      try {
+        if (window.JarvisWorkoutUI && typeof window.JarvisWorkoutUI.init === "function") window.JarvisWorkoutUI.init();
+      } catch (err) {
+        if (window.console) console.error("The new Workout screens failed to start; the classic logger still works", err);
+      }
       if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisGroceries && typeof window.JarvisGroceries.init === "function") window.JarvisGroceries.init();
       if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
