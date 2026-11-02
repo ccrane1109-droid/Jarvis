@@ -309,3 +309,10 @@ test("a custom exercise that already exists is caught whatever the case, punctua
   assert.equal(W.findDuplicate("", list), null);
   assert.equal(W.findDuplicate("!!!", list), null);
 });
+
+test("a saved workout keeps the name of its routine as it was that day, and only when it has a routine", () => {
+  const draft = { dateTime: "2026-11-02T18:00", routineId: "r1", startedAt: 1000, exercises: [{ exerciseId: "bench", sets: [{ weight: 100, reps: 5, completed: true }] }] };
+  assert.equal(W.buildSession(draft, { now: 61000, routineName: "Push Day" }).routineName, "Push Day");
+  assert.equal("routineName" in W.buildSession(draft, { now: 61000 }), false, "no name given, no field");
+  assert.equal("routineName" in W.buildSession(Object.assign({}, draft, { routineId: "" }), { now: 61000, routineName: "Push Day" }), false, "a freestyle workout has no routine to name");
+});

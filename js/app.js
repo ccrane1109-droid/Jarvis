@@ -506,6 +506,13 @@
       } catch (err) {
         if (window.console) console.error("The new Workout screens failed to start; the classic logger still works", err);
       }
+      try {
+        if (window.JarvisRoutinesUI && typeof window.JarvisRoutinesUI.init === "function") window.JarvisRoutinesUI.init();
+      } catch (err) {
+        if (window.console) console.error("The new Routines screen failed to start; the older one is still in the page", err);
+        const legacy = document.getElementById("rtLegacy"), mine = document.getElementById("rtRoot");
+        if (legacy && mine) { legacy.hidden = false; mine.hidden = true; }   // fall back to the earlier screen rather than show nothing
+      }
       if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisGroceries && typeof window.JarvisGroceries.init === "function") window.JarvisGroceries.init();
       if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();

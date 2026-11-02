@@ -25,6 +25,7 @@
   "use strict";
 
   const WL = window.JarvisWorkoutLogic;
+  const RL = window.JarvisRoutineLogic || null;
   const LS_PREFS = "jarvisWorkoutPrefs";
   const UNDO_MS = 9000;
   const RPE_CHOICES = ["", 6, 7, 7.5, 8, 8.5, 9, 9.5, 10];
@@ -81,14 +82,17 @@
   function announce(text) { const el = $("wkLive"); if (el) { el.textContent = ""; window.setTimeout(function () { el.textContent = text; }, 30); } }
 
   function routineName(id) { const r = id ? api().routineById(id) : null; return r ? r.name : ""; }
+  // Routines you can start, schedule or pick (archived ones are left out).
+  function activeRoutines() { return api().activeRoutines ? api().activeRoutines() : api().getRoutines(); }
   function workoutTitle(d) { return routineName(d.routineId) || "Workout"; }
 
   /* ---------------- undo ---------------- */
 
   // Remember how the workout was just before a change, so the bar at the bottom can put it back.
-  function pushUndo(label, snapshot) {
+  // restore (optional) is a function that puts back something other than the workout, e.g. a routine you archived.
+  function pushUndo(label, snapshot, restore) {
     if (undo && undo.timer) window.clearTimeout(undo.timer);
-    undo = { label: label, snapshot: snapshot || WL.cloneDraft(draft()), timer: window.setTimeout(clearUndo, UNDO_MS) };
+    undo = { label: label, snapshot: restore ? null : (snapshot || WL.cloneDraft(draft())), restore: restore || null, timer: window.setTimeout(clearUndo, UNDO_MS) };
     renderUndo();
   }
   function clearUndo() { if (undo && undo.timer) window.clearTimeout(undo.timer); undo = null; renderUndo(); }
@@ -100,8 +104,9 @@
   }
   function doUndo() {
     if (!undo) return;
-    const snap = undo.snapshot;
+    const snap = undo.snapshot, restore = undo.restore;
     clearUndo();
+    if (restore) { restore(); announce("Undone."); return; }
     api().replaceDraft(snap);
     summary = null;
     renderAll();
@@ -179,6 +184,7 @@
   function startRoutine(id) {
     const routine = api().routineById(id);
     if (!routine) { core().showToast("That routine isn't here any more. Pick another."); return; }
+    if (routine.archivedAt) { core().showToast("That routine is archived. Restore it from Routines to use it."); return; }
     startWith(function (d) { d.exercises = WL.exercisesFromRoutine(routine, api().getWorkouts()); d.routineId = routine.id; });
   }
   function startProgram(id) {
@@ -186,7 +192,7 @@
     if (!p || !p.days.length) return;
     const day = p.days[p.currentIndex % p.days.length];
     const routine = api().routineById(day.routineId);
-    if (!routine) { goTo("workout-programs"); core().showToast("That day's routine is missing. Pick one for it here."); return; }
+    if (!routine || routine.archivedAt) { goTo("workout-programs"); core().showToast("That day needs a routine. Pick one for it here."); return; }
     startWith(function (d) { d.exercises = WL.exercisesFromRoutine(routine, api().getWorkouts()); d.routineId = routine.id; d.programId = p.id; d.programDayId = day.id; });
   }
   function startEmpty() { startWith(function () {}); window.setTimeout(function () { if (isActive() && !draft().exercises.length) openPicker(); }, 50); }
@@ -212,7 +218,7 @@
   function renderHome() {
     const root = $("wkHomeRoot");
     if (!root) return;
-    const a = api(), workouts = a.getWorkouts(), routines = a.getRoutines(), now = Date.now();
+    const a = api(), workouts = a.getWorkouts(), routines = activeRoutines(), now = Date.now();
     const d = draft();
     const trainedToday = WL.sessionsOf(workouts).some(function (w) { return w.date === WL.dayKey(now); });
     const today = a.routineScheduledToday();
@@ -230,7 +236,7 @@
     } else {
       const last = WL.sessionsOf(workouts).slice().sort(function (x, y) { return x.dateTime < y.dateTime ? 1 : -1; })[0];
       hero = '<section class="wk-hero card" aria-labelledby="wkHeroTitle"><p class="wk-kicker">Ready when you are</p><h2 class="wk-hero-title" id="wkHeroTitle">Start a workout</h2>' +
-        '<p class="wk-hero-meta">' + (last ? 'Last workout: ' + esc(routineName(last.routineId) || "Workout") + ', ' + esc(prettyDate(last.date)) : 'Pick a routine below, or start from nothing.') + '</p>' +
+        '<p class="wk-hero-meta">' + (last ? 'Last workout: ' + esc(routineName(last.routineId) || last.routineName || "Workout") + ', ' + esc(prettyDate(last.date)) : 'Pick a routine below, or start from nothing.') + '</p>' +
         '<button type="button" class="btn btn-primary wk-big-btn" data-wk="start-empty">Start empty workout</button></section>';
     }
 
@@ -273,9 +279,10 @@
       ? '<section class="wk-block" aria-labelledby="wkProgH"><h2 id="wkProgH" class="wk-block-title">Programs</h2><div class="wk-list">' + programs.map(function (p) {
           const day = p.days[p.currentIndex % p.days.length];
           const r = a.routineById(day.routineId);
-          return r
+          const usable = r && !r.archivedAt;
+          return usable
             ? '<button type="button" class="wk-row" data-wk="start-program" data-id="' + esc(p.id) + '"><span class="wk-row-main"><span class="wk-row-title">' + esc(p.name) + '</span><span class="wk-row-sub">' + esc(day.label) + ' &middot; ' + esc(r.name) + '</span></span><span class="wk-row-go" aria-hidden="true">Start</span></button>'
-            : '<div class="wk-row wk-row-warn"><span class="wk-row-main"><span class="wk-row-title">' + esc(p.name) + '</span><span class="wk-row-sub">' + esc(day.label) + ' needs a routine. The one it used is gone.</span></span><button type="button" class="btn btn-secondary" data-wk-go="workout-programs">Fix it</button></div>';
+            : '<div class="wk-row wk-row-warn"><span class="wk-row-main"><span class="wk-row-title">' + esc(p.name) + '</span><span class="wk-row-sub">' + esc(day.label) + ' needs a routine. ' + (r ? 'The one it used, ' + esc(r.name) + ', is archived.' : 'The one it used is gone.') + '</span></span><button type="button" class="btn btn-secondary" data-wk-go="workout-programs">Fix it</button></div>';
         }).join("") + '</div></section>'
       : "";
 
@@ -625,13 +632,54 @@
 
   /* ---------------- adding exercises ---------------- */
 
-  function openPicker() {
-    openSheet("Add exercise",
+  // The exercise picker. With no argument it adds one exercise to the workout on screen. The Routines screen passes a target:
+  //   { multi: true, title, taken: {exerciseId: true}, takenLabel, selected: [], doneLabel(n), onDone(ids) }
+  // to tick several exercises and add them all at once.
+  let pickTarget = null;
+
+  function openPicker(target) {
+    pickTarget = target || null;
+    const multi = !!(pickTarget && pickTarget.multi);
+    if (multi && !pickTarget.selected) pickTarget.selected = [];
+    const JE = window.JarvisExercises;
+    openSheet(pickTarget && pickTarget.title ? pickTarget.title : "Add exercise",
       '<div class="wk-search"><label class="visually-hidden" for="wkPickSearch">Search exercises</label><input id="wkPickSearch" type="search" placeholder="Search exercises" autocomplete="off" autocapitalize="off" enterkeyhint="search"></div>' +
-      '<div class="wk-chips wk-chips-scroll" id="wkPickChips" role="group" aria-label="Filter by muscle group"></div>' +
-      '<div id="wkPickList" class="wk-pick-list"></div>', { focus: "#wkPickSearch" });
+      '<div class="form-row wk-pick-filter"><label for="wkPickMuscle">Muscle group</label><select id="wkPickMuscle"><option value="">All muscle groups</option>' + JE.MUSCLE_GROUPS.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div>' +
+      '<div id="wkPickList" class="wk-pick-list"></div>' +
+      (multi ? '<div class="wk-pick-foot"><button type="button" class="btn btn-primary wk-big-btn" id="wkPickDone" data-wk="pick-done" disabled>Choose exercises</button></div>' : ""), { focus: "#wkPickSearch" });
     sheet.picker = { muscle: "" };
     drawPicker();
+    updatePickFoot();
+  }
+
+  function updatePickFoot() {
+    const b = $("wkPickDone");
+    if (!b || !pickTarget || !pickTarget.multi) return;
+    const n = pickTarget.selected.length;
+    b.disabled = n === 0;
+    b.textContent = n === 0 ? "Choose exercises" : (pickTarget.doneLabel ? pickTarget.doneLabel(n) : "Add " + n + " " + plural(n, "exercise"));
+  }
+
+  // Tick or untick one exercise in the multi picker without redrawing the list (so your place in it isn't lost).
+  function toggleSelected(id) {
+    const t = pickTarget, at = t.selected.indexOf(id);
+    if (at === -1) t.selected.push(id); else t.selected.splice(at, 1);
+    const on = at === -1;
+    Array.prototype.forEach.call(document.querySelectorAll('#wkPickList [data-wk="pick"]'), function (b) {
+      if (b.getAttribute("data-id") === id) { b.setAttribute("aria-pressed", String(on)); b.classList.toggle("is-picked", on); }
+    });
+    updatePickFoot();
+    announce(exInfo(id).name + (on ? " selected. " : " removed. ") + t.selected.length + " chosen.");
+  }
+
+  function pickExercise(id) {
+    if (pickTarget && pickTarget.multi) {
+      if (pickTarget.taken && pickTarget.taken[id]) { core().showToast("That exercise is already in this routine."); return; }
+      if (!$("wkPickList")) { if (pickTarget.selected.indexOf(id) === -1) pickTarget.selected.push(id); openPicker(pickTarget); return; }   // from the "you already have it" link in the custom form
+      toggleSelected(id);
+      return;
+    }
+    addExercise(id);
   }
 
   function pickerResults(query, muscle) {
@@ -651,16 +699,20 @@
 
   function drawPicker() {
     const JE = window.JarvisExercises;
-    const chips = $("wkPickChips"), list = $("wkPickList");
-    if (!chips || !list) return;
+    const list = $("wkPickList");
+    if (!list) return;
     const muscle = sheet.picker.muscle, query = $("wkPickSearch").value;
-    chips.innerHTML = ['All'].concat(JE.MUSCLE_GROUPS).map(function (m) { const on = (m === 'All' && !muscle) || m === muscle; return '<button type="button" class="wk-chip' + (on ? " is-on" : "") + '" data-wk="pick-muscle" data-value="' + (m === 'All' ? '' : esc(m)) + '" aria-pressed="' + on + '">' + esc(m) + '</button>'; }).join("");
     const groups = pickerResults(query, muscle);
-    const inDraft = {}; draft().exercises.forEach(function (se) { inDraft[se.exerciseId] = true; });
+    const multi = !!(pickTarget && pickTarget.multi);
+    const inDraft = multi && pickTarget.taken ? pickTarget.taken : {};
+    if (!multi) draft().exercises.forEach(function (se) { inDraft[se.exerciseId] = true; });
+    const takenLabel = multi && pickTarget.takenLabel ? pickTarget.takenLabel : "in workout";
+    const picked = multi ? pickTarget.selected : [];
     const total = groups.reduce(function (t, g) { return t + g.items.length; }, 0);
     list.innerHTML = (total ? groups.map(function (g) {
       return (g.title ? '<h3 class="wk-sheet-sub">' + esc(g.title) + '</h3>' : '') + g.items.map(function (e) {
-        return '<div class="wk-pick-row"><button type="button" class="wk-pick" data-wk="pick" data-id="' + esc(e.id) + '"><span class="wk-row-title">' + esc(e.name) + (inDraft[e.id] ? ' <span class="wk-tag">in workout</span>' : '') + '</span><span class="wk-row-sub">' + esc([e.muscleGroup, e.equipment].filter(Boolean).join(" · ")) + '</span></button>' +
+        const isPicked = picked.indexOf(e.id) !== -1;
+        return '<div class="wk-pick-row"><button type="button" class="wk-pick' + (isPicked ? " is-picked" : "") + '" data-wk="pick" data-id="' + esc(e.id) + '"' + (multi ? ' aria-pressed="' + isPicked + '"' + (inDraft[e.id] ? " disabled" : "") : "") + '><span class="wk-row-title">' + esc(e.name) + (inDraft[e.id] ? ' <span class="wk-tag">' + esc(takenLabel) + '</span>' : '') + '</span><span class="wk-row-sub">' + esc([e.muscleGroup, e.equipment].filter(Boolean).join(" · ")) + '</span></button>' +
           '<button type="button" class="wk-icon-btn" data-wk="pick-fav" data-id="' + esc(e.id) + '" aria-pressed="' + JE.isFavorite(e.id) + '" aria-label="' + (JE.isFavorite(e.id) ? "Remove " : "Add ") + esc(e.name) + (JE.isFavorite(e.id) ? " from favorites" : " to favorites") + '"><svg class="wk-star' + (JE.isFavorite(e.id) ? " is-on" : "") + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.8l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.7l-5.9 3.1 1.2-6.5L2.5 9.7l6.6-.9z"/></svg></button></div>';
       }).join("");
     }).join("") : '<p class="wk-empty">Nothing matches.</p>') +
@@ -708,6 +760,12 @@
       return;
     }
     const created = JE.addCustomExercise({ name: name, muscleGroup: $("wkCustMuscle").value, equipment: $("wkCustEquip").value });
+    if (pickTarget && pickTarget.multi) {
+      if (pickTarget.selected.indexOf(created.id) === -1) pickTarget.selected.push(created.id);
+      openPicker(pickTarget);
+      announce(created.name + " created and selected.");
+      return;
+    }
     addExercise(created.id);
   }
 
@@ -731,7 +789,7 @@
 
   function finishNow() {
     closeSheet(true);
-    const session = failed || WL.buildSession(draft(), { now: Date.now() });
+    const session = failed || WL.buildSession(draft(), { now: Date.now(), routineName: routineName(draft().routineId) });
     if (!session) return;
     const result = api().commitSession(session, {});
     if (!result.ok) { failed = session; renderSession(); return; }
@@ -837,8 +895,8 @@
         else { pushUndo("Set deleted."); t.f.se.sets.splice(t.hit.idx, 1); }
         save(); closeSheet(); renderSession(); break;
       }
-      case "pick-muscle": sheet.picker.muscle = el.getAttribute("data-value"); drawPicker(); break;
-      case "pick": addExercise(id); break;
+      case "pick": pickExercise(id); break;
+      case "pick-done": { const t = pickTarget; if (!t || !t.selected.length) break; const ids = t.selected.slice(); closeSheet(); pickTarget = null; t.onDone(ids); break; }
       case "pick-fav": window.JarvisExercises.toggleFavorite(id); drawPicker(); break;
       case "custom-open": { const q = $("wkPickSearch") ? $("wkPickSearch").value.trim() : ""; closeSheet(true); openCustomForm(q); break; }
       default: break;
@@ -853,6 +911,7 @@
     if (t.id === "wkSumNotes") { if (summary) { summary.session.notes = t.value; } }
   }
   function onChange(e) {
+    if (e.target.id === "wkPickMuscle" && sheet && sheet.picker) { sheet.picker.muscle = e.target.value; drawPicker(); return; }
     if (e.target.id === "wkSumNotes" && summary) api().updateSessionNotes(summary.session.id, e.target.value);
   }
   function onKeyDown(e) {
@@ -909,5 +968,10 @@
     renderAll();
   }
 
-  window.JarvisWorkoutUI = { init: init, startRoutine: startRoutine, startProgram: startProgram };
+  // The pieces the Routines screen (routines-ui.js) shares with the logger: sheets, the exercise picker, the undo bar.
+  const kit = {
+    openSheet: openSheet, closeSheet: closeSheet, isSheetOpen: function () { return !!sheet; },
+    openPicker: openPicker, pushUndo: pushUndo, announce: announce, focusSoon: focusSoon, goTo: goTo
+  };
+  window.JarvisWorkoutUI = { init: init, startRoutine: startRoutine, startProgram: startProgram, kit: kit };
 })();
