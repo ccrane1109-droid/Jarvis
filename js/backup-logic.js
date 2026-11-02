@@ -39,7 +39,7 @@
     "jarvisNutritionLog", "jarvisNutritionSavedFoods", "jarvisNutritionRecipes", "jarvisNutritionGoals",
     "jarvisNutritionProfile", "jarvisNutritionCheckins",
     "jarvisTasks", "jarvisGoals",
-    "jarvisDiscipline", "jarvisWakeCheck",
+    "jarvisDiscipline", "jarvisWakeCheck", "jarvisWorkoutPrefs",
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
     "jarvisFormCheckHistory"
   ];

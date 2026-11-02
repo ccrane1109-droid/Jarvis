@@ -10,7 +10,17 @@
      jarvisMeasurements    — body measurement history (waist, arms, etc.)
      jarvisStrengthSettings — which published standards to compare against
      jarvisWorkoutDraft    — in-progress (unsaved) session, so a refresh
-                              mid-log doesn't lose data
+                              mid-log doesn't lose data. Stays on this phone: it
+                              is NOT in the cloud sync (an older copy in the cloud
+                              could otherwise replace a newer one at sign-in).
+     jarvisWorkoutMeta     — { snapshotAt, uiVersion } device-only bookkeeping
+     jarvisWorkoutSnapshot — one safety copy of workouts, routines and programs,
+                              taken the first time the new logger starts. Device-only.
+     jarvisWorkoutPrefs    — rest timer settings (see workout-ui.js)
+
+   The Home and Workout screens in workout-ui.js work on the same in-memory
+   data as this file, through window.JarvisWorkout.api (below). The older Log
+   screen is still here, reachable from the Workout screen, as a fallback.
    ========================================================================== */
 
 (function () {
@@ -23,6 +33,9 @@
   const LS_MEASUREMENTS = "jarvisMeasurements";
   const LS_STRENGTH_SETTINGS = "jarvisStrengthSettings";
   const LS_DRAFT = "jarvisWorkoutDraft";
+  const LS_META = "jarvisWorkoutMeta";
+  const LS_SNAPSHOT = "jarvisWorkoutSnapshot";
+  const WL = window.JarvisWorkoutLogic || null;   // the rules for the new screens (workout-logic.js)
 
   let workouts = [];
   let routines = [];
@@ -130,6 +143,23 @@
         if (s.rpe === undefined) s.rpe = "";
       });
     });
+    // The new logger needs an id on every set and a rest end time; this adds them and keeps everything else.
+    if (WL) draft = WL.migrateDraft(draft);
+    takeSafetySnapshot();
+  }
+
+  // One safety copy of your workouts, routines and programs, taken the first time the new logger runs. It stays on
+  // this phone, is never changed after, and nothing in the new screens deletes from it. If the data is very large,
+  // or the phone has no room, it is skipped (and the app carries on).
+  function takeSafetySnapshot() {
+    const core = window.JarvisCore;
+    const meta = core.loadJSON(LS_META, null);
+    if (meta && meta.uiVersion >= 1) return;
+    if (!workouts.length && !routines.length && !programs.length) return;
+    const snapshot = { at: new Date().toISOString(), workouts: workouts, routines: routines, programs: programs };
+    const tooBig = JSON.stringify(snapshot).length > 1200000;
+    const saved = tooBig ? false : core.saveJSON(LS_SNAPSHOT, snapshot);
+    core.saveJSON(LS_META, { uiVersion: 1, snapshotAt: saved ? snapshot.at : null, snapshotSkipped: saved ? null : (tooBig ? "too large" : "no room") });
   }
 
   function saveWorkouts() { return window.JarvisCore.saveJSON(LS_WORKOUTS, workouts); }
@@ -442,8 +472,16 @@
     if (routines.some(function (r) { return r.id === current; })) sel.value = current;
   }
 
+  // The older Home and Log screens were replaced by the new Home and Workout screens. Anything here that used to
+  // jump to them now lands on the new ones. openClassicLogger() is the one way back to the old Log screen.
+  const REPLACED_TABS = { "workout-home": "wk-home", "workout-log": "wk-session" };
   function switchToWorkoutSubTab(targetId) {
-    const btn = document.querySelector('.workout-sub-nav-btn[data-subtarget="' + targetId + '"]');
+    const id = REPLACED_TABS[targetId] && document.getElementById(REPLACED_TABS[targetId]) ? REPLACED_TABS[targetId] : targetId;
+    const btn = document.querySelector('.workout-sub-nav-btn[data-subtarget="' + id + '"]');
+    if (btn) btn.click();
+  }
+  function openClassicLogger() {
+    const btn = document.querySelector('.workout-sub-nav-btn[data-subtarget="workout-log"]');
     if (btn) btn.click();
   }
 
@@ -1207,11 +1245,8 @@
       return;
     }
     savingWorkout = true;
-    const alreadyInHistory = workouts.some(function (w) { return w.id === session.id; });
-    if (!alreadyInHistory) workouts.push(session);
-    const saved = saveWorkouts();
-    if (!saved) {
-      if (!alreadyInHistory) workouts.pop();
+    const result = commitSession(session, { reloadRoutine: true });
+    if (!result.ok) {
       pendingFailedSession = session;
       savingWorkout = false;
       showSaveRetryBanner();
@@ -1219,13 +1254,70 @@
       return;
     }
     pendingFailedSession = null;
+    savingWorkout = false;
+    core.showToast("Workout saved.");
+  }
+
+  // Saves a finished session into history, moves a program on if this was its day, and clears the draft. The draft is
+  // left completely untouched unless the save really worked. Saving the same session twice (a double tap, or Retry
+  // after a failure) never adds it twice. The old Log screen asks for the routine to be loaded again afterwards; the new
+  // Workout screen starts from an empty draft instead (reloadRoutine false).
+  function commitSession(session, opts) {
+    const alreadyInHistory = workouts.some(function (w) { return w.id === session.id; });
+    if (!alreadyInHistory) workouts.push(session);
+    if (!saveWorkouts()) {
+      if (!alreadyInHistory) workouts.pop();
+      return { ok: false };
+    }
     draft.programId = session.programId || "";
     draft.programDayId = session.programDayId || "";
     advanceProgramIfApplicable();
-    resetSessionAfterFinish();
+    if (opts && opts.reloadRoutine) resetSessionAfterFinish();
+    else clearDraftQuietly();
     renderAll();
-    savingWorkout = false;
-    core.showToast("Workout saved.");
+    return { ok: true, session: session };
+  }
+
+  function clearDraftQuietly() {
+    stopAllRestTimers();
+    pendingFailedSession = null;
+    draft = WL ? WL.emptyDraft(window.JarvisCore.nowLocalDateTimeInputValue()) : { dateTime: window.JarvisCore.nowLocalDateTimeInputValue(), routineId: "", notes: "", exercises: [], programId: "", programDayId: "", activeIndex: 0, startedAt: null };
+    saveDraft();
+    syncClassicSessionFields();
+    renderSessionExerciseList();
+    renderSessionStatsBar();
+    hideSaveRetryBanner();
+  }
+
+  function syncClassicSessionFields() {
+    document.getElementById("sessionDateTime").value = draft.dateTime || window.JarvisCore.nowLocalDateTimeInputValue();
+    document.getElementById("sessionNotes").value = draft.notes || "";
+    document.getElementById("sessionRoutineSelect").value = draft.routineId || "";
+  }
+
+  // Swap in a different draft (starting a workout, restoring after an undo). It is repaired and saved at once.
+  function replaceDraft(next) {
+    stopAllRestTimers();
+    draft = WL ? WL.migrateDraft(next) : next;
+    saveDraft();
+    syncClassicSessionFields();
+    renderSessionExerciseList();
+    renderSessionStatsBar();
+  }
+
+  function updateSessionNotes(id, notes) {
+    const w = workouts.filter(function (x) { return x.id === id; })[0];
+    if (!w) return false;
+    w.notes = String(notes || "").trim();
+    return saveWorkouts();
+  }
+
+  // A routine, or null if it has been deleted. Used so the screens never show "routine deleted" as if it were a name.
+  function routineById(id) { return routines.filter(function (r) { return r.id === id; })[0] || null; }
+
+  // The routine scheduled for today in the weekly schedule, or null.
+  function routineScheduledToday() {
+    return routines.filter(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; })[0] || null;
   }
 
   function handleDiscardDraft() {
@@ -2036,12 +2128,14 @@
   // Shared by the Routines tab's "Log This" button and the Home tab's
   // Quick Start cards — both just want to load a routine and jump into it.
   function startRoutineNow(id) {
+    if (window.JarvisWorkoutUI && typeof window.JarvisWorkoutUI.startRoutine === "function") { window.JarvisWorkoutUI.startRoutine(id); return; }
     document.getElementById("sessionRoutineSelect").value = id;
     loadRoutineIntoDraft(id);
     switchToWorkoutSubTab("workout-log");
   }
 
   function startProgramToday(id) {
+    if (window.JarvisWorkoutUI && typeof window.JarvisWorkoutUI.startProgram === "function") { window.JarvisWorkoutUI.startProgram(id); return; }
     const program = programs.find(function (p) { return p.id === id; });
     if (!program || program.days.length === 0) return;
     const day = program.days[program.currentIndex % program.days.length];
@@ -3945,6 +4039,7 @@
     renderMeasurementList();
     renderStrengthSection();
     renderProgressTab();
+    document.dispatchEvent(new CustomEvent("jarvis-workout-changed"));
   }
 
   function getSummary() {
@@ -4088,5 +4183,24 @@
     if (draft.routineId) document.getElementById("sessionRoutineSelect").value = draft.routineId;
   }
 
-  window.JarvisWorkout = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
+  // What the new Home and Workout screens (workout-ui.js) use. The getters always return the CURRENT data, because the
+  // draft object is replaced when a workout starts, finishes or is restored.
+  const api = {
+    getWorkouts: function () { return workouts; },
+    getRoutines: function () { return routines; },
+    getPrograms: function () { return programs; },
+    getDraft: function () { return draft; },
+    saveDraft: saveDraft,
+    replaceDraft: replaceDraft,
+    commitSession: commitSession,
+    updateSessionNotes: updateSessionNotes,
+    routineById: routineById,
+    routineScheduledToday: routineScheduledToday,
+    startProgramToday: startProgramToday,
+    openClassicLogger: openClassicLogger,
+    renderClassicSession: function () { renderSessionExerciseList(); renderSessionStatsBar(); },
+    renderAll: renderAll
+  };
+
+  window.JarvisWorkout = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, api: api };
 })();

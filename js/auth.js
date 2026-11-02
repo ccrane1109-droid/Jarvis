@@ -84,7 +84,7 @@
   // state, not real data).
   const SYNCED_KEYS = [
     "jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight",
-    "jarvisMeasurements", "jarvisStrengthSettings", "jarvisWorkoutDraft",
+    "jarvisMeasurements", "jarvisStrengthSettings",
     "jarvisHabits", "jarvisBusiness", "jarvisCalories",
     "jarvisTradingWatchlist", "jarvisPaperTrades", "jarvisTradingJournal", "jarvisTradingSettings",
     "jarvisVideo", "jarvisVideoStudio",
