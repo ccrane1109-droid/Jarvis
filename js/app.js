@@ -527,6 +527,11 @@
         const legacy = document.getElementById("pgLegacy"), mine = document.getElementById("pgRoot");
         if (legacy && mine) { legacy.hidden = false; mine.hidden = true; }
       }
+      try {
+        if (window.JarvisInsights && typeof window.JarvisInsights.init === "function") window.JarvisInsights.init();
+      } catch (err) {
+        if (window.console) console.error("The training notes failed to start; the rest of Workout is unaffected", err);
+      }
       if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisGroceries && typeof window.JarvisGroceries.init === "function") window.JarvisGroceries.init();
       if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();

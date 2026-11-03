@@ -344,6 +344,7 @@
       (open
         ? '<div class="wk-ex-body" id="' + bodyId + '">' +
             '<p class="wk-last">' + (last ? 'Last time: ' + esc(last) : 'First time logging this exercise.') + (best && best.e1rm ? ' &middot; best est. 1RM ' + Math.round(best.e1rm.value) : '') + '</p>' +
+            (window.JarvisInsights ? window.JarvisInsights.loggerNote(draft(), se) : '') +
             '<div class="wk-sets" role="group" aria-label="Sets for ' + esc(info.name) + '"><div class="wk-set wk-set-head" aria-hidden="true"><span>Set</span><span>Last</span><span>Weight</span><span>Reps</span><span></span></div>' + rows + '</div>' +
             '<button type="button" class="wk-add-set" data-wk="add-set" data-ex="' + esc(se.sessionExId) + '">+ Add set</button>' +
           '</div>'
@@ -572,6 +573,7 @@
     openSheet(info.name,
       '<div data-sheet-ex="' + esc(exId) + '">' +
       btn("ex-warmups", "Add warm-up sets") +
+      (window.JarvisInsights ? window.JarvisInsights.swapMenuItem(f.se) : "") +
       btn("ex-up", "Move up") + btn("ex-down", "Move down") +
       (f.se.supersetGroup ? btn("ex-unlink", "Remove from superset") : (hasNext ? btn("ex-link", "Superset with the next exercise") : "")) +
       btn("ex-fav", window.JarvisExercises.isFavorite(f.se.exerciseId) ? "Remove from favorites" : "Add to favorites") +
@@ -973,5 +975,5 @@
     openSheet: openSheet, closeSheet: closeSheet, isSheetOpen: function () { return !!sheet; },
     openPicker: openPicker, pushUndo: pushUndo, announce: announce, focusSoon: focusSoon, goTo: goTo
   };
-  window.JarvisWorkoutUI = { init: init, startRoutine: startRoutine, startProgram: startProgram, kit: kit };
+  window.JarvisWorkoutUI = { init: init, render: renderAll, startRoutine: startRoutine, startProgram: startProgram, kit: kit };
 })();
