@@ -163,7 +163,7 @@
   }
 
   function saveWorkouts() { return window.JarvisCore.saveJSON(LS_WORKOUTS, workouts); }
-  function saveRoutines() { window.JarvisCore.saveJSON(LS_ROUTINES, routines); }
+  function saveRoutines() { return window.JarvisCore.saveJSON(LS_ROUTINES, routines); }
   function savePrograms() { window.JarvisCore.saveJSON(LS_PROGRAMS, programs); }
   function saveBodyweight() { window.JarvisCore.saveJSON(LS_BODYWEIGHT, bodyweightEntries); }
   function saveMeasurements() { window.JarvisCore.saveJSON(LS_MEASUREMENTS, measurements); }
@@ -468,7 +468,7 @@
     const sel = document.getElementById("sessionRoutineSelect");
     const current = sel.value;
     sel.innerHTML = '<option value="">Freestyle (no routine)</option>' +
-      routines.map(function (r) { return '<option value="' + core.escapeHtml(r.id) + '">' + core.escapeHtml(r.name) + "</option>"; }).join("");
+      activeRoutines().map(function (r) { return '<option value="' + core.escapeHtml(r.id) + '">' + core.escapeHtml(r.name) + "</option>"; }).join("");
     if (routines.some(function (r) { return r.id === current; })) sel.value = current;
   }
 
@@ -1202,6 +1202,7 @@
       dateTime: dateTime,
       date: dateTime.slice(0, 10),
       routineId: draft.routineId || null,
+      routineName: draft.routineId && routineById(draft.routineId) ? routineById(draft.routineId).name : undefined,
       programId: draft.programId || null,
       programDayId: draft.programDayId || null,
       notes: document.getElementById("sessionNotes").value.trim(),
@@ -1317,7 +1318,37 @@
 
   // The routine scheduled for today in the weekly schedule, or null.
   function routineScheduledToday() {
-    return routines.filter(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; })[0] || null;
+    return activeRoutines().filter(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; })[0] || null;
+  }
+
+  // Routines that are not archived. Archived ones stay in the list (so history and programs can still name them)
+  // but never show up to pick, start or schedule.
+  function activeRoutines() { return routines.filter(function (r) { return !r.archivedAt; }); }
+
+  // Swap in a changed routine list (archive, edit, schedule...). It is saved at once; if the phone refuses (storage
+  // full) the old list is put back and false is returned, so the screen never shows something that wasn't saved.
+  function replaceRoutines(next) {
+    const before = routines;
+    routines = next;
+    if (!saveRoutines()) { routines = before; return false; }
+    renderRoutineList();
+    renderWeeklySchedule();
+    populateRoutineSelect();
+    populateProgramDayRoutineSelect();
+    renderProgramList();
+    renderWorkoutHome();
+    document.dispatchEvent(new CustomEvent("jarvis-workout-changed"));
+    return true;
+  }
+
+  // Same for the saved workouts (used only to write a routine's name onto the workouts that used it). Rolls back on failure.
+  function replaceWorkouts(next) {
+    const before = workouts;
+    workouts = next;
+    if (!saveWorkouts()) { workouts = before; return false; }
+    renderWorkoutList();
+    document.dispatchEvent(new CustomEvent("jarvis-workout-changed"));
+    return true;
   }
 
   function handleDiscardDraft() {
@@ -1394,7 +1425,7 @@
 
     const scheduledCard = document.getElementById("homeScheduledTodayCard");
     if (scheduledCard) {
-      const todaysRoutine = routines.find(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; });
+      const todaysRoutine = activeRoutines().find(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; });
       if (todaysRoutine) {
         scheduledCard.classList.remove("hidden");
         const musclesTrained = getMuscleGroupsForExerciseIds(todaysRoutine.exercises.map(function (re) { return re.exerciseId; }));
@@ -1415,7 +1446,7 @@
         const routine = routines.find(function (r) { return r.id === day.routineId; });
         const musclesTrained = routine ? getMuscleGroupsForExerciseIds(routine.exercises.map(function (re) { return re.exerciseId; })) : [];
         const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
-        const meta = core.escapeHtml(day.label) + (routine ? " &middot; " + core.escapeHtml(routine.name) : " &middot; routine deleted");
+        const meta = core.escapeHtml(day.label) + (routine ? " &middot; " + core.escapeHtml(routine.name) : " &middot; needs a routine");
         return quickStartCardHtml("home-today-start-btn", p.id, icon, p.name, meta);
       }).join("");
     } else {
@@ -1423,10 +1454,10 @@
     }
 
     const grid = document.getElementById("homeQuickStartGrid");
-    if (routines.length === 0) {
+    if (activeRoutines().length === 0) {
       grid.innerHTML = '<div class="empty-state">No routines yet — build one in the Routines tab to see it here.</div>';
     } else {
-      grid.innerHTML = routines.map(function (r) {
+      grid.innerHTML = activeRoutines().map(function (r) {
         const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
         const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
         const meta = r.exercises.length + " exercise" + (r.exercises.length === 1 ? "" : "s");
@@ -1518,7 +1549,7 @@
     container.innerHTML = sorted.map(function (w) {
       if (w.schema === 2) {
         const routine = w.routineId ? routines.find(function (r) { return r.id === w.routineId; }) : null;
-        let title = routine ? routine.name : "Freestyle Workout";
+        let title = routine ? routine.name : (w.routineName || "Freestyle Workout");
         if (w.programId) {
           const program = programs.find(function (p) { return p.id === w.programId; });
           if (program) {
@@ -2080,6 +2111,7 @@
     core.showToast("Created " + template.length + " routines and “" + programName + "” — find it in Programs, or start today's from Home.");
     routineGenerator.trainingDays = [];
     renderRoutineGenerator();
+    document.dispatchEvent(new CustomEvent("jarvis-workout-changed"));   // the Routines screen and Home refresh themselves
   }
 
   function renderRoutineList() {
@@ -2140,7 +2172,7 @@
     if (!program || program.days.length === 0) return;
     const day = program.days[program.currentIndex % program.days.length];
     const routine = routines.find(function (r) { return r.id === day.routineId; });
-    if (!routine) { window.JarvisCore.showToast("That day's routine no longer exists — edit the program to fix it."); return; }
+    if (!routine || routine.archivedAt) { window.JarvisCore.showToast("That day needs a routine. Pick one for it in Programs."); return; }
     document.getElementById("sessionRoutineSelect").value = day.routineId;
     loadRoutineIntoDraft(day.routineId, { programId: program.id, programDayId: day.id });
     switchToWorkoutSubTab("workout-log");
@@ -2237,12 +2269,12 @@
   function populateProgramDayRoutineSelect() {
     const core = window.JarvisCore;
     const sel = document.getElementById("programDayRoutineSelect");
-    if (routines.length === 0) {
+    if (activeRoutines().length === 0) {
       sel.innerHTML = '<option value="">Create a routine first</option>';
       return;
     }
     const current = sel.value;
-    sel.innerHTML = routines.map(function (r) { return '<option value="' + core.escapeHtml(r.id) + '">' + core.escapeHtml(r.name) + "</option>"; }).join("");
+    sel.innerHTML = activeRoutines().map(function (r) { return '<option value="' + core.escapeHtml(r.id) + '">' + core.escapeHtml(r.name) + "</option>"; }).join("");
     if (routines.some(function (r) { return r.id === current; })) sel.value = current;
   }
 
@@ -2255,7 +2287,7 @@
     }
     container.innerHTML = programBuilder.days.map(function (d, i) {
       const routine = routines.find(function (r) { return r.id === d.routineId; });
-      const routineName = routine ? routine.name : "Unknown routine";
+      const routineName = routine ? routine.name + (routine.archivedAt ? " (archived)" : "") : "No routine picked yet";
       return (
         '<div class="list-item">' +
           '<div class="list-item-row">' +
@@ -2364,7 +2396,7 @@
       const nextDay = p.days[dayIndex];
       const nextRoutine = nextDay ? routines.find(function (r) { return r.id === nextDay.routineId; }) : null;
       const nextText = nextDay
-        ? "Next: " + core.escapeHtml(nextDay.label) + " (" + core.escapeHtml(nextRoutine ? nextRoutine.name : "routine deleted") + ") &middot; day " + (dayIndex + 1) + " of " + p.days.length
+        ? "Next: " + core.escapeHtml(nextDay.label) + " (" + core.escapeHtml(nextRoutine ? nextRoutine.name + (nextRoutine.archivedAt ? ", archived" : "") : "needs a routine") + ") &middot; day " + (dayIndex + 1) + " of " + p.days.length
         : "This program has no days.";
       return (
         '<div class="list-item" data-id="' + core.escapeHtml(p.id) + '">' +
@@ -4050,8 +4082,8 @@
       let name;
       if (last.schema === 2) {
         const routine = last.routineId ? routines.find(function (r) { return r.id === last.routineId; }) : null;
-        if (routine) {
-          name = routine.name;
+        if (routine || last.routineName) {
+          name = routine ? routine.name : last.routineName;
         } else {
           const firstEx = last.exercises[0] ? window.JarvisExercises.getExerciseById(last.exercises[0].exerciseId) : null;
           name = firstEx ? (firstEx.name + (last.exercises.length > 1 ? " + more" : "")) : "Workout";
@@ -4195,6 +4227,9 @@
     commitSession: commitSession,
     updateSessionNotes: updateSessionNotes,
     routineById: routineById,
+    activeRoutines: activeRoutines,
+    replaceRoutines: replaceRoutines,
+    replaceWorkouts: replaceWorkouts,
     routineScheduledToday: routineScheduledToday,
     startProgramToday: startProgramToday,
     openClassicLogger: openClassicLogger,

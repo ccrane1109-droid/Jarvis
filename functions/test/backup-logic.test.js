@@ -19,7 +19,7 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisPushCheck", "jarvisRemind
   "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice",
   "jarvisDisciplineDrafts", // unsaved typing in the Discipline forms; stays on the phone
   "jarvisWorkoutDraft",     // the workout in progress: on the phone only, so an old cloud copy can never replace a newer one
-  "jarvisWorkoutMeta", "jarvisWorkoutSnapshot"]; // the new logger's bookkeeping and its one-time safety copy
+  "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft"]; // the new logger's bookkeeping and its one-time safety copy
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {
   const used = new Set();

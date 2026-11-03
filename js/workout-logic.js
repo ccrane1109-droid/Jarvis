@@ -378,12 +378,15 @@
     if (!exercises.length) return null;
     const dateTime = draft.dateTime || (dayKey(now) + "T" + pad(new Date(now).getHours()) + ":" + pad(new Date(now).getMinutes()));
     const elapsed = draft.startedAt ? Math.max(0, now - draft.startedAt) : 0;
-    return {
+    const session = {
       id: o.id || makeId("workout"), schema: 2, dateTime: dateTime, date: dateTime.slice(0, 10),
       routineId: draft.routineId || null, programId: draft.programId || null, programDayId: draft.programDayId || null,
       notes: String(draft.notes || "").trim(), duration: elapsed > 0 ? Math.max(1, Math.round(elapsed / 60000)) : null,
       exercises: exercises, createdAt: now
     };
+    // The routine's name as it was on the day, so History can still name it if the routine is later deleted.
+    if (draft.routineId && o.routineName) session.routineName = String(o.routineName);
+    return session;
   }
 
   /* ---------------- rest timer (an end time, so it survives the screen locking) ---------------- */
