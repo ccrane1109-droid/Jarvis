@@ -513,6 +513,20 @@
         const legacy = document.getElementById("rtLegacy"), mine = document.getElementById("rtRoot");
         if (legacy && mine) { legacy.hidden = false; mine.hidden = true; }   // fall back to the earlier screen rather than show nothing
       }
+      try {
+        if (window.JarvisHistoryUI && typeof window.JarvisHistoryUI.init === "function") window.JarvisHistoryUI.init();
+      } catch (err) {
+        if (window.console) console.error("The new History screen failed to start; the older list is still in the page", err);
+        const legacy = document.getElementById("hsLegacy"), mine = document.getElementById("hsRoot");
+        if (legacy && mine) { legacy.hidden = false; mine.hidden = true; }
+      }
+      try {
+        if (window.JarvisProgressUI && typeof window.JarvisProgressUI.init === "function") window.JarvisProgressUI.init();
+      } catch (err) {
+        if (window.console) console.error("The new Progress screen failed to start; the older one is still in the page", err);
+        const legacy = document.getElementById("pgLegacy"), mine = document.getElementById("pgRoot");
+        if (legacy && mine) { legacy.hidden = false; mine.hidden = true; }
+      }
       if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisGroceries && typeof window.JarvisGroceries.init === "function") window.JarvisGroceries.init();
       if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();

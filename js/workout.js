@@ -4228,6 +4228,15 @@
     updateSessionNotes: updateSessionNotes,
     routineById: routineById,
     activeRoutines: activeRoutines,
+    // The body drawing (front or back) with each muscle region filled from colors { muscleName: "#hex" or null }.
+    // selected: the muscle to outline, or null. Used by Progress, which colours it by how many sets you did.
+    bodyMapSvg: function (side, colors, selected) {
+      const keep = selectedMuscle;
+      selectedMuscle = selected || null;
+      try { return side === "back" ? bodyMapBackSvg(colors || {}) : bodyMapFrontSvg(colors || {}); } finally { selectedMuscle = keep; }
+    },
+    fineMuscles: FINE_MUSCLES,
+    muscleName: muscleDisplayName,
     replaceRoutines: replaceRoutines,
     replaceWorkouts: replaceWorkouts,
     routineScheduledToday: routineScheduledToday,

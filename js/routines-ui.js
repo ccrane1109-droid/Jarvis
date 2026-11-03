@@ -485,10 +485,10 @@
   /* ---------------- events ---------------- */
 
   function onClick(e) {
+    const el = e.target.closest("[data-rt]");
+    if (!el) return;   // not a click on this screen: leave it (and whatever has focus) alone, the logger handles its own
     const focused = document.activeElement;
     if (focused && focused.matches && focused.matches("input, textarea, select") && !e.target.closest("input, textarea, select")) focused.blur();
-    const el = e.target.closest("[data-rt]");
-    if (!el) return;
     const act = el.getAttribute("data-rt"), id = el.getAttribute("data-id"), i = Number(el.getAttribute("data-i")), day = Number(el.getAttribute("data-day"));
     switch (act) {
       case "new": openBuilder(RL.blankBuilder(), 1); focusSel("#rtName"); break;
