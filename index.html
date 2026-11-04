@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=63">
+<link rel="stylesheet" href="style.css?v=64">
 </head>
 <body>
 
@@ -169,6 +169,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="wk-history" role="tab" aria-selected="false" aria-controls="wk-history" id="workoutSubNavWkHistory">History</button>
       <!-- Reached from links inside the screens above, not from this bar -->
       <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
+      <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-library" role="tab" aria-selected="false" aria-controls="workout-library" id="workoutSubNavLibrary">Exercises</button>
       <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
       <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-log" role="tab" aria-selected="false" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
     </nav>
@@ -358,7 +359,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Routines ---------- -->
     <div id="workout-routines" class="workout-sub-panel wk-scope" role="tabpanel" aria-labelledby="workoutSubNavRoutines">
-      <div class="wk-linkrow"><button type="button" class="btn btn-secondary" data-wk-go="workout-programs">Programs</button></div>
+      <div class="wk-linkrow"><button type="button" class="btn btn-secondary" data-wk-go="workout-library">Exercise library</button><button type="button" class="btn btn-secondary" data-wk-go="workout-programs">Programs</button></div>
       <div id="rtRoot" class="rt-root" aria-live="off"></div>
 
       <div id="rtGenerator" class="rt-generator">
@@ -849,58 +850,86 @@ npx firebase-tools deploy --only firestore:rules</pre>
     </div>
 
     <!-- ---------- Sub-panel: Form Check ---------- -->
+    <!-- ---------- Sub-panel: Exercise library (reached from Routines, the exercise menu and the picker) ---------- -->
+    <div id="workout-library" class="workout-sub-panel wk-scope" role="tabpanel" aria-labelledby="workoutSubNavLibrary">
+      <div class="wk-linkrow"><button type="button" class="btn btn-secondary" data-wk-go="workout-routines">&larr; Routines</button></div>
+      <div id="lbRoot" class="lb-root"><p class="field-hint">The exercise library couldn't load. The exercise picker in a workout still works.</p></div>
+    </div>
+
     <div id="workout-form-check" class="workout-sub-panel wk-scope" role="tabpanel" aria-labelledby="workoutSubNavFormCheck">
       <div class="wk-linkrow"><button type="button" class="btn btn-secondary" data-wk-go="workout-progress">&larr; Progress</button></div>
-      <div class="card">
-        <h2 class="card-title">Form Check (Beta)</h2>
-        <p class="field-hint">
-          Takes a photo or a short video and uses on-device body tracking (no server, nothing uploaded anywhere) to
-          estimate joint positions and flag a few common form cues. A video is checked frame by frame and the moment
-          that matters (e.g. the bottom of the squat) is picked out automatically — that's more useful than a photo
-          since it isn't just one frozen instant, but it still can't judge things like bar control between reps.
-          Neither is a substitute for a coach, and each check below only works well from the camera angle it names.
-          Range-of-motion and body-swing checks (Preacher Curl, Bicep Curl, Row, Plank) need a video — a photo can only show context for those.
-          Covers Squat, Deadlift, Lunge, Push-Up, Bench Press, Overhead Press, Lat Pulldown, Row, Bicep Curl, Preacher Curl, Overhead Tricep Extension, and Plank for now; more to come.
-          Every check you run is saved below (with the skeleton overlay, not the original photo/video) so you can look back over time.
-        </p>
-        <div class="form-row">
-          <label for="formCheckExerciseSelect">Exercise</label>
-          <select id="formCheckExerciseSelect">
-            <option value="squat">Squat (side view works best)</option>
-            <option value="deadlift">Deadlift (side view works best)</option>
-            <option value="lunge">Lunge (side view works best)</option>
-            <option value="pushup">Push-Up (side view works best)</option>
-            <option value="benchpress">Bench Press (shot from the feet looking up works best)</option>
-            <option value="overheadpress">Overhead Press (side view works best)</option>
-            <option value="latpulldown">Lat Pulldown (side view works best)</option>
-            <option value="row">Row (side view works best)</option>
-            <option value="bicepcurl">Bicep Curl (side view works best)</option>
-            <option value="preachercurl">Preacher Curl (side view works best)</option>
-            <option value="tricepextension">Overhead Tricep Extension (side view works best)</option>
-            <option value="plank">Plank (side view works best)</option>
-          </select>
+      <section class="card fc-card" aria-labelledby="fcH">
+        <h2 class="card-title" id="fcH">Form check <span class="badge badge-neutral">Beta</span></h2>
+        <p class="fc-lead">Looks at one photo or a short video on your phone and points out a few things about your technique. Your photo or video is never uploaded.</p>
+        <ol class="fc-steps">
+          <li class="fc-step">
+            <h3 class="fc-step-title">1. Pick the exercise</h3>
+            <div class="form-row">
+              <label class="visually-hidden" for="formCheckExerciseSelect">Exercise</label>
+              <select id="formCheckExerciseSelect" aria-describedby="formCheckTip">
+                <option value="squat">Squat</option>
+                <option value="deadlift">Deadlift</option>
+                <option value="lunge">Lunge</option>
+                <option value="pushup">Push-Up</option>
+                <option value="benchpress">Bench Press</option>
+                <option value="overheadpress">Overhead Press</option>
+                <option value="latpulldown">Lat Pulldown</option>
+                <option value="row">Row</option>
+                <option value="bicepcurl">Bicep Curl</option>
+                <option value="preachercurl">Preacher Curl</option>
+                <option value="tricepextension">Overhead Tricep Extension</option>
+                <option value="plank">Plank</option>
+              </select>
+            </div>
+            <p class="field-hint" id="formCheckTip"></p>
+          </li>
+          <li class="fc-step">
+            <h3 class="fc-step-title">2. Choose a photo or video</h3>
+            <div class="fc-picks">
+              <label class="btn btn-secondary fc-pick"><input type="file" class="visually-hidden" id="formCheckPhotoInput" accept="image/*,video/*">Choose from library</label>
+              <label class="btn btn-secondary fc-pick"><input type="file" class="visually-hidden" id="formCheckCameraInput" accept="image/*,video/*" capture="environment">Record or take one now</label>
+            </div>
+            <p class="fc-picked" id="formCheckPicked" role="status">Nothing chosen yet.</p>
+            <p class="field-hint">Good light and your whole body in frame. A video of one rep, a few seconds long, works best; only the first 8 seconds are checked.</p>
+          </li>
+          <li class="fc-step">
+            <h3 class="fc-step-title">3. Analyze</h3>
+            <button type="button" class="btn btn-primary wk-big-btn" id="formCheckAnalyzeBtn" disabled>Analyze</button>
+            <p class="field-hint" id="formCheckStatus" role="status" aria-live="polite"></p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="card fc-results hidden" id="formCheckResultCard" aria-labelledby="fcResH">
+        <h2 class="card-title" id="fcResH" tabindex="-1">4. Results</h2>
+        <div id="formCheckQuality"></div>
+        <div id="formCheckCanvasWrap" class="fc-canvas-wrap">
+          <canvas id="formCheckCanvas" role="img" aria-label="The frame that was checked, with the tracked joints drawn on it"></canvas>
+          <p class="field-hint" id="formCheckLegend"></p>
         </div>
-        <div class="form-row">
-          <label for="formCheckPhotoInput">Photo or video</label>
-          <input type="file" id="formCheckPhotoInput" accept="image/*,video/*" capture="environment">
-          <p class="field-hint">Good lighting, full body in frame, taken from the side. For video, trim to just one rep if you can — a short clip (a few seconds) processes faster than a long one, and only the first 8 seconds are checked either way.</p>
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary" id="formCheckAnalyzeBtn" disabled>Analyze Form</button>
-        </div>
-        <p class="field-hint" id="formCheckStatus"></p>
-        <div id="formCheckCanvasWrap" class="hidden" style="margin-top:12px;">
-          <canvas id="formCheckCanvas" style="max-width:100%;border-radius:8px;"></canvas>
-        </div>
-        <div id="formCheckResults" style="margin-top:14px;"></div>
-      </div>
-      <div class="card">
-        <div class="list-item-row" style="margin-bottom:10px;">
-          <h2 class="card-title" style="margin:0;">Recent Checks</h2>
-          <button type="button" class="btn-icon danger hidden" id="formCheckClearHistoryBtn">Clear History</button>
-        </div>
+        <p class="fc-summary" id="formCheckSummary"></p>
+        <div id="formCheckResults"></div>
+        <p class="field-hint" id="formCheckNote"></p>
+        <p class="fc-disclaimer" id="formCheckDisclaimer"></p>
+      </section>
+
+      <details class="card fc-history">
+        <summary id="formCheckHistorySummary">Recent checks</summary>
+        <div class="fc-history-head"><button type="button" class="btn btn-secondary hidden" id="formCheckClearHistoryBtn">Clear history</button></div>
         <div id="formCheckHistoryList" class="item-list"></div>
-      </div>
+      </details>
+
+      <details class="card fc-about">
+        <summary>How this works, and what it can't do</summary>
+        <ul class="pg-plain">
+          <li>A body-tracking model (MoveNet, run on your phone with TensorFlow.js) estimates where your shoulders, elbows, hips, knees and ankles are in the picture.</li>
+          <li>For a video it looks at frames of the clip and picks the one that matters most for the exercise, such as the bottom of a squat.</li>
+          <li>Then it applies a few simple rules about angles and positions. They are rough, commonly used coaching cues, not a clinical assessment.</li>
+          <li>The model itself is downloaded when you analyze, so that step may need a connection. Your photo or video stays on your phone.</li>
+          <li>It can't see bar path, tempo, how hard the set was or what you feel. Each check only makes sense from the camera angle it names.</li>
+          <li>Each check you run is saved here with the joints drawn on it, not your original photo or video.</li>
+        </ul>
+      </details>
     </div>
   </section>
 
@@ -5135,52 +5164,56 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=63"></script>
-<script src="js/backup-logic.js?v=63"></script>
-<script src="js/cloud-backup.js?v=63"></script>
-<script type="module" src="js/auth.js?v=63"></script>
-<script src="js/app.js?v=63"></script>
-<script src="js/exercises.js?v=63"></script>
-<script src="js/workout-logic.js?v=63"></script>
-<script src="js/routine-logic.js?v=63"></script>
-<script src="js/workout.js?v=63"></script>
-<script src="js/workout-ui.js?v=63"></script>
-<script src="js/routines-ui.js?v=63"></script>
-<script src="js/progress-logic.js?v=63"></script>
-<script src="js/insights-logic.js?v=63"></script>
-<script src="js/charts.js?v=63"></script>
-<script src="js/history-ui.js?v=63"></script>
-<script src="js/insights-ui.js?v=63"></script>
-<script src="js/progress-ui.js?v=63"></script>
-<script src="js/nutrition.js?v=63"></script>
-<script src="js/nutrition-label-parse.js?v=63"></script>
-<script src="js/nutrition-label-scan.js?v=63"></script>
-<script src="js/groceries.js?v=63"></script>
-<script src="js/habits.js?v=63"></script>
-<script src="js/discipline-logic.js?v=63"></script>
-<script src="js/discipline-program.js?v=63"></script>
-<script src="js/discipline-habits.js?v=63"></script>
-<script src="js/discipline-insights.js?v=63"></script>
-<script src="js/discipline-charts.js?v=63"></script>
-<script src="js/discipline-delivery.js?v=63"></script>
-<script src="js/discipline.js?v=63"></script>
-<script src="js/wakecheck-logic.js?v=63"></script>
-<script src="js/wakecheck.js?v=63"></script>
-<script src="functions/lib/reminder-spec.js?v=63"></script>
-<script src="functions/lib/reminder-events.js?v=63"></script>
-<script src="js/reminders.js?v=63"></script>
-<script src="js/business.js?v=63"></script>
-<script src="js/trading.js?v=63"></script>
-<script src="js/blobstore.js?v=63"></script>
-<script src="js/video-api-client.js?v=63"></script>
-<script src="js/video-connections.js?v=63"></script>
-<script src="js/video.js?v=63"></script>
-<script src="js/video-studio.js?v=63"></script>
-<script src="functions/lib/idea-spec.js?v=63"></script>
-<script src="functions/lib/niche-spec.js?v=63"></script>
-<script src="js/marketing-stats.js?v=63"></script>
-<script src="js/niche-research.js?v=63"></script>
-<script src="js/content-intelligence.js?v=63"></script>
-<script src="js/form-check.js?v=63"></script>
+<script src="js/firebase-config.js?v=64"></script>
+<script src="js/backup-logic.js?v=64"></script>
+<script src="js/cloud-backup.js?v=64"></script>
+<script type="module" src="js/auth.js?v=64"></script>
+<script src="js/app.js?v=64"></script>
+<script src="js/exercises.js?v=64"></script>
+<script src="js/workout-logic.js?v=64"></script>
+<script src="js/exercise-logic.js?v=64"></script>
+<script src="js/exercise-guides.js?v=64"></script>
+<script src="js/routine-logic.js?v=64"></script>
+<script src="js/workout.js?v=64"></script>
+<script src="js/workout-ui.js?v=64"></script>
+<script src="js/routines-ui.js?v=64"></script>
+<script src="js/progress-logic.js?v=64"></script>
+<script src="js/insights-logic.js?v=64"></script>
+<script src="js/charts.js?v=64"></script>
+<script src="js/history-ui.js?v=64"></script>
+<script src="js/insights-ui.js?v=64"></script>
+<script src="js/library-ui.js?v=64"></script>
+<script src="js/progress-ui.js?v=64"></script>
+<script src="js/nutrition.js?v=64"></script>
+<script src="js/nutrition-label-parse.js?v=64"></script>
+<script src="js/nutrition-label-scan.js?v=64"></script>
+<script src="js/groceries.js?v=64"></script>
+<script src="js/habits.js?v=64"></script>
+<script src="js/discipline-logic.js?v=64"></script>
+<script src="js/discipline-program.js?v=64"></script>
+<script src="js/discipline-habits.js?v=64"></script>
+<script src="js/discipline-insights.js?v=64"></script>
+<script src="js/discipline-charts.js?v=64"></script>
+<script src="js/discipline-delivery.js?v=64"></script>
+<script src="js/discipline.js?v=64"></script>
+<script src="js/wakecheck-logic.js?v=64"></script>
+<script src="js/wakecheck.js?v=64"></script>
+<script src="functions/lib/reminder-spec.js?v=64"></script>
+<script src="functions/lib/reminder-events.js?v=64"></script>
+<script src="js/reminders.js?v=64"></script>
+<script src="js/business.js?v=64"></script>
+<script src="js/trading.js?v=64"></script>
+<script src="js/blobstore.js?v=64"></script>
+<script src="js/video-api-client.js?v=64"></script>
+<script src="js/video-connections.js?v=64"></script>
+<script src="js/video.js?v=64"></script>
+<script src="js/video-studio.js?v=64"></script>
+<script src="functions/lib/idea-spec.js?v=64"></script>
+<script src="functions/lib/niche-spec.js?v=64"></script>
+<script src="js/marketing-stats.js?v=64"></script>
+<script src="js/niche-research.js?v=64"></script>
+<script src="js/content-intelligence.js?v=64"></script>
+<script src="js/formcheck-logic.js?v=64"></script>
+<script src="js/form-check.js?v=64"></script>
 </body>
 </html>

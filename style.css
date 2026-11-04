@@ -3283,7 +3283,7 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .wk-empty { color: var(--text-dim); margin: 4px 0 0; }
 .wk-link { background: none; border: 0; padding: 12px 4px; min-height: 44px; color: #9ec1ff; text-decoration: underline; cursor: pointer; font: inherit; }
 .wk-tools { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 4px 0 12px; }
-.wk-linkrow { margin-bottom: 12px; }
+.wk-linkrow { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
 
 .wk-week { padding: 14px 16px; }
 .wk-week-count { margin: 0 0 10px; font-size: 15px; }
@@ -3668,3 +3668,59 @@ button.hs-day:hover { background: var(--card-hover); }
 .in-swap-name { font-weight: 700; overflow-wrap: anywhere; }
 .in-swap-sub { font-size: 13px; color: var(--text-dim); font-weight: 400; overflow-wrap: anywhere; }
 .wk-menu-item:disabled { color: var(--text-faint); cursor: not-allowed; }
+
+/* Workout: the Exercise Library screen and detail sheet (library-ui.js) */
+.lb-controls { margin-bottom: 12px; }
+.lb-controls .wk-chips { margin-top: 4px; align-items: center; }
+.lb-count { margin: 4px 0 8px; font-size: 14px; color: var(--text-dim); }
+.lb-list { list-style: none; margin: 0; padding: 0; }
+.lb-row { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--card-border); }
+.lb-open { flex: 1; min-width: 0; min-height: 56px; display: flex; flex-direction: column; justify-content: center; text-align: left; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; padding: 6px 4px; }
+.lb-name { font-weight: 600; overflow-wrap: anywhere; }
+.lb-sub { font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
+.lb-more { margin-top: 12px; }
+.lb-foot { margin-top: 16px; }
+.lb-empty-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.lb-steps { margin: 0 0 8px; padding-left: 22px; font-size: 15px; }
+.lb-steps li { margin: 10px 0; }
+.lb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.lb-actions .btn { flex: 1 1 140px; min-height: 48px; }
+.lb-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.lb-mine { margin: 8px 0; }
+.lb-formmsg { margin: 8px 0; font-size: 14px; }
+.lb-similar { padding: 10px 12px; border: 1px solid var(--yellow); border-radius: 12px; background: var(--bg-elevated); }
+.lb-similar p { margin: 0 0 6px; }
+
+/* Workout: Form Check, in four steps (form-check.js, formcheck-logic.js) */
+.fc-lead { margin: 0 0 12px; color: var(--text-dim); }
+.fc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+.fc-step-title { font-size: 16px; margin: 0 0 8px; }
+.fc-picks { display: flex; flex-direction: column; gap: 8px; }
+.fc-pick { position: relative; display: flex; align-items: center; justify-content: center; min-height: 52px; cursor: pointer; text-align: center; }
+.fc-pick:focus-within { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+.fc-picked { margin: 8px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.fc-quality { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--card-border); border-left: 4px solid var(--text-faint); border-radius: 12px; background: var(--bg-elevated); font-size: 14px; }
+.fc-q-clear { border-left-color: var(--accent); }
+.fc-q-low { border-left-color: var(--yellow); }
+.fc-canvas-wrap { margin: 0 0 12px; }
+.fc-canvas-wrap canvas { display: block; max-width: 100%; height: auto; border-radius: 10px; }
+.fc-summary { margin: 0 0 10px; font-weight: 600; }
+.fc-finds { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.fc-find { padding: 10px 12px; border: 1px solid var(--card-border); border-left: 4px solid var(--text-faint); border-radius: 12px; background: var(--bg-elevated); }
+.fc-good { border-left-color: var(--accent); }
+.fc-warn { border-left-color: var(--yellow); }
+.fc-tag { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 2px; }
+.fc-find-title { font-size: 16px; margin: 0 0 4px; overflow-wrap: anywhere; }
+.fc-find-detail { margin: 0; font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.fc-disclaimer { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; font-size: 14px; }
+.fc-history > summary, .fc-about > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; }
+.fc-history-head { margin: 6px 0; }
+.fc-hist-row { display: flex; align-items: center; gap: 8px; }
+.fc-hist-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 4px; text-align: left; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; }
+.fc-hist-text { display: flex; flex-direction: column; min-width: 0; }
+.fc-hist-item .history-delete-btn { min-height: 44px; min-width: 44px; }
+.fc-detail-img { display: block; max-width: 100%; border-radius: 8px; margin: 8px 0; }
+#workout-form-check .field-hint { overflow-wrap: anywhere; }
+.lb-controls :is(input:not([type="checkbox"]):not([type="radio"]), select) { min-height: 44px; }
+.wk-link { min-width: 44px; }
+.fc-card .badge { font-size: 12px; }

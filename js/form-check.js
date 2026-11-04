@@ -29,6 +29,9 @@
 (function () {
   "use strict";
 
+  // The wording and honesty rules (formcheck-logic.js): reading quality, "Looks typical here" instead of "good", the disclaimer.
+  const FC = window.JarvisFormCheckLogic || null;
+
   const TFJS_URL = "js/vendor/tfjs/tf.min.js";
   const POSE_DETECTION_URL = "js/vendor/tfjs/pose-detection.min.js";
   const MIN_KEYPOINT_SCORE = 0.3;
@@ -753,12 +756,16 @@
 
   // source can be an <img> (naturalWidth/Height) or a <canvas> (width/height
   // directly) — the latter is how a chosen video frame gets passed in.
-  function drawSkeleton(canvas, source, keypoints) {
+  // Joints the tracker was clear about are filled, joints it was unsure about are hollow, and the joints this check used are ringed
+  // in white, so the picture shows both what was measured and how sure the tracker was.
+  function drawSkeleton(canvas, source, keypoints, ringed) {
     canvas.width = source.naturalWidth || source.width;
     canvas.height = source.naturalHeight || source.height;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(source, 0, 0);
     const map = keypointMap(keypoints);
+    const ring = {};
+    (ringed || []).forEach(function (n) { ring[n] = true; });
 
     ctx.strokeStyle = "#4ade80";
     ctx.lineWidth = Math.max(2, canvas.width / 250);
@@ -772,11 +779,25 @@
       }
     });
 
-    ctx.fillStyle = "#facc15";
+    const r = Math.max(3, canvas.width / 150);
     keypoints.forEach(function (k) {
-      if (k.score >= MIN_KEYPOINT_SCORE) {
+      if (k.score < MIN_KEYPOINT_SCORE) return;
+      const unsure = FC ? FC.jointState(k.score) === "unsure" : false;
+      if (ring[k.name]) {
         ctx.beginPath();
-        ctx.arc(k.x, k.y, Math.max(3, canvas.width / 150), 0, 2 * Math.PI);
+        ctx.arc(k.x, k.y, r * 2, 0, 2 * Math.PI);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = Math.max(2, canvas.width / 300);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(k.x, k.y, r, 0, 2 * Math.PI);
+      if (unsure) {
+        ctx.strokeStyle = "#facc15";
+        ctx.lineWidth = Math.max(2, canvas.width / 300);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "#facc15";
         ctx.fill();
       }
     });
@@ -841,7 +862,8 @@
       finalCanvas.getContext("2d").drawImage(video, 0, 0);
       return {
         time: chosen.time, keypoints: chosen.keypoints, canvas: finalCanvas,
-        totalSamples: totalSamples, confidentSamples: samples.length,
+        // frames where the tracker had a usable reading of this exercise's joints (not just any frame it returned a body for)
+        totalSamples: totalSamples, confidentSamples: samples.filter(function (x) { return scoreFrameForExercise(x.keypoints, exercise) !== null; }).length,
         allKeypoints: samples.map(function (s) { return s.keypoints; })
       };
     });
@@ -1001,38 +1023,35 @@
   }
 
   function buildSummaryLine(results) {
-    if (!results || !results.length) return "";
-    let good = 0, warn = 0, info = 0;
-    results.forEach(function (r) {
-      if (r.status === "good") good++;
-      else if (r.status === "warn") warn++;
-      else info++;
-    });
-    const parts = [];
-    if (good) parts.push(good + " good");
-    if (warn) parts.push(warn + " to look at");
-    if (info) parts.push(info + " for context");
-    return parts.join(" · ");
+    return FC ? FC.summaryLine(results) : "";
+  }
+
+  function esc(v) { return window.JarvisCore.escapeHtml(v === undefined || v === null ? "" : String(v)); }
+
+  // One finding per card, with the words "Looks typical here", "For context" or "Worth a closer look" (never "good").
+  function findingsHtml(results) {
+    return '<ul class="fc-finds">' + (results || []).map(function (r) {
+      const status = r.status === "good" || r.status === "warn" ? r.status : "info";
+      const tag = FC ? FC.tagFor(status) : "For context";
+      return '<li class="fc-find fc-' + status + '"><span class="fc-tag">' + esc(tag) + '</span><h3 class="fc-find-title">' + esc(r.label) + '</h3><p class="fc-find-detail">' + esc(r.detail) + '</p></li>';
+    }).join("") + '</ul>';
+  }
+
+  function qualityHtml(level, text) {
+    if (!level || !FC) return "";
+    return '<p class="fc-quality fc-q-' + esc(level) + '"><strong>How sure the tracker was: ' + esc(FC.LEVEL_LABEL[level] || level) + '.</strong> ' + esc(text || "") + '</p>';
   }
 
   function renderHistoryDetail(entry) {
-    const core = window.JarvisCore;
     const summary = buildSummaryLine(entry.results);
-    const findingsHtml = (entry.results || []).map(function (r) {
-      const cls = r.status === "good" ? "badge-green" : r.status === "warn" ? "badge-yellow" : "badge-neutral";
-      return (
-        '<div class="list-item" style="margin-top:8px;">' +
-          '<span class="badge ' + cls + '">' + core.escapeHtml(r.label) + '</span>' +
-          '<p class="field-hint" style="margin-top:6px;">' + core.escapeHtml(r.detail) + '</p>' +
-        '</div>'
-      );
-    }).join("");
     return (
       '<div class="form-check-history-detail">' +
-        '<img src="' + entry.thumbnail + '" alt="" style="max-width:100%;border-radius:8px;">' +
-        (entry.note ? '<p class="field-hint" style="margin-top:8px;">' + core.escapeHtml(entry.note) + '</p>' : "") +
-        (summary ? '<p class="list-item-meta" style="margin-top:8px;">' + core.escapeHtml(summary) + '</p>' : "") +
-        findingsHtml +
+        '<img class="fc-detail-img" src="' + entry.thumbnail + '" alt="The frame that was checked, with the tracked joints drawn on it">' +
+        (entry.quality && FC ? qualityHtml(entry.quality, FC.qualityLine({ level: entry.quality, frameShare: null })) : "") +
+        (entry.note ? '<p class="field-hint">' + esc(entry.note) + '</p>' : "") +
+        (summary ? '<p class="fc-summary">' + esc(summary) + '</p>' : "") +
+        findingsHtml(entry.results) +
+        '<p class="fc-disclaimer">' + esc(FC ? FC.DISCLAIMER : "") + '</p>' +
       '</div>'
     );
   }
@@ -1044,26 +1063,27 @@
     const list = loadHistory();
     const clearBtn = $("formCheckClearHistoryBtn");
     if (clearBtn) clearBtn.classList.toggle("hidden", list.length === 0);
+    const head = $("formCheckHistorySummary");
+    if (head) head.textContent = list.length ? "Recent checks (" + list.length + ")" : "Recent checks";
     if (list.length === 0) {
-      container.innerHTML = '<div class="empty-state">No checks saved yet — run an analysis above and it will show up here.</div>';
+      container.innerHTML = '<div class="empty-state">No checks saved yet. Run one above and it will show up here.</div>';
       return;
     }
     container.innerHTML = list.map(function (entry) {
       const summary = buildSummaryLine(entry.results);
+      const open = openHistoryId === entry.id;
       return (
-        '<div class="list-item">' +
-          '<div class="list-item-row">' +
-            '<img class="form-check-history-thumb history-toggle-btn" data-id="' + core.escapeHtml(entry.id) + '" src="' + entry.thumbnail + '" alt="">' +
-            '<div class="list-item-main history-toggle-btn" data-id="' + core.escapeHtml(entry.id) + '" style="cursor:pointer;">' +
-              '<span class="list-item-title">' + core.escapeHtml(entry.exerciseLabel) + '</span>' +
-              '<span class="list-item-meta">' + core.escapeHtml(core.formatDateTime(entry.timestamp)) + '</span>' +
-              (summary ? '<span class="list-item-meta">' + core.escapeHtml(summary) + '</span>' : "") +
-            '</div>' +
-            '<div class="list-item-actions">' +
-              '<button type="button" class="btn-icon danger history-delete-btn" data-id="' + core.escapeHtml(entry.id) + '">Delete</button>' +
-            '</div>' +
+        '<div class="list-item fc-hist-item">' +
+          '<div class="fc-hist-row">' +
+            '<button type="button" class="fc-hist-open history-toggle-btn" data-id="' + esc(entry.id) + '" aria-expanded="' + open + '">' +
+              '<img class="form-check-history-thumb" src="' + entry.thumbnail + '" alt="">' +
+              '<span class="fc-hist-text"><span class="list-item-title">' + esc(entry.exerciseLabel) + '</span>' +
+              '<span class="list-item-meta">' + esc(core.formatDateTime(entry.timestamp)) + '</span>' +
+              (summary ? '<span class="list-item-meta">' + esc(summary) + '</span>' : "") + '</span>' +
+            '</button>' +
+            '<button type="button" class="btn-icon danger history-delete-btn" data-id="' + esc(entry.id) + '" aria-label="Delete this check, ' + esc(entry.exerciseLabel) + '">Delete</button>' +
           '</div>' +
-          (openHistoryId === entry.id ? renderHistoryDetail(entry) : "") +
+          (open ? renderHistoryDetail(entry) : "") +
         '</div>'
       );
     }).join("");
@@ -1080,6 +1100,8 @@
       const id = toggle.getAttribute("data-id");
       openHistoryId = openHistoryId === id ? null : id;
       renderHistory();
+      const again = document.querySelector('.history-toggle-btn[data-id="' + id + '"]');
+      if (again) again.focus({ preventScroll: true });
     }
   }
 
@@ -1092,58 +1114,84 @@
   function $(id) { return document.getElementById(id); }
 
   function setStatus(text) {
-    $("formCheckStatus").textContent = text || "";
+    const el = $("formCheckStatus");
+    if (el) el.textContent = text || "";
   }
 
-  function renderResults(results) {
-    const container = $("formCheckResults");
-    if (!results || results.length === 0) {
-      container.innerHTML = "";
-      return;
-    }
-    const core = window.JarvisCore;
-    const summary = buildSummaryLine(results);
-    const items = results.map(function (r) {
-      const cls = r.status === "good" ? "badge-green" : r.status === "warn" ? "badge-yellow" : "badge-neutral";
-      return (
-        '<div class="list-item">' +
-          '<span class="badge ' + cls + '">' + core.escapeHtml(r.label) + '</span>' +
-          '<p class="field-hint" style="margin-top:6px;">' + core.escapeHtml(r.detail) + '</p>' +
-        '</div>'
-      );
-    }).join("");
-    container.innerHTML = (summary ? '<p class="list-item-meta" style="margin-bottom:8px;">' + core.escapeHtml(summary) + '</p>' : "") + items;
+  function showResultCard(show) {
+    const card = $("formCheckResultCard");
+    if (card) card.classList.toggle("hidden", !show);
   }
+
+  function clearResults() {
+    showResultCard(false);
+    ["formCheckResults", "formCheckQuality", "formCheckSummary", "formCheckNote", "formCheckLegend"].forEach(function (id) { const el = $(id); if (el) el.innerHTML = ""; });
+  }
+
+  function updateTip() {
+    const sel = $("formCheckExerciseSelect"), tip = $("formCheckTip");
+    if (!sel || !tip || !FC) return;
+    const c = FC.checkFor(sel.value);
+    tip.textContent = c ? c.tip + (c.video ? "" : " A video of one rep, or a photo, both work.") : "";
+  }
+
+  let currentUrl = null;
 
   function handleFileChange(e) {
-    const file = e.target.files[0];
-    $("formCheckAnalyzeBtn").disabled = !file;
-    $("formCheckResults").innerHTML = "";
+    const input = e.target, file = input.files[0];
+    // Two ways in (library, camera): only the latest choice counts.
+    ["formCheckPhotoInput", "formCheckCameraInput"].forEach(function (id) { const other = $(id); if (other && other !== input) other.value = ""; });
+    const analyzeBtn = $("formCheckAnalyzeBtn");
+    analyzeBtn.disabled = true;
+    clearResults();
     setStatus("");
-    $("formCheckCanvasWrap").classList.add("hidden");
     currentImage = null;
     currentVideo = null;
+    if (currentUrl) { URL.revokeObjectURL(currentUrl); currentUrl = null; }
+    const picked = $("formCheckPicked");
+    if (picked) picked.textContent = file ? (FC ? FC.fileText(file) : file.name) : "Nothing chosen yet.";
     if (!file) return;
+    currentUrl = URL.createObjectURL(file);
     if (file.type.indexOf("video/") === 0) {
       const video = document.createElement("video");
       video.muted = true;
       video.playsInline = true;
       video.preload = "auto";
-      video.onloadedmetadata = function () { currentVideo = video; };
-      video.src = URL.createObjectURL(file);
+      video.onloadedmetadata = function () { currentVideo = video; analyzeBtn.disabled = false; };
+      video.onerror = function () { setStatus("That video couldn't be opened. Try a different one."); };
+      video.src = currentUrl;
     } else {
       const img = new Image();
-      img.onload = function () { currentImage = img; };
-      img.src = URL.createObjectURL(file);
+      img.onload = function () { currentImage = img; analyzeBtn.disabled = false; };
+      img.onerror = function () { setStatus("That photo couldn't be opened. Try a different one."); };
+      img.src = currentUrl;
     }
   }
 
+  function renderResultCard(exercise, analysis, results, quality) {
+    const check = FC ? FC.checkFor(exercise) : null;
+    showResultCard(true);
+    $("formCheckQuality").innerHTML = qualityHtml(quality.level, FC.qualityLine(quality));
+    $("formCheckLegend").textContent = "Dots mark the joints the tracker found: filled where it was clear, hollow where it was unsure. White rings are the joints this check used.";
+    const summary = FC.summaryLine(results);
+    $("formCheckSummary").textContent = summary;
+    $("formCheckResults").innerHTML = findingsHtml(results);
+    const notes = [];
+    if (analysis.note) notes.push(analysis.note);
+    if (check && check.video && !currentVideo) notes.push("This check compares frames, so a single photo only gives context. A short video gives the full check.");
+    $("formCheckNote").textContent = notes.join(" ");
+    $("formCheckDisclaimer").textContent = FC.DISCLAIMER;
+    const h = $("fcResH");
+    if (h) { h.focus({ preventScroll: true }); h.scrollIntoView({ block: "start" }); }
+  }
+
   function handleAnalyzeClick() {
+    if (!FC) return;
     if (!currentImage && !currentVideo) { window.JarvisCore.showToast("Choose a photo or video first."); return; }
     const btn = $("formCheckAnalyzeBtn");
     btn.disabled = true;
     setStatus(currentVideo ? "Preparing…" : "Analyzing…");
-    $("formCheckResults").innerHTML = "";
+    clearResults();
     const exercise = $("formCheckExerciseSelect").value;
 
     ensureDetector(setStatus).then(function (d) {
@@ -1153,7 +1201,8 @@
           return {
             keypoints: result.keypoints,
             source: result.canvas,
-            note: "Used the frame at " + result.time.toFixed(1) + "s (found a clear reading in " + result.confidentSamples + " of " + result.totalSamples + " sampled frames).",
+            note: "Used the frame at " + result.time.toFixed(1) + "s (a usable reading in " + result.confidentSamples + " of " + result.totalSamples + " sampled frames).",
+            frames: { confident: result.confidentSamples, total: result.totalSamples },
             allFrames: result.allKeypoints
           };
         });
@@ -1161,39 +1210,41 @@
       setStatus("Analyzing…");
       return d.estimatePoses(currentImage).then(function (poses) {
         if (!poses || !poses[0] || !poses[0].keypoints) return null;
-        return { keypoints: poses[0].keypoints, source: currentImage, note: null, allFrames: null };
+        return { keypoints: poses[0].keypoints, source: currentImage, note: null, frames: null, allFrames: null };
       });
     }).then(function (analysis) {
       btn.disabled = false;
       if (!analysis) {
         setStatus(currentVideo
-          ? "Couldn't detect a person clearly in that clip. Try better lighting, a clearer side angle, or trimming to just the rep."
-          : "Couldn't detect a person in that photo. Try a clearer, well-lit, full-body shot.");
+          ? "Couldn't find a person clearly in that clip. Try better light, a clearer side view, or trim it to one rep."
+          : "Couldn't find a person in that photo. Try a clearer, well-lit, whole-body shot.");
         return;
       }
-      const canvasWrap = $("formCheckCanvasWrap");
-      canvasWrap.classList.remove("hidden");
-      drawSkeleton($("formCheckCanvas"), analysis.source, analysis.keypoints);
-
+      const check = FC.checkFor(exercise);
       const analyzer = ANALYZERS[exercise];
-      const results = analyzer ? analyzer(analysis.keypoints, analysis.allFrames) : [];
-      renderResults(results);
-      const baseStatus = results.length ? "" : "Detected a person, but couldn't get confident readings for this check — try a clearer angle.";
-      setStatus([analysis.note, baseStatus].filter(Boolean).join(" "));
-
-      if (results.length) {
-        const select = $("formCheckExerciseSelect");
-        const exerciseLabel = (select && select.selectedOptions[0] && select.selectedOptions[0].textContent) || exercise;
-        addHistoryEntry({
-          id: window.JarvisCore.uid("formcheck"),
-          exercise: exercise,
-          exerciseLabel: exerciseLabel,
-          timestamp: new Date().toISOString(),
-          thumbnail: makeThumbnail($("formCheckCanvas")),
-          note: analysis.note || null,
-          results: results
-        });
+      const raw = analyzer ? analyzer(analysis.keypoints, analysis.allFrames) : [];
+      const quality = FC.readingQuality(analysis.keypoints, check ? check.joints : ["shoulder", "hip"], analysis.frames);
+      const results = FC.adjustForQuality(raw, quality.level);
+      drawSkeleton($("formCheckCanvas"), analysis.source, analysis.keypoints, FC.ringedJoints(exercise, analysis.keypoints));
+      if (!results.length) {
+        setStatus("Found a person, but couldn't get a confident reading for this check. Try a clearer angle.");
+        return;
       }
+      setStatus("");
+      renderResultCard(exercise, analysis, results, quality);
+
+      const select = $("formCheckExerciseSelect");
+      const exerciseLabel = (select && select.selectedOptions[0] && select.selectedOptions[0].textContent) || exercise;
+      addHistoryEntry({
+        id: window.JarvisCore.uid("formcheck"),
+        exercise: exercise,
+        exerciseLabel: exerciseLabel,
+        timestamp: new Date().toISOString(),
+        thumbnail: makeThumbnail($("formCheckCanvas")),
+        note: analysis.note || null,
+        quality: quality.level,
+        results: results
+      });
     }).catch(function (err) {
       btn.disabled = false;
       const message = err && err.message ? err.message : "";
@@ -1209,8 +1260,18 @@
     const photoInput = $("formCheckPhotoInput");
     const analyzeBtn = $("formCheckAnalyzeBtn");
     if (!photoInput || !analyzeBtn) return;
+    if (!FC) {
+      analyzeBtn.disabled = true;
+      setStatus("Form Check couldn't load. Reload the app to try again.");
+      return;
+    }
     photoInput.addEventListener("change", handleFileChange);
+    const cameraInput = $("formCheckCameraInput");
+    if (cameraInput) cameraInput.addEventListener("change", handleFileChange);
     analyzeBtn.addEventListener("click", handleAnalyzeClick);
+    const select = $("formCheckExerciseSelect");
+    if (select) select.addEventListener("change", function () { updateTip(); clearResults(); setStatus(""); });
+    updateTip();
     const historyList = $("formCheckHistoryList");
     if (historyList) historyList.addEventListener("click", handleHistoryListClick);
     const clearHistoryBtn = $("formCheckClearHistoryBtn");

@@ -546,6 +546,20 @@
   function deleteCustomExercise(id) {
     const list = loadCustomExercises().filter(function (e) { return e.id !== id; });
     saveCustomExercises(list);
+    const favs = loadFavoriteIds();
+    if (favs.indexOf(id) !== -1) saveFavoriteIds(favs.filter(function (f) { return f !== id; }));
+  }
+
+  // Rename or re-file a custom exercise. The id stays the same, so history and routines keep pointing at it. Returns it, or null.
+  function updateCustomExercise(id, data) {
+    const list = loadCustomExercises();
+    const i = list.findIndex(function (e) { return e.id === id && e.custom; });
+    if (i === -1) return null;
+    const next = Object.assign({}, list[i], { name: data.name, muscleGroup: data.muscleGroup, equipment: data.equipment });
+    const copy = list.slice();
+    copy[i] = next;
+    saveCustomExercises(copy);
+    return next;
   }
 
   /* ---------------- favorites ---------------- */
@@ -646,6 +660,7 @@
     getStandard: getStandard,
     addCustomExercise: addCustomExercise,
     deleteCustomExercise: deleteCustomExercise,
+    updateCustomExercise: updateCustomExercise,
     loadCustomExercises: loadCustomExercises,
     isFavorite: isFavorite,
     toggleFavorite: toggleFavorite,
