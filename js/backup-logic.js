@@ -41,7 +41,8 @@
     "jarvisTasks", "jarvisGoals",
     "jarvisDiscipline", "jarvisWakeCheck", "jarvisWorkoutPrefs", "jarvisInsightPrefs", "jarvisExerciseExtras",
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
-    "jarvisFormCheckHistory"
+    "jarvisFormCheckHistory",
+    "jarvisCalendarEvents", "jarvisCalendarSettings"
   ];
   const CHUNK_CHARS = 250000; // even at 3 bytes a character this stays under Firestore's 1 MiB document limit
 
@@ -259,6 +260,7 @@
     jarvisNutritionLog: mergeDateMeals,
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
     jarvisTasks: mergeById, jarvisGoals: mergeById, jarvisGroceryList: mergeById, jarvisGroceryMealPlan: mergeById, jarvisFormCheckHistory: mergeById,
+    jarvisCalendarEvents: mergeById, jarvisCalendarSettings: mergeNewest,
     jarvisGroceryPantry: mergeMapNewest,
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,

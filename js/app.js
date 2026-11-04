@@ -302,7 +302,7 @@
   // matching one there, and follow it whenever anything else switches section (other modules do, e.g. opening a
   // reminder from a notification), so the bar always shows where you are. When the open section is one of the ones
   // behind "More", that button takes its name so the current section is still named on screen.
-  const PRIMARY_NAV = ["navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnDiscipline"];
+  const PRIMARY_NAV = ["navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnCalendar"];
   const SHORT_NAV_LABELS = { navBtnTrading: "Trading" };
   const TEXT_FIELD = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=range]):not([type=file]), textarea, select";
 
@@ -397,7 +397,10 @@
     let syncBottomNav = function () {};
     const mainNavBtns = Array.prototype.slice.call(document.querySelectorAll(".main-nav-btn"));
     const mainPanels = Array.prototype.slice.call(document.querySelectorAll(".tab-panel"));
-    setupTabGroup(mainNavBtns, mainPanels, function () { syncBottomNav(); });
+    setupTabGroup(mainNavBtns, mainPanels, function (targetId) {
+      syncBottomNav();
+      if (targetId === "panel-calendar" && window.JarvisCalendar && typeof window.JarvisCalendar.onShow === "function") window.JarvisCalendar.onShow();
+    });
     syncBottomNav = initBottomNav();
 
     const subNavBtns = Array.prototype.slice.call(document.querySelectorAll(".sub-nav-btn"));
@@ -543,6 +546,11 @@
         if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
       } catch (err) {
         if (window.console) console.error("Habits failed to start; the rest of the app is unaffected", err);
+      }
+      try {
+        if (window.JarvisCalendar && typeof window.JarvisCalendar.init === "function") window.JarvisCalendar.init();
+      } catch (err) {
+        if (window.console) console.error("The calendar failed to start; the rest of the app is unaffected", err);
       }
       try {
         if (window.JarvisDayPlan && typeof window.JarvisDayPlan.init === "function") window.JarvisDayPlan.init();
