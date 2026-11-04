@@ -293,11 +293,14 @@
       return;
     }
     const m = model();
-    root.innerHTML = periodHtml(m) + tilesHtml(m) + consistencyHtml(m) + strengthHtml(m) + volumeHtml(m) + timeHtml(m) + musclesHtml(m) + recordsHtml(m) + aboutHtml();
+    root.innerHTML = periodHtml(m) + tilesHtml(m) + insightsHtml() + consistencyHtml(m) + strengthHtml(m) + volumeHtml(m) + timeHtml(m) + musclesHtml(m) + recordsHtml(m) + aboutHtml();
     drawCharts();
     window.scrollTo(0, keep);
     if (focusId) { const f = $(focusId); if (f) f.focus({ preventScroll: true }); }
   }
+
+  // The "What I noticed" card (insights-ui.js). If that file failed to load, Progress simply has no card.
+  function insightsHtml() { try { return window.JarvisInsights ? window.JarvisInsights.cardHtml() : ""; } catch (e) { return ""; } }
 
   function drawCharts() {
     const root = $("pgRoot");

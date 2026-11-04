@@ -3640,3 +3640,31 @@ button.hs-day:hover { background: var(--card-hover); }
 @media (max-width: 359px) { .pg-tile-value { font-size: 22px; } }
 .hs-controls input[type="search"], .hs-controls select { min-height: 44px; }
 .pg-body .segmented-btn { min-height: 44px; }
+
+/* Workout: the training assistant (insights-ui.js) — the "What I noticed" card on Progress, the suggestion line in the logger, the swap list */
+.pg-in-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.pg-in-item { padding: 12px 14px; border: 1px solid var(--card-border); border-left: 4px solid var(--text-faint); border-radius: 12px; background: var(--bg-elevated); }
+.pg-in-good { border-left-color: var(--accent); }
+.pg-in-watch { border-left-color: var(--yellow); }
+.pg-in-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 2px; }
+.pg-in-title { font-size: 17px; line-height: 1.25; margin: 0 0 4px; overflow-wrap: anywhere; }
+.pg-in-text { margin: 0 0 4px; font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.pg-in-why > summary, .pg-in-settings > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; color: #9ec1ff; }
+.pg-in-why .pg-plain { margin-bottom: 8px; }
+.pg-in-hide { display: block; }
+.pg-in-none, .pg-in-off, .pg-in-hidden { margin: 12px 0 0; font-size: 14px; color: var(--text-dim); }
+.pg-in-ready { margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
+.pg-in-ready li { margin: 6px 0; }
+.pg-in-settings { margin-top: 10px; border-top: 1px solid var(--card-border); }
+.wk-sugg { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-dim); }
+.wk-sugg-hold { border-color: var(--card-border); background: var(--bg-elevated); }
+.wk-sugg-text { margin: 0 0 8px; font-size: 14px; overflow-wrap: anywhere; }
+.wk-sugg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.wk-sugg-actions .btn { flex: 1 1 80px; min-height: 48px; min-width: 72px; }
+.wk-sugg-actions .btn-primary { flex: 2 1 120px; }
+.in-swap-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.in-swap-item { border-bottom: 1px solid var(--card-border); padding-bottom: 6px; margin-bottom: 8px; }
+.in-swap-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 56px; padding: 8px 14px; text-align: left; }
+.in-swap-name { font-weight: 700; overflow-wrap: anywhere; }
+.in-swap-sub { font-size: 13px; color: var(--text-dim); font-weight: 400; overflow-wrap: anywhere; }
+.wk-menu-item:disabled { color: var(--text-faint); cursor: not-allowed; }
