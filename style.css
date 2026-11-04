@@ -3724,3 +3724,50 @@ button.hs-day:hover { background: var(--card-hover); }
 .lb-controls :is(input:not([type="checkbox"]):not([type="radio"]), select) { min-height: 44px; }
 .wk-link { min-width: 44px; }
 .fc-card .badge { font-size: 12px; }
+
+/* Workout polish (phase 6) -------------------------------------------------------------------------- */
+/* A card-grid column is never wider than the screen (it used to be at least 320px, which ran off a 320px phone) */
+.card-grid { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+/* The older classic logger and Programs screens: no sideways scrolling, text at least 12px, buttons at least 44px, readable badges */
+.exercise-pill-nav { flex-wrap: wrap; overflow: visible; }
+.exercise-pill { min-height: 44px; font-size: 14px; max-width: 100%; }
+.exercise-pill-name { overflow: hidden; text-overflow: ellipsis; }
+.session-stat-label { font-size: 12px; }
+#workout-log .badge, #workout-programs .badge { font-size: 12px; }
+#workout-log .badge-accent, #workout-programs .badge-accent { color: #9ec1ff; }
+#workout-log :is(.btn, .btn-icon), #workout-programs :is(.btn, .btn-icon) { min-height: 44px; }
+#workout-log .exercise-card-fav-btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+#workout-programs .list-item-row { flex-wrap: wrap; }
+#workout-programs .list-item-main { flex: 1 1 200px; min-width: 0; }
+#workout-programs .list-item-actions { flex-wrap: wrap; flex-shrink: 1; }
+.goal-card-label { font-weight: 600; }
+/* Progress: a row of buttons to jump to a section, and sections that stop below the app header when jumped to */
+.pg-sec { scroll-margin-top: 80px; }
+.pg-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.pg-jump-label { font-size: 13px; color: var(--text-dim); margin-right: 2px; }
+.pg-jump-btn { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--bg-elevated); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.pg-jump-btn:hover { background: var(--card-hover); }
+.pg-jump-btn:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+/* The exercise picker keeps its search and filters in view while you scroll a long list */
+.wk-pick-head { position: sticky; top: 0; z-index: 2; background: var(--card); padding: 4px 0 2px; }
+
+/* The classic logger's set rows on a phone: two lines instead of seven cramped columns, inputs 44px tall and 16px (so iPhone doesn't zoom in on them) */
+@media (max-width: 560px) {
+  #workout-log .set-row-header { display: none; }
+  #workout-log .set-row-editable { grid-template-columns: repeat(3, minmax(0, 1fr)) 44px; gap: 8px; padding: 8px 10px; }
+  #workout-log .set-row-editable .set-row-label { grid-column: 1; grid-row: 1; font-size: 15px; text-align: left; padding-left: 4px; }
+  #workout-log .set-row-editable .set-row-previous { grid-column: 2 / span 2; grid-row: 1; min-height: 44px; font-size: 13px; padding: 4px 6px; }
+  #workout-log .set-row-editable .remove-set-btn { grid-column: 4; grid-row: 1; min-width: 44px; min-height: 44px; }
+  #workout-log .set-row-editable .set-reps-input { grid-column: 1; grid-row: 2; }
+  #workout-log .set-row-editable .set-weight-input { grid-column: 2; grid-row: 2; }
+  #workout-log .set-row-editable .set-rpe-input { grid-column: 3; grid-row: 2; }
+  #workout-log .set-row-editable .set-complete-label { grid-column: 4; grid-row: 2; min-width: 44px; min-height: 44px; align-items: center; }
+  #workout-log .set-row-editable :is(.set-reps-input, .set-weight-input, .set-rpe-input) { min-height: 44px; font-size: 16px; padding: 6px 4px; }
+  #workout-log .set-row-editable .set-complete-chk { width: 28px; height: 28px; }
+  #workout-log .set-row-tags { grid-row: 3; }
+  /* the "add a set" steppers: 44px buttons and inputs, one stepper per line when there is no room for two */
+  #workout-log .add-set-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  #workout-log .stepper-btn { width: 44px; height: 44px; flex: 0 0 44px; }
+  #workout-log .stepper-row :is(input) { min-width: 0; min-height: 44px; font-size: 16px; }
+}
+#workout-log .set-row-previous:not(:disabled) { color: #9ec1ff; }
