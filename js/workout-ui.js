@@ -646,9 +646,9 @@
     if (multi && !pickTarget.selected) pickTarget.selected = [];
     const JE = window.JarvisExercises;
     openSheet(pickTarget && pickTarget.title ? pickTarget.title : "Add exercise",
-      '<div class="wk-search"><label class="visually-hidden" for="wkPickSearch">Search exercises</label><input id="wkPickSearch" type="search" placeholder="Search exercises" autocomplete="off" autocapitalize="off" enterkeyhint="search"></div>' +
+      '<div class="wk-pick-head"><div class="wk-search"><label class="visually-hidden" for="wkPickSearch">Search exercises</label><input id="wkPickSearch" type="search" placeholder="Search exercises" autocomplete="off" autocapitalize="off" enterkeyhint="search"></div>' +
       '<div class="form-row two-col wk-pick-filter"><div><label for="wkPickMuscle">Muscle group</label><select id="wkPickMuscle"><option value="">All</option>' + JE.MUSCLE_GROUPS.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div>' +
-      '<div><label for="wkPickEquip">Equipment</label><select id="wkPickEquip"><option value="">All</option>' + JE.EQUIPMENT_TYPES.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label for="wkPickEquip">Equipment</label><select id="wkPickEquip"><option value="">All</option>' + JE.EQUIPMENT_TYPES.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div></div></div>' +
       '<div id="wkPickList" class="wk-pick-list"></div>' +
       (multi ? '<div class="wk-pick-foot"><button type="button" class="btn btn-primary wk-big-btn" id="wkPickDone" data-wk="pick-done" disabled>Choose exercises</button></div>' : ""), { focus: "#wkPickSearch" });
     sheet.picker = { muscle: "", equipment: "" };

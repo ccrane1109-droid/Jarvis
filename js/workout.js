@@ -50,9 +50,9 @@
   const WEEKDAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const WEEKDAY_SHORT = ["M", "T", "W", "T", "F", "S", "S"];
   const GENERATOR_GOALS = [
-    { id: "muscle", label: "Build Muscle", icon: "💪" },
-    { id: "strength", label: "Build Strength", icon: "🏋️" },
-    { id: "lean", label: "Get Lean", icon: "🔥" }
+    { id: "muscle", label: "Build Muscle" },
+    { id: "strength", label: "Build Strength" },
+    { id: "lean", label: "Get Lean" }
   ];
   const GENERATOR_GOAL_SCHEMES = {
     muscle: { primary: { sets: 4, reps: 8 }, accessory: { sets: 3, reps: 11 } },
@@ -184,11 +184,16 @@
     return Array.from(set).sort();
   }
 
+  // The same star as the new screens: a drawing with a pressed state, not a text glyph.
+  function starSvg(on) {
+    return '<svg class="wk-star' + (on ? " is-on" : "") + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.8l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.7l-5.9 3.1 1.2-6.5L2.5 9.7l6.6-.9z"/></svg>';
+  }
+
   function muscleGroupBadgesHtml(muscleGroups) {
     const core = window.JarvisCore;
     const JE = window.JarvisExercises;
     return muscleGroups.map(function (m) {
-      return '<span class="badge badge-neutral">' + JE.iconForMuscleGroup(m) + ' ' + core.escapeHtml(m) + '</span>';
+      return '<span class="badge badge-neutral">' + core.escapeHtml(m) + '</span>';
     }).join("");
   }
 
@@ -232,13 +237,12 @@
     }
 
     function optionHtml(ex) {
-      const star = favoriteIds.indexOf(ex.id) !== -1 ? "★ " : "";
-      return '<option value="' + core.escapeHtml(ex.id) + '">' + star + core.escapeHtml(ex.name) + " (" + core.escapeHtml(ex.equipment) + ")</option>";
+      return '<option value="' + core.escapeHtml(ex.id) + '">' + core.escapeHtml(ex.name) + " (" + core.escapeHtml(ex.equipment) + ")</option>";
     }
 
     const favorites = filtered.filter(function (ex) { return favoriteIds.indexOf(ex.id) !== -1; });
     const favoritesGroup = favorites.length
-      ? '<optgroup label="★ Favorites">' + favorites.map(optionHtml).join("") + "</optgroup>"
+      ? '<optgroup label="Favorites">' + favorites.map(optionHtml).join("") + "</optgroup>"
       : "";
 
     // Exclude favorites here so they don't also appear in their normal
@@ -295,8 +299,7 @@
     const chips = [{ value: "", label: "All" }].concat(JE.MUSCLE_GROUPS.map(function (m) { return { value: m, label: m }; }));
     container.innerHTML = chips.map(function (c) {
       const activeCls = c.value === current ? " active" : "";
-      const icon = c.value ? JE.iconForMuscleGroup(c.value) : "🏋️";
-      return '<button type="button" class="muscle-chip' + activeCls + '" data-value="' + core.escapeHtml(c.value) + '">' + icon + ' ' + core.escapeHtml(c.label) + '</button>';
+      return '<button type="button" class="muscle-chip' + activeCls + '" data-value="' + core.escapeHtml(c.value) + '">' + core.escapeHtml(c.label) + '</button>';
     }).join("");
   }
 
@@ -333,8 +336,7 @@
       const selectedCls = ex.id === selectedId ? " selected" : "";
       return (
         '<div class="exercise-card' + selectedCls + '" data-id="' + core.escapeHtml(ex.id) + '">' +
-          '<button type="button" class="exercise-card-fav-btn' + (isFav ? " active" : "") + '" data-id="' + core.escapeHtml(ex.id) + '" aria-label="Toggle favorite">' + (isFav ? "★" : "☆") + '</button>' +
-          '<span class="exercise-card-icon">' + JE.iconForMuscleGroup(ex.muscleGroup) + '</span>' +
+          '<button type="button" class="exercise-card-fav-btn' + (isFav ? " active" : "") + '" data-id="' + core.escapeHtml(ex.id) + '" aria-label="' + (isFav ? "Remove " : "Add ") + core.escapeHtml(ex.name) + (isFav ? " from favorites" : " to favorites") + '" aria-pressed="' + isFav + '">' + starSvg(isFav) + '</button>' +
           '<span class="exercise-card-name">' + core.escapeHtml(ex.name) + '</span>' +
           '<span class="exercise-card-meta">' + core.escapeHtml(ex.equipment) + '</span>' +
         '</div>'
@@ -380,7 +382,8 @@
     const btn = document.getElementById("exercisePickerFavoriteBtn");
     const exerciseId = document.getElementById("exercisePickerSelect").value;
     const isFav = exerciseId && window.JarvisExercises.isFavorite(exerciseId);
-    btn.textContent = isFav ? "★" : "☆";
+    btn.innerHTML = starSvg(!!isFav);
+    btn.setAttribute("aria-pressed", String(!!isFav));
     btn.classList.toggle("active", !!isFav);
   }
 
@@ -656,7 +659,7 @@
                   'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Reps for set ' + (i + 1) + '">' +
                 '<input type="number" class="set-weight-input" min="0" step="0.5" placeholder="Weight" value="' + core.escapeHtml(weightVal) + '" ' +
                   'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Weight for set ' + (i + 1) + '">' +
-                '<input type="number" class="set-rpe-input" min="1" max="10" step="0.5" placeholder="—" value="' + core.escapeHtml(rpeVal) + '" ' +
+                '<input type="number" class="set-rpe-input" min="1" max="10" step="0.5" placeholder="RPE" value="' + core.escapeHtml(rpeVal) + '" ' +
                   'data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="RPE for set ' + (i + 1) + '">' +
                 '<label class="set-complete-label"><input type="checkbox" class="set-complete-chk"' + (s.completed ? " checked" : "") + ' data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Mark set ' + (i + 1) + ' complete"></label>' +
                 '<button type="button" class="btn-icon danger remove-set-btn" data-session-ex-id="' + core.escapeHtml(se.sessionExId) + '" data-set-index="' + i + '" aria-label="Remove set">&times;</button>' +
@@ -733,14 +736,12 @@
 
     pillNav.innerHTML = draft.exercises.map(function (se, i) {
       const ex = window.JarvisExercises.getExerciseById(se.exerciseId);
-      const icon = ex ? window.JarvisExercises.iconForMuscleGroup(ex.muscleGroup) : "🏋️";
       const name = ex ? ex.name : "Unknown exercise";
       const hasCompletedSet = se.sets.some(isCompletedSet);
       const activeCls = i === draft.activeIndex ? " active" : "";
       const doneCls = hasCompletedSet ? " done" : "";
       return (
         '<button type="button" class="exercise-pill' + activeCls + doneCls + '" data-index="' + i + '">' +
-          '<span class="exercise-pill-icon">' + icon + '</span>' +
           '<span class="exercise-pill-name">' + core.escapeHtml(name) + '</span>' +
           (hasCompletedSet ? '<span class="exercise-pill-check">&#10003;</span>' : '') +
         '</button>'
@@ -1419,10 +1420,9 @@
       continueCard.classList.add("hidden");
     }
 
-    function quickStartCardHtml(cls, id, icon, title, meta) {
+    function quickStartCardHtml(cls, id, title, meta) {
       return (
         '<button type="button" class="quick-start-card ' + cls + '" data-id="' + core.escapeHtml(id) + '">' +
-          '<span class="quick-start-icon">' + icon + '</span>' +
           '<span class="quick-start-title">' + core.escapeHtml(title) + '</span>' +
           '<span class="quick-start-meta">' + meta + '</span>' +
         '</button>'
@@ -1434,10 +1434,8 @@
       const todaysRoutine = activeRoutines().find(function (r) { return r.scheduledDays && r.scheduledDays.indexOf(todayWeekdayIndex()) !== -1; });
       if (todaysRoutine) {
         scheduledCard.classList.remove("hidden");
-        const musclesTrained = getMuscleGroupsForExerciseIds(todaysRoutine.exercises.map(function (re) { return re.exerciseId; }));
-        const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
         document.getElementById("homeScheduledTodayList").innerHTML =
-          quickStartCardHtml("home-routine-start-btn", todaysRoutine.id, icon, todaysRoutine.name, "Scheduled for today");
+          quickStartCardHtml("home-routine-start-btn", todaysRoutine.id, todaysRoutine.name, "Scheduled for today");
       } else {
         scheduledCard.classList.add("hidden");
       }
@@ -1450,10 +1448,8 @@
       document.getElementById("homeTodayList").innerHTML = activePrograms.map(function (p) {
         const day = p.days[p.currentIndex % p.days.length];
         const routine = routines.find(function (r) { return r.id === day.routineId; });
-        const musclesTrained = routine ? getMuscleGroupsForExerciseIds(routine.exercises.map(function (re) { return re.exerciseId; })) : [];
-        const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
         const meta = core.escapeHtml(day.label) + (routine ? " &middot; " + core.escapeHtml(routine.name) : " &middot; needs a routine");
-        return quickStartCardHtml("home-today-start-btn", p.id, icon, p.name, meta);
+        return quickStartCardHtml("home-today-start-btn", p.id, p.name, meta);
       }).join("");
     } else {
       todayCard.classList.add("hidden");
@@ -1464,10 +1460,8 @@
       grid.innerHTML = '<div class="empty-state">No routines yet — build one in the Routines tab to see it here.</div>';
     } else {
       grid.innerHTML = activeRoutines().map(function (r) {
-        const musclesTrained = getMuscleGroupsForExerciseIds(r.exercises.map(function (re) { return re.exerciseId; }));
-        const icon = musclesTrained.length ? JE.iconForMuscleGroup(musclesTrained[0]) : "🏋️";
         const meta = r.exercises.length + " exercise" + (r.exercises.length === 1 ? "" : "s");
-        return quickStartCardHtml("home-routine-start-btn", r.id, icon, r.name, meta);
+        return quickStartCardHtml("home-routine-start-btn", r.id, r.name, meta);
       }).join("");
     }
   }
@@ -1971,7 +1965,6 @@
       const selectedCls = g.id === routineGenerator.goal ? " selected" : "";
       return (
         '<div class="goal-card' + selectedCls + '" data-id="' + g.id + '">' +
-          '<span class="goal-card-icon">' + g.icon + '</span>' +
           '<span class="goal-card-label">' + core.escapeHtml(g.label) + '</span>' +
         '</div>'
       );

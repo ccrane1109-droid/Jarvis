@@ -293,10 +293,21 @@
       return;
     }
     const m = model();
-    root.innerHTML = periodHtml(m) + tilesHtml(m) + insightsHtml() + consistencyHtml(m) + strengthHtml(m) + volumeHtml(m) + timeHtml(m) + musclesHtml(m) + recordsHtml(m) + aboutHtml();
+    const sections = consistencyHtml(m) + strengthHtml(m) + volumeHtml(m) + timeHtml(m) + musclesHtml(m) + recordsHtml(m);
+    root.innerHTML = periodHtml(m) + tilesHtml(m) + jumpHtml(sections) + insightsHtml() + sections + aboutHtml();
     drawCharts();
     window.scrollTo(0, keep);
     if (focusId) { const f = $(focusId); if (f) f.focus({ preventScroll: true }); }
+  }
+
+  // Progress is a long page, so a row of buttons gets you to a section in one tap. Only the sections that are on the page are listed.
+  function jumpHtml(sectionsHtml) {
+    const items = [["pgConsistency", "Consistency"], ["pgStrength", "Strength"], ["pgVolume", "Volume"], ["pgTime", "Time"], ["pgMuscles", "Muscles"], ["pgRecords", "Records"]]
+      .filter(function (i) { return sectionsHtml.indexOf('id="' + i[0] + '"') !== -1; });
+    if (items.length < 2) return "";
+    return '<nav class="pg-jump" aria-label="Jump to a section"><span class="pg-jump-label">Jump to</span>' + items.map(function (i) {
+      return '<button type="button" class="pg-jump-btn" data-pg="jump" data-target="' + i[0] + '">' + esc(i[1]) + '</button>';
+    }).join("") + '</nav>';
   }
 
   // The "What I noticed" card (insights-ui.js). If that file failed to load, Progress simply has no card.
@@ -408,6 +419,7 @@
     if (!el) return;
     const act = el.getAttribute("data-pg");
     switch (act) {
+      case "jump": { const t = $(el.getAttribute("data-target")), h = t && $(el.getAttribute("data-target") + "H"); if (t) { t.scrollIntoView({ block: "start" }); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } } break; }
       case "range": state.range = el.getAttribute("data-range"); render(); break;
       case "metric": state.metric = el.getAttribute("data-metric"); render(); break;
       case "side": state.side = el.getAttribute("data-side"); render(); break;
