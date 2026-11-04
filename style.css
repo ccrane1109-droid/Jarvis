@@ -3771,3 +3771,106 @@ button.hs-day:hover { background: var(--card-hover); }
   #workout-log .stepper-row :is(input) { min-width: 0; min-height: 44px; font-size: 16px; }
 }
 #workout-log .set-row-previous:not(:disabled) { color: #9ec1ff; }
+
+/* Habits: filling in any past day (habits.js, habit-logic.js) ---------------------------------------- */
+.hb-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--card-border); border-left: 4px solid var(--accent); border-radius: 12px; background: var(--bg-elevated); }
+.hb-note.hidden { display: none; }
+.hb-note-text { margin: 0; font-size: 14px; flex: 1 1 200px; overflow-wrap: anywhere; }
+.hb-note .btn { min-height: 44px; }
+.habit-toggle-btn { display: block; width: 100%; min-height: 44px; border-radius: var(--radius-sm); border: 1px solid var(--card-border); background: var(--bg-elevated); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.habit-toggle-btn.done { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+.habit-toggle-btn:disabled, .habit-card .stepper-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.habit-toggle-btn:focus-visible, .hb-day:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+.habit-card .stepper-btn { min-width: 44px; min-height: 44px; }
+.habit-card-name { font-size: 14px; }
+.habit-card-body { font-size: 13px; }
+/* the Week grid: a habit's name, then a button for each day of the week */
+.hb-habit { margin: 0 0 14px; }
+.hb-habit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 6px; }
+.hb-habit-name { font-weight: 600; overflow-wrap: anywhere; }
+.hb-habit-week { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.hb-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.hb-dayhead { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: var(--text-dim); }
+.hb-dayhead.is-today { color: var(--accent-hover); font-weight: 700; }
+.hb-days-head { margin: 8px 0 6px; }
+.hb-day { min-height: 44px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--bg-elevated); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; padding: 0; }
+.hb-day.is-done { background: var(--accent-dim); border-color: var(--accent); color: #fff; }
+.hb-day.is-today { border-color: var(--accent-hover); }
+.hb-day.is-future { opacity: 0.4; cursor: not-allowed; }
+.habit-history-grid-wrap { overflow-x: visible; }
+
+/* ---------------- Habits: seven tabs, and the Plan tab (a section for each hour) ---------------- */
+@media (max-width: 600px) {
+  /* seven tabs do not fit in a row on a phone: four on the first line, three on the second, none hidden off to the side */
+  .habits-sub-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; overflow-x: visible; padding-right: 0; }
+  .habits-sub-nav .habits-sub-nav-btn { margin-right: 0; padding: 8px 2px; min-height: 44px; text-align: center; font-size: 14px; }
+}
+
+.dp-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dp-step { min-width: 44px; min-height: 44px; }
+.dp-when { flex: 1; min-width: 0; text-align: center; }
+.dp-title { margin: 0; }
+.dp-date { margin: 2px 0 0; font-size: 14px; color: var(--text-dim); }
+.dp-summary { margin: 10px 0; font-size: 14px; color: var(--text-dim); text-align: center; overflow-wrap: anywhere; }
+#dpToday { display: block; min-height: 44px; margin: 0 auto; }
+#dpToday.hidden { display: none; }
+.dp-pool-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.dp-pool-row { display: flex; align-items: center; gap: 8px; }
+.dp-pool-row .dp-what { flex: 1; min-width: 0; }
+.dp-pick { flex: none; min-height: 44px; }
+
+.dp-hours { display: flex; flex-direction: column; }
+.dp-hour { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--card-border); }
+.dp-hour:first-child { border-top: 0; }
+.dp-hour.is-now { background: linear-gradient(90deg, rgba(79, 140, 255, 0.10), transparent); border-radius: 10px; }
+.dp-hour-label { margin: 0; padding-top: 12px; font-size: 14px; font-weight: 600; color: var(--text-dim); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.dp-hour.is-now .dp-hour-label { color: var(--accent-hover); }
+.dp-now { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px; }
+.dp-hour-body { min-width: 0; }
+.dp-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dp-item { display: flex; align-items: center; gap: 4px; }
+.dp-item.dp-editing { display: block; }
+
+.dp-check { flex: none; position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: #06210f; font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
+.dp-check::before { content: ""; position: absolute; inset: 9px; z-index: -1; border-radius: 50%; border: 2px solid var(--text-faint); background: transparent; }
+.dp-check.done::before { background: var(--green); border-color: var(--green); }
+.dp-check:focus-visible, .dp-text:focus-visible, .dp-add:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+
+.dp-text { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 10px; color: var(--text); font: inherit; cursor: pointer; }
+.dp-time { flex: none; font-size: 13px; font-weight: 600; color: var(--accent-hover); font-variant-numeric: tabular-nums; }
+.dp-what { min-width: 0; overflow-wrap: anywhere; }
+.dp-item.is-done .dp-what, .dp-pool-item.is-done .dp-what { text-decoration: line-through; color: var(--text-dim); }
+.dp-item.is-done .dp-time { color: var(--text-dim); }
+.dp-add { display: block; width: 100%; min-height: 44px; margin-top: 6px; padding: 0 12px; background: transparent; border: 1px dashed var(--card-border); border-radius: 10px; color: var(--text-dim); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.dp-hour-body > .dp-add:first-child { margin-top: 0; }
+.dp-add:hover { color: var(--text); border-color: var(--accent-dim); }
+
+.dp-form { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; padding: 10px; background: var(--bg-elevated); border: 1px solid var(--accent-dim); border-radius: 12px; }
+.dp-field label { display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-dim); }
+.dp-field input { width: 100%; min-height: 44px; font-size: 16px; }
+.dp-error { margin: 0; font-size: 13px; color: var(--red); }
+.dp-error:empty { display: none; }
+.dp-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dp-form-actions .btn { flex: 1 1 120px; min-height: 44px; }
+.dp-form-more { padding-top: 10px; border-top: 1px solid var(--card-border); }
+
+.dp-undo { position: fixed; left: 16px; right: 16px; bottom: 20px; z-index: 150; max-width: 520px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 14px; background: #1f2740; border: 1px solid var(--accent-dim); border-radius: 12px; box-shadow: var(--shadow); font-size: 14px; }
+.dp-undo.hidden { display: none; }
+.dp-undo-text { min-width: 0; overflow-wrap: anywhere; }
+.dp-undo .btn { flex: none; min-height: 44px; }
+@media (max-width: 900px) { .dp-undo { bottom: calc(78px + env(safe-area-inset-bottom)); } }
+@media (max-width: 360px) { .dp-hour { grid-template-columns: 56px minmax(0, 1fr); gap: 8px; } }
+/* while a form is open in an hour it gets the whole width, with the hour above it */
+.dp-hour.has-form { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.dp-hour.has-form .dp-hour-label { padding-top: 4px; flex-direction: row; align-items: center; gap: 8px; }
+
+/* Habits: the same readable colours Discipline and Workout use (white on the lighter blue and the faint grey hint text were below 4.5:1),
+   and the Week tab's small buttons made 44 px tall. */
+#panel-habits .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+#panel-habits .btn-primary:hover:not(:disabled) { background: #2a66d4; border-color: #2a66d4; }
+#panel-habits .field-hint { color: var(--text-dim); }
+#habits-week .btn-icon, #habits-week .btn { min-height: 44px; }
+#habits-week input:not([type="checkbox"]):not([type="radio"]), #habits-week select { min-height: 44px; }
+@media (max-width: 360px) { .hb-days { gap: 2px; } }
+#habits-week .list-item-meta { color: var(--text-dim); }
+#habits-week .btn-icon { min-width: 44px; }
