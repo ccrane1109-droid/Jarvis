@@ -31,9 +31,9 @@
    ========================================================================== */
 
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("./workout-logic"), require("./progress-logic"));
-  else root.JarvisInsightsLogic = factory(root.JarvisWorkoutLogic, root.JarvisProgressLogic);
-})(typeof self !== "undefined" ? self : this, function (WL, PL) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./workout-logic"), require("./progress-logic"), require("./exercise-logic"));
+  else root.JarvisInsightsLogic = factory(root.JarvisWorkoutLogic, root.JarvisProgressLogic, root.JarvisExerciseLogic);
+})(typeof self !== "undefined" ? self : this, function (WL, PL, EL) {
   "use strict";
 
   const RULES = {
@@ -344,17 +344,6 @@
     return "";
   }
 
-  // The name without the equipment words: "Barbell Bench Press" and "Bench Press" share "bench press".
-  const EQUIPMENT_WORDS = ["barbell", "dumbbell", "db", "bb", "machine", "cable", "smith", "ez", "bar", "kettlebell", "kb", "bodyweight", "weighted", "free", "weight"];
-  function coreName(name) { return WL.nameKey(name).split(" ").filter(function (t) { return EQUIPMENT_WORDS.indexOf(t) === -1; }).map(stem).join(" "); }
-  function equipWords(name) { return WL.nameKey(name).split(" ").filter(function (t) { return EQUIPMENT_WORDS.indexOf(t) !== -1; }).sort().join(" "); }
-  // "Bench Press" next to "Barbell Bench Press" is the same lift written twice. "Dumbbell Bench Press" is a different one.
-  function sameLift(a, b) {
-    if (a.equipment !== b.equipment || !coreName(a.name) || coreName(a.name) !== coreName(b.name)) return false;
-    const x = equipWords(a.name), y = equipWords(b.name);
-    return !x || !y || x === y;
-  }
-
   function loggedMap(workouts) {
     const map = {};
     WL.sessionsOf(workouts).slice().sort(byTime).forEach(function (w) {
@@ -385,7 +374,7 @@
     lib.forEach(function (e) {
       if (skip[e.id] || e.muscleGroup === "Cardio") return;
       if (WL.findDuplicate(e.name, [src])) return;
-      if (sameLift(e, src)) return;   // the same lift under another name is not an alternative
+      if (EL.sameLift(e, src)) return;   // the same lift under another name is not an alternative
       const prim = (lookup(e.id) || {}).primary || [];
       const shared = prim.filter(function (m) { return srcPrimary.indexOf(m) !== -1; });
       if (!shared.length) return;
@@ -393,13 +382,14 @@
       const move = movementOf(e.name);
       const sameMove = !!srcMove && move === srcMove;
       const hist = logged[e.id] || null;
-      const sameCore = !!coreName(e.name) && coreName(e.name) === coreName(src.name);   // e.g. dumbbell and barbell versions of one lift
+      const srcCore = EL.parts(src.name).core;
+      const sameCore = !!srcCore && EL.parts(e.name).core === srcCore;   // e.g. dumbbell and barbell versions of one lift
       const score = shared.length / union * 6 + (sameMove ? 2 : 0) + (sameCore ? 2 : 0) + (e.muscleGroup === src.muscleGroup ? 1 : 0) + (hist ? 1 : 0);
       const why = [];
       why.push(shared.length === srcPrimary.length && prim.length === srcPrimary.length
         ? "Works the same main " + plural(shared.length, "muscle") + ": " + shared.map(lab).join(", ") + "."
         : "Shares the main muscle " + shared.map(lab).join(", ") + (prim.length > shared.length ? " and also works " + prim.filter(function (m) { return shared.indexOf(m) === -1; }).map(lab).join(", ") : "") + ".");
-      if (sameCore) why.push("The same lift (" + coreName(src.name) + ") with different equipment.");
+      if (sameCore) why.push("The same lift as " + src.name + ", with different equipment.");
       else if (sameMove) why.push("Same kind of movement (" + srcMove + ").");
       why.push(e.equipment === src.equipment ? "Same equipment type (" + e.equipment + ")." : "Equipment: " + (e.equipment || "not listed") + ", where " + src.name + " uses " + (src.equipment || "not listed") + ".");
       if (hist) why.push("You have logged it " + hist.count + " " + plural(hist.count, "time") + ". Last on " + shortDate(hist.last.date, today) + ": " + WL.lastTimeText({ sets: hist.last.sets }) + ".");

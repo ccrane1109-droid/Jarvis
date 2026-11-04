@@ -572,6 +572,7 @@
     const btn = function (action, label, extra) { return '<button type="button" class="wk-menu-item' + (extra || "") + '" data-wk="' + action + '">' + label + '</button>'; };
     openSheet(info.name,
       '<div data-sheet-ex="' + esc(exId) + '">' +
+      (window.JarvisLibraryUI ? '<button type="button" class="wk-menu-item" data-lb="open" data-id="' + esc(f.se.exerciseId) + '">How to do it</button>' : "") +
       btn("ex-warmups", "Add warm-up sets") +
       (window.JarvisInsights ? window.JarvisInsights.swapMenuItem(f.se) : "") +
       btn("ex-up", "Move up") + btn("ex-down", "Move down") +
@@ -646,10 +647,11 @@
     const JE = window.JarvisExercises;
     openSheet(pickTarget && pickTarget.title ? pickTarget.title : "Add exercise",
       '<div class="wk-search"><label class="visually-hidden" for="wkPickSearch">Search exercises</label><input id="wkPickSearch" type="search" placeholder="Search exercises" autocomplete="off" autocapitalize="off" enterkeyhint="search"></div>' +
-      '<div class="form-row wk-pick-filter"><label for="wkPickMuscle">Muscle group</label><select id="wkPickMuscle"><option value="">All muscle groups</option>' + JE.MUSCLE_GROUPS.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="form-row two-col wk-pick-filter"><div><label for="wkPickMuscle">Muscle group</label><select id="wkPickMuscle"><option value="">All</option>' + JE.MUSCLE_GROUPS.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label for="wkPickEquip">Equipment</label><select id="wkPickEquip"><option value="">All</option>' + JE.EQUIPMENT_TYPES.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join("") + '</select></div></div>' +
       '<div id="wkPickList" class="wk-pick-list"></div>' +
       (multi ? '<div class="wk-pick-foot"><button type="button" class="btn btn-primary wk-big-btn" id="wkPickDone" data-wk="pick-done" disabled>Choose exercises</button></div>' : ""), { focus: "#wkPickSearch" });
-    sheet.picker = { muscle: "" };
+    sheet.picker = { muscle: "", equipment: "" };
     drawPicker();
     updatePickFoot();
   }
@@ -684,13 +686,15 @@
     addExercise(id);
   }
 
-  function pickerResults(query, muscle) {
+  function pickerResults(query, muscle, equipment) {
     const JE = window.JarvisExercises;
+    const EL = window.JarvisExerciseLogic;
     const all = JE.getExercises();
     const q = query.toLowerCase().trim();
-    const match = function (e) { return (!muscle || e.muscleGroup === muscle) && (!q || e.name.toLowerCase().indexOf(q) !== -1 || (e.equipment || "").toLowerCase().indexOf(q) !== -1); };
+    const match = function (e) { return (!muscle || e.muscleGroup === muscle) && (!equipment || e.equipment === equipment) && (!q || e.name.toLowerCase().indexOf(q) !== -1 || (e.equipment || "").toLowerCase().indexOf(q) !== -1); };
     const byName = function (a, b) { return a.name < b.name ? -1 : 1; };
-    if (q || muscle) return [{ title: q || muscle ? "Results" : "", items: all.filter(match).sort(byName).slice(0, 80) }];
+    // Every word you type has to match the name, the muscle group or the equipment ("db bench", "chest cable"); best matches first.
+    if (q || muscle || equipment) return [{ title: "Results", items: (EL ? EL.filterExercises(all, { query: query, muscle: muscle, equipment: equipment }) : all.filter(match).sort(byName)).slice(0, 80) }];
     const favIds = JE.loadFavoriteIds();
     const favs = favIds.map(JE.getExerciseById).filter(Boolean);
     const recentIds = [];
@@ -703,8 +707,8 @@
     const JE = window.JarvisExercises;
     const list = $("wkPickList");
     if (!list) return;
-    const muscle = sheet.picker.muscle, query = $("wkPickSearch").value;
-    const groups = pickerResults(query, muscle);
+    const muscle = sheet.picker.muscle, equipment = sheet.picker.equipment, query = $("wkPickSearch").value;
+    const groups = pickerResults(query, muscle, equipment);
     const multi = !!(pickTarget && pickTarget.multi);
     const inDraft = multi && pickTarget.taken ? pickTarget.taken : {};
     if (!multi) draft().exercises.forEach(function (se) { inDraft[se.exerciseId] = true; });
@@ -756,9 +760,19 @@
     const name = $("wkCustName").value.replace(/\s+/g, " ").trim();
     const err = $("wkCustError");
     if (!name) { err.textContent = "Give it a name."; $("wkCustName").focus(); return; }
-    const dup = WL.findDuplicate(name, JE.getExercises());
-    if (dup) {
-      err.innerHTML = 'You already have &ldquo;' + esc(dup.name) + '&rdquo;. <button type="button" class="wk-link" data-wk="pick" data-id="' + esc(dup.id) + '">Use that one</button>';
+    const EL = window.JarvisExerciseLogic;
+    const equip = $("wkCustEquip").value;
+    const found = EL ? EL.findSimilar(name, equip, JE.getExercises()) : { exact: WL.findDuplicate(name, JE.getExercises()), similar: [] };
+    if (found.exact) {
+      err.innerHTML = 'You already have &ldquo;' + esc(found.exact.name) + '&rdquo;. <button type="button" class="wk-link" data-wk="pick" data-id="' + esc(found.exact.id) + '">Use that one</button>';
+      return;
+    }
+    const sig = name.toLowerCase() + "|" + equip;
+    const form = e.target;
+    if (found.similar.length && form.getAttribute("data-ack") !== sig) {
+      form.setAttribute("data-ack", sig);
+      err.innerHTML = 'This looks like ' + found.similar.map(function (s) { return '&ldquo;' + esc(s.exercise.name) + '&rdquo; <button type="button" class="wk-link" data-wk="pick" data-id="' + esc(s.exercise.id) + '">Use that one</button>'; }).join(' or ') + '. Using it keeps your history in one place. If yours is different, tap Add and use it again.';
+      announce("This looks like an exercise you already have. Tap the button again to add yours anyway.");
       return;
     }
     const created = JE.addCustomExercise({ name: name, muscleGroup: $("wkCustMuscle").value, equipment: $("wkCustEquip").value });
@@ -914,6 +928,7 @@
   }
   function onChange(e) {
     if (e.target.id === "wkPickMuscle" && sheet && sheet.picker) { sheet.picker.muscle = e.target.value; drawPicker(); return; }
+    if (e.target.id === "wkPickEquip" && sheet && sheet.picker) { sheet.picker.equipment = e.target.value; drawPicker(); return; }
     if (e.target.id === "wkSumNotes" && summary) api().updateSessionNotes(summary.session.id, e.target.value);
   }
   function onKeyDown(e) {

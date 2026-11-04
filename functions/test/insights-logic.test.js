@@ -262,7 +262,7 @@ test("swap suggestions: same main muscle, ranked, every one explained, nothing f
   assert.ok(ids.indexOf("bb-bench") === -1, "not itself");
   const first = r.items[0];
   assert.match(first.why.join(" | "), /Works the same main muscle: Chest/);
-  assert.match(first.why.join(" | "), /The same lift \(bench press\) with different equipment/);
+  assert.match(first.why.join(" | "), /The same lift as Barbell Bench Press, with different equipment/);
   const machineFirst = r.items.filter((x) => x.exerciseId === "chest-press")[0];
   assert.match(machineFirst.why.join(" | "), /Same kind of movement \(press\)/, "a different lift of the same movement says so");
   assert.match(first.why.join(" | "), /Same equipment type \(Free Weight\)/);

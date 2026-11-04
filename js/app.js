@@ -528,6 +528,11 @@
         if (legacy && mine) { legacy.hidden = false; mine.hidden = true; }
       }
       try {
+        if (window.JarvisLibraryUI && typeof window.JarvisLibraryUI.init === "function") window.JarvisLibraryUI.init();
+      } catch (err) {
+        if (window.console) console.error("The exercise library failed to start; the exercise picker still works", err);
+      }
+      try {
         if (window.JarvisInsights && typeof window.JarvisInsights.init === "function") window.JarvisInsights.init();
       } catch (err) {
         if (window.console) console.error("The training notes failed to start; the rest of Workout is unaffected", err);

@@ -439,6 +439,12 @@
     const muscleGroup = document.getElementById("customExerciseMuscle").value;
     const equipment = document.getElementById("customExerciseEquipment").value;
     if (!name) { core.showToast("Give the exercise a name."); return; }
+    const EL = window.JarvisExerciseLogic;
+    if (EL) {
+      const found = EL.findSimilar(name, equipment, window.JarvisExercises.getExercises());
+      if (found.exact) { core.showToast("You already have “" + found.exact.name + "”."); return; }
+      if (found.similar.length && !window.confirm("This looks like “" + found.similar[0].exercise.name + "”, which you already have. Add yours anyway?")) return;
+    }
     const exercise = window.JarvisExercises.addCustomExercise({ name: name, muscleGroup: muscleGroup, equipment: equipment });
     refreshExercisePicker();
     refreshRoutinePicker();
