@@ -33,6 +33,8 @@
 (function () {
   "use strict";
 
+  const HL = window.JarvisHabitLogic;   // counting, streaks and checking a habit off on any day (habit-logic.js)
+
   const LS_TASKS = "jarvisTasks";
   const LS_HABITS = "jarvisHabits";
   const LS_GOALS = "jarvisGoals";
@@ -402,38 +404,14 @@
 
   /* ==================== HABITS ==================== */
 
-  function habitDailyTarget(h) { return (h.dailyTarget && h.dailyTarget > 1) ? h.dailyTarget : 1; }
-  function habitCountOn(h, date) { return (h.completions && h.completions[date]) || 0; }
-  function isHabitDoneOnDate(h, date) { return habitCountOn(h, date) >= habitDailyTarget(h); }
-
-  function computeCurrentStreak(h) {
-    let streak = 0;
-    let cursor = window.JarvisCore.todayISODate();
-    for (;;) {
-      if (isHabitDoneOnDate(h, cursor)) { streak++; cursor = addDaysISO(cursor, -1); } else break;
-    }
-    return streak;
-  }
-
-  function computeLongestStreak(h) {
-    const doneDates = Object.keys(h.completions || {}).filter(function (d) { return isHabitDoneOnDate(h, d); }).sort();
-    if (doneDates.length === 0) return 0;
-    let longest = 1, current = 1;
-    for (let i = 1; i < doneDates.length; i++) {
-      const diffDays = Math.round((parseISODateLocal(doneDates[i]) - parseISODateLocal(doneDates[i - 1])) / 86400000);
-      current = diffDays === 1 ? current + 1 : 1;
-      if (current > longest) longest = current;
-    }
-    return longest;
-  }
-
-  function habitWeeklyDone(h, weekDates) {
-    return weekDates.reduce(function (sum, d) { return sum + Math.min(habitCountOn(h, d), habitDailyTarget(h)); }, 0);
-  }
-  function habitWeeklyTarget(h) { return h.targetDays * habitDailyTarget(h); }
-  function habitTotalCompletions(h) {
-    return Object.keys(h.completions || {}).reduce(function (sum, d) { return sum + (h.completions[d] || 0); }, 0);
-  }
+  function habitDailyTarget(h) { return HL.dailyTarget(h); }
+  function habitCountOn(h, date) { return HL.countOn(h, date); }
+  function isHabitDoneOnDate(h, date) { return HL.isDone(h, date); }
+  function computeCurrentStreak(h) { return HL.currentStreak(h, window.JarvisCore.todayISODate()); }
+  function computeLongestStreak(h) { return HL.longestStreak(h); }
+  function habitWeeklyDone(h, weekDates) { return HL.weeklyDone(h, weekDates); }
+  function habitWeeklyTarget(h) { return HL.weeklyTarget(h); }
+  function habitTotalCompletions(h) { return HL.totalCompletions(h); }
 
   function resetHabitForm() {
     habitFormEditId = null;
@@ -464,34 +442,40 @@
     core.showToast(habitFormEditId ? "Habit updated." : "Habit added.");
   }
 
+  // The card follows the day picked in the day selector above. Today and any earlier day can be checked off; a day that hasn't
+  // happened yet shows the state but its buttons are off.
   function habitCardHtml(h) {
     const core = window.JarvisCore;
     const today = core.todayISODate();
-    const count = habitCountOn(h, today);
+    const date = selectedDate;
+    const editable = HL.canEdit(date, today);
+    const count = habitCountOn(h, date);
     const target = habitDailyTarget(h);
-    const done = isHabitDoneOnDate(h, today);
+    const done = isHabitDoneOnDate(h, date);
     const streak = computeCurrentStreak(h);
-    const weekDates = getWeekDatesISO(getMondayISO(today));
+    const weekDates = getWeekDatesISO(getMondayISO(date));
     const weeklyDone = habitWeeklyDone(h, weekDates);
     const weeklyTargetVal = habitWeeklyTarget(h);
     const total = habitTotalCompletions(h);
     const isCountHabit = target > 1;
+    const dis = editable ? "" : " disabled";
+    const dayWord = HL.dayLabel(date, today);
     return (
       '<div class="habit-card" data-id="' + core.escapeHtml(h.id) + '">' +
         '<div class="habit-card-header"><span class="habit-card-name">' + core.escapeHtml(h.name) + '</span></div>' +
         (isCountHabit
           ? '<div class="habit-card-today-row">' +
-              '<span class="field-hint">Today: ' + count + ' / ' + target + '</span>' +
+              '<span class="field-hint">' + core.escapeHtml(dayWord) + ': ' + count + ' / ' + target + '</span>' +
               '<div class="stepper-row">' +
-                '<button type="button" class="stepper-btn habit-decrement-btn" data-id="' + core.escapeHtml(h.id) + '" aria-label="Decrease">&minus;</button>' +
+                '<button type="button" class="stepper-btn habit-decrement-btn" data-id="' + core.escapeHtml(h.id) + '" aria-label="Decrease ' + core.escapeHtml(h.name) + ' for ' + core.escapeHtml(dayWord) + '"' + dis + '>&minus;</button>' +
                 '<span class="habit-card-count-value">' + count + '</span>' +
-                '<button type="button" class="stepper-btn habit-increment-btn" data-id="' + core.escapeHtml(h.id) + '" aria-label="Increase">+</button>' +
+                '<button type="button" class="stepper-btn habit-increment-btn" data-id="' + core.escapeHtml(h.id) + '" aria-label="Increase ' + core.escapeHtml(h.name) + ' for ' + core.escapeHtml(dayWord) + '"' + dis + '>+</button>' +
               '</div>' +
             '</div>'
-          : '<button type="button" class="habit-check-btn' + (done ? " done" : "") + '" data-id="' + core.escapeHtml(h.id) + '" aria-pressed="' + done + '" style="align-self:flex-start;width:auto;border-radius:var(--radius-sm);padding:8px 14px;">' + (done ? "&#10003; Completed Today" : "Mark Complete") + '</button>'
+          : '<button type="button" class="habit-toggle-btn' + (done ? " done" : "") + '" data-id="' + core.escapeHtml(h.id) + '" aria-pressed="' + done + '" aria-label="' + core.escapeHtml(h.name) + ', ' + core.escapeHtml(dayWord) + (done ? ', done' : ', not done') + '"' + dis + '>' + (done ? "&#10003; Done" : "Mark done") + '</button>'
         ) +
         '<div class="habit-card-body">' +
-          '<span>Weekly: ' + weeklyDone + ' / ' + weeklyTargetVal + '</span>' +
+          '<span>' + (date >= getMondayISO(today) && date <= addDaysISO(getMondayISO(today), 6) ? 'This week' : 'That week') + ': ' + weeklyDone + ' / ' + weeklyTargetVal + '</span>' +
           '<span>Current streak: ' + streak + ' day' + (streak === 1 ? "" : "s") + '</span>' +
           '<span>Total: ' + total + ' completion' + (total === 1 ? "" : "s") + '</span>' +
         '</div>' +
@@ -499,8 +483,25 @@
     );
   }
 
+  // The line above the habit cards: which day this is, a way back to today, and a pointer to yesterday when it has habits left.
+  function habitsDayNoteHtml() {
+    const today = window.JarvisCore.todayISODate();
+    const kind = HL.describeDay(selectedDate, today);
+    if (!habits.length) return "";
+    if (kind === "future") return '<p class="hb-note-text">This day hasn\'t happened yet, so its habits can\'t be checked off. Tasks can still be planned for it.</p><button type="button" class="btn btn-secondary" data-hb="back-today">Back to today</button>';
+    if (kind === "yesterday" || kind === "past") return '<p class="hb-note-text">You\'re filling in ' + window.JarvisCore.escapeHtml(HL.dayLabel(selectedDate, today).toLowerCase() === "yesterday" ? "yesterday" : parseISODateLocal(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })) + '. Streaks and weekly totals follow what you tick here.</p><button type="button" class="btn btn-secondary" data-hb="back-today">Back to today</button>';
+    const y = HL.dayStatus(habits, addDaysISO(today, -1));
+    if (y.missed.length) return '<p class="hb-note-text">Yesterday: ' + y.done + ' of ' + y.total + ' habits done.</p><button type="button" class="btn btn-secondary" data-hb="fill-yesterday">Fill in yesterday</button>';
+    return "";
+  }
+
   function renderTodayHabitsList() {
     const container = $("todayHabitsList");
+    const note = $("habitsDayNote");
+    const title = $("habitsDayTitle");
+    const today = window.JarvisCore.todayISODate();
+    if (title) title.textContent = selectedDate === today ? "Habits" : "Habits \u2014 " + parseISODateLocal(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+    if (note) { const html = habitsDayNoteHtml(); note.innerHTML = html; note.classList.toggle("hidden", !html); }
     if (habits.length === 0) {
       container.innerHTML = '<div class="empty-state">No habits yet — add one in the Week tab.</div>';
       return;
@@ -508,29 +509,43 @@
     container.innerHTML = habits.map(habitCardHtml).join("");
   }
 
-  function handleTodayHabitsClick(e) {
+  // Checks one habit off (or a count up or down) for the picked day, if that day has happened.
+  function applyHabitChange(id, fn) {
     const today = window.JarvisCore.todayISODate();
+    const res = fn(habits, today);
+    if (!res.ok) { window.JarvisCore.showToast(res.error || "That can't be changed."); return false; }
+    habits = res.habits;
+    saveHabits();
+    renderAllHabitViews();
+    return true;
+  }
+
+  function handleTodayHabitsClick(e) {
+    const date = selectedDate;
     const incBtn = e.target.closest(".habit-increment-btn");
-    if (incBtn) {
-      const h = habits.find(function (hh) { return hh.id === incBtn.getAttribute("data-id"); });
-      if (h) { h.completions = h.completions || {}; h.completions[today] = (h.completions[today] || 0) + 1; saveHabits(); renderAllHabitViews(); }
-      return;
-    }
+    if (incBtn) { const id = incBtn.getAttribute("data-id"); applyHabitChange(id, function (list, today) { return HL.adjust(list, id, date, 1, today); }); return; }
     const decBtn = e.target.closest(".habit-decrement-btn");
-    if (decBtn) {
-      const h = habits.find(function (hh) { return hh.id === decBtn.getAttribute("data-id"); });
-      if (h) { h.completions = h.completions || {}; h.completions[today] = Math.max(0, (h.completions[today] || 0) - 1); saveHabits(); renderAllHabitViews(); }
-      return;
-    }
-    const checkBtn = e.target.closest(".habit-check-btn");
-    if (checkBtn) {
-      const h = habits.find(function (hh) { return hh.id === checkBtn.getAttribute("data-id"); });
-      if (h) {
-        h.completions = h.completions || {};
-        h.completions[today] = isHabitDoneOnDate(h, today) ? 0 : habitDailyTarget(h);
-        saveHabits(); renderAllHabitViews();
+    if (decBtn) { const id = decBtn.getAttribute("data-id"); applyHabitChange(id, function (list, today) { return HL.adjust(list, id, date, -1, today); }); return; }
+    const toggle = e.target.closest(".habit-toggle-btn");
+    if (toggle) {
+      const id = toggle.getAttribute("data-id");
+      const h = habits.find(function (hh) { return hh.id === id; });
+      if (!h) return;
+      const wasDone = isHabitDoneOnDate(h, date);
+      if (applyHabitChange(id, function (list, today) { return HL.setDone(list, id, date, !wasDone, today); })) {
+        const f = $("todayHabitsList").querySelector('.habit-toggle-btn[data-id="' + id + '"]');
+        if (f) f.focus({ preventScroll: true });
+        if (date !== window.JarvisCore.todayISODate()) window.JarvisCore.showToast((wasDone ? "Unmarked " : "Marked ") + h.name + (wasDone ? " for " : " done for ") + parseISODateLocal(date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) + ".");
       }
     }
+  }
+
+  function handleHabitsDayNoteClick(e) {
+    const btn = e.target.closest("[data-hb]");
+    if (!btn) return;
+    const today = window.JarvisCore.todayISODate();
+    if (btn.getAttribute("data-hb") === "back-today") selectDate(today);
+    else if (btn.getAttribute("data-hb") === "fill-yesterday") selectDate(addDaysISO(today, -1));
   }
 
   function renderHabitManageList() {
@@ -586,25 +601,48 @@
     }
   }
 
+  // One block per habit with a button for each day of the week. A simple habit toggles right here; a counting habit opens that day
+  // on the Today tab where it has + and −. Days that haven't happened yet are off.
   function renderHabitHistoryGrid() {
     const core = window.JarvisCore;
     const container = $("habitHistoryGrid");
-    const monday = getMondayISO(addDaysISO(core.todayISODate(), historyWeekOffset * 7));
+    const today = core.todayISODate();
+    const monday = getMondayISO(addDaysISO(today, historyWeekOffset * 7));
     const weekDates = getWeekDatesISO(monday);
     $("historyWeekLabel").textContent = formatShortDate(weekDates[0]) + " – " + formatShortDate(weekDates[6]);
     if (habits.length === 0) {
       container.innerHTML = '<div class="empty-state">No habits yet — add one below.</div>';
       return;
     }
-    const headerCells = weekDates.map(function (d) { return "<th>" + formatWeekdayShort(d).slice(0, 1) + "</th>"; }).join("");
-    const rows = habits.map(function (h) {
-      const cells = weekDates.map(function (d) {
-        const done = isHabitDoneOnDate(h, d);
-        return '<td><span class="habit-history-dot' + (done ? " done" : "") + '">' + (done ? "&#10003;" : "&#9675;") + "</span></td>";
+    const head = '<div class="hb-days hb-days-head" aria-hidden="true">' + weekDates.map(function (d) {
+      return '<span class="hb-dayhead' + (d === today ? " is-today" : "") + '"><span>' + formatWeekdayShort(d).slice(0, 1) + '</span><span>' + parseISODateLocal(d).getDate() + '</span></span>';
+    }).join("") + '</div>';
+    const blocks = habits.map(function (h) {
+      const target = habitDailyTarget(h);
+      const buttons = weekDates.map(function (d) {
+        const count = habitCountOn(h, d), done = isHabitDoneOnDate(h, d), future = !HL.canEdit(d, today);
+        const dayWord = parseISODateLocal(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+        const label = core.escapeHtml(h.name) + ", " + dayWord + (target > 1 ? ": " + count + " of " + target : (done ? ", done" : ", not done")) + (future ? ". Hasn't happened yet." : (target > 1 ? ". Opens this day." : ""));
+        return '<button type="button" class="hb-day' + (done ? " is-done" : "") + (d === today ? " is-today" : "") + (future ? " is-future" : "") + '" data-id="' + core.escapeHtml(h.id) + '" data-date="' + d + '" data-kind="' + (target > 1 ? "count" : "simple") + '"' +
+          (target > 1 ? "" : ' aria-pressed="' + done + '"') + (future ? " disabled" : "") + ' aria-label="' + label + '">' + (target > 1 ? count : (done ? "&#10003;" : "")) + '</button>';
       }).join("");
-      return '<tr><td class="habit-history-row-name">' + core.escapeHtml(h.name) + "</td>" + cells + "</tr>";
+      return '<div class="hb-habit"><div class="hb-habit-head"><span class="hb-habit-name">' + core.escapeHtml(h.name) + '</span><span class="hb-habit-week">' + habitWeeklyDone(h, weekDates) + ' / ' + habitWeeklyTarget(h) + '</span></div><div class="hb-days">' + buttons + '</div></div>';
     }).join("");
-    container.innerHTML = '<table class="habit-history-grid"><thead><tr><th></th>' + headerCells + "</tr></thead><tbody>" + rows + "</tbody></table>";
+    container.innerHTML = '<p class="field-hint">Tap a day to fill it in. Days that haven\'t happened yet are greyed out.</p>' + head + blocks;
+  }
+
+  function handleHabitGridClick(e) {
+    const btn = e.target.closest(".hb-day");
+    if (!btn || btn.disabled) return;
+    const id = btn.getAttribute("data-id"), date = btn.getAttribute("data-date");
+    if (btn.getAttribute("data-kind") === "count") { selectDate(date); $("habitsSubNavToday").click(); return; }
+    const h = habits.find(function (hh) { return hh.id === id; });
+    if (!h) return;
+    const wasDone = isHabitDoneOnDate(h, date);
+    if (applyHabitChange(id, function (list, today) { return HL.setDone(list, id, date, !wasDone, today); })) {
+      const again = $("habitHistoryGrid").querySelector('.hb-day[data-id="' + id + '"][data-date="' + date + '"]');
+      if (again) again.focus({ preventScroll: true });
+    }
   }
 
   function handleHistoryWeekNav(delta) {
@@ -956,14 +994,23 @@
     $("todoSelectedDateLabel").textContent = parseISODateLocal(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   }
 
-  function handleDaySelectorClick(e) {
-    const pill = e.target.closest(".day-pill");
-    if (!pill) return;
-    selectedDate = pill.getAttribute("data-date");
+  // Picks the day that the To-Do list and the habit cards show.
+  function selectDate(date) {
+    const today = window.JarvisCore.todayISODate();
+    selectedDate = date;
+    daySelectorWeekOffset = Math.round((parseISODateLocal(getMondayISO(date)) - parseISODateLocal(getMondayISO(today))) / (7 * 86400000));
     resetTaskForm();
     renderDaySelectorPills();
     renderTaskList();
     renderTaskGoalSelectOptions();
+    renderTodayHabitsList();
+    document.dispatchEvent(new CustomEvent("jarvis-habits-day-changed", { detail: { date: date } }));
+  }
+
+  function handleDaySelectorClick(e) {
+    const pill = e.target.closest(".day-pill");
+    if (!pill) return;
+    selectDate(pill.getAttribute("data-date"));
   }
 
   function handleDaySelectorWeekNav(delta) {
@@ -971,13 +1018,7 @@
     renderDaySelectorPills();
   }
 
-  function handleJumpToToday() {
-    daySelectorWeekOffset = 0;
-    selectedDate = window.JarvisCore.todayISODate();
-    resetTaskForm();
-    renderDaySelectorPills();
-    renderTaskList();
-  }
+  function handleJumpToToday() { selectDate(window.JarvisCore.todayISODate()); }
 
   /* ==================== boot ==================== */
 
@@ -999,7 +1040,21 @@
     return { total: habits.length, doneToday: doneToday, bestStreak: bestStreak };
   }
 
+  /* ---- for the Plan tab (dayplan-ui.js) ----
+     The planner works on the very same tasks the To-Do list shows (a task with a time is an item in that hour), so it
+     reads them from here and hands the changed list back. Nothing is copied: one list, one place it is saved. */
+  function getTasks() { return tasks; }
+  function commitTasks(next) {
+    tasks = Array.isArray(next) ? next : tasks;
+    saveTasks();
+    renderTaskList();
+    renderDaySelectorPills();
+    renderTodayOverview();
+  }
+  function getSelectedDate() { return selectedDate; }
+
   function onSubTabChange(targetId) {
+    if (targetId === "habits-plan" && window.JarvisDayPlan && typeof window.JarvisDayPlan.onShow === "function") window.JarvisDayPlan.onShow();
     if (targetId === "habits-today") { renderDaySelectorPills(); renderTaskList(); renderTodayHabitsList(); renderTodayOverview(); }
     if (targetId === "habits-week") renderHabitHistoryGrid();
     if (targetId === "habits-goals") renderGoalsList();
@@ -1027,6 +1082,8 @@
     $("daySelectorTodayBtn").addEventListener("click", handleJumpToToday);
 
     $("todayHabitsList").addEventListener("click", handleTodayHabitsClick);
+    $("habitsDayNote").addEventListener("click", handleHabitsDayNoteClick);
+    $("habitHistoryGrid").addEventListener("click", handleHabitGridClick);
     $("habitForm").addEventListener("submit", handleHabitFormSubmit);
     $("habitFormCancelBtn").addEventListener("click", resetHabitForm);
     $("habitManageList").addEventListener("click", handleHabitManageListClick);
@@ -1045,5 +1102,5 @@
     renderAll();
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
+  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, selectDate: selectDate };
 })();

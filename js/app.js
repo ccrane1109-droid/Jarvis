@@ -539,7 +539,16 @@
       }
       if (window.JarvisNutrition && typeof window.JarvisNutrition.init === "function") window.JarvisNutrition.init();
       if (window.JarvisGroceries && typeof window.JarvisGroceries.init === "function") window.JarvisGroceries.init();
-      if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
+      try {
+        if (window.JarvisHabits && typeof window.JarvisHabits.init === "function") window.JarvisHabits.init();
+      } catch (err) {
+        if (window.console) console.error("Habits failed to start; the rest of the app is unaffected", err);
+      }
+      try {
+        if (window.JarvisDayPlan && typeof window.JarvisDayPlan.init === "function") window.JarvisDayPlan.init();
+      } catch (err) {
+        if (window.console) console.error("The day planner failed to start; the rest of the app is unaffected", err);
+      }
       if (window.JarvisReminders && typeof window.JarvisReminders.init === "function") window.JarvisReminders.init();
       if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
       if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();

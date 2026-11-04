@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=64">
+<link rel="stylesheet" href="style.css?v=65">
 </head>
 <body>
 
@@ -1724,6 +1724,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <nav class="sub-nav habits-sub-nav" role="tablist" aria-label="Habits sections">
       <button type="button" class="habits-sub-nav-btn active" data-subtarget="habits-today" role="tab" aria-selected="true" aria-controls="habits-today" id="habitsSubNavToday">Today</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-plan" role="tab" aria-selected="false" aria-controls="habits-plan" id="habitsSubNavPlan">Plan</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-wake" role="tab" aria-selected="false" aria-controls="habits-wake" id="habitsSubNavWake">Wake</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-week" role="tab" aria-selected="false" aria-controls="habits-week" id="habitsSubNavWeek">Week</button>
       <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-goals" role="tab" aria-selected="false" aria-controls="habits-goals" id="habitsSubNavGoals">Goals</button>
@@ -1813,12 +1814,42 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Habits</h2>
+      <div class="card" id="habitsDayCard">
+        <h2 class="card-title" id="habitsDayTitle">Habits</h2>
+        <div id="habitsDayNote" class="hb-note hidden" role="status"></div>
         <div id="todayHabitsList" class="habit-card-grid">
           <div class="empty-state">No habits yet — add one in the Week tab.</div>
         </div>
       </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Plan (a section for each hour of the day) ---------- -->
+    <div id="habits-plan" class="habits-sub-panel dp-scope" role="tabpanel" aria-labelledby="habitsSubNavPlan">
+      <div class="card dp-head">
+        <div class="dp-nav">
+          <button type="button" class="btn-icon dp-step" id="dpPrev" aria-label="Previous day">&larr;</button>
+          <div class="dp-when">
+            <h2 class="card-title dp-title" id="dpTitle">Today</h2>
+            <p class="dp-date" id="dpDate"></p>
+          </div>
+          <button type="button" class="btn-icon dp-step" id="dpNext" aria-label="Next day">&rarr;</button>
+        </div>
+        <p class="dp-summary" id="dpSummary"></p>
+        <button type="button" class="btn-icon hidden" id="dpToday">Jump to today</button>
+      </div>
+
+      <div class="card dp-pool hidden" id="dpPoolCard" aria-labelledby="dpPoolTitle">
+        <h2 class="card-title" id="dpPoolTitle">Not scheduled yet</h2>
+        <p class="field-hint">Tasks for this day that have no time. Pick an hour to put one on the plan.</p>
+        <div id="dpPool" class="dp-pool-list"></div>
+      </div>
+
+      <div class="card dp-day">
+        <div id="dpHours" class="dp-hours"></div>
+      </div>
+
+      <div id="dpUndo" class="dp-undo hidden" role="status"></div>
+      <p id="dpLive" class="visually-hidden" role="status" aria-live="polite"></p>
     </div>
 
     <!-- ---------- Sub-panel: Week (Habit History + manage habits) ---------- -->
@@ -5164,56 +5195,59 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=64"></script>
-<script src="js/backup-logic.js?v=64"></script>
-<script src="js/cloud-backup.js?v=64"></script>
-<script type="module" src="js/auth.js?v=64"></script>
-<script src="js/app.js?v=64"></script>
-<script src="js/exercises.js?v=64"></script>
-<script src="js/workout-logic.js?v=64"></script>
-<script src="js/exercise-logic.js?v=64"></script>
-<script src="js/exercise-guides.js?v=64"></script>
-<script src="js/routine-logic.js?v=64"></script>
-<script src="js/workout.js?v=64"></script>
-<script src="js/workout-ui.js?v=64"></script>
-<script src="js/routines-ui.js?v=64"></script>
-<script src="js/progress-logic.js?v=64"></script>
-<script src="js/insights-logic.js?v=64"></script>
-<script src="js/charts.js?v=64"></script>
-<script src="js/history-ui.js?v=64"></script>
-<script src="js/insights-ui.js?v=64"></script>
-<script src="js/library-ui.js?v=64"></script>
-<script src="js/progress-ui.js?v=64"></script>
-<script src="js/nutrition.js?v=64"></script>
-<script src="js/nutrition-label-parse.js?v=64"></script>
-<script src="js/nutrition-label-scan.js?v=64"></script>
-<script src="js/groceries.js?v=64"></script>
-<script src="js/habits.js?v=64"></script>
-<script src="js/discipline-logic.js?v=64"></script>
-<script src="js/discipline-program.js?v=64"></script>
-<script src="js/discipline-habits.js?v=64"></script>
-<script src="js/discipline-insights.js?v=64"></script>
-<script src="js/discipline-charts.js?v=64"></script>
-<script src="js/discipline-delivery.js?v=64"></script>
-<script src="js/discipline.js?v=64"></script>
-<script src="js/wakecheck-logic.js?v=64"></script>
-<script src="js/wakecheck.js?v=64"></script>
-<script src="functions/lib/reminder-spec.js?v=64"></script>
-<script src="functions/lib/reminder-events.js?v=64"></script>
-<script src="js/reminders.js?v=64"></script>
-<script src="js/business.js?v=64"></script>
-<script src="js/trading.js?v=64"></script>
-<script src="js/blobstore.js?v=64"></script>
-<script src="js/video-api-client.js?v=64"></script>
-<script src="js/video-connections.js?v=64"></script>
-<script src="js/video.js?v=64"></script>
-<script src="js/video-studio.js?v=64"></script>
-<script src="functions/lib/idea-spec.js?v=64"></script>
-<script src="functions/lib/niche-spec.js?v=64"></script>
-<script src="js/marketing-stats.js?v=64"></script>
-<script src="js/niche-research.js?v=64"></script>
-<script src="js/content-intelligence.js?v=64"></script>
-<script src="js/formcheck-logic.js?v=64"></script>
-<script src="js/form-check.js?v=64"></script>
+<script src="js/firebase-config.js?v=65"></script>
+<script src="js/backup-logic.js?v=65"></script>
+<script src="js/cloud-backup.js?v=65"></script>
+<script type="module" src="js/auth.js?v=65"></script>
+<script src="js/app.js?v=65"></script>
+<script src="js/exercises.js?v=65"></script>
+<script src="js/workout-logic.js?v=65"></script>
+<script src="js/exercise-logic.js?v=65"></script>
+<script src="js/exercise-guides.js?v=65"></script>
+<script src="js/routine-logic.js?v=65"></script>
+<script src="js/workout.js?v=65"></script>
+<script src="js/workout-ui.js?v=65"></script>
+<script src="js/routines-ui.js?v=65"></script>
+<script src="js/progress-logic.js?v=65"></script>
+<script src="js/insights-logic.js?v=65"></script>
+<script src="js/charts.js?v=65"></script>
+<script src="js/history-ui.js?v=65"></script>
+<script src="js/insights-ui.js?v=65"></script>
+<script src="js/library-ui.js?v=65"></script>
+<script src="js/progress-ui.js?v=65"></script>
+<script src="js/nutrition.js?v=65"></script>
+<script src="js/nutrition-label-parse.js?v=65"></script>
+<script src="js/nutrition-label-scan.js?v=65"></script>
+<script src="js/groceries.js?v=65"></script>
+<script src="js/habit-logic.js?v=65"></script>
+<script src="js/dayplan-logic.js?v=65"></script>
+<script src="js/habits.js?v=65"></script>
+<script src="js/dayplan-ui.js?v=65"></script>
+<script src="js/discipline-logic.js?v=65"></script>
+<script src="js/discipline-program.js?v=65"></script>
+<script src="js/discipline-habits.js?v=65"></script>
+<script src="js/discipline-insights.js?v=65"></script>
+<script src="js/discipline-charts.js?v=65"></script>
+<script src="js/discipline-delivery.js?v=65"></script>
+<script src="js/discipline.js?v=65"></script>
+<script src="js/wakecheck-logic.js?v=65"></script>
+<script src="js/wakecheck.js?v=65"></script>
+<script src="functions/lib/reminder-spec.js?v=65"></script>
+<script src="functions/lib/reminder-events.js?v=65"></script>
+<script src="js/reminders.js?v=65"></script>
+<script src="js/business.js?v=65"></script>
+<script src="js/trading.js?v=65"></script>
+<script src="js/blobstore.js?v=65"></script>
+<script src="js/video-api-client.js?v=65"></script>
+<script src="js/video-connections.js?v=65"></script>
+<script src="js/video.js?v=65"></script>
+<script src="js/video-studio.js?v=65"></script>
+<script src="functions/lib/idea-spec.js?v=65"></script>
+<script src="functions/lib/niche-spec.js?v=65"></script>
+<script src="js/marketing-stats.js?v=65"></script>
+<script src="js/niche-research.js?v=65"></script>
+<script src="js/content-intelligence.js?v=65"></script>
+<script src="js/formcheck-logic.js?v=65"></script>
+<script src="js/form-check.js?v=65"></script>
 </body>
 </html>
