@@ -4109,3 +4109,42 @@ button.hs-day:hover { background: var(--card-hover); }
 .hm-earlier { display: block; width: calc(100% - 32px); min-height: 44px; margin: 4px 16px; padding: 0 12px; text-align: left; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 10px; color: var(--text-dim); font: inherit; font-size: 14px; cursor: pointer; }
 .hm-dayplan .hm-row { padding-right: 0; }
 @media (max-width: 360px) { .hm-hour { grid-template-columns: 52px minmax(0, 1fr) auto; } .hm-hl { padding-left: 12px; } }
+
+/* ---------------- Calendar: the Content view ---------------- */
+.cal-views { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 480px) { .cal-view-btn { font-size: 15px; padding: 0 2px; } }
+@media (max-width: 360px) { .cal-views { gap: 2px; padding: 3px; } .cal-view-btn { font-size: 13px; padding: 0; } }
+.cc .btn { min-height: 44px; }
+/* the Idea Library editor is where a scheduled idea opens from the calendar: same tap size and button contrast as the calendar's sheets */
+#mktIdeaModal .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+#mktIdeaModal .btn, #mktIdeaModal input:not([type="checkbox"]):not([type="radio"]), #mktIdeaModal select { min-height: 44px; }
+#mktIdeaModal .btn-icon { min-width: 44px; min-height: 44px; }
+.cc { padding: 4px 0 8px; }
+.cc-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 4px; }
+.cc-actions .btn { flex: 1 1 120px; min-height: 44px; }
+.cc-stages { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px 6px; }
+.cc-stages .cal-chip-btn b { font-variant-numeric: tabular-nums; color: var(--text); }
+.cc-sec { padding: 10px 0 4px; border-top: 1px solid var(--card-border); margin-top: 8px; }
+.cc-h { margin: 0 14px 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim); }
+.cc-n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--card-border); font-size: 12px; text-align: center; color: var(--text); }
+.cc-note { margin: 4px 14px 10px; font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.cc-pad { padding-top: 6px; }
+.cc-card { margin: 0 0 2px; border-top: 1px solid var(--card-border); padding: 6px 14px 10px; }
+.cc-open { display: flex; align-items: stretch; gap: 12px; width: 100%; min-height: 48px; padding: 6px 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.cc-open:focus-visible, .cc-more:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+.cc-ctl { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 16px; }
+.cc-stage { flex: 1 1 130px; min-height: 44px; font-size: 16px; }
+.cc-date { flex: 1 1 120px; min-height: 44px; }
+.cc-more { display: block; min-height: 44px; margin: 0 14px; }
+.cc-times { list-style: none; margin: 4px 14px 6px; padding: 0; }
+.cc-times li { padding: 6px 0; font-size: 15px; }
+.cc-times li span { color: var(--text-dim); }
+.cc-pick { margin: 0; padding: 8px 10px; border: 1px solid var(--card-border); border-radius: 10px; max-height: 240px; overflow-y: auto; }
+.cc-pick legend { padding: 0 6px; font-size: 13px; color: var(--text-dim); }
+.cc-pick .cal-check span { overflow-wrap: anywhere; }
+.cc-pick small { color: var(--text-dim); }
+.cc-li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; border-top: 1px solid var(--card-border); }
+.cc-li .btn { min-height: 44px; flex: none; }
+.cc-hint { padding: 10px 12px; border: 1px dashed var(--card-border); border-radius: 10px; }
+.cc-hint .btn { min-height: 44px; margin-top: 6px; }
+.cal-scope .cc .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }

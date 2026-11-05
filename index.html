@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=68">
+<link rel="stylesheet" href="style.css?v=69">
 </head>
 <body>
 
@@ -2155,6 +2155,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
         <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
         <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Day</button>
         <button type="button" class="cal-view-btn" data-view="agenda" aria-pressed="false">Agenda</button>
+        <button type="button" class="cal-view-btn" data-view="content" aria-pressed="false">Content</button>
       </div>
       <div class="cal-tools">
         <input type="search" id="calSearch" class="cal-search" placeholder="Search events and tasks" aria-label="Search events and tasks" autocomplete="off">
@@ -4728,7 +4729,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <div class="form-row two-col">
             <div>
               <label for="mktEdPlatform">Platform</label>
-              <select id="mktEdPlatform"><option value="both">Instagram + TikTok</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select>
+              <select id="mktEdPlatform"><option value="both">Instagram + TikTok</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="youtube">YouTube Shorts</option></select>
             </div>
             <div>
               <label for="mktEdStage">Awareness stage</label>
@@ -4744,6 +4745,8 @@ npx firebase-tools deploy --only firestore:rules</pre>
             <div>
               <label for="mktEdDate">Planned date</label>
               <input type="date" id="mktEdDate">
+              <label for="mktEdTime">Posting time (optional)</label>
+              <input type="time" id="mktEdTime">
             </div>
           </div>
           <div class="form-row"><label for="mktEdObjective">Objective</label><textarea id="mktEdObjective" rows="2" maxlength="600"></textarea></div>
@@ -5272,63 +5275,64 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=68"></script>
-<script src="js/backup-logic.js?v=68"></script>
-<script src="js/cloud-backup.js?v=68"></script>
-<script type="module" src="js/auth.js?v=68"></script>
-<script src="js/app.js?v=68"></script>
-<script src="js/exercises.js?v=68"></script>
-<script src="js/workout-logic.js?v=68"></script>
-<script src="js/exercise-logic.js?v=68"></script>
-<script src="js/exercise-guides.js?v=68"></script>
-<script src="js/routine-logic.js?v=68"></script>
-<script src="js/workout.js?v=68"></script>
-<script src="js/workout-ui.js?v=68"></script>
-<script src="js/routines-ui.js?v=68"></script>
-<script src="js/progress-logic.js?v=68"></script>
-<script src="js/insights-logic.js?v=68"></script>
-<script src="js/charts.js?v=68"></script>
-<script src="js/history-ui.js?v=68"></script>
-<script src="js/insights-ui.js?v=68"></script>
-<script src="js/library-ui.js?v=68"></script>
-<script src="js/progress-ui.js?v=68"></script>
-<script src="js/nutrition.js?v=68"></script>
-<script src="js/nutrition-label-parse.js?v=68"></script>
-<script src="js/nutrition-label-scan.js?v=68"></script>
-<script src="js/groceries.js?v=68"></script>
-<script src="js/habit-logic.js?v=68"></script>
-<script src="js/dayplan-logic.js?v=68"></script>
-<script src="js/habits.js?v=68"></script>
-<script src="js/dayplan-ui.js?v=68"></script>
-<script src="js/calendar-logic.js?v=68"></script>
-<script src="js/schedule-logic.js?v=68"></script>
-<script src="js/calendar-ui.js?v=68"></script>
-<script src="js/home-ui.js?v=68"></script>
-<script src="js/discipline-logic.js?v=68"></script>
-<script src="js/discipline-program.js?v=68"></script>
-<script src="js/discipline-habits.js?v=68"></script>
-<script src="js/discipline-insights.js?v=68"></script>
-<script src="js/discipline-charts.js?v=68"></script>
-<script src="js/discipline-delivery.js?v=68"></script>
-<script src="js/discipline.js?v=68"></script>
-<script src="js/wakecheck-logic.js?v=68"></script>
-<script src="js/wakecheck.js?v=68"></script>
-<script src="functions/lib/reminder-spec.js?v=68"></script>
-<script src="functions/lib/reminder-events.js?v=68"></script>
-<script src="js/reminders.js?v=68"></script>
-<script src="js/business.js?v=68"></script>
-<script src="js/trading.js?v=68"></script>
-<script src="js/blobstore.js?v=68"></script>
-<script src="js/video-api-client.js?v=68"></script>
-<script src="js/video-connections.js?v=68"></script>
-<script src="js/video.js?v=68"></script>
-<script src="js/video-studio.js?v=68"></script>
-<script src="functions/lib/idea-spec.js?v=68"></script>
-<script src="functions/lib/niche-spec.js?v=68"></script>
-<script src="js/marketing-stats.js?v=68"></script>
-<script src="js/niche-research.js?v=68"></script>
-<script src="js/content-intelligence.js?v=68"></script>
-<script src="js/formcheck-logic.js?v=68"></script>
-<script src="js/form-check.js?v=68"></script>
+<script src="js/firebase-config.js?v=69"></script>
+<script src="js/backup-logic.js?v=69"></script>
+<script src="js/cloud-backup.js?v=69"></script>
+<script type="module" src="js/auth.js?v=69"></script>
+<script src="js/app.js?v=69"></script>
+<script src="js/exercises.js?v=69"></script>
+<script src="js/workout-logic.js?v=69"></script>
+<script src="js/exercise-logic.js?v=69"></script>
+<script src="js/exercise-guides.js?v=69"></script>
+<script src="js/routine-logic.js?v=69"></script>
+<script src="js/workout.js?v=69"></script>
+<script src="js/workout-ui.js?v=69"></script>
+<script src="js/routines-ui.js?v=69"></script>
+<script src="js/progress-logic.js?v=69"></script>
+<script src="js/insights-logic.js?v=69"></script>
+<script src="js/charts.js?v=69"></script>
+<script src="js/history-ui.js?v=69"></script>
+<script src="js/insights-ui.js?v=69"></script>
+<script src="js/library-ui.js?v=69"></script>
+<script src="js/progress-ui.js?v=69"></script>
+<script src="js/nutrition.js?v=69"></script>
+<script src="js/nutrition-label-parse.js?v=69"></script>
+<script src="js/nutrition-label-scan.js?v=69"></script>
+<script src="js/groceries.js?v=69"></script>
+<script src="js/habit-logic.js?v=69"></script>
+<script src="js/dayplan-logic.js?v=69"></script>
+<script src="js/habits.js?v=69"></script>
+<script src="js/dayplan-ui.js?v=69"></script>
+<script src="js/calendar-logic.js?v=69"></script>
+<script src="js/content-logic.js?v=69"></script>
+<script src="js/schedule-logic.js?v=69"></script>
+<script src="js/calendar-ui.js?v=69"></script>
+<script src="js/home-ui.js?v=69"></script>
+<script src="js/discipline-logic.js?v=69"></script>
+<script src="js/discipline-program.js?v=69"></script>
+<script src="js/discipline-habits.js?v=69"></script>
+<script src="js/discipline-insights.js?v=69"></script>
+<script src="js/discipline-charts.js?v=69"></script>
+<script src="js/discipline-delivery.js?v=69"></script>
+<script src="js/discipline.js?v=69"></script>
+<script src="js/wakecheck-logic.js?v=69"></script>
+<script src="js/wakecheck.js?v=69"></script>
+<script src="functions/lib/reminder-spec.js?v=69"></script>
+<script src="functions/lib/reminder-events.js?v=69"></script>
+<script src="js/reminders.js?v=69"></script>
+<script src="js/business.js?v=69"></script>
+<script src="js/trading.js?v=69"></script>
+<script src="js/blobstore.js?v=69"></script>
+<script src="js/video-api-client.js?v=69"></script>
+<script src="js/video-connections.js?v=69"></script>
+<script src="js/video.js?v=69"></script>
+<script src="js/video-studio.js?v=69"></script>
+<script src="functions/lib/idea-spec.js?v=69"></script>
+<script src="functions/lib/niche-spec.js?v=69"></script>
+<script src="js/marketing-stats.js?v=69"></script>
+<script src="js/niche-research.js?v=69"></script>
+<script src="js/content-intelligence.js?v=69"></script>
+<script src="js/formcheck-logic.js?v=69"></script>
+<script src="js/form-check.js?v=69"></script>
 </body>
 </html>

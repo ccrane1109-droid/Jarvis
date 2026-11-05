@@ -39,12 +39,14 @@
   // the cost estimate shown before generating; the server makes the real
   // check with the actual prompt.
   const TYPICAL_INPUT_TOKENS = 3000;
-  const STATUSES = [
-    { value: "draft", label: "Draft" },
-    { value: "ready", label: "Ready to film" },
-    { value: "filmed", label: "Filmed" },
-    { value: "posted", label: "Posted" }
+  // Content stages (content-logic.js). Ideas saved before these existed keep their old value (draft, ready, filmed,
+  // posted) and are shown as the nearest stage until you change them.
+  const CL = window.JarvisContentLogic;
+  const STATUSES = CL ? CL.STAGES : [
+    { value: "idea", label: "Idea" }, { value: "script", label: "Script" }, { value: "filming", label: "Filming" },
+    { value: "editing", label: "Editing" }, { value: "scheduled", label: "Scheduled" }, { value: "published", label: "Published" }
   ];
+  function contentStage(v) { return CL ? CL.stageOf(v) : (v || "idea"); }
   const STAGES = [
     { value: "unaware", label: "Unaware" },
     { value: "problem_aware", label: "Problem aware" },
@@ -52,7 +54,7 @@
     { value: "product_aware", label: "Product aware" },
     { value: "most_aware", label: "Most aware" }
   ];
-  const PLATFORM_LABELS = { instagram: "Instagram", tiktok: "TikTok", both: "Instagram + TikTok" };
+  const PLATFORM_LABELS = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube Shorts", both: "Instagram + TikTok" };
   const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
   const MODEL_LABELS = { "claude-opus-5-5": "Claude Opus 5.5", "claude-sonnet-5-5": "Claude Sonnet 5.5", "claude-haiku-5-5": "Claude Haiku 5.5" };
 
@@ -127,7 +129,7 @@
   function formatNumber(n) { return typeof n === "number" && isFinite(n) ? n.toLocaleString() : "—"; }
   function money(n) { return "$" + (typeof n === "number" && isFinite(n) ? n : 0).toFixed(2); }
   function stageLabel(v) { const s = STAGES.find(function (x) { return x.value === v; }); return s ? s.label : v || "—"; }
-  function statusLabel(v) { const s = STATUSES.find(function (x) { return x.value === v; }); return s ? s.label : "Draft"; }
+  function statusLabel(v) { const k = contentStage(v), s = STATUSES.find(function (x) { return x.value === k; }); return s ? s.label : "Idea"; }
   // "2026-10-14" as a local calendar day (new Date() would read it as UTC
   // midnight and show the previous day in US time zones).
   function formatDay(isoDay) { return isoDay ? core().formatDate(String(isoDay).slice(0, 10) + "T00:00:00") : ""; }
@@ -1073,7 +1075,7 @@
     if (idea.contentPillar) b.appendChild(el("span", "badge badge-neutral", idea.contentPillar));
     b.appendChild(el("span", "badge badge-neutral", stageLabel(idea.awarenessStage)));
     if (withStatus) {
-      b.appendChild(el("span", "badge " + (idea.status === "posted" ? "badge-green" : idea.status === "ready" || idea.status === "filmed" ? "badge-accent" : "badge-neutral"), statusLabel(idea.status)));
+      b.appendChild(el("span", "badge " + (contentStage(idea.status) === "published" ? "badge-green" : ["filming", "editing", "scheduled"].indexOf(contentStage(idea.status)) !== -1 ? "badge-accent" : "badge-neutral"), statusLabel(idea.status)));
       if (idea.priority) b.appendChild(el("span", "badge " + (idea.priority === "high" ? "badge-yellow" : "badge-neutral"), idea.priority.charAt(0).toUpperCase() + idea.priority.slice(1) + " priority"));
       if (idea.plannedDate) b.appendChild(el("span", "badge badge-neutral", "Planned " + formatDay(idea.plannedDate)));
     }
@@ -1122,10 +1124,11 @@
       researchBasis: Array.isArray(idea.researchBasis) ? idea.researchBasis : [],
       whyItMightWork: idea.whyItMightWork || "",
       notes: idea.notes || "",
-      status: idea.status || "draft",
+      status: idea.status || "idea",
       priority: idea.priority || "medium",
       favorite: !!idea.favorite,
       plannedDate: idea.plannedDate || "",
+      plannedTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(idea.plannedTime || "") ? idea.plannedTime : "",
       source: idea.model ? "ai" : (idea.source || "manual"),
       model: idea.model || "",
       createdAt: idea.createdAt || now,
@@ -1179,7 +1182,7 @@
     const sort = $("mktLibSort").value;
     const list = state.ideas.filter(function (i) {
       if (f.platform && i.platform !== f.platform) return false;
-      if (f.status && (i.status || "draft") !== f.status) return false;
+      if (f.status && contentStage(i.status) !== f.status) return false;
       if (f.pillar && i.contentPillar !== f.pillar) return false;
       if (f.stage && i.awarenessStage !== f.stage) return false;
       if (f.priority && (i.priority || "medium") !== f.priority) return false;
@@ -1226,7 +1229,7 @@
     const statusSel = el("select");
     statusSel.setAttribute("aria-label", "Status for " + idea.title);
     STATUSES.forEach(function (s) { const o = el("option", "", s.label); o.value = s.value; statusSel.appendChild(o); });
-    statusSel.value = idea.status || "draft";
+    statusSel.value = contentStage(idea.status);
     statusSel.addEventListener("change", function () { updateIdea(idea.id, { status: statusSel.value }); });
     actions.appendChild(statusSel);
     const edit = el("button", "btn btn-secondary", "Edit");
@@ -1274,7 +1277,7 @@
 
   const EDIT_FIELDS = [
     ["mktEdTitle", "title"], ["mktEdStatus", "status"], ["mktEdPriority", "priority"], ["mktEdPlatform", "platform"],
-    ["mktEdStage", "awarenessStage"], ["mktEdPillar", "contentPillar"], ["mktEdDate", "plannedDate"],
+    ["mktEdStage", "awarenessStage"], ["mktEdPillar", "contentPillar"], ["mktEdDate", "plannedDate"], ["mktEdTime", "plannedTime"],
     ["mktEdObjective", "objective"], ["mktEdAudience", "targetAudience"], ["mktEdHook", "hook"], ["mktEdScript", "script"],
     ["mktEdCaption", "caption"], ["mktEdCta", "cta"], ["mktEdWhy", "whyItMightWork"], ["mktEdNotes", "notes"]
   ];
@@ -1285,6 +1288,7 @@
     const idea = id ? state.ideas.find(function (x) { return x.id === id; }) : draftIndex >= 0 ? state.generated[draftIndex] : null;
     const src = libraryRecord(idea || { source: "manual" });
     if (!idea) src.title = "";
+    src.status = contentStage(src.status);   // an old value shows as the nearest stage, so the select is never blank
     EDIT_FIELDS.forEach(function (pair) { $(pair[0]).value = src[pair[1]] || ""; });
     $("mktEdShots").value = (src.shots || []).join("\n");
     $("mktIdeaModalTitle").textContent = id ? "Edit Idea" : draftIndex >= 0 ? "Edit Before Saving" : "New Idea";
@@ -1484,5 +1488,23 @@
     loadAll();
   }
 
-  window.JarvisContentIntel = { init: init };
+  // For the Calendar: it reads the same ideas and changes the same fields (stage, planned date and time), so the Idea
+  // Library and the calendar never disagree.
+  function openIdea(id) {
+    const nav = $("navBtnMarketing"); if (nav) nav.click();
+    const tab = $("mktSubNavIdeas"); if (tab) tab.click();
+    window.setTimeout(function () { if (state.ideas.some(function (x) { return x.id === id; })) openEditor(id); }, 0);
+  }
+  function newIdea() {
+    const nav = $("navBtnMarketing"); if (nav) nav.click();
+    const tab = $("mktSubNavIdeas"); if (tab) tab.click();
+    window.setTimeout(function () { openEditor(null); }, 0);
+  }
+  window.JarvisContentIntel = {
+    init: init,
+    getIdeas: function () { return state.ideas.slice(); },
+    updateIdea: updateIdea,
+    openIdea: openIdea,
+    newIdea: newIdea
+  };
 })();

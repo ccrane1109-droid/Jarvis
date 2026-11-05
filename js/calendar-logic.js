@@ -216,7 +216,12 @@
 
     const keys = Object.keys(errors);
     if (keys.length) return { ok: false, errors: errors, error: errors[keys[0]] };
-    const linked = i.linked && typeof i.linked === "object" && typeof i.linked.type === "string" && typeof i.linked.id === "string" ? { type: i.linked.type.slice(0, 30), id: i.linked.id.slice(0, 80) } : null;
+    let linked = i.linked && typeof i.linked === "object" && typeof i.linked.type === "string" && typeof i.linked.id === "string" ? { type: i.linked.type.slice(0, 30), id: i.linked.id.slice(0, 80) } : null;
+    // A filming session can point at several ideas at once.
+    if (linked && Array.isArray(i.linked.ids)) {
+      const ids = i.linked.ids.filter(function (x) { return typeof x === "string" && x; }).map(function (x) { return x.slice(0, 80); }).filter(function (x, k, a) { return a.indexOf(x) === k; }).slice(0, 20);
+      if (ids.length) linked.ids = ids;
+    }
     return {
       ok: true, errors: {},
       event: {
