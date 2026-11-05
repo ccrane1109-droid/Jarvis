@@ -1349,7 +1349,7 @@
     $("rmNotifMissingBtn").addEventListener("click", function () { reportCheck("missing"); });
     if ("serviceWorker" in navigator && navigator.serviceWorker.addEventListener) {
       navigator.serviceWorker.addEventListener("message", function (e) {
-        if (e && e.data && e.data.type === "jarvis-open-reminder") openFromNotification(typeof e.data.id === "string" ? e.data.id : "");
+        if (e && e.data && e.data.type === "jarvis-open-reminder" && e.data.kind !== "calendar") openFromNotification(typeof e.data.id === "string" ? e.data.id : "");
       });
     }
     $("rmActCloseBtn").addEventListener("click", closeAct);

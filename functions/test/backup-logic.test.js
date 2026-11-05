@@ -14,7 +14,7 @@ const SYNCED = (function () {
   return block.match(/"jarvis[A-Za-z]+"/g).map((s) => s.slice(1, -1));
 })();
 // Keys that stay on the device on purpose: secrets, flags, caches, one-level undo, the backup's own bookkeeping.
-const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisPushCheck", "jarvisRemindersCache", "jarvisMarketingLastSync", "jarvisLastBriefingDate",
+const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisPushCheck", "jarvisRemindersCache", "jarvisMarketingLastSync", "jarvisLastBriefingDate",
   "jarvisVideoConnections", "jarvisInsightSocialKey", "jarvisVideoBlobs", "jarvisGroceryChangelog",
   "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice",
   "jarvisDisciplineDrafts", // unsaved typing in the Discipline forms; stays on the phone

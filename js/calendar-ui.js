@@ -347,6 +347,7 @@
         if (f.repeatFreq === "weekly") h += '<div class="cal-field"><span class="cal-lab" id="calF_by_l">On</span><div class="cal-chips" role="group" aria-labelledby="calF_by_l">' + dows.map(function (d, i) { const on = f.byDay.indexOf(i) !== -1; return '<button type="button" class="cal-chip-btn" data-cal="byday" data-v="' + i + '" aria-pressed="' + on + '">' + d + '</button>'; }).join("") + '</div></div>';
       }
     }
+    h += reminderPickerHtml(m);
     h += '<div class="cal-field"><label for="calF_priority">Priority</label><select id="calF_priority">' + selOpts(C.PRIORITIES.map(function (p) { return { value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }; }), f.priority) + '</select></div>';
     h += '<div class="cal-field"><label for="calF_description">Description</label><textarea id="calF_description" maxlength="' + C.DESC_MAX + '" rows="2">' + esc(f.description) + '</textarea>' + err(m, "description") + '</div>';
     h += '<div class="cal-field"><label for="calF_notes">Notes (optional)</label><textarea id="calF_notes" maxlength="' + C.NOTES_MAX + '" rows="3">' + esc(f.notes) + '</textarea>' + err(m, "notes") + '</div>';
@@ -354,6 +355,20 @@
     if (!editing && f.kind === "content" && ci()) h += '<div class="cc-hint"><p class="field-hint">Planning something from your Idea Library? Schedule it from there so its date and stage stay in step.</p><button type="button" class="btn btn-secondary" data-cal="to-sched">Schedule an idea</button></div>';
     h += '<div class="cal-actions"><button type="submit" class="btn btn-primary">' + (editing ? "Save" : "Add to calendar") + '</button><button type="button" class="btn btn-secondary" data-cal="close">Cancel</button></div>';
     if (editing) h += '<div class="cal-actions cal-actions-more"><button type="button" class="btn btn-secondary" data-cal="duplicate">Duplicate</button><button type="button" class="btn btn-danger" data-cal="delete">Delete' + (recurring && f.scope === "this" ? " this one" : recurring ? " all" : "") + '</button></div>';
+    return h;
+  }
+
+  // "Remind me": up to five of the usual choices. Values saved from elsewhere that aren't in the list are kept and shown.
+  function reminderLabel(v) { const c = C.REMINDER_CHOICES.filter(function (x) { return x.value === v; })[0]; return c ? c.label : v >= 1440 && v % 1440 === 0 ? (v / 1440) + " days before" : v >= 60 && v % 60 === 0 ? (v / 60) + " hours before" : v + " minutes before"; }
+  function reminderPickerHtml(m) {
+    const f = m.form, cur = f.reminders || [], values = C.REMINDER_CHOICES.map(function (c) { return c.value; });
+    cur.forEach(function (v) { if (values.indexOf(v) === -1) values.push(v); });
+    values.sort(function (a, b) { return a - b; });
+    let h = '<fieldset class="cal-rem"><legend>Remind me</legend><div class="cal-rem-list">' + values.map(function (v) {
+      return '<label class="cal-check"><input type="checkbox" name="calF_rem" value="' + v + '"' + (cur.indexOf(v) !== -1 ? " checked" : "") + '> ' + esc(reminderLabel(v)) + '</label>';
+    }).join("") + '</div>' + (m.errors.reminders ? '<p class="cal-err" role="alert">' + esc(m.errors.reminders) + '</p>' : "");
+    h += '<p class="field-hint">Shown in JARVIS while it is open' + (f.allDay ? ", counted from " + C.timeLabel(settings.notify.allDayAt) + " on the day (all-day items have no start time)" : "") + '. ' +
+      '<button type="button" class="cal-more" data-cal="rem-settings">Reminder settings</button></p></fieldset>';
     return h;
   }
 
@@ -396,6 +411,8 @@
       '<div class="cal-row"><div class="cal-field"><label for="calS_week">Week starts on</label><select id="calS_week"><option value="1"' + (s.weekStart === 1 ? " selected" : "") + '>Monday</option><option value="0"' + (s.weekStart === 0 ? " selected" : "") + '>Sunday</option></select></div>' +
       '<div class="cal-field"><label for="calS_view">Opens in</label><select id="calS_view">' + selOpts([{ value: "", label: "Automatic" }, { value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "day", label: "Day" }, { value: "agenda", label: "Agenda" }], s.defaultView) + '</select></div></div>' +
       '<div class="cal-field"><label for="calS_len">New events last</label><select id="calS_len">' + selOpts([30, 45, 60, 90, 120, 180].map(function (n) { return { value: n, label: n < 60 ? n + " minutes" : (n / 60) + (n === 60 ? " hour" : " hours") }; }), s.defaultDuration) + '</select></div>' +
+      '<div class="cal-field"><label for="calS_rem">New events remind me</label><select id="calS_rem">' + selOpts([{ value: -1, label: "Not at all" }].concat(C.REMINDER_CHOICES), s.defaultReminder) + '</select></div>' +
+      '<button type="button" class="btn btn-secondary" data-cal="rem-settings">Reminder and notification settings</button>' +
       '<p class="field-hint">Events keep the time zone they were made in, so a 9 AM meeting stays 9 AM there. They are shown here in the zone above.</p>' +
       '<div class="cal-actions"><button type="submit" class="btn btn-primary">Save settings</button><button type="button" class="btn btn-secondary" data-cal="close">Cancel</button></div>';
   }
@@ -420,6 +437,8 @@
     const f = modal.form, v = function (id) { const e = $(id); return e ? e.value : undefined; };
     ["title", "kind", "category", "priority", "date", "time", "endDate", "endTime", "description", "notes"].forEach(function (k) { const x = v("calF_" + k); if (x !== undefined) f[k] = x; });
     const ad = $("calF_allDay"); if (ad) f.allDay = ad.checked;
+    const rems = document.querySelectorAll('#calForm input[name="calF_rem"]');
+    if (rems.length) f.reminders = Array.prototype.filter.call(rems, function (x) { return x.checked; }).map(function (x) { return Number(x.value); });
     const rp = v("calF_repeat"); if (rp !== undefined) f.repeatFreq = rp;
     const iv = v("calF_interval"); if (iv !== undefined) f.repeatInterval = iv;
     const un = v("calF_until"); if (un !== undefined) f.until = un;
@@ -907,6 +926,7 @@
     if (act === "close") { closeModal(); return; }
     if (act === "scope") { syncForm(); modal.form.scope = el.getAttribute("data-v"); redrawModal(); focusSoon('#calForm [data-cal="scope"][data-v="' + modal.form.scope + '"]'); return; }
     if (act === "byday") { syncForm(); const d = Number(el.getAttribute("data-v")), a = modal.form.byDay, i = a.indexOf(d); if (i === -1) a.push(d); else if (a.length > 1) a.splice(i, 1); modal.form.byDay = a.sort(function (x, y) { return x - y; }); redrawModal(); focusSoon('#calForm [data-cal="byday"][data-v="' + d + '"]'); return; }
+    if (act === "rem-settings") { if (modal && modal.kind === "event") syncForm(); if (window.JarvisCalReminders) window.JarvisCalReminders.openSettings(el); return; }
     if (act === "sched-clear") { saveSched(true); return; }
     if (act === "new-idea-modal") { closeModal(false); if (ci()) ci().newIdea(); return; }
     if (act === "open-idea") { const id = el.getAttribute("data-id"); closeModal(false); if (ci()) ci().openIdea(id); return; }
@@ -964,7 +984,7 @@
   }
   function saveSettings() {
     const g = function (id) { return $(id).value; };
-    const next = C.settings({ timeZone: g("calS_zone"), weekStart: Number(g("calS_week")), defaultView: g("calS_view"), defaultDuration: Number(g("calS_len")), defaultReminder: settings.defaultReminder, plan: settings.plan, updatedAt: Date.now() });
+    const next = C.settings({ timeZone: g("calS_zone"), weekStart: Number(g("calS_week")), defaultView: g("calS_view"), defaultDuration: Number(g("calS_len")), defaultReminder: Number(g("calS_rem")), plan: settings.plan, notify: settings.notify, updatedAt: Date.now() });
     if (!core().saveJSON(SET_KEY, next)) { saveError = "The browser would not save your settings."; renderStatus(); return; }
     settings = next; closeModal(); render(); announce("Settings saved.");
   }
@@ -1065,6 +1085,8 @@
       settings = next; render(); return true;
     },
     refresh: function () { render(); notify(); },
+    // For the reminders screen (calendar-reminders-ui.js): open an event from a reminder, wherever you are in JARVIS.
+    showEvent: function (id, occDate) { const b = $("navBtnCalendar"); if (b) b.click(); if (!C.byId(events, id)) return false; anchor = occDate && C.isDate(occDate) ? occDate : anchor; selected = anchor; wantScroll = true; render(); openEdit({ id: id, occDate: occDate }); return true; },
     ctx: ctx, today: today, nowMin: nowMin
   };
 })();

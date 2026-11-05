@@ -4182,3 +4182,25 @@ button.hs-day:hover { background: var(--card-hover); }
 .as-goal { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
 .as-goal input { width: 96px; min-height: 44px; }
 @media (max-width: 360px) { .as-days .cal-chip-btn { min-width: 44px; padding: 0 6px; } }
+
+/* ---- Calendar reminders ---- */
+.cr-bar { position: fixed; z-index: 130; left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 8px); display: grid; gap: 8px; max-width: 560px; margin: 0 auto; }
+.cr-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; background: var(--bg-elevated); border: 1px solid var(--accent); border-radius: 14px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45); }
+.cr-missed { border-color: var(--card-border); }
+.cr-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.cr-t { overflow-wrap: anywhere; }
+.cr-w { font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.cr-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.cr-acts .btn, .cr-rowacts .btn { min-height: 44px; }
+.cr-rowacts { display: flex; flex-wrap: wrap; gap: 8px; }
+#crModal .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+#crModal .btn, #crModal input:not([type="checkbox"]), #crModal select { min-height: 44px; }
+.cr-bar .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+.cr-limit { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; font-size: 14px; color: var(--text-dim); }
+.cr-limit strong { color: var(--text); }
+.cr-limit p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.cal-rem { margin: 0; padding: 8px 10px; border: 1px solid var(--card-border); border-radius: 10px; }
+.cal-rem legend { padding: 0 6px; font-size: 13px; color: var(--text-dim); }
+.cal-rem-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+@media (max-width: 360px) { .cal-rem-list { grid-template-columns: 1fr; } }
+#calForm > .btn { min-height: 44px; }

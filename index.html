@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=70">
+<link rel="stylesheet" href="style.css?v=71">
 </head>
 <body>
 
@@ -5267,6 +5267,16 @@ npx firebase-tools deploy --only firestore:rules</pre>
   </div>
 </div>
 
+<div class="modal-overlay sheet-overlay cal-overlay hidden" id="crModal" role="dialog" aria-modal="true" aria-labelledby="crTitle">
+  <div class="modal-box sheet-box cal-modal-box">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <h2 class="cal-modal-title" id="crTitle">Reminder settings</h2>
+    <form id="crBody" class="cal-form" novalidate></form>
+  </div>
+</div>
+
+<div class="cr-bar hidden" id="crBar" role="region" aria-label="Calendar reminders"></div>
+
 <div class="modal-overlay sheet-overlay cal-overlay hidden" id="calScope" role="dialog" aria-modal="true" aria-labelledby="calScopeTitle">
   <div class="modal-box sheet-box cal-scope-box">
     <div class="sheet-handle" aria-hidden="true"></div>
@@ -5284,66 +5294,68 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=70"></script>
-<script src="js/backup-logic.js?v=70"></script>
-<script src="js/cloud-backup.js?v=70"></script>
-<script type="module" src="js/auth.js?v=70"></script>
-<script src="js/app.js?v=70"></script>
-<script src="js/exercises.js?v=70"></script>
-<script src="js/workout-logic.js?v=70"></script>
-<script src="js/exercise-logic.js?v=70"></script>
-<script src="js/exercise-guides.js?v=70"></script>
-<script src="js/routine-logic.js?v=70"></script>
-<script src="js/workout.js?v=70"></script>
-<script src="js/workout-ui.js?v=70"></script>
-<script src="js/routines-ui.js?v=70"></script>
-<script src="js/progress-logic.js?v=70"></script>
-<script src="js/insights-logic.js?v=70"></script>
-<script src="js/charts.js?v=70"></script>
-<script src="js/history-ui.js?v=70"></script>
-<script src="js/insights-ui.js?v=70"></script>
-<script src="js/library-ui.js?v=70"></script>
-<script src="js/progress-ui.js?v=70"></script>
-<script src="js/nutrition.js?v=70"></script>
-<script src="js/nutrition-label-parse.js?v=70"></script>
-<script src="js/nutrition-label-scan.js?v=70"></script>
-<script src="js/groceries.js?v=70"></script>
-<script src="js/habit-logic.js?v=70"></script>
-<script src="js/dayplan-logic.js?v=70"></script>
-<script src="js/habits.js?v=70"></script>
-<script src="js/dayplan-ui.js?v=70"></script>
-<script src="js/calendar-logic.js?v=70"></script>
-<script src="js/content-logic.js?v=70"></script>
-<script src="js/schedule-logic.js?v=70"></script>
-<script src="js/assistant-logic.js?v=70"></script>
-<script src="js/calendar-ui.js?v=70"></script>
-<script src="js/assistant-ui.js?v=70"></script>
-<script src="js/home-ui.js?v=70"></script>
-<script src="js/discipline-logic.js?v=70"></script>
-<script src="js/discipline-program.js?v=70"></script>
-<script src="js/discipline-habits.js?v=70"></script>
-<script src="js/discipline-insights.js?v=70"></script>
-<script src="js/discipline-charts.js?v=70"></script>
-<script src="js/discipline-delivery.js?v=70"></script>
-<script src="js/discipline.js?v=70"></script>
-<script src="js/wakecheck-logic.js?v=70"></script>
-<script src="js/wakecheck.js?v=70"></script>
-<script src="functions/lib/reminder-spec.js?v=70"></script>
-<script src="functions/lib/reminder-events.js?v=70"></script>
-<script src="js/reminders.js?v=70"></script>
-<script src="js/business.js?v=70"></script>
-<script src="js/trading.js?v=70"></script>
-<script src="js/blobstore.js?v=70"></script>
-<script src="js/video-api-client.js?v=70"></script>
-<script src="js/video-connections.js?v=70"></script>
-<script src="js/video.js?v=70"></script>
-<script src="js/video-studio.js?v=70"></script>
-<script src="functions/lib/idea-spec.js?v=70"></script>
-<script src="functions/lib/niche-spec.js?v=70"></script>
-<script src="js/marketing-stats.js?v=70"></script>
-<script src="js/niche-research.js?v=70"></script>
-<script src="js/content-intelligence.js?v=70"></script>
-<script src="js/formcheck-logic.js?v=70"></script>
-<script src="js/form-check.js?v=70"></script>
+<script src="js/firebase-config.js?v=71"></script>
+<script src="js/backup-logic.js?v=71"></script>
+<script src="js/cloud-backup.js?v=71"></script>
+<script type="module" src="js/auth.js?v=71"></script>
+<script src="js/app.js?v=71"></script>
+<script src="js/exercises.js?v=71"></script>
+<script src="js/workout-logic.js?v=71"></script>
+<script src="js/exercise-logic.js?v=71"></script>
+<script src="js/exercise-guides.js?v=71"></script>
+<script src="js/routine-logic.js?v=71"></script>
+<script src="js/workout.js?v=71"></script>
+<script src="js/workout-ui.js?v=71"></script>
+<script src="js/routines-ui.js?v=71"></script>
+<script src="js/progress-logic.js?v=71"></script>
+<script src="js/insights-logic.js?v=71"></script>
+<script src="js/charts.js?v=71"></script>
+<script src="js/history-ui.js?v=71"></script>
+<script src="js/insights-ui.js?v=71"></script>
+<script src="js/library-ui.js?v=71"></script>
+<script src="js/progress-ui.js?v=71"></script>
+<script src="js/nutrition.js?v=71"></script>
+<script src="js/nutrition-label-parse.js?v=71"></script>
+<script src="js/nutrition-label-scan.js?v=71"></script>
+<script src="js/groceries.js?v=71"></script>
+<script src="js/habit-logic.js?v=71"></script>
+<script src="js/dayplan-logic.js?v=71"></script>
+<script src="js/habits.js?v=71"></script>
+<script src="js/dayplan-ui.js?v=71"></script>
+<script src="js/calendar-logic.js?v=71"></script>
+<script src="js/content-logic.js?v=71"></script>
+<script src="js/schedule-logic.js?v=71"></script>
+<script src="js/assistant-logic.js?v=71"></script>
+<script src="js/calendar-ui.js?v=71"></script>
+<script src="js/assistant-ui.js?v=71"></script>
+<script src="js/calendar-reminders-logic.js?v=71"></script>
+<script src="js/calendar-reminders-ui.js?v=71"></script>
+<script src="js/home-ui.js?v=71"></script>
+<script src="js/discipline-logic.js?v=71"></script>
+<script src="js/discipline-program.js?v=71"></script>
+<script src="js/discipline-habits.js?v=71"></script>
+<script src="js/discipline-insights.js?v=71"></script>
+<script src="js/discipline-charts.js?v=71"></script>
+<script src="js/discipline-delivery.js?v=71"></script>
+<script src="js/discipline.js?v=71"></script>
+<script src="js/wakecheck-logic.js?v=71"></script>
+<script src="js/wakecheck.js?v=71"></script>
+<script src="functions/lib/reminder-spec.js?v=71"></script>
+<script src="functions/lib/reminder-events.js?v=71"></script>
+<script src="js/reminders.js?v=71"></script>
+<script src="js/business.js?v=71"></script>
+<script src="js/trading.js?v=71"></script>
+<script src="js/blobstore.js?v=71"></script>
+<script src="js/video-api-client.js?v=71"></script>
+<script src="js/video-connections.js?v=71"></script>
+<script src="js/video.js?v=71"></script>
+<script src="js/video-studio.js?v=71"></script>
+<script src="functions/lib/idea-spec.js?v=71"></script>
+<script src="functions/lib/niche-spec.js?v=71"></script>
+<script src="js/marketing-stats.js?v=71"></script>
+<script src="js/niche-research.js?v=71"></script>
+<script src="js/content-intelligence.js?v=71"></script>
+<script src="js/formcheck-logic.js?v=71"></script>
+<script src="js/form-check.js?v=71"></script>
 </body>
 </html>
