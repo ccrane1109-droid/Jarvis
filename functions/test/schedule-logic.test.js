@@ -181,3 +181,16 @@ test("an item that began on an earlier day sits at midnight today", () => {
   const d = S.daySlots(today, { today: TODAY, nowHour: 8, showEarlier: true });
   assert.equal(d.slots.find((s) => s.hour === 0).items[0].title, "Overnight");
 });
+
+test("the Business content planner's dated posts show on the schedule, read-only, done when posted", () => {
+  const biz = { content: [
+    { id: "c1", title: "Hoodie reel", platform: "TikTok", scheduledDate: "2026-11-06", status: "Scheduled" },
+    { id: "c2", title: "Old post", platform: "TikTok", scheduledDate: "2026-11-02", status: "Posted" },
+    { id: "c3", title: "No date", scheduledDate: "", status: "Idea" }, { id: "c4", title: "", scheduledDate: "2026-11-06" }, null
+  ] };
+  const out = S.businessItems(biz, [], "2026-11-01", "2026-11-30");
+  assert.deepEqual(out.map((i) => i.title).sort(), ["Post: Hoodie reel", "Post: Old post"]);
+  const c1 = out.find((i) => i.id === "c1");
+  assert.deepEqual([c1.source, c1.kind, c1.category, c1.readOnly, c1.completed, c1.allDay], ["bizContent", "content", "content", true, false, true]);
+  assert.equal(out.find((i) => i.id === "c2").completed, true, "a Posted one is done, so never overdue");
+});

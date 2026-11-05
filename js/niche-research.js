@@ -1637,6 +1637,9 @@
   window.JarvisNicheResearch = {
     init: init,
     render: render,
+    // For the Calendar's "best times to post": the saved research posts, if they have been loaded.
+    getLibrary: function () { return { status: ui.lib.status, posts: ui.lib.status === "ready" ? ui.lib.posts : [], total: ui.lib.total, error: ui.lib.error }; },
+    loadLibrary: function () { return loadLibrary(false); },
     helpers: {
       sanitizeNiche: sanitizeNiche, parseKeywords: parseKeywords, parseHandles: parseHandles, hashtagOf: hashtagOf,
       normalizeSourceUrl: normalizeSourceUrl, parseCount: parseCount, formatCompact: formatCompact, themeCounts: themeCounts,

@@ -45,6 +45,9 @@
     (Array.isArray(b.products) ? b.products : []).forEach(function (p) {
       if (p && typeof p.id === "string" && str(p.name) && inRange(p.launchDate)) out.push(dateItem({ key: "launch:" + p.id, id: p.id, source: "launch", title: "Launch: " + str(p.name), kind: "milestone", category: "launch", priority: "high", completed: p.status === "Live", date: p.launchDate, readOnly: true }));
     });
+    (Array.isArray(b.content) ? b.content : []).forEach(function (c) {
+      if (c && typeof c.id === "string" && str(c.title) && inRange(c.scheduledDate)) out.push(dateItem({ key: "bizcontent:" + c.id, id: c.id, source: "bizContent", title: "Post: " + str(c.title), kind: "content", category: "content", priority: "medium", completed: c.status === "Posted", date: c.scheduledDate, readOnly: true }));
+    });
     const prof = b.profile && typeof b.profile === "object" ? b.profile : {};
     if (inRange(prof.launchDate)) out.push(dateItem({ key: "launch:brand", id: "brand", source: "launch", title: "Launch: " + (str(prof.name) || "your brand"), kind: "milestone", category: "launch", priority: "high", completed: false, date: prof.launchDate, readOnly: true }));
     (Array.isArray(personalGoals) ? personalGoals : []).forEach(function (g) {

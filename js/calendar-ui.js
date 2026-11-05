@@ -17,6 +17,7 @@
 
   const C = window.JarvisCalendarLogic;
   const S = window.JarvisScheduleLogic;
+  const K = window.JarvisContentLogic;
   const EV_KEY = "jarvisCalendarEvents", SET_KEY = "jarvisCalendarSettings";
   const SNAP = 15, UNDO_MS = 8000, TASK_COLOR = "#7d8fb3";
   const ZONES = ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu", "America/Toronto", "America/Mexico_City", "America/Sao_Paulo",
@@ -29,11 +30,13 @@
   let modal = null;          // the open popup: { kind: "event" | "task" | "settings", ... }
   let undo = null;           // { timer, fn }
   let itemMap = {};          // key -> item, for what is on screen
+  let contentStage = "", showAllNeeds = false;
   let wantScroll = true, ready = false, drag = null, suppressClickUntil = 0, searchTimer = null, nowTimer = null, lastDay = "";
 
   function $(id) { return document.getElementById(id); }
   function core() { return window.JarvisCore; }
   function esc(s) { return core().escapeHtml(s); }
+  function ci() { return K && window.JarvisContentIntel && window.JarvisContentIntel.getIdeas ? window.JarvisContentIntel : null; }
   function habits() { return window.JarvisHabits && window.JarvisHabits.getTasks ? window.JarvisHabits : null; }
   function zone() { return C.viewZone(settings); }
   function today() { return C.todayIn(Date.now(), zone()); }
@@ -99,7 +102,7 @@
   function sortItems(a, b) { return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || (a.startMin || 0) - (b.startMin || 0) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); }
   function allItems(from, to) {
     const h = habits(), b = window.JarvisBusiness && window.JarvisBusiness.getScheduleData ? window.JarvisBusiness.getScheduleData() : null;
-    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.businessItems(b, h && h.getGoals ? h.getGoals() : [], from, to) : []);
+    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.businessItems(b, h && h.getGoals ? h.getGoals() : [], from, to) : [], ci() ? K.ideaItems(ci().getIdeas(), from, to) : []);
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
@@ -120,7 +123,7 @@
   /* ---------------- drawing ---------------- */
 
   function renderToolbar() {
-    $("calTitle").textContent = C.viewTitle(view, anchor, settings.weekStart);
+    $("calTitle").textContent = view === "content" ? "Content \u00b7 " + C.viewTitle("agenda", anchor, settings.weekStart) : C.viewTitle(view, anchor, settings.weekStart);
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === view)); });
     const n = filters.categories.length + (filters.hideDone ? 1 : 0);
     $("calFilterBtn").textContent = n ? "Filters · " + n : "Filters";
@@ -174,13 +177,16 @@
 
   function rowHtml(it) {
     const sub = [];
-    if (it.source === "task") sub.push("Task"); else {
+    if (it.source === "task") sub.push("Task");
+    else if (it.source === "idea") { sub.push(it.platformLabel); sub.push(it.stageLabel); }
+    else if (it.source === "bizContent") sub.push("Content planner");
+    else {
       const kind = C.kindInfo(it.kind).label, cat = C.categoryInfo(it.category).label;
       if (it.kind !== "event" && kind !== cat) sub.push(kind);
       sub.push(cat);
     }
     if (it.recurring) sub.push("Repeats");
-    const tickable = it.source === "task" || it.source === "bizTask" || (it.source === "event" && C.isPoint(it.kind));
+    const tickable = it.source === "task" || it.source === "bizTask" || it.source === "idea" || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
@@ -188,7 +194,7 @@
         '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + esc(it.title) + '</span><span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
         (it.conflict ? '<span class="cal-ag-flag">Overlaps</span>' : "") +
       '</button>' +
-      (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
+      (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? (it.source === "idea" ? "Posted: " : "Done: ") : (it.source === "idea" ? "Mark posted: " : "Mark done: ")) + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
     '</div>';
   }
   function agendaRows(list, date, inMonth) {
@@ -241,8 +247,9 @@
     renderToolbar();
     const scroller = $("calScroll"), keep = scroller ? scroller.scrollTop : 0;
     if (loadError) { stage.innerHTML = '<div class="cal-empty"><p>' + esc(loadError) + '</p></div>'; return; }
-    const r = C.rangeFor(view, anchor, settings.weekStart), items = visibleItems(r.from, r.to).shown;
+    const r = C.rangeFor(view, anchor, settings.weekStart), items = view === "content" ? [] : visibleItems(r.from, r.to).shown;
     if (view === "month") stage.innerHTML = monthHtml(items);
+    else if (view === "content") stage.innerHTML = contentViewHtml();
     else if (view === "agenda") stage.innerHTML = agendaHtml(items);
     else {
       const dates = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) dates.push(d);
@@ -343,6 +350,8 @@
     h += '<div class="cal-field"><label for="calF_priority">Priority</label><select id="calF_priority">' + selOpts(C.PRIORITIES.map(function (p) { return { value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }; }), f.priority) + '</select></div>';
     h += '<div class="cal-field"><label for="calF_description">Description</label><textarea id="calF_description" maxlength="' + C.DESC_MAX + '" rows="2">' + esc(f.description) + '</textarea>' + err(m, "description") + '</div>';
     h += '<div class="cal-field"><label for="calF_notes">Notes (optional)</label><textarea id="calF_notes" maxlength="' + C.NOTES_MAX + '" rows="3">' + esc(f.notes) + '</textarea>' + err(m, "notes") + '</div>';
+    if (f.linked && f.linked.type === "batch" && ci()) h += batchListHtml(f.linked.ids && f.linked.ids.length ? f.linked.ids : [f.linked.id]);
+    if (!editing && f.kind === "content" && ci()) h += '<div class="cc-hint"><p class="field-hint">Planning something from your Idea Library? Schedule it from there so its date and stage stay in step.</p><button type="button" class="btn btn-secondary" data-cal="to-sched">Schedule an idea</button></div>';
     h += '<div class="cal-actions"><button type="submit" class="btn btn-primary">' + (editing ? "Save" : "Add to calendar") + '</button><button type="button" class="btn btn-secondary" data-cal="close">Cancel</button></div>';
     if (editing) h += '<div class="cal-actions cal-actions-more"><button type="button" class="btn btn-secondary" data-cal="duplicate">Duplicate</button><button type="button" class="btn btn-danger" data-cal="delete">Delete' + (recurring && f.scope === "this" ? " this one" : recurring ? " all" : "") + '</button></div>';
     return h;
@@ -360,6 +369,7 @@
   const EXT = {
     bizTask: { title: "Business task", where: "Business \u203a Tasks", nav: "navBtnBusiness", sub: "bizSubNavTasks", note: "This is one of your Business tasks. Ticking it or moving it here changes that task." },
     bizGoal: { title: "Business goal", where: "Business \u203a Goals", nav: "navBtnBusiness", sub: "bizSubNavGoals", note: "This date comes from a Business goal. Change it in Business." },
+    bizContent: { title: "Planned content", where: "Business \u203a Marketing", nav: "navBtnBusiness", sub: "bizSubNavMarketing", note: "This date comes from the Business Content Planner. Change it in Business." },
     launch: { title: "Launch date", where: "Business \u203a Products", nav: "navBtnBusiness", sub: "bizSubNavProducts", note: "This date comes from Business. Change it there." },
     goal: { title: "Goal", where: "Habits \u203a Goals", nav: "navBtnHabits", sub: "habitsSubNavGoals", note: "This date comes from one of your personal goals. Change it in Habits." }
   };
@@ -394,7 +404,9 @@
     const overlay = $("calModal"), form = $("calForm");
     $("calModalTitle").textContent = modal.kind === "settings" ? "Calendar settings" : modal.kind === "task" ? "Task" : modal.kind === "external" ? externalTitle(modal.item) : modal.mode === "new" ? "New" : "Edit";
     if (modal.kind === "event") $("calModalTitle").textContent = modal.mode === "new" ? "New event" : "Edit " + C.kindInfo(modal.form.kind).label.toLowerCase();
-    form.innerHTML = modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
+    if (modal.kind === "sched") $("calModalTitle").textContent = "Schedule an idea";
+    if (modal.kind === "batch") $("calModalTitle").textContent = "Batch filming session";
+    form.innerHTML = modal.kind === "sched" ? schedFormHtml(modal) : modal.kind === "batch" ? batchFormHtml(modal) : modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
     overlay.classList.remove("hidden");
   }
   function closeModal(focusOpener) {
@@ -520,6 +532,11 @@
       h.commitTasks(h.getTasks().map(function (t) { return t.id === it.id ? Object.assign({}, t, { completed: !t.completed }) : t; }));
       render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); return;
     }
+    if (it.source === "idea") {
+      const idea = ci() && ci().getIdeas().filter(function (x) { return x.id === it.id; })[0];
+      if (idea) ci().updateIdea(it.id, K.donePatch(idea, !it.completed)).then(function () { render(); notify(); announce((it.completed ? "Not posted: " : "Posted: ") + it.title + "."); });
+      return;
+    }
     if (it.source === "bizTask") {
       if (window.JarvisBusiness && window.JarvisBusiness.setTaskDone && window.JarvisBusiness.setTaskDone(it.id, !it.completed)) { render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
       return;
@@ -527,6 +544,163 @@
     if (it.readOnly) return;
     const res = C.setDone(events, it.id, it.occDate, !it.completed, ctx());
     if (res.ok && commit(res.events)) { render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
+  }
+
+
+  /* ---------------- content: ideas, stages, filming sessions, best times ---------------- */
+
+  function nr() { return window.JarvisNicheResearch && window.JarvisNicheResearch.getLibrary ? window.JarvisNicheResearch : null; }
+  function when(it) { return dayName(it.date, { weekday: "short", month: "short", day: "numeric" }) + (it.allDay ? "" : " · " + C.timeLabel(it.time)); }
+  function stageSelect(idea) {
+    return '<select class="cc-stage" data-cal="stage-set" data-id="' + esc(idea.id) + '" aria-label="Stage for ' + esc(idea.title) + '">' + K.STAGES.map(function (st) { return '<option value="' + st.value + '"' + (K.stageOf(idea.status) === st.value ? " selected" : "") + '>' + esc(st.label) + '</option>'; }).join("") + '</select>';
+  }
+  // One idea as a card: what it is, where it is in the pipeline (changeable here), and its date.
+  function ideaCard(idea, item) {
+    const stage = K.stageOf(idea.status), sub = [K.platformLabel(idea.platform)];
+    sub.push(item ? when(item) : "No date yet");
+    return '<div class="cc-card" style="--cc:' + C.categoryInfo("content").color + '">' +
+      '<button type="button" class="cc-open" data-cal="open" data-key="' + esc("idea:" + idea.id) + '" aria-label="' + esc(idea.title + ", " + K.stageLabel(stage) + ", " + sub.join(", ")) + '">' +
+        '<span class="cal-ag-bar"></span><span class="cal-ag-main"><span class="cal-ag-title' + (stage === "published" ? " cal-item-done" : "") + '">' + esc(idea.title) + '</span><span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span></button>' +
+      '<div class="cc-ctl">' + stageSelect(idea) + '<button type="button" class="btn btn-secondary cc-date" data-cal="sched" data-id="' + esc(idea.id) + '">' + (item ? "Change date" : "Schedule") + '</button></div></div>';
+  }
+
+  function postingHtml() {
+    const lib = nr() ? nr().getLibrary() : null;
+    let body;
+    if (!lib || lib.status === "unavailable") body = '<p class="cc-note">This uses the research posts saved in Marketing. They are not available here: it needs your Marketing server and a signed-in account.</p>';
+    else if (lib.status === "loading") body = '<p class="cc-note">Loading your saved research posts…</p>';
+    else if (lib.status === "error") body = '<p class="cc-note">Could not load them: ' + esc(lib.error || "the server did not answer") + '</p><button type="button" class="btn btn-secondary" data-cal="load-lib">Try again</button>';
+    else if (lib.status !== "ready") body = '<p class="cc-note">Suggestions come from the research posts you have saved in Marketing (their publish times and views). Load them to see if there is enough to say anything.</p><button type="button" class="btn btn-secondary" data-cal="load-lib">Load my saved posts</button>';
+    else {
+      const r = K.bestPostingTimes(lib.posts, { zone: zone() });
+      if (!r.ok) body = '<p class="cc-note">Not enough data yet: ' + r.have + ' usable posts (from accounts with at least 3 saved posts), and at least ' + r.need + ' are needed before JARVIS will suggest anything. Run Research My Niche in Marketing to save more.</p>';
+      else if (!r.best.length) body = '<p class="cc-note">No time window stands out in these ' + r.have + ' posts: none did clearly better than each account’s usual.</p>';
+      else body = '<ul class="cc-times">' + r.best.map(function (w) { return '<li><strong>' + esc(w.label) + '</strong><span> posts there got ' + w.lift + '× the account’s usual views (' + w.posts + ' posts)</span></li>'; }).join("") + '</ul>' +
+        '<p class="cc-note">From ' + r.have + ' saved posts by ' + r.accounts + ' other accounts, not your own audience. Shown in ' + esc(zone().replace(/_/g, " ")) + '. A hint, not a promise.</p>';
+    }
+    return '<section class="cc-sec"><h3 class="cc-h">Best times to post</h3>' + body + '</section>';
+  }
+
+  function contentViewHtml() {
+    const k = ci();
+    if (!k) return '<div class="cal-empty"><p>The Idea Library is not available right now.</p></div>';
+    const ideas = k.getIdeas(), pl = K.pipeline(ideas), r = C.rangeFor("content", anchor, settings.weekStart);
+    let h = '<div class="cc">';
+    h += '<div class="cc-actions"><button type="button" class="btn btn-primary" data-cal="sched">+ Schedule an idea</button><button type="button" class="btn btn-secondary" data-cal="batch">+ Batch filming</button><button type="button" class="btn btn-secondary" data-cal="new-idea">+ New idea</button></div>';
+    h += '<div class="cc-stages" role="group" aria-label="Content stages">' + K.STAGES.map(function (st) {
+      return '<button type="button" class="cal-chip-btn" data-cal="stage" data-v="' + st.value + '" aria-pressed="' + (contentStage === st.value) + '">' + esc(st.label) + ' <b>' + pl.counts[st.value] + '</b></button>';
+    }).join("") + '</div>';
+    if (!pl.total) h += '<p class="cc-note cc-pad">No ideas yet. Write or generate ideas in Marketing › Content Studio, then schedule them here.</p>';
+
+    // coming up: ideas with a date, product drops, content planner posts and filming sessions
+    const all = allItems(r.from, r.to).filter(function (it) {
+      if (it.source === "idea") return !contentStage || it.stage === contentStage;
+      return it.source === "bizContent" || (it.source === "launch" && it.id !== "brand") || (it.source === "event" && it.linked && it.linked.type === "batch");
+    });
+    itemMap = {}; all.forEach(function (it) { itemMap[it.key] = it; });
+    const days = C.agenda(all, r.from, r.to), byId = {}; ideas.forEach(function (i) { byId[i.id] = i; });
+    h += '<section class="cc-sec"><h3 class="cc-h">Coming up · ' + esc(C.fmtDate(r.from, { month: "short", day: "numeric" }) + " – " + C.fmtDate(r.to, { month: "short", day: "numeric" })) + '</h3>';
+    if (!days.length) h += '<p class="cc-note cc-pad">Nothing scheduled in these 30 days' + (contentStage ? " at this stage" : "") + '. Schedule an idea to put it on the calendar.</p>';
+    days.forEach(function (d) {
+      h += '<div class="cal-ag-day' + (d.date === today() ? " is-today" : "") + '">' + esc((d.date === today() ? "Today · " : "") + dayName(d.date, { weekday: "long", month: "short", day: "numeric" })) + '</div>' +
+        d.items.map(function (it) { return it.source === "idea" && byId[it.id] ? ideaCard(byId[it.id], it) : rowHtml(it); }).join("");
+    });
+    h += '</section>';
+
+    // waiting for a date
+    const needs = K.needsDate(ideas).filter(function (i) { return !contentStage || K.stageOf(i.status) === contentStage; });
+    if (needs.length) {
+      const shown = showAllNeeds ? needs : needs.slice(0, 5);
+      h += '<section class="cc-sec"><h3 class="cc-h">Waiting for a date <span class="cc-n">' + needs.length + '</span></h3>' + shown.map(function (i) { return ideaCard(i, null); }).join("") +
+        (needs.length > 5 ? '<button type="button" class="cal-more cc-more" data-cal="more-needs">' + (showAllNeeds ? "Show fewer" : "Show all " + needs.length) + '</button>' : "") + '</section>';
+    }
+    h += postingHtml();
+    return h + '</div>';
+  }
+
+  /* ---- scheduling an idea ---- */
+
+  function openSchedule(ideaId) {
+    const k = ci(); if (!k) return;
+    const ideas = k.getIdeas(), idea = ideaId ? ideas.filter(function (i) { return i.id === ideaId; })[0] : null;
+    modal = { kind: "sched", form: { id: idea ? idea.id : "", date: idea && C.isDate(idea.plannedDate) ? idea.plannedDate : (selected || anchor || today()), time: idea && C.isTime(idea.plannedTime) ? idea.plannedTime : "", status: idea ? K.stageOf(idea.status) : "" }, error: "", opener: document.activeElement };
+    showModal(); focusSoon(idea ? "#calC_date" : "#calC_idea");
+  }
+  function schedFormHtml(m) {
+    const f = m.form, ideas = ci().getIdeas().filter(function (i) { return K.stageOf(i.status) !== "published" || i.id === f.id; }).sort(function (a, b) { return a.title < b.title ? -1 : 1; });
+    const cur = ideas.filter(function (i) { return i.id === f.id; })[0];
+    if (!ideas.length) return '<p class="field-hint">There are no ideas to schedule yet. Write or generate some in Marketing › Content Studio.</p><div class="cal-actions"><button type="button" class="btn btn-primary" data-cal="new-idea-modal">+ New idea</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
+    let h = '';
+    if (m.error) h += '<div class="cal-banner" role="alert">' + esc(m.error) + '</div>';
+    h += '<div class="cal-field"><label for="calC_idea">Idea</label><select id="calC_idea"><option value="">Choose an idea…</option>' + ideas.map(function (i) { return '<option value="' + esc(i.id) + '"' + (i.id === f.id ? " selected" : "") + '>' + esc(i.title + " (" + K.stageLabel(i.status) + ")") + '</option>'; }).join("") + '</select></div>';
+    h += '<div class="cal-row"><div class="cal-field"><label for="calC_date">Post on</label><input type="date" id="calC_date" value="' + esc(f.date) + '"></div><div class="cal-field"><label for="calC_time">At (optional)</label><input type="time" id="calC_time" value="' + esc(f.time) + '"></div></div>';
+    h += '<div class="cal-field"><label for="calC_stage">Stage</label><select id="calC_stage">' + K.STAGES.map(function (st) { return '<option value="' + st.value + '"' + (f.status === st.value ? " selected" : "") + '>' + esc(st.label) + '</option>'; }).join("") + '</select></div>';
+    h += '<p class="field-hint">' + (cur ? esc(K.platformLabel(cur.platform)) + ". " : "") + 'The date and stage are saved on the idea itself, in the Idea Library.</p>';
+    h += '<div class="cal-actions"><button type="submit" class="btn btn-primary">Put on the calendar</button><button type="button" class="btn btn-secondary" data-cal="close">Cancel</button></div>';
+    if (cur && C.isDate(cur.plannedDate)) h += '<div class="cal-actions cal-actions-more"><button type="button" class="btn btn-secondary" data-cal="sched-clear">Take off the calendar</button></div>';
+    return h;
+  }
+  function readSched() {
+    const v = function (id) { const e = $(id); return e ? e.value : ""; };
+    return { id: v("calC_idea"), date: v("calC_date"), time: v("calC_time"), status: v("calC_stage") };
+  }
+  function saveSched(clear) {
+    const f = readSched(); modal.form = f;
+    if (!f.id) { modal.error = "Choose an idea."; showModal(); return; }
+    const r = clear ? { ok: true, patch: K.unschedulePatch() } : K.schedulePatch({ date: f.date, time: f.time, status: f.status });
+    if (!r.ok) { modal.error = r.error; showModal(); return; }
+    const idea = ci().getIdeas().filter(function (i) { return i.id === f.id; })[0], title = idea ? idea.title : "Idea";
+    ci().updateIdea(f.id, r.patch).then(function () {
+      closeModal(false);
+      if (!clear && view !== "agenda" && view !== "content" && (f.date < C.rangeFor(view, anchor, settings.weekStart).from || f.date > C.rangeFor(view, anchor, settings.weekStart).to)) { anchor = f.date; selected = f.date; }
+      render(); notify();
+      announce(clear ? title + " is off the calendar." : title + " is on " + dayName(f.date) + (f.time ? " at " + C.timeLabel(f.time) : "") + ".");
+      if (!clear) focusSoon('[data-key="idea:' + f.id + '"]', true);
+    });
+  }
+
+  /* ---- a filming session for several ideas ---- */
+
+  function openBatch() {
+    const k = ci(); if (!k) return;
+    modal = { kind: "batch", form: { ids: [], date: selected || anchor || today(), time: "10:00", minutes: 120, film: true }, error: "", opener: document.activeElement };
+    showModal(); focusSoon("#calB_date");
+  }
+  function batchFormHtml(m) {
+    const f = m.form, pool = K.needsDate(ci().getIdeas()).concat(ci().getIdeas().filter(function (i) { return C.isDate(i.plannedDate) && K.stageOf(i.status) !== "published"; })).filter(function (i) { return K.stageRank(i.status) <= K.stageRank("filming"); });
+    const seen = {}, list = pool.filter(function (i) { if (seen[i.id]) return false; seen[i.id] = true; return true; });
+    let h = '';
+    if (m.error) h += '<div class="cal-banner" role="alert">' + esc(m.error) + '</div>';
+    h += '<fieldset class="cc-pick"><legend>Ideas to film</legend>' + (list.length ? list.map(function (i) {
+      return '<label class="cal-check"><input type="checkbox" name="calB_idea" value="' + esc(i.id) + '"' + (f.ids.indexOf(i.id) !== -1 ? " checked" : "") + '><span>' + esc(i.title) + ' <small>' + esc(K.stageLabel(i.status) + " · " + K.platformLabel(i.platform)) + '</small></span></label>';
+    }).join("") : '<p class="field-hint">No ideas at the Idea, Script or Filming stage. Add some in Marketing › Content Studio.</p>') + '</fieldset>';
+    h += '<div class="cal-row"><div class="cal-field"><label for="calB_date">Date</label><input type="date" id="calB_date" value="' + esc(f.date) + '"></div><div class="cal-field"><label for="calB_time">Starts</label><input type="time" id="calB_time" value="' + esc(f.time) + '"></div></div>';
+    h += '<div class="cal-field"><label for="calB_len">Length</label><select id="calB_len">' + [60, 90, 120, 180, 240].map(function (n) { return '<option value="' + n + '"' + (Number(f.minutes) === n ? " selected" : "") + '>' + (n < 120 ? n + " minutes" : (n / 60) + " hours") + '</option>'; }).join("") + '</select></div>';
+    h += '<label class="cal-check"><input type="checkbox" id="calB_film"' + (f.film ? " checked" : "") + '> Move these ideas to the Filming stage</label>';
+    h += '<p class="field-hint">This adds a work block to your calendar listing the ideas. Ideas already further along keep their stage.</p>';
+    h += '<div class="cal-actions"><button type="submit" class="btn btn-primary">Add the session</button><button type="button" class="btn btn-secondary" data-cal="close">Cancel</button></div>';
+    return h;
+  }
+  function saveBatch() {
+    const ids = Array.prototype.slice.call(document.querySelectorAll('#calForm input[name="calB_idea"]:checked')).map(function (e) { return e.value; });
+    const f = { ids: ids, date: $("calB_date").value, time: $("calB_time").value, minutes: Number($("calB_len").value), film: $("calB_film").checked };
+    modal.form = f;
+    const chosen = ci().getIdeas().filter(function (i) { return ids.indexOf(i.id) !== -1; });
+    const r = K.batchInput(chosen, { date: f.date, time: f.time, minutes: f.minutes });
+    if (!r.ok) { modal.error = r.error; showModal(); return; }
+    const prev = events, res = C.add(events, r.input, ctx());
+    if (!res.ok) { modal.error = res.error; showModal(); return; }
+    if (!commit(res.events)) { modal.error = saveError; showModal(); return; }
+    if (f.film) chosen.forEach(function (i) { if (K.stageRank(i.status) < K.stageRank("filming")) ci().updateIdea(i.id, { status: "filming" }); });
+    closeModal(false);
+    render(); withUndo("Added a filming session.", prev, res.events);
+    announce("Added a filming session for " + chosen.length + (chosen.length === 1 ? " idea" : " ideas") + " on " + dayName(f.date) + ".");
+  }
+  function batchListHtml(ids) {
+    const ideas = ci() ? ci().getIdeas() : [], by = {}; ideas.forEach(function (i) { by[i.id] = i; });
+    return '<div class="cal-field"><span class="cal-lab">Ideas in this session</span>' + ids.map(function (id) {
+      return by[id] ? '<div class="cc-li"><span>' + esc(by[id].title) + ' <small>' + esc(K.stageLabel(by[id].status)) + '</small></span><button type="button" class="btn btn-secondary" data-cal="open-idea" data-id="' + esc(id) + '">Open</button></div>' : '<div class="cc-li"><span class="field-hint">An idea that was removed from the Idea Library</span></div>';
+    }).join("") + '</div>';
   }
 
   /* ---------------- moving by drag ---------------- */
@@ -537,6 +711,19 @@
       const keepTime = target.time === undefined;
       h.commitTasks(h.getTasks().map(function (t) { return t.id === it.id ? Object.assign({}, t, { date: target.date, time: keepTime ? t.time : target.time }) : t; }));
       render(); notify(); announce("Moved " + it.title + " to " + dayName(target.date) + (keepTime ? "" : " at " + C.timeLabel(target.time)) + "."); return;
+    }
+    if (it.source === "idea") {
+      const idea = ci() && ci().getIdeas().filter(function (x) { return x.id === it.id; })[0];
+      if (!idea) return;
+      const m = K.movePatch(idea, target);
+      if (!m.ok) { core().showToast(m.error); render(); return; }
+      const back = { plannedDate: idea.plannedDate || "", plannedTime: idea.plannedTime || "" };
+      ci().updateIdea(it.id, m.patch).then(function () {
+        render(); notify();
+        showUndo("Moved \u201c" + it.title + "\u201d.", function () { ci().updateIdea(it.id, back).then(function () { render(); notify(); announce("Undone."); }); });
+        announce("Moved " + it.title + " to " + dayName(target.date) + (m.patch.plannedTime ? " at " + C.timeLabel(m.patch.plannedTime) : "") + ".");
+      });
+      return;
     }
     if (it.source === "bizTask") {
       if (window.JarvisBusiness && window.JarvisBusiness.setTaskDeadline && window.JarvisBusiness.setTaskDeadline(it.id, target.date)) { render(); notify(); announce("Moved " + it.title + " to " + dayName(target.date) + "."); }
@@ -662,7 +849,11 @@
     if (Date.now() < suppressClickUntil) return;
     const el = e.target.closest("[data-cal]");
     const act = el ? el.getAttribute("data-cal") : null;
-    if (act === "open") { const it = itemMap[el.getAttribute("data-key")]; if (it) openItem(it); return; }
+    if (act === "open") {
+      const key = el.getAttribute("data-key"), it = itemMap[key];
+      if (it) openItem(it); else if (/^idea:/.test(key) && ci()) ci().openIdea(key.slice(5));   // an idea with no date yet is not a dated item, but still opens
+      return;
+    }
     if (act === "tick") { tick(el.getAttribute("data-key")); return; }
     if (act === "num") {
       const d = el.getAttribute("data-date");
@@ -672,6 +863,12 @@
     if (act === "goto-day") { gotoDay(el.getAttribute("data-date")); return; }
     if (act === "new-on") { openNew({ date: el.getAttribute("data-date") }); return; }
     if (act === "new") { openNew({}); return; }
+    if (act === "sched") { openSchedule(el.getAttribute("data-id") || ""); return; }
+    if (act === "batch") { openBatch(); return; }
+    if (act === "new-idea") { if (ci()) ci().newIdea(); return; }
+    if (act === "stage") { const v = el.getAttribute("data-v"); contentStage = contentStage === v ? "" : v; render(); focusSoon('#calStage [data-cal="stage"][data-v="' + v + '"]'); return; }
+    if (act === "more-needs") { showAllNeeds = !showAllNeeds; render(); focusSoon('#calStage [data-cal="more-needs"]'); return; }
+    if (act === "load-lib") { const n = nr(); if (n) { n.loadLibrary().then(render, render); render(); } return; }
     if (act === "clear") { clearFilters(); return; }
     if (act === "slot" && e.target === el) {
       const date = el.getAttribute("data-date"), min = snapMinute(el, e.clientY, 0);
@@ -684,7 +881,9 @@
     }
   }
   function openItem(it) {
-    if (it.source === "bizTask" || it.source === "bizGoal" || it.source === "launch" || it.source === "goal") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
+    // A scheduled piece of content opens its idea in Marketing > Content Studio.
+    if (it.source === "idea") { if (ci()) ci().openIdea(it.id); return; }
+    if (it.source === "bizTask" || it.source === "bizGoal" || it.source === "launch" || it.source === "goal" || it.source === "bizContent") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
     if (it.source === "task") { modal = { kind: "task", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="task-toggle"]'); return; }
     openEdit(it); focusSoon("#calF_title");
   }
@@ -708,6 +907,10 @@
     if (act === "close") { closeModal(); return; }
     if (act === "scope") { syncForm(); modal.form.scope = el.getAttribute("data-v"); redrawModal(); focusSoon('#calForm [data-cal="scope"][data-v="' + modal.form.scope + '"]'); return; }
     if (act === "byday") { syncForm(); const d = Number(el.getAttribute("data-v")), a = modal.form.byDay, i = a.indexOf(d); if (i === -1) a.push(d); else if (a.length > 1) a.splice(i, 1); modal.form.byDay = a.sort(function (x, y) { return x - y; }); redrawModal(); focusSoon('#calForm [data-cal="byday"][data-v="' + d + '"]'); return; }
+    if (act === "sched-clear") { saveSched(true); return; }
+    if (act === "new-idea-modal") { closeModal(false); if (ci()) ci().newIdea(); return; }
+    if (act === "open-idea") { const id = el.getAttribute("data-id"); closeModal(false); if (ci()) ci().openIdea(id); return; }
+    if (act === "to-sched") { closeModal(false); openSchedule(); return; }
     if (act === "duplicate") { duplicateFromModal(); return; }
     if (act === "delete") { deleteFromModal(); return; }
     if (act === "ext-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
@@ -718,6 +921,11 @@
   function tickItem(it) { itemMap[it.key] = it; tick(it.key); }
 
   function onModalChange(e) {
+    if (modal && modal.kind === "sched" && e.target.id === "calC_idea") {
+      const idea = ci().getIdeas().filter(function (i) { return i.id === e.target.value; })[0];
+      if (idea) { modal.form = readSched(); modal.form.status = K.stageOf(idea.status); if (C.isDate(idea.plannedDate)) { modal.form.date = idea.plannedDate; modal.form.time = C.isTime(idea.plannedTime) ? idea.plannedTime : ""; } modal.error = ""; showModal(); focusSoon("#calC_date"); }
+      return;
+    }
     if (!modal || modal.kind !== "event") return;
     const id = e.target.id;
     const f = modal.form;
@@ -750,6 +958,8 @@
     e.preventDefault();
     if (!modal) return;
     if (modal.kind === "settings") { saveSettings(); return; }
+    if (modal.kind === "sched") { saveSched(false); return; }
+    if (modal.kind === "batch") { saveBatch(); return; }
     if (modal.kind === "event") saveModal();
   }
   function saveSettings() {
@@ -766,7 +976,7 @@
     const tg = e.target, tag = tg && tg.tagName ? tg.tagName.toLowerCase() : "";
     if (tag === "input" || tag === "textarea" || tag === "select" || (tg && tg.isContentEditable)) { if (e.key === "Escape" && tg.id === "calSearch") { tg.blur(); } return; }
     const k = e.key;
-    if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda");
+    if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "c") setView("content");
     else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); $("calSearch").focus(); }
     else if (k === "ArrowLeft" && tag !== "button") go(-1); else if (k === "ArrowRight" && tag !== "button") go(1);
     else if (k === "j") go(1); else if (k === "k") go(-1);
@@ -806,6 +1016,12 @@
     });
     const stage = $("calStage");
     stage.addEventListener("click", onStageClick);
+    stage.addEventListener("change", function (e) {
+      const sel = e.target.closest('[data-cal="stage-set"]');
+      if (!sel || !ci()) return;
+      const id = sel.getAttribute("data-id"), v = sel.value;
+      ci().updateIdea(id, { status: v }).then(function () { render(); notify(); announce("Stage set to " + K.stageLabel(v) + "."); focusSoon('#calStage select[data-id="' + id + '"]'); });
+    });
     stage.addEventListener("pointerdown", onPointerDown);
     // Once a press has turned into a drag on a touch screen the page must not scroll with it.
     stage.addEventListener("touchmove", function (e) { if (drag && drag.active && e.cancelable) e.preventDefault(); }, { passive: false });

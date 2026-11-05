@@ -1735,7 +1735,7 @@
   /* ---- for the Calendar and Home screens ----
      They read the dates kept here (task deadlines, goal target dates, product and brand launch dates) and can tick a task
      or move its deadline. Nothing is copied: these are the same records the Business tabs show. */
-  function getScheduleData() { return { tasks: data.tasks, goals: data.goals, products: data.products, profile: data.profile }; }
+  function getScheduleData() { return { tasks: data.tasks, goals: data.goals, products: data.products, content: data.content, profile: data.profile }; }
   function setTaskDone(id, done) {
     const t = data.tasks.find(function (x) { return x.id === id; });
     if (!t) return false;
