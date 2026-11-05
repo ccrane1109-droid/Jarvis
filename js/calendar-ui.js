@@ -413,6 +413,7 @@
       '<div class="cal-field"><label for="calS_len">New events last</label><select id="calS_len">' + selOpts([30, 45, 60, 90, 120, 180].map(function (n) { return { value: n, label: n < 60 ? n + " minutes" : (n / 60) + (n === 60 ? " hour" : " hours") }; }), s.defaultDuration) + '</select></div>' +
       '<div class="cal-field"><label for="calS_rem">New events remind me</label><select id="calS_rem">' + selOpts([{ value: -1, label: "Not at all" }].concat(C.REMINDER_CHOICES), s.defaultReminder) + '</select></div>' +
       '<button type="button" class="btn btn-secondary" data-cal="rem-settings">Reminder and notification settings</button>' +
+      '<button type="button" class="btn btn-secondary" data-cal="ics-open">Google Calendar and calendar files</button>' +
       '<p class="field-hint">Events keep the time zone they were made in, so a 9 AM meeting stays 9 AM there. They are shown here in the zone above.</p>' +
       '<div class="cal-actions"><button type="submit" class="btn btn-primary">Save settings</button><button type="button" class="btn btn-secondary" data-cal="close">Cancel</button></div>';
   }
@@ -927,6 +928,7 @@
     if (act === "scope") { syncForm(); modal.form.scope = el.getAttribute("data-v"); redrawModal(); focusSoon('#calForm [data-cal="scope"][data-v="' + modal.form.scope + '"]'); return; }
     if (act === "byday") { syncForm(); const d = Number(el.getAttribute("data-v")), a = modal.form.byDay, i = a.indexOf(d); if (i === -1) a.push(d); else if (a.length > 1) a.splice(i, 1); modal.form.byDay = a.sort(function (x, y) { return x - y; }); redrawModal(); focusSoon('#calForm [data-cal="byday"][data-v="' + d + '"]'); return; }
     if (act === "rem-settings") { if (modal && modal.kind === "event") syncForm(); if (window.JarvisCalReminders) window.JarvisCalReminders.openSettings(el); return; }
+    if (act === "ics-open") { closeModal(false); if (window.JarvisCalFile) window.JarvisCalFile.open($("calFoot") ? $("calFoot").querySelector('[data-cal="settings"]') : null); return; }   // closed first: the Undo bar must not sit behind it
     if (act === "sched-clear") { saveSched(true); return; }
     if (act === "new-idea-modal") { closeModal(false); if (ci()) ci().newIdea(); return; }
     if (act === "open-idea") { const id = el.getAttribute("data-id"); closeModal(false); if (ci()) ci().openIdea(id); return; }

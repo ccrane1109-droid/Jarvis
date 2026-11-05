@@ -583,6 +583,11 @@
         if (window.console) console.error("Calendar reminders failed to start; the calendar is unaffected", err);
       }
       try {
+        if (window.JarvisCalFile && typeof window.JarvisCalFile.init === "function") window.JarvisCalFile.init();
+      } catch (err) {
+        if (window.console) console.error("Calendar files failed to start; the calendar is unaffected", err);
+      }
+      try {
         if (window.JarvisHome && typeof window.JarvisHome.init === "function") window.JarvisHome.init();
       } catch (err) {
         if (window.console) console.error("Home failed to start; the rest of the app is unaffected", err);
