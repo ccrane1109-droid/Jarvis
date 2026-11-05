@@ -207,6 +207,11 @@
   function buildBriefingHTML() {
     const rows = [];
 
+    if (window.JarvisHome && typeof window.JarvisHome.briefingLine === "function") {
+      const line = window.JarvisHome.briefingLine();
+      if (line) rows.push('<div class="briefing-row"><strong>Schedule:</strong> ' + escapeHtml(line) + '</div>');
+    }
+
     if (window.JarvisBusiness && typeof window.JarvisBusiness.getSummary === "function") {
       const biz = window.JarvisBusiness.getSummary();
       const netClass = biz.net >= 0 ? "text-positive" : "text-negative";
@@ -302,7 +307,7 @@
   // matching one there, and follow it whenever anything else switches section (other modules do, e.g. opening a
   // reminder from a notification), so the bar always shows where you are. When the open section is one of the ones
   // behind "More", that button takes its name so the current section is still named on screen.
-  const PRIMARY_NAV = ["navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnCalendar"];
+  const PRIMARY_NAV = ["navBtnHome", "navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnCalendar"];
   const SHORT_NAV_LABELS = { navBtnTrading: "Trading" };
   const TEXT_FIELD = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=range]):not([type=file]), textarea, select";
 
@@ -400,6 +405,7 @@
     setupTabGroup(mainNavBtns, mainPanels, function (targetId) {
       syncBottomNav();
       if (targetId === "panel-calendar" && window.JarvisCalendar && typeof window.JarvisCalendar.onShow === "function") window.JarvisCalendar.onShow();
+      if (targetId === "panel-home" && window.JarvisHome && typeof window.JarvisHome.onShow === "function") window.JarvisHome.onShow();
     });
     syncBottomNav = initBottomNav();
 
@@ -548,11 +554,6 @@
         if (window.console) console.error("Habits failed to start; the rest of the app is unaffected", err);
       }
       try {
-        if (window.JarvisCalendar && typeof window.JarvisCalendar.init === "function") window.JarvisCalendar.init();
-      } catch (err) {
-        if (window.console) console.error("The calendar failed to start; the rest of the app is unaffected", err);
-      }
-      try {
         if (window.JarvisDayPlan && typeof window.JarvisDayPlan.init === "function") window.JarvisDayPlan.init();
       } catch (err) {
         if (window.console) console.error("The day planner failed to start; the rest of the app is unaffected", err);
@@ -565,6 +566,17 @@
       if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
       if (window.JarvisFormCheck && typeof window.JarvisFormCheck.init === "function") window.JarvisFormCheck.init();
       if (window.JarvisContentIntel && typeof window.JarvisContentIntel.init === "function") window.JarvisContentIntel.init();
+      // The Calendar and Home read dates from Habits and Business, so they start after both have loaded.
+      try {
+        if (window.JarvisCalendar && typeof window.JarvisCalendar.init === "function") window.JarvisCalendar.init();
+      } catch (err) {
+        if (window.console) console.error("The calendar failed to start; the rest of the app is unaffected", err);
+      }
+      try {
+        if (window.JarvisHome && typeof window.JarvisHome.init === "function") window.JarvisHome.init();
+      } catch (err) {
+        if (window.console) console.error("Home failed to start; the rest of the app is unaffected", err);
+      }
       // Last of the modules (before the briefing, which reads its summary), and guarded: a problem starting the
       // Discipline tab must never stop the other tabs from working.
       try {

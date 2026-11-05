@@ -4036,3 +4036,51 @@ button.hs-day:hover { background: var(--card-hover); }
   .cal-ev { left: calc(var(--col, 0) * 9px + 1px); width: calc(100% - (var(--cols, 1) - 1) * 9px - 3px); }
   .cal-ev .t { overflow-wrap: break-word; hyphens: auto; }
 }
+
+/* ---------------- Home ---------------- */
+.hm-hello { margin: 4px 0 14px; }
+.hm-title { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+.hm-date { margin: 2px 0 0; color: var(--text-dim); font-size: 15px; }
+.hm-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.hm-actions .btn { flex: 1 1 130px; min-height: 48px; }
+.hm-scope .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+.hm-card { padding: 14px 0 6px; }
+.hm-card > .card-title-row, .hm-card > .card-title { padding: 0 16px; }
+.hm-counts { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.hm-counts.is-late { color: var(--red); }
+.hm-body { padding: 0; }
+.hm-sec { padding: 10px 0 8px; border-top: 1px solid var(--card-border); }
+.hm-sec:first-child { border-top: 0; }
+.hm-sec-title { margin: 0 16px 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim); }
+.hm-sec-n { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--card-border); font-size: 12px; text-align: center; color: var(--text); }
+.hm-late .hm-sec-title { color: var(--red); }
+.hm-late .hm-sec-n { border-color: var(--red); color: var(--red); }
+.hm-row { display: flex; align-items: center; padding-right: 12px; }
+.hm-row:hover { background: var(--card-hover); }
+.hm-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 8px 8px 16px; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.hm-time { flex: none; width: 68px; font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.hm-time:empty { display: none; }
+.hm-bar { flex: none; width: 4px; align-self: stretch; border-radius: 2px; background: var(--cc, var(--accent)); }
+.hm-main { flex: 1; min-width: 0; }
+.hm-rtitle { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.hm-rtitle.is-done { text-decoration: line-through; opacity: 0.6; }
+.hm-sub { display: block; font-size: 13px; color: var(--text-dim); }
+.hm-row.is-passed .hm-rtitle { opacity: 0.55; }
+.hm-badge { flex: none; font-size: 12px; font-weight: 700; color: #fff; background: var(--accent-dim); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px; }
+.hm-tick { flex: none; position: relative; isolation: isolate; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: #06210f; font: inherit; font-weight: 800; cursor: pointer; }
+.hm-tick::before { content: ""; position: absolute; inset: 9px; z-index: -1; border-radius: 50%; border: 2px solid var(--text-faint); }
+.hm-tick.done::before { background: var(--green); border-color: var(--green); }
+.hm-open:focus-visible, .hm-tick:focus-visible, .hm-more:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: -2px; }
+.hm-more { display: block; min-height: 44px; margin: 0 16px; padding: 0; border: 0; background: transparent; color: var(--accent-hover); font: inherit; font-size: 14px; cursor: pointer; }
+.hm-empty { margin: 4px 16px 8px; color: var(--text-dim); font-size: 14px; }
+.hm-empty-all { margin-top: 10px; }
+.hm-add { margin: 0 16px 8px; min-height: 44px; }
+.hm-glance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 8px 16px 12px; }
+.hm-scope .field-hint { color: var(--text-dim); }
+
+/* Ten tabs in the header row: let the row shrink and scroll inside its space (with the edge arrows) instead of pushing the account button onto a second line. */
+@media (min-width: 901px) {
+  .header-inner .nav-scroll-wrap { flex: 1 1 0; }
+  .header-inner .main-nav-btn { padding-left: 12px; padding-right: 12px; }
+}
+#calFoot .cal-more { min-height: 44px; }

@@ -1732,5 +1732,22 @@
     renderAll();
   }
 
-  window.JarvisBusiness = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
+  /* ---- for the Calendar and Home screens ----
+     They read the dates kept here (task deadlines, goal target dates, product and brand launch dates) and can tick a task
+     or move its deadline. Nothing is copied: these are the same records the Business tabs show. */
+  function getScheduleData() { return { tasks: data.tasks, goals: data.goals, products: data.products, profile: data.profile }; }
+  function setTaskDone(id, done) {
+    const t = data.tasks.find(function (x) { return x.id === id; });
+    if (!t) return false;
+    t.completed = !!done; save(); renderTasks();
+    return true;
+  }
+  function setTaskDeadline(id, date) {
+    const t = data.tasks.find(function (x) { return x.id === id; });
+    if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) return false;
+    t.deadline = date; save(); renderTasks();
+    return true;
+  }
+
+  window.JarvisBusiness = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getScheduleData: getScheduleData, setTaskDone: setTaskDone, setTaskDeadline: setTaskDeadline };
 })();
