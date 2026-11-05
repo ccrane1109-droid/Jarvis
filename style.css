@@ -4084,3 +4084,9 @@ button.hs-day:hover { background: var(--card-hover); }
   .header-inner .main-nav-btn { padding-left: 12px; padding-right: 12px; }
 }
 #calFoot .cal-more { min-height: 44px; }
+
+/* Six buttons on the narrowest phones: a little less padding so the longest names ("Marketing", "Nutrition") are not cut off. */
+@media (max-width: 340px) {
+  .bottom-nav { padding-left: 2px; padding-right: 2px; gap: 0; }
+  .bottom-nav-btn { padding-left: 1px; padding-right: 1px; }
+}
