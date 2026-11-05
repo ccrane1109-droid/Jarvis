@@ -4204,3 +4204,4 @@ button.hs-day:hover { background: var(--card-hover); }
 .cal-rem-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
 @media (max-width: 360px) { .cal-rem-list { grid-template-columns: 1fr; } }
 #calForm > .btn { min-height: 44px; }
+.cal-rem .cal-more { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; }
