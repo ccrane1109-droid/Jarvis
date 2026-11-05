@@ -35,7 +35,7 @@ test("the backup list overlaps neither the original sync nor the secrets", () =>
   assert.equal(new Set(B.BACKUP_KEYS).size, B.BACKUP_KEYS.length, "no repeats");
   assert.deepEqual(B.BACKUP_KEYS.filter((k) => SYNCED.includes(k)), [], "no key is stored in two places");
   assert.deepEqual(B.BACKUP_KEYS.filter((k) => /Connections|SocialKey|Blobs/.test(k)), [], "no secrets");
-  ["jarvisNutritionLog", "jarvisNutritionSavedFoods", "jarvisTasks", "jarvisGoals", "jarvisDiscipline", "jarvisWakeCheck", "jarvisGroceryPantry"].forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k));
+  ["jarvisNutritionLog", "jarvisNutritionSavedFoods", "jarvisTasks", "jarvisGoals", "jarvisDiscipline", "jarvisWakeCheck", "jarvisGroceryPantry", "jarvisCalendarEvents", "jarvisCalendarSettings"].forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k));
 });
 
 test("every backed-up key has a merge rule that fits its shape", () => {
@@ -260,4 +260,21 @@ test("Wake check: merging stored text uses its own rule and keeps both devices' 
   const r = B.mergeText("jarvisWakeCheck", l, c);
   assert.equal(r.ok, true);
   assert.deepEqual(Object.keys(JSON.parse(r.text).days).sort(), ["2026-11-02", "2026-11-03"]);
+});
+
+test("calendar events: a deletion on one device reaches the other, and an undo wins over it", () => {
+  const ev = (o) => Object.assign({ id: "e1", title: "Meeting", date: "2026-11-04", time: "10:00", createdAt: 100, updatedAt: 100 }, o);
+  const merge = (a, b) => JSON.parse(B.mergeText("jarvisCalendarEvents", JSON.stringify(a), JSON.stringify(b)).text);
+  // phone deleted it (marker, newer); the other copy still has it live
+  const deleted = merge([ev({ deletedAt: 500, updatedAt: 500 })], [ev()]);
+  assert.equal(deleted.length, 1);
+  assert.equal(deleted[0].deletedAt, 500, "the deletion wins, so the event does not come back");
+  // then the deletion was undone later
+  const undone = merge([ev({ updatedAt: 900 })], [ev({ deletedAt: 500, updatedAt: 500 })]);
+  assert.equal(undone[0].deletedAt, undefined);
+  // events made on each device are both kept
+  assert.equal(merge([ev({ id: "a" })], [ev({ id: "b" })]).length, 2);
+  // settings: the newer copy wins whole
+  const s = JSON.parse(B.mergeText("jarvisCalendarSettings", JSON.stringify({ weekStart: 0, updatedAt: 10 }), JSON.stringify({ weekStart: 1, updatedAt: 20 })).text);
+  assert.equal(s.weekStart, 1);
 });
