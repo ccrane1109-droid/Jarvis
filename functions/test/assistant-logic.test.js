@@ -218,6 +218,27 @@ test("catching up: old tasks are counted, not moved; Business deadlines and cale
   assert.match(r.proposals[0].reason, /High priority goes first/);
 });
 
+test("catching up: a calendar task with a time keeps its time, and being moved next to a meeting is not a clash", () => {
+  const events = build([
+    ev("Call the printer", "2026-11-03", "15:00", "", { kind: "task" }),
+    ev("Long meeting", "2026-11-04", "14:00", "16:00")
+  ]);
+  const items = itemsOf(events);
+  const r = A.catchUp({ items, plan: plan(), now: NOW });
+  assert.equal(r.proposals.length, 1);
+  const p = r.proposals[0];
+  assert.deepEqual([p.move.source, p.move.from, p.move.to], ["event", { date: "2026-11-03", time: "15:00" }, { date: TODAY, time: "15:00" }], "the same time of day on the new day");
+  const res = A.apply(events, r.proposals, [p.id], ctx());
+  assert.deepEqual(res.skipped, [], "a task has no length, so it isn't blocked by a meeting that covers 15:00");
+  const moved = C.byId(res.events, events[0].id);
+  assert.deepEqual([moved.date, moved.time], [TODAY, "15:00"]);
+  // a task with no time still moves by date only
+  const plain = build([ev("Send invoice", "2026-11-03", "", "", { kind: "task", allDay: true })]);
+  const q = A.catchUp({ items: itemsOf(plain), plan: plan(), now: NOW }).proposals[0];
+  assert.deepEqual(q.move.to, { date: TODAY });
+  assert.deepEqual(A.apply(plain, [q], [q.id], ctx()).skipped, []);
+});
+
 test("splitting a project: even sessions, spread out, finished before the deadline, short of room is said", () => {
   const r = A.splitProject([], { title: "Lookbook", minutes: 360, deadline: "2026-11-20", plan: plan(), now: NOW });
   assert.ok(r.ok);

@@ -227,7 +227,7 @@
     const consider = function (entry) { if (entry.date >= n.date) { bump(entry.date); return; } if (entry.date < cutoff) { older++; return; } late.push(entry); };
     tasks.forEach(function (t) { if (t && !t.completed && typeof t.id === "string" && C.isDate(t.date) && str(t.text)) consider({ source: "task", id: t.id, title: str(t.text), date: t.date, prio: prioRank(t.priority), occDate: t.date }); });
     biz.forEach(function (t) { if (t && !t.completed && typeof t.id === "string" && C.isDate(t.deadline) && str(t.text)) consider({ source: "bizTask", id: t.id, title: str(t.text), date: t.deadline, prio: prioRank(t.priority), occDate: t.deadline }); });
-    items.forEach(function (it) { if (it && it.source === "event" && it.kind === "task" && !it.completed && !it.recurring && C.isDate(it.date)) consider({ source: "event", id: it.id, title: it.title, date: it.date, prio: prioRank(it.priority), occDate: it.occDate }); });
+    items.forEach(function (it) { if (it && it.source === "event" && it.kind === "task" && !it.completed && !it.recurring && C.isDate(it.date)) consider({ source: "event", id: it.id, title: it.title, date: it.date, time: it.allDay ? "" : it.time, prio: prioRank(it.priority), occDate: it.occDate }); });
     late.sort(function (a, b) { return b.prio - a.prio || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.title < b.title ? -1 : 1); });
     const b = board([], p, n), room = [];
     for (let d = n.date, k = 0; k <= HORIZON_DAYS; d = C.addDays(d, 1), k++) {
@@ -241,7 +241,7 @@
       if (!slot) { unplaced++; return; }
       slot.left--;
       const days = C.diffDays(e.date, n.date), src = e.source;
-      proposals.push(moveProposal(id(), "catchup", src, { id: e.id, title: e.title, occDate: e.occDate }, { date: e.date }, { date: slot.date },
+      proposals.push(moveProposal(id(), "catchup", src, { id: e.id, title: e.title, occDate: e.occDate }, e.time ? { date: e.date, time: e.time } : { date: e.date }, e.time ? { date: slot.date, time: e.time } : { date: slot.date },
         dayLabel(e.date) + " → " + dayLabel(slot.date), (src === "bizTask" ? "Business task, due " + days + (days === 1 ? " day" : " days") + " ago. The due date moves." : "Not done, " + days + (days === 1 ? " day" : " days") + " late.") + (e.prio === 3 ? " High priority goes first." : "")));
     });
     return { proposals: proposals.slice(0, MAX_PROPOSALS), unplaced: unplaced, older: older, total: late.length };
@@ -371,7 +371,7 @@
         if (ev.repeat) { skipped.push({ id: p.id, error: "That event repeats now, so I left it." }); return; }
         const occ = C.occurrence(ev, p.move.occDate, ctx.zone);
         if (occ.date !== p.move.from.date || (p.move.from.time && occ.time !== p.move.from.time)) { skipped.push({ id: p.id, error: "It was moved since I looked." }); return; }
-        if (!occ.allDay && p.move.to.time && clashAt(cur, ctx, p.move.to.date, p.move.to.time, Math.round((occ.endMs - occ.startMs) / 60000), occ.key).length) { skipped.push({ id: p.id, error: "That time is taken now." }); return; }
+        if (!occ.allDay && p.move.to.time && occ.endMs > occ.startMs && clashAt(cur, ctx, p.move.to.date, p.move.to.time, Math.round((occ.endMs - occ.startMs) / 60000), occ.key).length) { skipped.push({ id: p.id, error: "That time is taken now." }); return; }
         const r = C.moveTo(cur, p.move.id, p.move.occDate, p.move.to, "all", ctx);
         if (!r.ok) { skipped.push({ id: p.id, error: r.error }); return; }
         cur = r.events; applied.push(p.id);
