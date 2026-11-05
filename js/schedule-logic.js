@@ -115,6 +115,28 @@
     };
   }
 
+  /* ---------------- today, hour by hour ---------------- */
+
+  const DAY_START = 6, DAY_END = 22;   // the hours shown even when nothing is in them: 6 AM to 10 PM
+
+  // Today's items laid out by hour for the Home schedule. items: the items that touch today (summarize().today).
+  // opts: { today, nowHour, showEarlier }. Hours before the one just gone are folded away unless showEarlier.
+  // -> { allDay: [...], slots: [{ hour, isNow, items: [...] }], earlier: { hours, items } | null, canCollapse }
+  function daySlots(items, opts) {
+    const o = opts || {}, today = o.today, nowHour = typeof o.nowHour === "number" ? o.nowHour : 12, show = !!o.showEarlier;
+    const list = Array.isArray(items) ? items : [];
+    const allDay = list.filter(function (it) { return it.allDay; });
+    const timed = list.filter(function (it) { return !it.allDay; });
+    const hourOf = function (it) { return it.date < today ? 0 : Math.floor((it.startMin || 0) / 60); };   // one that began on an earlier day sits at midnight
+    const hours = timed.map(hourOf);
+    const lo = Math.min.apply(null, [DAY_START, nowHour].concat(hours)), hi = Math.max.apply(null, [DAY_END, nowHour].concat(hours));
+    const from = show ? lo : Math.max(lo, nowHour - 1);
+    const slots = [];
+    for (let h = from; h <= hi; h++) slots.push({ hour: h, isNow: h === nowHour, items: timed.filter(function (it) { return hourOf(it) === h; }).sort(byDay) });
+    const hidden = timed.filter(function (it) { return hourOf(it) < from; });
+    return { allDay: allDay.sort(byDay), slots: slots, earlier: from > lo ? { hours: from - lo, items: hidden.length } : null, canCollapse: show && lo < nowHour - 1 };
+  }
+
   // The one line the Daily Briefing shows.
   function briefingLine(s, today, timeLabel) {
     const parts = [];
@@ -128,6 +150,6 @@
 
   return {
     LOOKBACK_DAYS: LOOKBACK_DAYS, DEADLINE_DAYS: DEADLINE_DAYS, LIST_MAX: LIST_MAX,
-    businessItems: businessItems, summarize: summarize, isOverdue: isOverdue, whenLabel: whenLabel, daysUntil: daysUntil, briefingLine: briefingLine, byDay: byDay
+    businessItems: businessItems, summarize: summarize, daySlots: daySlots, DAY_START: DAY_START, DAY_END: DAY_END, isOverdue: isOverdue, whenLabel: whenLabel, daysUntil: daysUntil, briefingLine: briefingLine, byDay: byDay
   };
 });

@@ -42,7 +42,13 @@
   function isPhone() { return !!(window.matchMedia && window.matchMedia("(max-width: 700px)").matches); }
   function reducedMotion() { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
   function announce(text) { const el = $("calLive"); if (el) { el.textContent = ""; window.setTimeout(function () { el.textContent = text; }, 30); } }
-  function focusSoon(sel) { window.setTimeout(function () { const el = document.querySelector(sel); if (el) el.focus(); }, 0); }
+  // Focus the first match that is on screen (the same event can be drawn on Home and in the calendar).
+  function focusSoon(sel, visibleOnly) {
+    window.setTimeout(function () {
+      const all = visibleOnly ? Array.prototype.slice.call(document.querySelectorAll(sel)).filter(function (e) { return e.offsetParent !== null; }) : [document.querySelector(sel)];
+      if (all[0]) all[0].focus();
+    }, 0);
+  }
   function ctx() { return { now: Date.now(), zone: zone(), defaultDuration: settings.defaultDuration, makeId: function () { return core().uid("ev"); } }; }
   function colorOf(it) { return it.source === "task" ? TASK_COLOR : C.categoryInfo(it.category).color; }
   function shortTime(t) { const h = Number(t.slice(0, 2)), m = t.slice(3); return ((h + 11) % 12 + 1) + (m === "00" ? "" : ":" + m) + (h < 12 ? "a" : "p"); }
@@ -444,7 +450,7 @@
     render();
     announce((isNew ? "Added " : "Saved ") + saved.title + ".");
     // Opened from another screen (Home)? Put focus back on what opened it. Otherwise on the event just saved.
-    if (!panelActive() && opener && opener.focus && document.contains(opener)) opener.focus(); else focusSoon('[data-key^="' + saved.id + '@"]');
+    if (!panelActive() && opener && opener.focus && document.contains(opener)) opener.focus(); else focusSoon('[data-key^="' + saved.id + '@"]', true);
   }
 
   /* ---------------- other changes ---------------- */
