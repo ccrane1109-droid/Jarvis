@@ -964,7 +964,7 @@
   }
   function saveSettings() {
     const g = function (id) { return $(id).value; };
-    const next = C.settings({ timeZone: g("calS_zone"), weekStart: Number(g("calS_week")), defaultView: g("calS_view"), defaultDuration: Number(g("calS_len")), defaultReminder: settings.defaultReminder, updatedAt: Date.now() });
+    const next = C.settings({ timeZone: g("calS_zone"), weekStart: Number(g("calS_week")), defaultView: g("calS_view"), defaultDuration: Number(g("calS_len")), defaultReminder: settings.defaultReminder, plan: settings.plan, updatedAt: Date.now() });
     if (!core().saveJSON(SET_KEY, next)) { saveError = "The browser would not save your settings."; renderStatus(); return; }
     settings = next; closeModal(); render(); announce("Settings saved.");
   }
@@ -976,7 +976,7 @@
     const tg = e.target, tag = tg && tg.tagName ? tg.tagName.toLowerCase() : "";
     if (tag === "input" || tag === "textarea" || tag === "select" || (tg && tg.isContentEditable)) { if (e.key === "Escape" && tg.id === "calSearch") { tg.blur(); } return; }
     const k = e.key;
-    if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "c") setView("content");
+    if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "c") setView("content"); else if (k === "p" && window.JarvisAssistant) window.JarvisAssistant.open($("calAssist"));
     else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); $("calSearch").focus(); }
     else if (k === "ArrowLeft" && tag !== "button") go(-1); else if (k === "ArrowRight" && tag !== "button") go(1);
     else if (k === "j") go(1); else if (k === "k") go(-1);
@@ -1050,6 +1050,21 @@
     toggleItem: function (it) { if (it) { itemMap[it.key] = it; tick(it.key); } },
     goToSource: goToSource,
     // Open the popup or sheet for any schedule item from another screen (Home).
-    openItem: function (it) { if (it) { itemMap[it.key] = it; openItem(it); } }
+    openItem: function (it) { if (it) { itemMap[it.key] = it; openItem(it); } },
+    // For the planning assistant (assistant-ui.js): the same saving, undo and settings the rest of the calendar uses.
+    // commitEvents saves a new list (false if the browser refused). undoable shows the Undo bar for a change from prev to next,
+    // and also() puts back anything outside the calendar that the same change touched (tasks, Business dates).
+    commitEvents: function (next) { return commit(next); },
+    undoable: function (label, prev, next, also) {
+      const ids = changed(prev, next), created = next.filter(function (e) { return !prev.some(function (p) { return p.id === e.id; }); }).map(function (e) { return e.id; });
+      const back = ids.length ? revertFn(prev, ids, created) : null;
+      showUndo(label, function () { if (back) back(); if (also) also(); render(); notify(); });
+    },
+    saveSettings: function (next) {
+      if (!core().saveJSON(SET_KEY, next)) { saveError = "The browser would not save your settings."; renderStatus(); return false; }
+      settings = next; render(); return true;
+    },
+    refresh: function () { render(); notify(); },
+    ctx: ctx, today: today, nowMin: nowMin
   };
 })();

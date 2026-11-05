@@ -51,7 +51,17 @@
     { value: 0, label: "At the time" }, { value: 5, label: "5 minutes before" }, { value: 10, label: "10 minutes before" },
     { value: 30, label: "30 minutes before" }, { value: 60, label: "1 hour before" }, { value: 1440, label: "1 day before" }
   ];
-  const DEFAULT_SETTINGS = { weekStart: 1, timeZone: "", defaultView: "", defaultDuration: 60, defaultReminder: -1, updatedAt: 0 };
+  // What the planning assistant may use. These are starting values you change, not things it knows about you:
+  // the hours it may plan in, the days, how long one work session is, how many tasks a day it will pile on when
+  // catching up, and how many minutes a week you want for each focus area (0 = not planned).
+  const FOCUS_AREAS = [
+    { id: "content", label: "Content creation", category: "content" },
+    { id: "marketing", label: "Marketing", category: "business" },
+    { id: "research", label: "Research", category: "study" },
+    { id: "bizdev", label: "Business development", category: "business" }
+  ];
+  const DEFAULT_PLAN = { start: "09:00", end: "17:00", days: [1, 2, 3, 4, 5], session: 90, perDay: 4, goals: { content: 0, marketing: 0, research: 0, bizdev: 0 } };
+  const DEFAULT_SETTINGS = { weekStart: 1, timeZone: "", defaultView: "", defaultDuration: 60, defaultReminder: -1, plan: DEFAULT_PLAN, updatedAt: 0 };
 
   function kindInfo(v) { return KINDS.filter(function (k) { return k.value === v; })[0] || KINDS[0]; }
   function categoryInfo(v) { return CATEGORIES.filter(function (c) { return c.value === v; })[0] || CATEGORIES[CATEGORIES.length - 1]; }
@@ -112,6 +122,17 @@
 
   /* ---------------- settings ---------------- */
 
+  function intIn(v, lo, hi, dflt) { const n = Number(v); return v !== "" && v !== null && v !== undefined && Number.isInteger(n) && n >= lo && n <= hi ? n : dflt; }
+  function planSettings(raw) {
+    const r = raw && typeof raw === "object" ? raw : {};
+    let start = isTime(r.start) && minutesOf(r.start) % 15 === 0 ? r.start : DEFAULT_PLAN.start;
+    let end = isTime(r.end) && minutesOf(r.end) % 15 === 0 ? r.end : DEFAULT_PLAN.end;
+    if (minutesOf(end) - minutesOf(start) < 60) { start = DEFAULT_PLAN.start; end = DEFAULT_PLAN.end; }   // under an hour is no room to plan in
+    const days = Array.isArray(r.days) ? r.days.map(Number).filter(function (d, i, a) { return Number.isInteger(d) && d >= 0 && d <= 6 && a.indexOf(d) === i; }).sort(function (a, b) { return a - b; }) : [];
+    const g = r.goals && typeof r.goals === "object" ? r.goals : {}, goals = {};
+    FOCUS_AREAS.forEach(function (a) { const m = intIn(g[a.id], 0, 2400, 0); goals[a.id] = Math.round(m / 15) * 15; });
+    return { start: start, end: end, days: days.length ? days : DEFAULT_PLAN.days.slice(), session: Math.round(intIn(r.session, 30, 240, DEFAULT_PLAN.session) / 15) * 15, perDay: intIn(r.perDay, 1, 12, DEFAULT_PLAN.perDay), goals: goals };
+  }
   function settings(raw) {
     const r = raw && typeof raw === "object" ? raw : {};
     const dur = Number(r.defaultDuration);
@@ -121,6 +142,7 @@
       defaultView: ["month", "week", "day", "agenda"].indexOf(r.defaultView) !== -1 ? r.defaultView : "",
       defaultDuration: Number.isInteger(dur) && dur >= 15 && dur <= 480 ? dur : 60,
       defaultReminder: Number.isInteger(Number(r.defaultReminder)) && Number(r.defaultReminder) >= -1 && Number(r.defaultReminder) <= REMINDER_MAX_MIN ? Number(r.defaultReminder) : -1,
+      plan: planSettings(r.plan),
       updatedAt: Number(r.updatedAt) || 0
     };
   }
@@ -575,7 +597,7 @@
 
   return {
     TITLE_MAX: TITLE_MAX, DESC_MAX: DESC_MAX, NOTES_MAX: NOTES_MAX, MAX_EVENTS: MAX_EVENTS, TOMBSTONE_DAYS: TOMBSTONE_DAYS,
-    KINDS: KINDS, CATEGORIES: CATEGORIES, PRIORITIES: PRIORITIES, FREQS: FREQS, REMINDER_CHOICES: REMINDER_CHOICES, DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+    KINDS: KINDS, CATEGORIES: CATEGORIES, PRIORITIES: PRIORITIES, FREQS: FREQS, REMINDER_CHOICES: REMINDER_CHOICES, DEFAULT_SETTINGS: DEFAULT_SETTINGS, DEFAULT_PLAN: DEFAULT_PLAN, FOCUS_AREAS: FOCUS_AREAS, planSettings: planSettings,
     kindInfo: kindInfo, categoryInfo: categoryInfo, isPoint: isPoint,
     isDate: isDate, isTime: isTime, addDays: addDays, diffDays: diffDays, weekday: weekday, minutesOf: minutesOf, timeOf: timeOf, addMonths: addMonths,
     isValidZone: isValidZone, deviceZone: deviceZone, instantToWall: instantToWall, wallToInstant: wallToInstant, todayIn: todayIn,
