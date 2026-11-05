@@ -16,6 +16,7 @@
   "use strict";
 
   const C = window.JarvisCalendarLogic;
+  const S = window.JarvisScheduleLogic;
   const EV_KEY = "jarvisCalendarEvents", SET_KEY = "jarvisCalendarSettings";
   const SNAP = 15, UNDO_MS = 8000, TASK_COLOR = "#7d8fb3";
   const ZONES = ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu", "America/Toronto", "America/Mexico_City", "America/Sao_Paulo",
@@ -79,8 +80,11 @@
     events = next;
     if (!save()) { events = prev; renderStatus(); render(); return false; }
     renderStatus();
+    notify();
     return true;
   }
+  // Tells the Home screen (and anything else showing the schedule) that something changed.
+  function notify() { try { document.dispatchEvent(new CustomEvent("jarvis-calendar-changed")); } catch (e) { /* nothing is listening */ } }
   function saveTasks(list) { const h = habits(); if (h) h.commitTasks(list); }
   function changed(prev, next) { const p = {}; prev.forEach(function (e) { p[e.id] = e; }); return next.filter(function (e) { return p[e.id] !== e; }).map(function (e) { return e.id; }); }
 
@@ -88,8 +92,8 @@
 
   function sortItems(a, b) { return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || (a.startMin || 0) - (b.startMin || 0) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); }
   function allItems(from, to) {
-    const h = habits();
-    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : []);
+    const h = habits(), b = window.JarvisBusiness && window.JarvisBusiness.getScheduleData ? window.JarvisBusiness.getScheduleData() : null;
+    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.businessItems(b, h && h.getGoals ? h.getGoals() : [], from, to) : []);
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
@@ -170,7 +174,7 @@
       sub.push(cat);
     }
     if (it.recurring) sub.push("Repeats");
-    const tickable = it.source === "task" || (it.source === "event" && C.isPoint(it.kind));
+    const tickable = it.source === "task" || it.source === "bizTask" || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
@@ -347,6 +351,28 @@
       (h ? '<button type="button" class="btn btn-secondary" data-cal="task-open">Open in Habits</button>' : "") + '<button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
   }
 
+  const EXT = {
+    bizTask: { title: "Business task", where: "Business \u203a Tasks", nav: "navBtnBusiness", sub: "bizSubNavTasks", note: "This is one of your Business tasks. Ticking it or moving it here changes that task." },
+    bizGoal: { title: "Business goal", where: "Business \u203a Goals", nav: "navBtnBusiness", sub: "bizSubNavGoals", note: "This date comes from a Business goal. Change it in Business." },
+    launch: { title: "Launch date", where: "Business \u203a Products", nav: "navBtnBusiness", sub: "bizSubNavProducts", note: "This date comes from Business. Change it there." },
+    goal: { title: "Goal", where: "Habits \u203a Goals", nav: "navBtnHabits", sub: "habitsSubNavGoals", note: "This date comes from one of your personal goals. Change it in Habits." }
+  };
+  function externalTitle(it) { return (EXT[it.source] || EXT.goal).title; }
+  function externalSheetHtml(m) {
+    const it = m.item, x = EXT[it.source] || EXT.goal, canTick = it.source === "bizTask";
+    return '<div class="cal-field"><span class="cal-lab">' + esc(x.title) + '</span><p><strong>' + esc(it.title) + '</strong></p><p class="field-hint">' + esc(dayName(it.date)) + (it.completed ? " \u00b7 done" : "") + '</p></div>' +
+      '<p class="field-hint">' + esc(x.note) + '</p>' +
+      '<div class="cal-actions">' + (canTick ? '<button type="button" class="btn btn-primary" data-cal="ext-toggle">' + (it.completed ? "Mark not done" : "Mark done") + '</button>' : "") +
+      '<button type="button" class="btn ' + (canTick ? "btn-secondary" : "btn-primary") + '" data-cal="ext-open">Open in ' + esc(x.where.split(" \u203a ")[0]) + '</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
+  }
+  // Takes you to where the item lives: the Business or Habits tab and the sub-tab it is on.
+  function goToSource(it) {
+    const x = EXT[it.source];
+    if (!x) return;
+    const b = $(x.nav); if (b) b.click();
+    const sub = $(x.sub); if (sub) sub.click();
+  }
+
   function settingsFormHtml() {
     const s = settings, dz = C.deviceZone();
     const zones = ZONES.slice(); if (zones.indexOf(dz) === -1) zones.unshift(dz); if (s.timeZone && zones.indexOf(s.timeZone) === -1) zones.unshift(s.timeZone);
@@ -360,9 +386,9 @@
 
   function showModal() {
     const overlay = $("calModal"), form = $("calForm");
-    $("calModalTitle").textContent = modal.kind === "settings" ? "Calendar settings" : modal.kind === "task" ? "Task" : modal.mode === "new" ? "New" : "Edit";
+    $("calModalTitle").textContent = modal.kind === "settings" ? "Calendar settings" : modal.kind === "task" ? "Task" : modal.kind === "external" ? externalTitle(modal.item) : modal.mode === "new" ? "New" : "Edit";
     if (modal.kind === "event") $("calModalTitle").textContent = modal.mode === "new" ? "New event" : "Edit " + C.kindInfo(modal.form.kind).label.toLowerCase();
-    form.innerHTML = modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : eventFormHtml(modal);
+    form.innerHTML = modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
     overlay.classList.remove("hidden");
   }
   function closeModal(focusOpener) {
@@ -411,13 +437,14 @@
       focusSoon("#calF_" + (first === "repeat" ? "repeat" : first || "title")); announce(res.error);
       return;
     }
-    const isNew = modal.mode === "new", saved = res.event;
+    const isNew = modal.mode === "new", saved = res.event, opener = modal.opener;
     if (!commit(res.events)) { modal.error = saveError; showModal(); return; }
     closeModal(false);
     if (saved && C.isDate(saved.date)) { if (view !== "agenda" && (saved.date < C.rangeFor(view, anchor, settings.weekStart).from || saved.date > C.rangeFor(view, anchor, settings.weekStart).to)) { anchor = saved.date; selected = saved.date; } }
     render();
     announce((isNew ? "Added " : "Saved ") + saved.title + ".");
-    const sel = '[data-key^="' + saved.id + '@"]'; focusSoon(sel);
+    // Opened from another screen (Home)? Put focus back on what opened it. Otherwise on the event just saved.
+    if (!panelActive() && opener && opener.focus && document.contains(opener)) opener.focus(); else focusSoon('[data-key^="' + saved.id + '@"]');
   }
 
   /* ---------------- other changes ---------------- */
@@ -485,8 +512,13 @@
     if (it.source === "task") {
       const h = habits(); if (!h) return;
       h.commitTasks(h.getTasks().map(function (t) { return t.id === it.id ? Object.assign({}, t, { completed: !t.completed }) : t; }));
-      render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); return;
+      render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); return;
     }
+    if (it.source === "bizTask") {
+      if (window.JarvisBusiness && window.JarvisBusiness.setTaskDone && window.JarvisBusiness.setTaskDone(it.id, !it.completed)) { render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
+      return;
+    }
+    if (it.readOnly) return;
     const res = C.setDone(events, it.id, it.occDate, !it.completed, ctx());
     if (res.ok && commit(res.events)) { render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
   }
@@ -498,8 +530,13 @@
       const h = habits(); if (!h) return;
       const keepTime = target.time === undefined;
       h.commitTasks(h.getTasks().map(function (t) { return t.id === it.id ? Object.assign({}, t, { date: target.date, time: keepTime ? t.time : target.time }) : t; }));
-      render(); announce("Moved " + it.title + " to " + dayName(target.date) + (keepTime ? "" : " at " + C.timeLabel(target.time)) + "."); return;
+      render(); notify(); announce("Moved " + it.title + " to " + dayName(target.date) + (keepTime ? "" : " at " + C.timeLabel(target.time)) + "."); return;
     }
+    if (it.source === "bizTask") {
+      if (window.JarvisBusiness && window.JarvisBusiness.setTaskDeadline && window.JarvisBusiness.setTaskDeadline(it.id, target.date)) { render(); notify(); announce("Moved " + it.title + " to " + dayName(target.date) + "."); }
+      return;
+    }
+    if (it.readOnly) return;
     const ev = C.byId(events, it.id);
     if (!ev) return;
     const go = function (scope) {
@@ -641,6 +678,7 @@
     }
   }
   function openItem(it) {
+    if (it.source === "bizTask" || it.source === "bizGoal" || it.source === "launch" || it.source === "goal") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
     if (it.source === "task") { modal = { kind: "task", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="task-toggle"]'); return; }
     openEdit(it); focusSoon("#calF_title");
   }
@@ -666,6 +704,8 @@
     if (act === "byday") { syncForm(); const d = Number(el.getAttribute("data-v")), a = modal.form.byDay, i = a.indexOf(d); if (i === -1) a.push(d); else if (a.length > 1) a.splice(i, 1); modal.form.byDay = a.sort(function (x, y) { return x - y; }); redrawModal(); focusSoon('#calForm [data-cal="byday"][data-v="' + d + '"]'); return; }
     if (act === "duplicate") { duplicateFromModal(); return; }
     if (act === "delete") { deleteFromModal(); return; }
+    if (act === "ext-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
+    if (act === "ext-open") { const it = modal.item; closeModal(false); goToSource(it); return; }
     if (act === "task-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
     if (act === "task-open") { const it = modal.item, h = habits(); closeModal(false); const b = $("navBtnHabits"); if (b) b.click(); if (h) h.selectDate(it.date); return; }
   }
@@ -779,6 +819,15 @@
 
   window.JarvisCalendar = {
     init: init, onShow: onShow, openNew: function (o) { openNew(o || {}); }, goTo: function (date, v) { if (C.isDate(date)) { anchor = date; selected = date; if (v) view = v; wantScroll = true; render(); } },
-    getEvents: function () { return events.slice(); }, getSettings: function () { return Object.assign({}, settings); }, zone: zone
+    getEvents: function () { return events.slice(); }, getSettings: function () { return Object.assign({}, settings); }, zone: zone,
+    // Every item from..to (dates in the view zone): events, your tasks and the Business dates, with no filters applied.
+    itemsBetween: function (from, to) { return allItems(from, to); },
+    // Open an event's popup from another screen (Home).
+    openEvent: function (id, occDate) { if (C.byId(events, id)) { openEdit({ id: id, occDate: occDate }); focusSoon("#calF_title"); } },
+    // Tick something shown on the schedule, from any screen.
+    toggleItem: function (it) { if (it) { itemMap[it.key] = it; tick(it.key); } },
+    goToSource: goToSource,
+    // Open the popup or sheet for any schedule item from another screen (Home).
+    openItem: function (it) { if (it) { itemMap[it.key] = it; openItem(it); } }
   };
 })();

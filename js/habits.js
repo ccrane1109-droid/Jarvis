@@ -1102,5 +1102,5 @@
     renderAll();
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, selectDate: selectDate };
+  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, selectDate: selectDate, getGoals: function () { return goals; } };
 })();

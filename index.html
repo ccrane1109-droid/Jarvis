@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=66">
+<link rel="stylesheet" href="style.css?v=67">
 </head>
 <body>
 
@@ -115,7 +115,8 @@
       <span class="brand-name">JARVIS</span>
     </div>
     <nav class="main-nav" role="tablist" aria-label="Main sections">
-      <button type="button" class="main-nav-btn active" data-target="panel-workout" role="tab" aria-selected="true" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
+      <button type="button" class="main-nav-btn active" data-target="panel-home" role="tab" aria-selected="true" aria-controls="panel-home" id="navBtnHome">Home</button>
+      <button type="button" class="main-nav-btn" data-target="panel-workout" role="tab" aria-selected="false" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
       <button type="button" class="main-nav-btn" data-target="panel-nutrition" role="tab" aria-selected="false" aria-controls="panel-nutrition" id="navBtnNutrition">Nutrition</button>
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
       <button type="button" class="main-nav-btn" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
@@ -155,8 +156,30 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <main class="app-main">
 
+  <!-- ===================== HOME ===================== -->
+  <section id="panel-home" class="tab-panel active hm-scope" role="tabpanel" aria-labelledby="navBtnHome">
+    <div class="hm-hello">
+      <h1 class="hm-title" id="hmGreeting">Welcome back</h1>
+      <p class="hm-date" id="hmDate"></p>
+    </div>
+    <div class="hm-actions">
+      <button type="button" class="btn btn-primary" id="hmNewEvent">+ New event</button>
+      <button type="button" class="btn btn-secondary" id="hmOpenCalendar">Open calendar</button>
+      <button type="button" class="btn btn-secondary" id="hmPlanDay">Plan today</button>
+    </div>
+    <div class="card hm-card" aria-labelledby="hmScheduleTitle">
+      <div class="card-title-row"><h2 class="card-title" id="hmScheduleTitle">Upcoming Schedule</h2><span class="hm-counts" id="hmCounts"></span></div>
+      <div id="hmScheduleBody" class="hm-body"></div>
+    </div>
+    <div class="card hm-card" aria-labelledby="hmGlanceTitle">
+      <h2 class="card-title" id="hmGlanceTitle">Today so far</h2>
+      <div class="hm-glance" id="hmGlance"></div>
+    </div>
+    <p id="hmLive" class="visually-hidden" role="status" aria-live="polite"></p>
+  </section>
+
   <!-- ===================== WORKOUT ===================== -->
-  <section id="panel-workout" class="tab-panel active" role="tabpanel" aria-labelledby="navBtnWorkout">
+  <section id="panel-workout" class="tab-panel" role="tabpanel" aria-labelledby="navBtnWorkout">
     <div class="panel-header">
       <h1>Workout</h1>
       <p class="panel-subtitle">Log sessions, build routines, and track real strength progress.</p>
@@ -5186,6 +5209,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <!-- Phone navigation: the four sections used every day, plus a sheet for the rest. The header's tab row (.main-nav)
      stays the source of truth: these buttons press the matching tab there, and follow it when anything else switches tabs. -->
 <nav class="bottom-nav" id="bottomNav" aria-label="Main sections">
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnHome">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5L12 4l8 7.5V20a1 1 0 01-1 1h-4.5v-6h-5v6H5a1 1 0 01-1-1z"/></svg><span>Home</span>
+  </button>
   <button type="button" class="bottom-nav-btn" data-nav="navBtnWorkout">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg><span>Workout</span>
   </button>
@@ -5251,61 +5277,63 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=66"></script>
-<script src="js/backup-logic.js?v=66"></script>
-<script src="js/cloud-backup.js?v=66"></script>
-<script type="module" src="js/auth.js?v=66"></script>
-<script src="js/app.js?v=66"></script>
-<script src="js/exercises.js?v=66"></script>
-<script src="js/workout-logic.js?v=66"></script>
-<script src="js/exercise-logic.js?v=66"></script>
-<script src="js/exercise-guides.js?v=66"></script>
-<script src="js/routine-logic.js?v=66"></script>
-<script src="js/workout.js?v=66"></script>
-<script src="js/workout-ui.js?v=66"></script>
-<script src="js/routines-ui.js?v=66"></script>
-<script src="js/progress-logic.js?v=66"></script>
-<script src="js/insights-logic.js?v=66"></script>
-<script src="js/charts.js?v=66"></script>
-<script src="js/history-ui.js?v=66"></script>
-<script src="js/insights-ui.js?v=66"></script>
-<script src="js/library-ui.js?v=66"></script>
-<script src="js/progress-ui.js?v=66"></script>
-<script src="js/nutrition.js?v=66"></script>
-<script src="js/nutrition-label-parse.js?v=66"></script>
-<script src="js/nutrition-label-scan.js?v=66"></script>
-<script src="js/groceries.js?v=66"></script>
-<script src="js/habit-logic.js?v=66"></script>
-<script src="js/dayplan-logic.js?v=66"></script>
-<script src="js/habits.js?v=66"></script>
-<script src="js/dayplan-ui.js?v=66"></script>
-<script src="js/calendar-logic.js?v=66"></script>
-<script src="js/calendar-ui.js?v=66"></script>
-<script src="js/discipline-logic.js?v=66"></script>
-<script src="js/discipline-program.js?v=66"></script>
-<script src="js/discipline-habits.js?v=66"></script>
-<script src="js/discipline-insights.js?v=66"></script>
-<script src="js/discipline-charts.js?v=66"></script>
-<script src="js/discipline-delivery.js?v=66"></script>
-<script src="js/discipline.js?v=66"></script>
-<script src="js/wakecheck-logic.js?v=66"></script>
-<script src="js/wakecheck.js?v=66"></script>
-<script src="functions/lib/reminder-spec.js?v=66"></script>
-<script src="functions/lib/reminder-events.js?v=66"></script>
-<script src="js/reminders.js?v=66"></script>
-<script src="js/business.js?v=66"></script>
-<script src="js/trading.js?v=66"></script>
-<script src="js/blobstore.js?v=66"></script>
-<script src="js/video-api-client.js?v=66"></script>
-<script src="js/video-connections.js?v=66"></script>
-<script src="js/video.js?v=66"></script>
-<script src="js/video-studio.js?v=66"></script>
-<script src="functions/lib/idea-spec.js?v=66"></script>
-<script src="functions/lib/niche-spec.js?v=66"></script>
-<script src="js/marketing-stats.js?v=66"></script>
-<script src="js/niche-research.js?v=66"></script>
-<script src="js/content-intelligence.js?v=66"></script>
-<script src="js/formcheck-logic.js?v=66"></script>
-<script src="js/form-check.js?v=66"></script>
+<script src="js/firebase-config.js?v=67"></script>
+<script src="js/backup-logic.js?v=67"></script>
+<script src="js/cloud-backup.js?v=67"></script>
+<script type="module" src="js/auth.js?v=67"></script>
+<script src="js/app.js?v=67"></script>
+<script src="js/exercises.js?v=67"></script>
+<script src="js/workout-logic.js?v=67"></script>
+<script src="js/exercise-logic.js?v=67"></script>
+<script src="js/exercise-guides.js?v=67"></script>
+<script src="js/routine-logic.js?v=67"></script>
+<script src="js/workout.js?v=67"></script>
+<script src="js/workout-ui.js?v=67"></script>
+<script src="js/routines-ui.js?v=67"></script>
+<script src="js/progress-logic.js?v=67"></script>
+<script src="js/insights-logic.js?v=67"></script>
+<script src="js/charts.js?v=67"></script>
+<script src="js/history-ui.js?v=67"></script>
+<script src="js/insights-ui.js?v=67"></script>
+<script src="js/library-ui.js?v=67"></script>
+<script src="js/progress-ui.js?v=67"></script>
+<script src="js/nutrition.js?v=67"></script>
+<script src="js/nutrition-label-parse.js?v=67"></script>
+<script src="js/nutrition-label-scan.js?v=67"></script>
+<script src="js/groceries.js?v=67"></script>
+<script src="js/habit-logic.js?v=67"></script>
+<script src="js/dayplan-logic.js?v=67"></script>
+<script src="js/habits.js?v=67"></script>
+<script src="js/dayplan-ui.js?v=67"></script>
+<script src="js/calendar-logic.js?v=67"></script>
+<script src="js/schedule-logic.js?v=67"></script>
+<script src="js/calendar-ui.js?v=67"></script>
+<script src="js/home-ui.js?v=67"></script>
+<script src="js/discipline-logic.js?v=67"></script>
+<script src="js/discipline-program.js?v=67"></script>
+<script src="js/discipline-habits.js?v=67"></script>
+<script src="js/discipline-insights.js?v=67"></script>
+<script src="js/discipline-charts.js?v=67"></script>
+<script src="js/discipline-delivery.js?v=67"></script>
+<script src="js/discipline.js?v=67"></script>
+<script src="js/wakecheck-logic.js?v=67"></script>
+<script src="js/wakecheck.js?v=67"></script>
+<script src="functions/lib/reminder-spec.js?v=67"></script>
+<script src="functions/lib/reminder-events.js?v=67"></script>
+<script src="js/reminders.js?v=67"></script>
+<script src="js/business.js?v=67"></script>
+<script src="js/trading.js?v=67"></script>
+<script src="js/blobstore.js?v=67"></script>
+<script src="js/video-api-client.js?v=67"></script>
+<script src="js/video-connections.js?v=67"></script>
+<script src="js/video.js?v=67"></script>
+<script src="js/video-studio.js?v=67"></script>
+<script src="functions/lib/idea-spec.js?v=67"></script>
+<script src="functions/lib/niche-spec.js?v=67"></script>
+<script src="js/marketing-stats.js?v=67"></script>
+<script src="js/niche-research.js?v=67"></script>
+<script src="js/content-intelligence.js?v=67"></script>
+<script src="js/formcheck-logic.js?v=67"></script>
+<script src="js/form-check.js?v=67"></script>
 </body>
 </html>
