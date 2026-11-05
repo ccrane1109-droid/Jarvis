@@ -138,3 +138,46 @@ test("the briefing line says what is true and nothing else", () => {
   assert.equal(S.briefingLine(s, TODAY, C.timeLabel), "1 event today · on now: Design review at 10:00 AM · 1 overdue · next deadline: Launch (in 2 days)");
   assert.equal(S.briefingLine(sum(items([])), TODAY, C.timeLabel), "no events today");
 });
+
+test("today hour by hour: the day's window, what is folded away, and where each item sits", () => {
+  const ev = mk([
+    { title: "Standup", time: "09:30", endTime: "10:00" },
+    { title: "Design review", time: "10:00", endTime: "12:30" },
+    { title: "Film", time: "14:00", endTime: "16:00" },
+    { title: "Trade show", allDay: true, date: "2026-11-03", endDate: "2026-11-05" },
+    { title: "Night shoot", time: "23:15", endTime: "23:45" }
+  ]);
+  const today = sum(items(ev, [{ id: "k1", date: TODAY, text: "Call Sam", time: "11:00" }, { id: "k2", date: TODAY, text: "Email supplier", time: "" }])).today;
+  const d = S.daySlots(today, { today: TODAY, nowHour: 10 });
+  assert.deepEqual(d.allDay.map((i) => i.title), ["Trade show", "Email supplier"], "untimed items are their own group");
+  assert.deepEqual([d.slots[0].hour, d.slots[d.slots.length - 1].hour], [9, 23], "from the hour just gone to the last item (a 11:15 PM item stretches the 10 PM end)");
+  const by = (h) => d.slots.find((s) => s.hour === h);
+  assert.deepEqual(by(9).items.map((i) => i.title), ["Standup"]);
+  assert.deepEqual(by(10).items.map((i) => i.title), ["Design review"], "a long event sits in the hour it starts");
+  assert.equal(by(11).items.map((i) => i.title).join(), "Call Sam", "a task with a time sits in its hour");
+  assert.equal(by(12).items.length, 0, "the hour a long event runs into is just free");
+  assert.equal(by(10).isNow, true);
+  assert.equal(by(9).isNow, false);
+  assert.deepEqual(d.earlier, { hours: 3, items: 0 }, "6, 7 and 8 AM are folded away, with nothing in them");
+  assert.equal(d.canCollapse, false);
+  const open = S.daySlots(today, { today: TODAY, nowHour: 10, showEarlier: true });
+  assert.equal(open.slots[0].hour, 6);
+  assert.equal(open.earlier, null);
+  assert.equal(open.canCollapse, true, "once expanded it can be folded again");
+  // something earlier today is counted in the fold
+  const early = sum(items(mk([{ title: "Breakfast", time: "07:00", endTime: "07:30" }]))).today;
+  assert.deepEqual(S.daySlots(early, { today: TODAY, nowHour: 15 }).earlier, { hours: 8, items: 1 });
+  // early morning and late night stretch the window to include the hour it is now
+  assert.equal(S.daySlots([], { today: TODAY, nowHour: 3 }).slots[0].hour, 3);
+  assert.equal(S.daySlots([], { today: TODAY, nowHour: 3 }).earlier, null);
+  assert.deepEqual([S.daySlots([], { today: TODAY, nowHour: 12 }).slots.length], [12], "an empty day still shows its hours (11 AM to 10 PM) so you can add to them");
+  assert.deepEqual(S.daySlots(null, { today: TODAY, nowHour: 12 }).allDay, []);
+});
+
+test("an item that began on an earlier day sits at midnight today", () => {
+  const ev = mk([{ title: "Overnight", date: "2026-11-03", time: "22:00", endDate: "2026-11-04", endTime: "02:00" }]);
+  const today = sum(items(ev)).today;
+  assert.equal(today.length, 1);
+  const d = S.daySlots(today, { today: TODAY, nowHour: 8, showEarlier: true });
+  assert.equal(d.slots.find((s) => s.hour === 0).items[0].title, "Overnight");
+});

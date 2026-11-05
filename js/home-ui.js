@@ -15,7 +15,7 @@
   const COLORS = {};
   (C ? C.CATEGORIES : []).forEach(function (c) { COLORS[c.value] = c.color; });
 
-  let last = { byKey: {}, summary: null }, lastDay = "";
+  let last = { byKey: {}, summary: null }, lastDay = "", showEarlier = false;
 
   function $(id) { return document.getElementById(id); }
   function core() { return window.JarvisCore; }
@@ -42,6 +42,7 @@
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     const sub = [];
     if (o.when) sub.push(o.when);
+    if (o.timeInSub && !it.allDay) sub.push(C.timeLabel(it.time) + (it.point || !it.endTime ? "" : " \u2013 " + C.timeLabel(it.endTime)));
     if (it.source === "task") sub.push("Task");
     else if (it.source === "bizTask") sub.push("Business task");
     else if (it.source === "bizGoal" || it.source === "launch" || it.source === "goal") sub.push(it.category === "launch" ? "Launch" : "Goal");
@@ -64,15 +65,35 @@
     return list.length > shown ? '<button type="button" class="hm-more" data-hm="calendar">' + esc("+" + (list.length - shown) + " more in " + label) + '</button>' : "";
   }
 
+  // Today, hour by hour. Tap an hour to add something there (it opens the calendar's popup on that hour).
+  function dayHtml(r) {
+    const s = r.summary, c = r.clock;
+    const d = S.daySlots(s.today, { today: c.today, nowHour: c.hour, showEarlier: showEarlier });
+    const nowKey = s.nextUp && s.nextUp.state === "now" ? s.nextUp.item.key : "";
+    let html = "";
+    if (!s.today.length) html += '<p class="hm-hint">Nothing scheduled yet. Tap an hour to add something.</p>';
+    if (d.allDay.length) html += '<div class="hm-hour hm-allday"><div class="hm-hl">All day</div><div class="hm-hbody">' + d.allDay.map(function (it) { return rowHtml(it, { hideTime: true }); }).join("") + '</div></div>';
+    if (d.earlier) html += '<button type="button" class="hm-earlier" data-hm="earlier" aria-expanded="false">Earlier today (' + d.earlier.hours + ' hours' + (d.earlier.items ? ", " + d.earlier.items + (d.earlier.items === 1 ? " item" : " items") : "") + ')</button>';
+    else if (d.canCollapse) html += '<button type="button" class="hm-earlier" data-hm="earlier" aria-expanded="true">Hide earlier hours</button>';
+    d.slots.forEach(function (sl) {
+      const label = C.hourLabel(sl.hour);
+      html += '<div class="hm-hour' + (sl.isNow ? " is-now" : "") + (sl.items.length ? "" : " is-free") + '"' + (sl.isNow ? ' aria-current="time"' : "") + '>' +
+        '<div class="hm-hl">' + esc(label) + (sl.isNow ? '<span class="hm-nowtag">Now</span>' : "") + '</div>' +
+        '<div class="hm-hbody">' + (sl.items.length
+          ? sl.items.map(function (it) { return rowHtml(it, { hideTime: true, timeInSub: true, state: it.key === nowKey ? "now" : "" }); }).join("")
+          : '<button type="button" class="hm-slot" data-hm="add-hour" data-hour="' + sl.hour + '" aria-label="Add something at ' + esc(label) + '">+ Add</button>') + '</div>' +
+        (sl.items.length ? '<button type="button" class="hm-plus" data-hm="add-hour" data-hour="' + sl.hour + '" aria-label="Add something at ' + esc(label) + '">+</button>' : "") +
+      '</div>';
+    });
+    return html;
+  }
+
   function scheduleHtml(r) {
     const s = r.summary, today = r.clock.today, all = s.counts.today + s.counts.overdue + s.deadlines.length + s.priorities.length + (s.nextTask ? 1 : 0);
     let html = "";
 
-    // today
-    const todayBody = s.today.length
-      ? s.today.slice(0, 8).map(function (it) { return rowHtml(it, { state: s.nextUp && s.nextUp.state === "now" && s.nextUp.item.key === it.key ? "now" : "" }); }).join("") + (s.today.length > 8 ? '<button type="button" class="hm-more" data-hm="calendar">+' + (s.today.length - 8) + ' more in Calendar</button>' : "")
-      : '<p class="hm-empty">Nothing scheduled today.</p><button type="button" class="btn btn-secondary hm-add" data-hm="new">+ Add something</button>';
-    html += section("Today", s.today.length ? s.today.length : null, todayBody);
+    // today, hour by hour
+    html += section("Today", s.today.length ? s.today.length : null, dayHtml(r), "hm-dayplan");
 
     // next task
     if (s.nextTask) html += section("Next task", null, rowHtml(s.nextTask, { when: S.whenLabel(s.nextTask.date, today), hideTime: s.nextTask.allDay }), "hm-next");
@@ -91,7 +112,7 @@
       ? s.priorities.slice(0, PREVIEW).map(function (it) { return rowHtml(it, { when: S.whenLabel(it.date, today), hideTime: it.allDay }); }).join("") + more(s.priorities, PREVIEW, "Calendar")
       : '<p class="hm-empty">Nothing marked high priority for the rest of this week.</p>');
 
-    if (!all) html = '<p class="hm-empty hm-empty-all">Your schedule is empty. Add an event, or give a task a date, and it will show here.</p>' + html;
+    if (!all) html = '<p class="hm-empty hm-empty-all">Your schedule is empty. Tap an hour below to add something, or give a task a date, and it will show here.</p>' + html;
     return html;
   }
 
@@ -133,7 +154,8 @@
     const el = e.target.closest("[data-hm]");
     if (!el) return;
     const act = el.getAttribute("data-hm"), it = last.byKey[el.getAttribute("data-key")];
-    if (act === "new") { cal().openNew({ date: clock().today }); return; }
+    if (act === "add-hour") { cal().openNew({ date: clock().today, time: C.timeOf(Number(el.getAttribute("data-hour")) * 60) }); return; }
+    if (act === "earlier") { showEarlier = !showEarlier; render(); const again = document.querySelector('#hmScheduleBody [data-hm="earlier"]'); if (again) again.focus(); return; }
     if (act === "calendar") { openCalendar("agenda"); return; }
     if (!it) return;
     if (act === "tick") {
@@ -158,9 +180,6 @@
   function init() {
     if (!$("panel-home") || !C || !S) return;
     $("hmScheduleBody").addEventListener("click", onClick);
-    $("hmNewEvent").addEventListener("click", function () { if (cal()) cal().openNew({ date: clock().today }); });
-    $("hmOpenCalendar").addEventListener("click", function () { openCalendar("week"); });
-    $("hmPlanDay").addEventListener("click", function () { const b = $("navBtnHabits"); if (b) b.click(); const p = $("habitsSubNavPlan"); if (p) p.click(); });
     document.addEventListener("jarvis-calendar-changed", function () { if (panelActive()) render(); });
     document.addEventListener("jarvis-habits-day-changed", function () { if (panelActive()) render(); });
     // A once-a-minute redraw keeps "now" and "overdue" right, but never while you are using a button here.
