@@ -138,7 +138,7 @@
         '<button type="button" class="cal-chip-btn" data-cal="hidedone" aria-pressed="' + filters.hideDone + '">Hide completed</button>' +
         (n || filters.q ? '<button type="button" class="cal-chip-btn" data-cal="clear">Clear all</button>' : "");
     }
-    $("calFoot").innerHTML = 'Times are shown in ' + esc(zone().replace(/_/g, " ")) + '. <button type="button" class="cal-more" data-cal="settings">Calendar settings</button>';
+    $("calFoot").innerHTML = 'Times are shown in ' + esc(zone().replace(/_/g, " ")) + '. <button type="button" class="cal-more" data-cal="settings">Calendar settings</button> <button type="button" class="cal-more" data-cal="keys">Keyboard shortcuts</button>';
   }
 
   function renderStatus() {
@@ -422,9 +422,10 @@
     const overlay = $("calModal"), form = $("calForm");
     $("calModalTitle").textContent = modal.kind === "settings" ? "Calendar settings" : modal.kind === "task" ? "Task" : modal.kind === "external" ? externalTitle(modal.item) : modal.mode === "new" ? "New" : "Edit";
     if (modal.kind === "event") $("calModalTitle").textContent = modal.mode === "new" ? "New event" : "Edit " + C.kindInfo(modal.form.kind).label.toLowerCase();
+    if (modal.kind === "keys") $("calModalTitle").textContent = "Keyboard shortcuts";
     if (modal.kind === "sched") $("calModalTitle").textContent = "Schedule an idea";
     if (modal.kind === "batch") $("calModalTitle").textContent = "Batch filming session";
-    form.innerHTML = modal.kind === "sched" ? schedFormHtml(modal) : modal.kind === "batch" ? batchFormHtml(modal) : modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
+    form.innerHTML = modal.kind === "keys" ? keysHtml() : modal.kind === "sched" ? schedFormHtml(modal) : modal.kind === "batch" ? batchFormHtml(modal) : modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
     overlay.classList.remove("hidden");
   }
   function closeModal(focusOpener) {
@@ -916,8 +917,17 @@
     else if (act === "hidedone") { filters.hideDone = !filters.hideDone; render(); focusSoon('#calFilters [data-cal="hidedone"]'); }
     else if (act === "clear") clearFilters();
     else if (act === "settings") openSettings();
+    else if (act === "keys") openKeys();
     else if (act === "dismiss") { saveError = ""; renderStatus(); }
   }
+  // The keys the calendar answers to (when you are not typing in a box). Kept in one list so this screen can't drift from onKey.
+  const SHORTCUTS = [["t", "Go to today"], ["m", "Month view"], ["w", "Week view"], ["d", "Day view"], ["a", "Agenda view"], ["c", "Content view"], ["n", "New event"], ["p", "Planning assistant"], ["/", "Search"],
+    ["\u2190  \u2192  or  k  j", "Previous / next"], ["?", "This list"], ["Esc", "Close what is open"]];
+  function keysHtml() {
+    return '<p class="field-hint">These work on the Calendar screen when you are not typing in a box.</p><dl class="cal-keys">' + SHORTCUTS.map(function (x) { return '<div class="cal-key-row"><dt><kbd>' + esc(x[0]) + '</kbd></dt><dd>' + esc(x[1]) + '</dd></div>'; }).join("") + '</dl>' +
+      '<div class="cal-actions"><button type="submit" class="btn btn-primary">Close</button></div>';
+  }
+  function openKeys() { modal = { kind: "keys", opener: document.activeElement }; showModal(); focusSoon("#calForm .btn-primary"); }
   function openSettings() { modal = { kind: "settings", opener: document.activeElement }; showModal(); focusSoon("#calS_zone"); }
 
   function onModalClick(e) {
@@ -979,6 +989,7 @@
   function onSubmit(e) {
     e.preventDefault();
     if (!modal) return;
+    if (modal.kind === "keys") { closeModal(); return; }
     if (modal.kind === "settings") { saveSettings(); return; }
     if (modal.kind === "sched") { saveSched(false); return; }
     if (modal.kind === "batch") { saveBatch(); return; }
@@ -998,7 +1009,7 @@
     const tg = e.target, tag = tg && tg.tagName ? tg.tagName.toLowerCase() : "";
     if (tag === "input" || tag === "textarea" || tag === "select" || (tg && tg.isContentEditable)) { if (e.key === "Escape" && tg.id === "calSearch") { tg.blur(); } return; }
     const k = e.key;
-    if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "c") setView("content"); else if (k === "p" && window.JarvisAssistant) window.JarvisAssistant.open($("calAssist"));
+    if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "c") setView("content"); else if (k === "p" && window.JarvisAssistant) window.JarvisAssistant.open($("calAssist")); else if (k === "?") { e.preventDefault(); openKeys(); }
     else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); $("calSearch").focus(); }
     else if (k === "ArrowLeft" && tag !== "button") go(-1); else if (k === "ArrowRight" && tag !== "button") go(1);
     else if (k === "j") go(1); else if (k === "k") go(-1);
