@@ -4009,7 +4009,7 @@ button.hs-day:hover { background: var(--card-hover); }
 @media (max-width: 900px) { .cal-undo { bottom: calc(78px + env(safe-area-inset-bottom)); } }
 .cal-scope .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
 .cal-scope .field-hint, .cal-overlay .field-hint { color: var(--text-dim); }
-#calModal .btn-primary, #calScope .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+#calModal .btn-primary, #calScope .btn-primary, #asModal .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
 .cal-ev.is-short .m { display: none; }
 .cal-ev.is-short .t { line-height: 1.2; }
 @media (max-width: 700px) {
@@ -4148,3 +4148,37 @@ button.hs-day:hover { background: var(--card-hover); }
 .cc-hint { padding: 10px 12px; border: 1px dashed var(--card-border); border-radius: 10px; }
 .cc-hint .btn { min-height: 44px; margin-top: 6px; }
 .cal-scope .cc .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+
+/* ---- Planning assistant ---- */
+.cal-tools { flex-wrap: wrap; }
+.cal-tools .cal-search { flex: 1 1 140px; }
+.cal-assist-btn { min-height: 44px; }
+#asModal .cal-modal-box { max-height: 92vh; overflow-y: auto; }
+.as-stats { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.as-stats li { padding: 6px 10px; border: 1px solid var(--card-border); border-radius: 999px; font-size: 14px; color: var(--text-dim); }
+.as-stats strong { color: var(--text); }
+.as-week { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.as-main { width: 100%; min-height: 48px; }
+.as-opts { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
+.as-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 56px; padding: 10px 14px; text-align: left; font: inherit; color: var(--text); background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; }
+.as-opt:hover { border-color: var(--accent); }
+.as-opt-t { font-weight: 600; }
+.as-opt-s { font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.as-grp { margin: 14px 0; }
+.as-h { margin: 0 0 6px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.as-n { font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent-dim); color: #fff; }
+.as-props { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.as-prop { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; }
+.as-prop input { width: 22px; height: 22px; flex: none; margin-top: 2px; }
+.as-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.as-t { font-weight: 600; overflow-wrap: anywhere; }
+.as-sub, .as-why { font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.as-kind { display: inline-block; margin-right: 4px; padding: 0 7px; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; background: var(--accent-dim); color: #fff; }
+.as-kind-delete { background: #7a2430; }
+.as-note { margin: 8px 0 0; font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.as-slot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; }
+.as-slot .btn { min-height: 44px; }
+.as-days { display: flex; flex-wrap: wrap; gap: 6px; }
+.as-goal { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.as-goal input { width: 96px; min-height: 44px; }
+@media (max-width: 360px) { .as-days .cal-chip-btn { min-width: 44px; padding: 0 6px; } }
