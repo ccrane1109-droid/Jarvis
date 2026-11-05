@@ -356,7 +356,7 @@ test("repeating events: change or delete just one day, finish a day of a series"
 });
 
 test("settings: unusable values fall back to defaults", () => {
-  assert.deepEqual(C.settings(null), { weekStart: 1, timeZone: "", defaultView: "", defaultDuration: 60, defaultReminder: -1, plan: C.DEFAULT_PLAN, updatedAt: 0 });
+  assert.deepEqual(C.settings(null), { weekStart: 1, timeZone: "", defaultView: "", defaultDuration: 60, defaultReminder: -1, plan: C.DEFAULT_PLAN, notify: C.DEFAULT_NOTIFY, updatedAt: 0 });
   const s = C.settings({ weekStart: 0, timeZone: "Europe/London", defaultView: "agenda", defaultDuration: 45, defaultReminder: 10, updatedAt: 5 });
   assert.deepEqual([s.weekStart, s.timeZone, s.defaultView, s.defaultDuration, s.defaultReminder], [0, "Europe/London", "agenda", 45, 10]);
   const bad = C.settings({ weekStart: 5, timeZone: "Nope/Zone", defaultView: "year", defaultDuration: 5, defaultReminder: -9 });

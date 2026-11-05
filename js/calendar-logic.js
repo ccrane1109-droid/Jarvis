@@ -61,7 +61,12 @@
     { id: "bizdev", label: "Business development", category: "business" }
   ];
   const DEFAULT_PLAN = { start: "09:00", end: "17:00", days: [1, 2, 3, 4, 5], session: 90, perDay: 4, goals: { content: 0, marketing: 0, research: 0, bizdev: 0 } };
-  const DEFAULT_SETTINGS = { weekStart: 1, timeZone: "", defaultView: "", defaultDuration: 60, defaultReminder: -1, plan: DEFAULT_PLAN, updatedAt: 0 };
+  // Calendar reminders (see calendar-reminders-logic.js). inApp: show them while JARVIS is open. system: also ask the phone or
+  // computer to show a notification (needs your permission; this only records that you asked). hideTitles: keep the event's
+  // name off the lock screen. allDayAt: what time of day an all-day item's reminders count from. quiet: hold reminders that
+  // would come during these hours until they end. Nothing here is on until you turn it on, except in-app reminders.
+  const DEFAULT_NOTIFY = { inApp: true, system: false, hideTitles: false, allDayAt: "09:00", quiet: { enabled: false, start: "22:00", end: "07:00" } };
+  const DEFAULT_SETTINGS = { weekStart: 1, timeZone: "", defaultView: "", defaultDuration: 60, defaultReminder: -1, plan: DEFAULT_PLAN, notify: DEFAULT_NOTIFY, updatedAt: 0 };
 
   function kindInfo(v) { return KINDS.filter(function (k) { return k.value === v; })[0] || KINDS[0]; }
   function categoryInfo(v) { return CATEGORIES.filter(function (c) { return c.value === v; })[0] || CATEGORIES[CATEGORIES.length - 1]; }
@@ -133,6 +138,12 @@
     FOCUS_AREAS.forEach(function (a) { const m = intIn(g[a.id], 0, 2400, 0); goals[a.id] = Math.round(m / 15) * 15; });
     return { start: start, end: end, days: days.length ? days : DEFAULT_PLAN.days.slice(), session: Math.round(intIn(r.session, 30, 240, DEFAULT_PLAN.session) / 15) * 15, perDay: intIn(r.perDay, 1, 12, DEFAULT_PLAN.perDay), goals: goals };
   }
+  function notifySettings(raw) {
+    const r = raw && typeof raw === "object" ? raw : {}, q = r.quiet && typeof r.quiet === "object" ? r.quiet : {};
+    let qs = isTime(q.start) ? q.start : DEFAULT_NOTIFY.quiet.start, qe = isTime(q.end) ? q.end : DEFAULT_NOTIFY.quiet.end;
+    if (qs === qe) { qs = DEFAULT_NOTIFY.quiet.start; qe = DEFAULT_NOTIFY.quiet.end; }   // the same time twice would be no hours or all of them
+    return { inApp: r.inApp !== false, system: r.system === true, hideTitles: r.hideTitles === true, allDayAt: isTime(r.allDayAt) ? r.allDayAt : DEFAULT_NOTIFY.allDayAt, quiet: { enabled: q.enabled === true, start: qs, end: qe } };
+  }
   function settings(raw) {
     const r = raw && typeof raw === "object" ? raw : {};
     const dur = Number(r.defaultDuration);
@@ -143,6 +154,7 @@
       defaultDuration: Number.isInteger(dur) && dur >= 15 && dur <= 480 ? dur : 60,
       defaultReminder: Number.isInteger(Number(r.defaultReminder)) && Number(r.defaultReminder) >= -1 && Number(r.defaultReminder) <= REMINDER_MAX_MIN ? Number(r.defaultReminder) : -1,
       plan: planSettings(r.plan),
+      notify: notifySettings(r.notify),
       updatedAt: Number(r.updatedAt) || 0
     };
   }
@@ -597,7 +609,7 @@
 
   return {
     TITLE_MAX: TITLE_MAX, DESC_MAX: DESC_MAX, NOTES_MAX: NOTES_MAX, MAX_EVENTS: MAX_EVENTS, TOMBSTONE_DAYS: TOMBSTONE_DAYS,
-    KINDS: KINDS, CATEGORIES: CATEGORIES, PRIORITIES: PRIORITIES, FREQS: FREQS, REMINDER_CHOICES: REMINDER_CHOICES, DEFAULT_SETTINGS: DEFAULT_SETTINGS, DEFAULT_PLAN: DEFAULT_PLAN, FOCUS_AREAS: FOCUS_AREAS, planSettings: planSettings,
+    KINDS: KINDS, CATEGORIES: CATEGORIES, PRIORITIES: PRIORITIES, FREQS: FREQS, REMINDER_CHOICES: REMINDER_CHOICES, DEFAULT_SETTINGS: DEFAULT_SETTINGS, DEFAULT_PLAN: DEFAULT_PLAN, FOCUS_AREAS: FOCUS_AREAS, planSettings: planSettings, DEFAULT_NOTIFY: DEFAULT_NOTIFY, notifySettings: notifySettings,
     kindInfo: kindInfo, categoryInfo: categoryInfo, isPoint: isPoint,
     isDate: isDate, isTime: isTime, addDays: addDays, diffDays: diffDays, weekday: weekday, minutesOf: minutesOf, timeOf: timeOf, addMonths: addMonths,
     isValidZone: isValidZone, deviceZone: deviceZone, instantToWall: instantToWall, wallToInstant: wallToInstant, todayIn: todayIn,

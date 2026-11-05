@@ -578,6 +578,11 @@
         if (window.console) console.error("The planning assistant failed to start; the calendar is unaffected", err);
       }
       try {
+        if (window.JarvisCalReminders && typeof window.JarvisCalReminders.init === "function") window.JarvisCalReminders.init();
+      } catch (err) {
+        if (window.console) console.error("Calendar reminders failed to start; the calendar is unaffected", err);
+      }
+      try {
         if (window.JarvisHome && typeof window.JarvisHome.init === "function") window.JarvisHome.init();
       } catch (err) {
         if (window.console) console.error("Home failed to start; the rest of the app is unaffected", err);
