@@ -58,6 +58,80 @@ test("clocks fall back: a time that happens twice fires once, at its first occur
   assert.equal(time.occurrencesOnDate(daily("02:30", "03:30"), NY, "2026-03-08").length, 1);
 });
 
+test("a repeated wall-clock time is always its FIRST occurrence, with exact moments, in zones with different rules", () => {
+  const ms = (isoDate, t, zone) => new Date(time.localInstant(isoDate, t, zone)).toISOString();
+  // New York, 2026-11-01: 2:00 EDT -> 1:00 EST. 1:30 happens at 05:30Z (EDT) and again at 06:30Z (EST).
+  assert.equal(ms("2026-11-01", "01:30", NY), "2026-11-01T05:30:00.000Z");
+  assert.equal(ms("2026-11-01", "01:00", NY), "2026-11-01T05:00:00.000Z");
+  assert.equal(ms("2026-11-01", "01:59", NY), "2026-11-01T05:59:00.000Z");
+  // Either side of the repeated hour is unambiguous.
+  assert.equal(ms("2026-11-01", "00:59", NY), "2026-11-01T04:59:00.000Z");
+  assert.equal(ms("2026-11-01", "02:00", NY), "2026-11-01T07:00:00.000Z");
+  assert.equal(ms("2026-11-01", "02:30", NY), "2026-11-01T07:30:00.000Z");
+  // London, 2026-10-25: 2:00 BST -> 1:00 GMT. 1:30 happens at 00:30Z (BST) and again at 01:30Z (GMT).
+  assert.equal(ms("2026-10-25", "01:30", "Europe/London"), "2026-10-25T00:30:00.000Z");
+  assert.equal(ms("2026-10-25", "02:00", "Europe/London"), "2026-10-25T02:00:00.000Z");
+  // Lord Howe Island, 2026-04-05: 2:00 (+11:00) -> 1:30 (+10:30), a 30-minute change. 1:45 happens at 14:45Z and 15:15Z on Apr 4.
+  assert.equal(ms("2026-04-05", "01:45", "Australia/Lord_Howe"), "2026-04-04T14:45:00.000Z");
+  assert.equal(ms("2026-04-05", "01:15", "Australia/Lord_Howe"), "2026-04-04T14:15:00.000Z");
+  // Sydney, 2026-04-05: 3:00 AEDT -> 2:00 AEST. 2:30 happens at 15:30Z (Apr 4) and 16:30Z.
+  assert.equal(ms("2026-04-05", "02:30", "Australia/Sydney"), "2026-04-04T15:30:00.000Z");
+});
+
+test("a time that doesn't exist is still shifted forward by the gap, and ordinary times are untouched", () => {
+  const ms = (isoDate, t, zone) => new Date(time.localInstant(isoDate, t, zone)).toISOString();
+  assert.equal(ms("2026-03-08", "02:30", NY), "2026-03-08T07:30:00.000Z"); // 3:30 AM EDT
+  assert.equal(ms("2026-03-08", "02:00", NY), "2026-03-08T07:00:00.000Z"); // 3:00 AM EDT
+  assert.equal(ms("2026-03-08", "01:59", NY), "2026-03-08T06:59:00.000Z");
+  assert.equal(ms("2026-03-29", "01:30", "Europe/London"), "2026-03-29T01:30:00.000Z"); // 1:30 GMT doesn't exist: 2:30 BST
+  assert.equal(ms("2026-06-15", "01:30", NY), "2026-06-15T05:30:00.000Z");
+  assert.equal(ms("2026-01-15", "13:45", NY), "2026-01-15T18:45:00.000Z");
+  assert.ok(isNaN(time.localInstant("2026-02-30", "09:00", NY)), "an impossible date is not a moment");
+  assert.ok(isNaN(time.localInstant("2026-02-10", "25:00", NY)), "an impossible time is not a moment");
+});
+
+test("checked against a brute-force scan: around every clock change, every quarter hour resolves to the earliest matching moment", () => {
+  const zones = ["America/New_York", "Europe/London", "Australia/Sydney", "Australia/Lord_Howe", "Pacific/Auckland", "America/Santiago", "America/Havana", "Europe/Berlin"];
+  const wall = (instant, zone) => DateTime.fromMillis(instant, { zone }).toFormat("yyyy-MM-dd HH:mm");
+  let ambiguous = 0;
+  let gaps = 0;
+  for (const zone of zones) {
+    let day = DateTime.fromISO("2026-01-01", { zone: "utc" });
+    for (let i = 0; i < 365; i++, day = day.plus({ days: 1 })) {
+      // Only days near a clock change: skip a day when the offset is the same at UTC midnight two days either side.
+      const offsetAt = (d) => DateTime.fromMillis(d.toMillis(), { zone }).offset;
+      const here = offsetAt(day);
+      if ([-2, -1, 1, 2].every((n) => offsetAt(day.plus({ days: n })) === here)) continue;
+      for (let q = 0; q < 96; q++) {
+        const t = String(Math.floor(q / 4)).padStart(2, "0") + ":" + String((q % 4) * 15).padStart(2, "0");
+        const target = day.toISODate() + " " + t;
+        const asIfUtc = DateTime.fromISO(day.toISODate() + "T" + t, { zone: "utc" }).toMillis();
+        const matches = [];
+        for (let m = asIfUtc - 15 * 3600000; m <= asIfUtc + 15 * 3600000; m += 15 * 60000) if (wall(m, zone) === target) matches.push(m);
+        const got = time.localInstant(day.toISODate(), t, zone);
+        if (matches.length === 0) {
+          gaps++;
+          assert.equal(got, DateTime.fromISO(day.toISODate() + "T" + t, { zone }).toMillis(), zone + " " + target + " (doesn't exist: the library's shifted-forward result)");
+        } else {
+          if (matches.length > 1) ambiguous++;
+          assert.equal(got, matches[0], zone + " " + target + " (" + matches.length + " matching moment(s))");
+        }
+      }
+    }
+  }
+  assert.ok(ambiguous >= 30 && gaps >= 30, "the scan really covered both kinds of odd time (" + ambiguous + " repeated, " + gaps + " missing)");
+});
+
+test("quiet hours that end at a repeated time end at its first occurrence", () => {
+  const quiet = { enabled: true, start: "22:00", end: "01:30" };
+  // Midnight EDT on the day the clocks go back: quiet hours end at the first 1:30 (05:30Z), not the second.
+  assert.equal(time.quietEndAfter(at("2026-11-01T04:00:00Z"), quiet, NY).toISOString(), "2026-11-01T05:30:00.000Z");
+  // Once the first 1:30 has passed, the next end is the following night's.
+  assert.equal(time.quietEndAfter(at("2026-11-01T05:45:00Z"), quiet, NY).toISOString(), "2026-11-02T06:30:00.000Z");
+  // An ordinary quiet-hours end is unchanged.
+  assert.equal(time.quietEndAfter(at("2026-10-14T03:00:00Z"), { enabled: true, start: "22:00", end: "07:00" }, NY).toISOString(), "2026-10-14T11:00:00.000Z");
+});
+
 test("every day of the year, in several zones: one occurrence at the right wall-clock time", () => {
   const zones = ["America/New_York", "America/Los_Angeles", "Europe/London", "Australia/Sydney", "Australia/Lord_Howe", "Asia/Kolkata", "Pacific/Auckland"];
   for (const zone of zones) {
