@@ -278,7 +278,7 @@
       const e = Object.assign({ id: raw.id }, c.event, {
         exceptions: (Array.isArray(raw.exceptions) ? raw.exceptions : []).filter(isDate),
         doneDates: (Array.isArray(raw.doneDates) ? raw.doneDates : []).filter(isDate),
-        source: raw.source === "google" ? "google" : "local",
+        source: raw.source === "google" || raw.source === "ics" ? raw.source : "local",
         externalId: typeof raw.externalId === "string" ? raw.externalId.slice(0, 200) : "",
         createdAt: Number(raw.createdAt) || 0, updatedAt: Number(raw.updatedAt) || 0
       });
@@ -495,6 +495,19 @@
     return { ok: true, events: (events || []).concat([ev]), event: ev };
   }
 
+  // An event that comes from outside (a calendar file): the same checks as add(), and it keeps where it came from.
+  // meta: { source: "ics" | "google", externalId, exceptions: [dates skipped] }.   -> { ok, events, event, error }
+  function addImported(events, input, meta, ctx) {
+    const c = ctxOf(ctx), r = check(input, c), m = meta || {};
+    if (!r.ok) return { ok: false, events: events, error: r.error, errors: r.errors };
+    if (!sizeOk(events)) return { ok: false, events: events, error: "The calendar is full. Delete some old events first." };
+    const ev = Object.assign({ id: c.makeId() }, r.event, {
+      exceptions: (Array.isArray(m.exceptions) ? m.exceptions : []).filter(isDate).filter(function (d, k, a) { return a.indexOf(d) === k; }).slice(0, 400), doneDates: [],
+      source: m.source === "google" || m.source === "ics" ? m.source : "local", externalId: typeof m.externalId === "string" ? m.externalId.slice(0, 200) : "", createdAt: c.now, updatedAt: c.now
+    });
+    return { ok: true, events: (events || []).concat([ev]), event: ev };
+  }
+
   // Change an event (all of a repeating one). input: any of the fields; the rest stay.
   function edit(events, id, input, ctx) {
     const c = ctxOf(ctx), cur = byId(events, id);
@@ -618,7 +631,7 @@
     repeatDates: repeatDates, occurrence: occurrence, expand: expand, taskItems: taskItems, allDayFor: allDayFor, layoutDay: layoutDay,
     findConflicts: findConflicts, conflictsWith: conflictsWith, filterItems: filterItems, matchesSearch: matchesSearch,
     startOfWeek: startOfWeek, monthGrid: monthGrid, rangeFor: rangeFor, shiftAnchor: shiftAnchor, viewTitle: viewTitle, timeLabel: timeLabel, hourLabel: hourLabel, fmtDate: fmtDate, agenda: agenda,
-    add: add, edit: edit, editOccurrence: editOccurrence, duplicate: duplicate, remove: remove, removeOccurrence: removeOccurrence, restore: restore, unremoveOccurrence: unremoveOccurrence, purge: purge,
+    add: add, addImported: addImported, edit: edit, editOccurrence: editOccurrence, duplicate: duplicate, remove: remove, removeOccurrence: removeOccurrence, restore: restore, unremoveOccurrence: unremoveOccurrence, purge: purge,
     setDone: setDone, moveTo: moveTo, resizeTo: resizeTo
   };
 });
