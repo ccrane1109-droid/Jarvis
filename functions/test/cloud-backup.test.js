@@ -80,7 +80,7 @@ test("saves are uploaded together a couple of seconds later, and the status goes
 test("keys that aren't on the backup list are ignored", async () => {
   const t = setup({ local: { jarvisTasks: tasks("a") } });
   await t.session.reconcile();
-  t.session.onSave("jarvisWorkouts");
+  t.session.onSave("jarvisHabits");        // kept by the original sync, not this backup
   t.session.onSave("jarvisVideoConnections");
   assert.equal(t.session.status().waiting, 0);
   assert.equal(t.clock.pending(), 0);

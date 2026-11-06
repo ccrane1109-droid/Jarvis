@@ -15,6 +15,11 @@
        seconds later (several quick saves become one upload).
      - on "Back up now", and when the phone comes back online.
 
+   The workout keys (jarvisWorkouts and the rest of that family) used to live in the original shared document, where
+   every save replaced the whole value and the cloud copy won at sign-in. The first time a device signs in with this
+   version, it reads that old copy and COMBINES it with what is on the device (nothing from either side is dropped), then
+   carries on as for every other key. The old copy is only ever read: never changed, never deleted.
+
    What it will NOT do, on purpose:
      - change this device's data after the app has started. The feature
        modules read their data once when the app opens, so a late write here
@@ -63,7 +68,7 @@
       case "mismatch": return { tone: "warn", text: "This phone's data was last backed up to a different account, so backup is paused here to avoid mixing the two.", button: "Use this account" };
       case "reload": return { tone: "warn", text: "Your account has newer data than this session. Reload JARVIS to combine it with what's on this phone.", button: "Reload JARVIS" };
       case "error": return { tone: "warn", text: "Backup hit a problem" + (s.detail ? " (" + s.detail + ")" : "") + ". Your data is safe on this phone. It will try again.", button: "Try again" };
-      default: return { tone: "off", text: "Sign in to back up your food log, tasks, goals and Discipline to your account.", button: "" };
+      default: return { tone: "off", text: "Sign in to back up your workouts, food log, tasks, goals and Discipline to your account.", button: "" };
     }
   }
 
@@ -88,6 +93,7 @@
     const setTimer = opts.setTimer || function (fn, ms) { return setTimeout(fn, ms); };
     const clearTimer = opts.clearTimer || function (t) { clearTimeout(t); };
     const keys = opts.keys || logic.BACKUP_KEYS;
+    const legacyKeys = (opts.legacyKeys || logic.LEGACY_KEYS || []).filter(function (k) { return keys.indexOf(k) !== -1; });
 
     const dirty = {};     // keys saved on this device and not yet confirmed in the cloud
     const blocked = {};   // keys that need a reload before they can be combined with the cloud
@@ -108,9 +114,9 @@
     let meta = (function () {
       try {
         const m = JSON.parse(storage.getItem(META_KEY) || "null");
-        if (m && typeof m === "object" && m.keys && typeof m.keys === "object") return m;
+        if (m && typeof m === "object" && m.keys && typeof m.keys === "object") { if (!m.legacy || typeof m.legacy !== "object") m.legacy = {}; return m; }
       } catch (e) { /* start fresh */ }
-      return { uid: null, keys: {}, lastOkAt: null };
+      return { uid: null, keys: {}, legacy: {}, lastOkAt: null };
     })();
     function saveMeta() { try { storage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* the cloud copy is still the truth */ } }
     function metaOf(key) { return meta.keys[key] || null; }
@@ -233,6 +239,46 @@
       storage.setItem(key, text); // may throw (storage full); the caller reports it as an error for this key
     }
 
+    /* ---- the workout keys' old home: read once, combined, never changed ---- */
+
+    // Which keys this device has not yet taken the old shared document's copy of.
+    function legacyWanted() { return legacyKeys.filter(function (k) { return !(meta.legacy && meta.legacy[k]); }); }
+    function markLegacy(key) { meta.legacy = meta.legacy || {}; meta.legacy[key] = now(); saveMeta(); }
+
+    // -> { skip: { key: "reload" | "unreadable" } } (keys that must not be backed up this round). Throws if the old copy can't be read:
+    // those keys then wait for a round that can, and nothing is pushed for them in the meantime.
+    function importLegacy() {
+      const wanted = legacyWanted();
+      if (!wanted.length) return Promise.resolve({ skip: {} });
+      const get = fb.getDocFromServer || fb.getDoc;
+      return bounded(get(fb.doc(db, "users", uid)), LIST_TIMEOUT_MS).then(function (snap) {
+        if (snap.metadata && snap.metadata.fromCache) { const e = new Error("offline"); e.offline = true; throw e; }
+        const store = snap.exists() && snap.data() && snap.data().store && typeof snap.data().store === "object" ? snap.data().store : {};
+        const skip = {};
+        wanted.forEach(function (key) {
+          if (!(key in store) || !logic.legacyShapeOk(key, store[key])) { markLegacy(key); return; }   // nothing there, or not the kind of value this key holds
+          let oldText;
+          try { oldText = JSON.stringify(store[key]); } catch (e) { skip[key] = "unreadable"; return; }
+          const localText = storage.getItem(key);
+          if (logic.isEmptyText(oldText)) { markLegacy(key); return; }
+          const same = localText !== null && localText !== undefined && logic.hashText(localText) === logic.hashText(oldText);
+          if (same) { markLegacy(key); return; }
+          if (appStarted) { blocked[key] = true; skip[key] = "reload"; return; }    // this session's data can't change under it; the next start does this
+          let text = oldText;
+          if (localText !== null && localText !== undefined && !logic.isEmptyText(localText)) {
+            const merged = logic.mergeText(key, localText, oldText);
+            if (!merged.ok) { skip[key] = "unreadable"; return; }
+            text = merged.text;
+          }
+          try {
+            if (text !== localText) { keepPreviousCopy(key, localText); writeLocal(key, text); }   // the usual case: the device already had everything the old copy holds
+          } catch (e) { skip[key] = "unreadable"; return; }   // a full phone: say so for this key; nothing was changed
+          markLegacy(key);
+        });
+        return { skip: skip };
+      });
+    }
+
     /* ---- sign-in: bring one key into line ---- */
 
     function reconcileKey(key, docs) {
@@ -306,8 +352,19 @@
         return listAll().then(function (docs) {
           let firstError = null;
           let chainKeys = Promise.resolve();
+          // The workout keys' old copy first. If it can't be read, those keys are left alone this round (and say why); the others go on.
+          let legacy = { skip: {} }, legacyFailed = {};
+          const legacyStep = importLegacy().then(function (r) { legacy = r; }, function (e) {
+            firstError = firstError || e;
+            legacyWanted().forEach(function (k) { legacyFailed[k] = true; });
+          });
+          chainKeys = legacyStep;
           keys.forEach(function (key) {
             chainKeys = chainKeys.then(function () {
+              if (legacyFailed[key] || legacy.skip[key]) {
+                if (legacy.skip[key] === "unreadable") firstError = firstError || Object.assign(new Error("can't combine the old copy of " + key), { code: "unreadable" });
+                return null;
+              }
               return reconcileKey(key, docs).catch(function (e) { firstError = firstError || e; });
             });
           });
@@ -412,7 +469,7 @@
       // "Back up now": check every key against the cloud again, then say what happened.
       retryNow: function () { clearRetry(); retryStep = 0; return reconcile(); },
       // Backup was paused because another account's backup is recorded on this device; the user chose to use this one.
-      acceptAccount: function () { meta = { uid: uid, keys: {}, lastOkAt: null }; saveMeta(); return reconcile(); },
+      acceptAccount: function () { meta = { uid: uid, keys: {}, legacy: {}, lastOkAt: null }; saveMeta(); return reconcile(); },
       markAppStarted: function () { appStarted = true; },
       status: status,
       subscribe: subscribe,
