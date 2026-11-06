@@ -3526,6 +3526,13 @@ button.hs-day:hover { background: var(--card-hover); }
 .hs-dots { display: flex; gap: 3px; height: 5px; }
 .hs-dots i { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .hs-day.is-picked .hs-dots i { background: #fff; }
+/* Narrow phones (under about 370px wide): seven 44px-wide days need 308px, more than the card has between the
+   12px page gutters, so on those screens the calendar runs edge to edge and the days sit side by side. */
+@media (max-width: 372px) {
+  .hs-calcard { margin-left: -12px; margin-right: -12px; padding-left: 0; padding-right: 0; border-radius: 0; border-left: 0; border-right: 0; }
+  .hs-calhead { padding: 0 12px; }
+  .hs-cell { padding: 1px 0; }
+}
 .hs-controls { margin-bottom: 4px; }
 .hs-controls .form-row { margin-bottom: 10px; }
 .hs-controls input[type="search"], .hs-controls select { width: 100%; }
