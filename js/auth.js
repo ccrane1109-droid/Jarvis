@@ -83,12 +83,12 @@
   // jarvisLastBriefingDate and jarvisMarketingLastSync (purely local UI
   // state, not real data).
   const SYNCED_KEYS = [
-    "jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight",
-    "jarvisMeasurements", "jarvisStrengthSettings",
+    // (The workout family, jarvisWorkouts / Routines / Programs / Bodyweight / Measurements / StrengthSettings / CustomExercises /
+    // FavoriteExercises, is NOT here any more: it is in the merge-based backup, js/backup-logic.js. In this list a save that never
+    // reached the cloud was replaced by the older cloud copy at the next sign-in.)
     "jarvisHabits", "jarvisBusiness", "jarvisCalories",
     "jarvisTradingWatchlist", "jarvisPaperTrades", "jarvisTradingJournal", "jarvisTradingSettings",
     "jarvisVideo", "jarvisVideoStudio",
-    "jarvisCustomExercises", "jarvisFavoriteExercises",
     "jarvisMarketing"
   ];
 

@@ -39,6 +39,15 @@ function createFakeFirestore() {
   const fb = {
     doc: (_db, ...segs) => ({ path: segs.join("/"), id: segs[segs.length - 1] }),
     collection: (_db, ...segs) => ({ path: segs.join("/"), isCollection: true }),
+    // A single document (the original shared document users/{uid}, which holds { store: { key: value } }).
+    getDocFromServer(ref) {
+      const bad = guard();
+      if (bad) return bad;
+      db.counts.reads++;
+      const snap = snapOf(ref.path);
+      snap.metadata = { fromCache: db.fromCache };
+      return Promise.resolve(snap);
+    },
     getDocsFromServer(col) {
       const bad = guard();
       if (bad) return bad;

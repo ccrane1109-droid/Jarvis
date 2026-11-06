@@ -1,6 +1,10 @@
 /* ==========================================================================
    JARVIS — Workout tracker
    localStorage keys:
+     (jarvisWorkouts, Routines, Programs, Bodyweight, Measurements and StrengthSettings, with
+      jarvisCustomExercises and jarvisFavoriteExercises in exercises.js, are in the merge-based cloud
+      backup, js/backup-logic.js: two devices' data is combined, and a save that never reached the cloud
+      is not replaced by an older cloud copy.)
      jarvisWorkouts        — session log (mixed schema: legacy quick-log
                               entries have no "schema" field; new structured
                               sessions have schema: 2)

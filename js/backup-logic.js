@@ -42,8 +42,17 @@
     "jarvisDiscipline", "jarvisWakeCheck", "jarvisWorkoutPrefs", "jarvisInsightPrefs", "jarvisExerciseExtras",
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
     "jarvisFormCheckHistory",
-    "jarvisCalendarEvents", "jarvisCalendarSettings"
+    "jarvisCalendarEvents", "jarvisCalendarSettings",
+    // The workout family. These lived in the original shared document (whole value per key, the cloud copy winning at
+    // sign-in, failed uploads silent). They are here now so a save that never reached the cloud is not replaced by an older
+    // cloud copy, and two devices' workouts are combined rather than one overwriting the other. LEGACY_KEYS below.
+    "jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight", "jarvisMeasurements",
+    "jarvisStrengthSettings", "jarvisCustomExercises", "jarvisFavoriteExercises"
   ];
+  // Keys that used to be in the original shared document (users/{uid}, field "store"). A device brings what that old copy
+  // holds into its own data once, combined (never replacing), before using the backup for them. The old copy is only read.
+  const LEGACY_KEYS = ["jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight", "jarvisMeasurements",
+    "jarvisStrengthSettings", "jarvisCustomExercises", "jarvisFavoriteExercises"];
   const CHUNK_CHARS = 250000; // even at 3 bytes a character this stays under Firestore's 1 MiB document limit
 
   /* ---------------- fingerprints and chunks ---------------- */
@@ -265,8 +274,19 @@
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,
     jarvisDiscipline: mergeDiscipline,
-    jarvisWakeCheck: mergeWakeCheck
+    jarvisWakeCheck: mergeWakeCheck,
+    // lists of records with ids (sessions, routines, programs, weigh-ins, measurements, your own exercises); the favourites are a list of
+    // exercise ids, which are matched by their value, so two devices' stars are both kept
+    jarvisWorkouts: mergeById, jarvisRoutines: mergeById, jarvisPrograms: mergeById, jarvisBodyweight: mergeById, jarvisMeasurements: mergeById,
+    jarvisCustomExercises: mergeById, jarvisFavoriteExercises: mergeById,
+    jarvisStrengthSettings: mergeObjects
   };
+
+  // Is this old-copy value the kind of thing the key holds (a list, or for the one settings key an object)? A damaged or foreign value
+  // must never be imported into an empty phone.
+  function legacyShapeOk(key, value) {
+    return key === "jarvisStrengthSettings" ? isObj(value) : Array.isArray(value);
+  }
 
   // Two stored copies of one key -> { ok, text }. If one can't be read, the other is used; if neither can, ok is false.
   function mergeText(key, localText, cloudText) {
@@ -281,9 +301,9 @@
   }
 
   return {
-    BACKUP_KEYS: BACKUP_KEYS, CHUNK_CHARS: CHUNK_CHARS,
+    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS,
     hashText: hashText, chunkText: chunkText, partId: partId, assemble: assemble, isEmptyText: isEmptyText,
-    decide: decide, mergeText: mergeText,
+    decide: decide, mergeText: mergeText, legacyShapeOk: legacyShapeOk,
     mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeWakeCheck: mergeWakeCheck
   };
 });
