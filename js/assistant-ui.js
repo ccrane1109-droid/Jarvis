@@ -22,7 +22,16 @@
   function habits() { return window.JarvisHabits && window.JarvisHabits.getTasks ? window.JarvisHabits : null; }
   function biz() { return window.JarvisBusiness && window.JarvisBusiness.getScheduleData ? window.JarvisBusiness : null; }
   function announce(text) { const el = $("calLive"); if (el) { el.textContent = ""; window.setTimeout(function () { el.textContent = text; }, 30); } }
-  function focusSoon(sel) { window.setTimeout(function () { const e = document.querySelector(sel); if (e) e.focus(); }, 0); }
+  // Moves focus after a redraw (the old element is gone, so focus has dropped to the page). If a field has been focused since, the
+  // person has already moved on (a busy phone can run this tick late), so focus is left where it is rather than taken from them.
+  function focusSoon(sel) {
+    window.setTimeout(function () {
+      const a = document.activeElement;
+      if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return;
+      const e = document.querySelector(sel);
+      if (e) e.focus();
+    }, 0);
+  }
   function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
 
   /* ---------------- what the rules are given ---------------- */
