@@ -216,17 +216,16 @@
 
   // Unfinished tasks from the past, moved to the next days with room: highest priority first, then the oldest, with
   // at most plan.perDay tasks on a day (counting what is already there).
-  // tasks: your To-Do/Habits tasks. bizTasks: Business tasks (their deadline is what moves). items: calendar items (Task kind).
+  // tasks: your To-Do/Habits tasks. items: calendar items (Task kind).
   // -> { proposals, unplaced: n, older: n }
   function catchUp(o) {
     const p = cleanPlan(o.plan), n = nowOf(o.now), id = makeIds((o && o.idPrefix) || "cu");
-    const tasks = Array.isArray(o.tasks) ? o.tasks : [], biz = Array.isArray(o.bizTasks) ? o.bizTasks : [], items = Array.isArray(o.items) ? o.items : [];
+    const tasks = Array.isArray(o.tasks) ? o.tasks : [], items = Array.isArray(o.items) ? o.items : [];
     const cutoff = C.addDays(n.date, -LOOKBACK_DAYS), late = [], count = {};
     const bump = function (d) { if (C.isDate(d)) count[d] = (count[d] || 0) + 1; };
     let older = 0;
     const consider = function (entry) { if (entry.date >= n.date) { bump(entry.date); return; } if (entry.date < cutoff) { older++; return; } late.push(entry); };
     tasks.forEach(function (t) { if (t && !t.completed && typeof t.id === "string" && C.isDate(t.date) && str(t.text)) consider({ source: "task", id: t.id, title: str(t.text), date: t.date, prio: prioRank(t.priority), occDate: t.date }); });
-    biz.forEach(function (t) { if (t && !t.completed && typeof t.id === "string" && C.isDate(t.deadline) && str(t.text)) consider({ source: "bizTask", id: t.id, title: str(t.text), date: t.deadline, prio: prioRank(t.priority), occDate: t.deadline }); });
     items.forEach(function (it) { if (it && it.source === "event" && it.kind === "task" && !it.completed && !it.recurring && C.isDate(it.date)) consider({ source: "event", id: it.id, title: it.title, date: it.date, time: it.allDay ? "" : it.time, prio: prioRank(it.priority), occDate: it.occDate }); });
     late.sort(function (a, b) { return b.prio - a.prio || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (a.title < b.title ? -1 : 1); });
     const b = board([], p, n), room = [];
@@ -242,7 +241,7 @@
       slot.left--;
       const days = C.diffDays(e.date, n.date), src = e.source;
       proposals.push(moveProposal(id(), "catchup", src, { id: e.id, title: e.title, occDate: e.occDate }, e.time ? { date: e.date, time: e.time } : { date: e.date }, e.time ? { date: slot.date, time: e.time } : { date: slot.date },
-        dayLabel(e.date) + " → " + dayLabel(slot.date), (src === "bizTask" ? "Business task, due " + days + (days === 1 ? " day" : " days") + " ago. The due date moves." : "Not done, " + days + (days === 1 ? " day" : " days") + " late.") + (e.prio === 3 ? " High priority goes first." : "")));
+        dayLabel(e.date) + " → " + dayLabel(slot.date), "Not done, " + days + (days === 1 ? " day" : " days") + " late." + (e.prio === 3 ? " High priority goes first." : "")));
     });
     return { proposals: proposals.slice(0, MAX_PROPOSALS), unplaced: unplaced, older: older, total: late.length };
   }
@@ -297,11 +296,10 @@
   /* ---------------- the numbers on the assistant's front page ---------------- */
 
   function overview(items, o) {
-    const n = nowOf(o && o.now), tasks = o.tasks || [], biz = o.bizTasks || [];
+    const n = nowOf(o && o.now), tasks = o.tasks || [];
     const clashes = C.findConflicts(items || []).length;
     const cutoff = C.addDays(n.date, -LOOKBACK_DAYS);
     const late = tasks.filter(function (t) { return t && !t.completed && C.isDate(t.date) && t.date < n.date && t.date >= cutoff; }).length
-      + biz.filter(function (t) { return t && !t.completed && C.isDate(t.deadline) && t.deadline < n.date && t.deadline >= cutoff; }).length
       + (items || []).filter(function (it) { return it.source === "event" && it.kind === "task" && !it.completed && !it.recurring && it.date < n.date && it.date >= cutoff; }).length;
     const p = cleanPlan(o.plan), to = C.addDays(o.weekFrom, 6);
     const focus = FOCUS.filter(function (a) { return p.goals[a.id] > 0; }).map(function (a) { return { area: a.id, label: a.label, goal: p.goals[a.id], planned: focusMinutes(items, a.id, o.weekFrom, to) }; });
@@ -353,7 +351,7 @@
 
   // Calendar events: add / move / delete, for approved proposals only. Each one is checked against the calendar as it is
   // NOW (not as it was when proposed): a time that has been taken, or an event that has changed, is skipped and said so.
-  // Proposals about tasks (move.source "task" / "bizTask") are not touched here; see applyTasks and the page.
+  // Proposals about tasks (move.source "task") are not touched here; see applyTasks and the page.
   // -> { events, applied: [id], skipped: [{ id, error }], changed: boolean }
   function apply(events, proposals, approvedIds, ctx) {
     const chosen = select(proposals, approvedIds), applied = [], skipped = [];

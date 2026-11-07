@@ -205,17 +205,19 @@ test("catching up: the per-day limit counts what is already there; weekends are 
   assert.equal(crowded.unplaced, 1, "and the one that doesn't fit is counted, not squeezed in");
 });
 
-test("catching up: old tasks are counted, not moved; Business deadlines and calendar tasks are included", () => {
+test("catching up: old tasks are counted, not moved; your tasks and calendar tasks are included", () => {
   const events = build([ev("Send invoice", "2026-11-02", "", "", { kind: "task", allDay: true })]);
   const r = A.catchUp({
-    tasks: [{ id: "ancient", date: "2026-08-01", text: "From the summer", priority: "high", completed: false }],
-    bizTasks: [{ id: "b1", text: "Order samples", deadline: "2026-11-03", priority: "High", completed: false }, { id: "b2", text: "No date", deadline: "", priority: "High", completed: false }],
+    tasks: [{ id: "ancient", date: "2026-08-01", text: "From the summer", priority: "high", completed: false },
+      { id: "t1", date: "2026-11-03", text: "Order samples", priority: "high", completed: false }, { id: "t2", date: "", text: "No date", priority: "high", completed: false }],
     items: itemsOf(events), plan: plan(), now: NOW
   });
   assert.equal(r.older, 1);
-  assert.deepEqual(r.proposals.map((p) => [p.title, p.move.source]), [["Order samples", "bizTask"], ["Send invoice", "event"]]);
-  assert.match(r.proposals[0].reason, /Business task, due 1 day ago. The due date moves/);
+  assert.deepEqual(r.proposals.map((p) => [p.title, p.move.source]), [["Order samples", "task"], ["Send invoice", "event"]]);
+  assert.match(r.proposals[0].reason, /Not done, 1 day late/);
   assert.match(r.proposals[0].reason, /High priority goes first/);
+  assert.equal(typeof A.catchUp({ tasks: [], bizTasks: [{ id: "b", text: "x", deadline: "2026-11-01", priority: "High", completed: false }], items: [], plan: plan(), now: NOW }).total, "number");
+  assert.equal(A.catchUp({ tasks: [], bizTasks: [{ id: "b", text: "x", deadline: "2026-11-01", priority: "High", completed: false }], items: [], plan: plan(), now: NOW }).proposals.length, 0, "Business tasks are not a thing any more: they are ignored, not moved");
 });
 
 test("catching up: a calendar task with a time keeps its time, and being moved next to a meeting is not a clash", () => {
@@ -302,8 +304,8 @@ test("preview: later suggestions in the same sitting work around earlier ones, a
 
 test("the numbers on the front page", () => {
   const events = build([ev("A", TODAY, "13:00", "14:00"), ev("B", TODAY, "13:30", "14:30"), ev("Focus: Research", "2026-11-05", "10:00", "11:00", { kind: "block", linked: { type: "assistant", id: "research" } })]);
-  const o = A.overview(itemsOf(events), { tasks: [{ id: "t", date: "2026-11-02", text: "x", completed: false }], bizTasks: [{ id: "b", deadline: "2026-11-01", text: "y", completed: false }], plan: plan({ goals: { research: 180 } }), now: NOW, weekFrom: "2026-11-02" });
-  assert.equal(o.clashes, 1); assert.equal(o.late, 2);
+  const o = A.overview(itemsOf(events), { tasks: [{ id: "t", date: "2026-11-02", text: "x", completed: false }, { id: "t2", date: "2026-11-01", text: "y", completed: false }], bizTasks: [{ id: "b", deadline: "2026-11-01", text: "z", completed: false }], plan: plan({ goals: { research: 180 } }), now: NOW, weekFrom: "2026-11-02" });
+  assert.equal(o.clashes, 1); assert.equal(o.late, 2, "two late tasks; a Business task is not counted");
   assert.deepEqual(o.focus, [{ area: "research", label: "Research", goal: 180, planned: 60 }]);
   assert.equal(A.overview([], { plan: plan(), now: NOW, weekFrom: "2026-11-02" }).anyGoal, false);
 });

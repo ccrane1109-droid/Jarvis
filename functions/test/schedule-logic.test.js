@@ -12,29 +12,22 @@ function mk(list) {
   list.forEach((o) => { const r = C.add(events, Object.assign({ date: TODAY, time: "10:00", endTime: "11:00", category: "work" }, o), ctx()); assert.equal(r.ok, true, r.error); events = r.events; });
   return events;
 }
-const items = (events, tasks, biz, goals) => C.expand(events, "2026-06-01", "2026-12-31", NY).concat(C.taskItems(tasks || [], "2026-06-01", "2026-12-31"), S.businessItems(biz, goals, "2026-06-01", "2026-12-31"));
+const items = (events, tasks, goals) => C.expand(events, "2026-06-01", "2026-12-31", NY).concat(C.taskItems(tasks || [], "2026-06-01", "2026-12-31"), S.goalItems(goals, "2026-06-01", "2026-12-31"));
 const sum = (it, extra) => S.summarize(it, Object.assign({ today: TODAY, nowMin: NOW, weekStart: 1 }, extra || {}));
 const titles = (l) => l.map((i) => i.title);
 
-test("Business dates become calendar items, and only dates somebody entered", () => {
-  const biz = {
-    tasks: [{ id: "t1", text: "Order samples", deadline: "2026-11-06", priority: "High", completed: false }, { id: "t2", text: "No date", deadline: "" }, { id: "t3", text: "Done one", deadline: "2026-11-02", completed: true }, { id: "t4", text: "", deadline: "2026-11-06" }, null],
-    goals: [{ id: "g1", title: "Reach $1k", targetDate: "2026-11-30", status: "In Progress", priority: "High" }, { id: "g2", title: "Finished goal", targetDate: "2026-11-20", status: "Complete" }, { id: "g3", title: "No date", targetDate: "" }],
-    products: [{ id: "p1", name: "Faith Hoodie", launchDate: "2026-12-01", status: "Designing" }, { id: "p2", name: "Cap", launchDate: "2026-10-20", status: "Live" }, { id: "p3", name: "Idea only", launchDate: "" }],
-    profile: { name: "Gratiel", launchDate: "2026-12-15" }
-  };
-  const goals = [{ id: "pg1", name: "Run a 5k", targetDate: "2026-11-25", completed: false }, { id: "pg2", name: "Nope", targetDate: "bad" }];
-  const out = S.businessItems(biz, goals, "2026-10-01", "2026-12-31");
-  assert.deepEqual(titles(out).sort(), ["Goal: Finished goal", "Goal: Reach $1k", "Goal: Run a 5k", "Launch: Cap", "Launch: Faith Hoodie", "Launch: Gratiel", "Done one", "Order samples"].sort());
-  const t1 = out.find((i) => i.id === "t1");
-  assert.deepEqual([t1.source, t1.kind, t1.priority, t1.allDay, t1.point, t1.date, t1.readOnly, t1.key], ["bizTask", "task", "high", true, true, "2026-11-06", false, "biztask:t1"]);
-  assert.equal(out.find((i) => i.id === "g2").completed, true, "a Complete goal is done");
-  assert.equal(out.find((i) => i.id === "p2").completed, true, "a Live product has launched");
-  assert.equal(out.find((i) => i.id === "p1").readOnly, true);
-  assert.equal(out.find((i) => i.key === "launch:brand").title, "Launch: Gratiel");
-  assert.deepEqual(S.businessItems(biz, goals, "2026-11-10", "2026-11-12"), [], "only dates inside the range");
-  assert.deepEqual(S.businessItems(null, null, "2026-10-01", "2026-12-31"), []);
-  assert.equal(S.businessItems({ profile: { launchDate: "2026-12-15" } }, [], "2026-10-01", "2026-12-31")[0].title, "Launch: your brand");
+test("goal target dates become calendar items, and only dates somebody entered", () => {
+  const goals = [{ id: "pg1", name: "Run a 5k", targetDate: "2026-11-25", completed: false }, { id: "pg2", name: "Nope", targetDate: "bad" }, { id: "pg3", name: "Done goal", targetDate: "2026-11-20", completed: true },
+    { id: "pg4", name: "No date", targetDate: "" }, { id: "pg5", name: "", targetDate: "2026-11-21" }, { name: "No id", targetDate: "2026-11-22" }, null];
+  const out = S.goalItems(goals, "2026-10-01", "2026-12-31");
+  assert.deepEqual(titles(out).sort(), ["Goal: Done goal", "Goal: Run a 5k"]);
+  const g1 = out.find((i) => i.id === "pg1");
+  assert.deepEqual([g1.source, g1.kind, g1.category, g1.priority, g1.allDay, g1.point, g1.date, g1.readOnly, g1.completed, g1.key], ["goal", "milestone", "personal", "medium", true, true, "2026-11-25", true, false, "goal:pg1"]);
+  assert.equal(out.find((i) => i.id === "pg3").completed, true, "a completed goal is done, so never overdue");
+  assert.deepEqual(S.goalItems(goals, "2026-11-10", "2026-11-12"), [], "only dates inside the range");
+  assert.deepEqual(S.goalItems(null, "2026-10-01", "2026-12-31"), []);
+  assert.deepEqual(S.goalItems(undefined, "2026-10-01", "2026-12-31"), []);
+  assert.equal(typeof S.businessItems, "undefined", "nothing about the removed Business section is left");
 });
 
 test("today: events, all-day items and tasks, in order, with what has passed marked", () => {
@@ -102,8 +95,7 @@ test("deadlines: the next 14 days, soonest first, not today's, not ticked", () =
     { title: "Done", kind: "task", date: "2026-11-07", time: "", completed: true },
     { title: "Today's", kind: "task", date: TODAY, time: "" }
   ]);
-  const biz = { tasks: [{ id: "t1", text: "Pay supplier", deadline: "2026-11-05", priority: "High" }] };
-  const s = sum(items(ev, [], biz));
+  const s = sum(items(ev, [{ id: "t1", date: "2026-11-05", text: "Pay supplier", time: "", priority: "high", completed: false }]));
   assert.deepEqual(titles(s.deadlines), ["Pay supplier", "Printer due", "Launch day"]);
   assert.equal(S.whenLabel("2026-11-05", TODAY), "Tomorrow");
   assert.equal(S.whenLabel("2026-11-18", TODAY), "In 14 days");
@@ -180,17 +172,4 @@ test("an item that began on an earlier day sits at midnight today", () => {
   assert.equal(today.length, 1);
   const d = S.daySlots(today, { today: TODAY, nowHour: 8, showEarlier: true });
   assert.equal(d.slots.find((s) => s.hour === 0).items[0].title, "Overnight");
-});
-
-test("the Business content planner's dated posts show on the schedule, read-only, done when posted", () => {
-  const biz = { content: [
-    { id: "c1", title: "Hoodie reel", platform: "TikTok", scheduledDate: "2026-11-06", status: "Scheduled" },
-    { id: "c2", title: "Old post", platform: "TikTok", scheduledDate: "2026-11-02", status: "Posted" },
-    { id: "c3", title: "No date", scheduledDate: "", status: "Idea" }, { id: "c4", title: "", scheduledDate: "2026-11-06" }, null
-  ] };
-  const out = S.businessItems(biz, [], "2026-11-01", "2026-11-30");
-  assert.deepEqual(out.map((i) => i.title).sort(), ["Post: Hoodie reel", "Post: Old post"]);
-  const c1 = out.find((i) => i.id === "c1");
-  assert.deepEqual([c1.source, c1.kind, c1.category, c1.readOnly, c1.completed, c1.allDay], ["bizContent", "content", "content", true, false, true]);
-  assert.equal(out.find((i) => i.id === "c2").completed, true, "a Posted one is done, so never overdue");
 });

@@ -19,12 +19,20 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice",
   "jarvisDisciplineDrafts", // unsaved typing in the Discipline forms; stays on the phone
   "jarvisWorkoutDraft",     // the workout in progress: on the phone only, so an old cloud copy can never replace a newer one
-  "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft"]; // the new logger's bookkeeping and its one-time safety copy
+  "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft", // the new logger's bookkeeping and its one-time safety copy
+  "jarvisRetiredState"];    // whether the leftovers of the removed sections have been erased on this device
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {
   const used = new Set();
+  // retired-data.js names the keys of the removed sections only to erase them (see its tests), so those names are allowed there.
+  const R = require("../../js/retired-data");
+  const erasing = new Set(R.LOCAL_KEYS.concat(R.SYNCED_FIELDS, [R.BACKUP_DOC]));
   fs.readdirSync(path.join(ROOT, "js")).filter((f) => f.endsWith(".js")).forEach((f) => {
-    (fs.readFileSync(path.join(ROOT, "js", f), "utf8").match(/"jarvis[A-Z][A-Za-z]+"/g) || []).forEach((s) => used.add(s.slice(1, -1)));
+    (fs.readFileSync(path.join(ROOT, "js", f), "utf8").match(/"jarvis[A-Z][A-Za-z]+"/g) || []).forEach((s) => {
+      const k = s.slice(1, -1);
+      if (f === "retired-data.js" && erasing.has(k)) return;
+      used.add(k);
+    });
   });
   const covered = new Set(SYNCED.concat(B.BACKUP_KEYS, DEVICE_ONLY));
   const loose = Array.from(used).filter((k) => !covered.has(k) && !/^jarvis(Backup|Sync)/.test(k)).sort();

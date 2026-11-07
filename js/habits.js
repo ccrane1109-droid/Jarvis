@@ -15,9 +15,7 @@
      jarvisGoals  — [ {id, name, description, category, targetDate,
                         hasNumericTarget, currentValue, targetValue, unit,
                         manualProgressPct, completed, milestones, createdAt} ]
-                      Separate from Business's own jarvisBusiness.goals —
-                      these are personal/habit goals, distinct from the
-                      Business section's goals, and tasks link here via
+                      These are the personal/habit goals; tasks link here via
                       task.goalId.
 
    All reads/writes to localStorage go through the small Storage object

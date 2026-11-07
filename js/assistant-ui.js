@@ -20,7 +20,6 @@
   function esc(s) { return core().escapeHtml(s); }
   function cal() { return window.JarvisCalendar && window.JarvisCalendar.commitEvents ? window.JarvisCalendar : null; }
   function habits() { return window.JarvisHabits && window.JarvisHabits.getTasks ? window.JarvisHabits : null; }
-  function biz() { return window.JarvisBusiness && window.JarvisBusiness.getScheduleData ? window.JarvisBusiness : null; }
   function announce(text) { const el = $("calLive"); if (el) { el.textContent = ""; window.setTimeout(function () { el.textContent = text; }, 30); } }
   // Moves focus after a redraw (the old element is gone, so focus has dropped to the page). If a field has been focused since, the
   // person has already moved on (a busy phone can run this tick late), so focus is left where it is rather than taken from them.
@@ -40,11 +39,11 @@
     const c = cal(), today = c.today(), settings = c.getSettings();
     const to = toDate && toDate > C.addDays(today, 45) ? toDate : C.addDays(today, 45);
     const items = c.itemsBetween(C.addDays(today, -A.LOOKBACK_DAYS), C.addDays(to, 1));
-    const h = habits(), b = biz();
+    const h = habits();
     return {
       c: c, today: today, settings: settings, plan: settings.plan, now: { date: today, min: c.nowMin() }, items: items,
       future: items.filter(function (i) { return (i.endDate || i.date) >= today; }),
-      tasks: h ? h.getTasks() : [], bizTasks: b ? (b.getScheduleData().tasks || []) : [],
+      tasks: h ? h.getTasks() : [],
       weekFrom: C.addDays(C.startOfWeek(today, settings.weekStart), 7 * (st ? st.week : 0))
     };
   }
@@ -58,7 +57,7 @@
       notes: r.unfixed.map(function (u) { return u.a.title + " and " + u.b.title + ": " + u.why; }) };
   }
   function groupCatch(g) {
-    const r = A.catchUp({ tasks: g.tasks, bizTasks: g.bizTasks, items: g.items, plan: g.plan, now: g.now });
+    const r = A.catchUp({ tasks: g.tasks, items: g.items, plan: g.plan, now: g.now });
     const notes = [];
     if (r.unplaced) notes.push(plural(r.unplaced, "more task", "more tasks") + " didn't fit in the next " + A.HORIZON_DAYS + " days at " + g.plan.perDay + " a day. Raise the limit in Planning hours if you want them spread out faster.");
     if (r.older) notes.push(plural(r.older, "unfinished task is", "unfinished tasks are") + " older than " + A.LOOKBACK_DAYS + " days, so I left " + (r.older === 1 ? "it" : "them") + " alone. Decide on " + (r.older === 1 ? "it" : "those") + " in your task list.");
@@ -110,7 +109,7 @@
   }
 
   function homeHtml() {
-    const g = gather(), over = A.overview(g.future, { tasks: g.tasks, bizTasks: g.bizTasks, plan: g.plan, now: g.now, weekFrom: g.weekFrom });
+    const g = gather(), over = A.overview(g.future, { tasks: g.tasks, plan: g.plan, now: g.now, weekFrom: g.weekFrom });
     const planned = A.clearPlanned(g.items, { now: g.now }).proposals.length;
     const hoursLine = C.timeLabel(g.plan.start) + " – " + C.timeLabel(g.plan.end) + ", " + g.plan.days.map(function (d) { return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]; }).join(" ");
     let h = '<p class="field-hint">Built-in rules, not an AI service: nothing is sent anywhere and it costs nothing. I only suggest. <strong>Nothing in your calendar changes until you look at the list and press Apply.</strong></p>';
@@ -286,28 +285,18 @@
   function applyChosen() {
     const r = st.review, ids = r.all.filter(function (p) { return r.sel[p.id]; }).map(function (p) { return p.id; });
     if (!ids.length) { st.error = "Tick at least one change, or go back."; draw(); return; }
-    const c = cal(), h = habits(), b = biz(), prev = c.getEvents(), prevTasks = h ? h.getTasks() : [];
+    const c = cal(), h = habits(), prev = c.getEvents(), prevTasks = h ? h.getTasks() : [];
     const ev = A.apply(prev, r.all, ids, c.ctx());
     const tk = h ? A.applyTasks(prevTasks, r.all, ids) : { tasks: prevTasks, applied: [], skipped: [], changed: false };
     if (ev.changed && !c.commitEvents(ev.events)) { st.error = "The browser would not save the calendar, so nothing was changed."; draw(); return; }
     if (tk.changed) h.commitTasks(tk.tasks);
-    const bizBack = [], bizApplied = [], bizSkipped = [];
-    A.select(r.all, ids).filter(function (p) { return p.kind === "move" && p.move.source === "bizTask"; }).forEach(function (p) {
-      const t = b && (b.getScheduleData().tasks || []).filter(function (x) { return x.id === p.move.id; })[0];
-      if (!t) { bizSkipped.push({ id: p.id, error: "That Business task isn't there any more." }); return; }
-      if (t.completed) { bizSkipped.push({ id: p.id, error: "That Business task is done now." }); return; }
-      if (t.deadline !== p.move.from.date) { bizSkipped.push({ id: p.id, error: "That Business task was moved since I looked." }); return; }
-      if (b.setTaskDeadline(p.move.id, p.move.to.date)) { bizApplied.push(p.id); bizBack.push({ id: p.move.id, from: p.move.from.date, to: p.move.to.date }); }
-      else bizSkipped.push({ id: p.id, error: "The Business task couldn't be changed." });
-    });
     const movedTasks = A.select(r.all, tk.applied).map(function (p) { return { id: p.move.id, from: p.move.from.date, to: p.move.to.date }; });
-    const applied = ev.applied.length + tk.applied.length + bizApplied.length, skipped = ev.skipped.concat(tk.skipped, bizSkipped);
+    const applied = ev.applied.length + tk.applied.length, skipped = ev.skipped.concat(tk.skipped);
     close(false);
     const label = applied ? "Applied " + plural(applied, "change", "changes") + (skipped.length ? "; skipped " + skipped.length : "") + "." : "Nothing was changed.";
     if (applied) {
       c.undoable(label, prev, ev.events, function () {
         if (movedTasks.length && h) h.commitTasks(h.getTasks().map(function (t) { const m = movedTasks.filter(function (x) { return x.id === t.id && x.to === t.date; })[0]; return m ? Object.assign({}, t, { date: m.from }) : t; }));
-        bizBack.forEach(function (x) { if (b) b.setTaskDeadline(x.id, x.from); });
       });
     }
     c.refresh();

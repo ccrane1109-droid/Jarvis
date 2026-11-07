@@ -78,18 +78,14 @@
   const FIREBASE_FUNCTIONS_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
   const FUNCTIONS_REGION = "us-central1";
 
-  // Every localStorage key Jarvis uses, EXCEPT jarvisVideoConnections
-  // (holds raw AI provider API keys — stays device-local by default),
-  // jarvisLastBriefingDate and jarvisMarketingLastSync (purely local UI
-  // state, not real data).
+  // The keys this original sync still covers. Not here on purpose: jarvisVideoConnections (holds a raw AI provider
+  // API key, so it stays on the device), purely local UI state such as jarvisLastBriefingDate, and everything in the
+  // merge-based backup (js/backup-logic.js).
   const SYNCED_KEYS = [
     // (The workout family, jarvisWorkouts / Routines / Programs / Bodyweight / Measurements / StrengthSettings / CustomExercises /
     // FavoriteExercises, is NOT here any more: it is in the merge-based backup, js/backup-logic.js. In this list a save that never
     // reached the cloud was replaced by the older cloud copy at the next sign-in.)
-    "jarvisHabits", "jarvisBusiness", "jarvisCalories",
-    "jarvisTradingWatchlist", "jarvisPaperTrades", "jarvisTradingJournal", "jarvisTradingSettings",
-    "jarvisVideo", "jarvisVideoStudio",
-    "jarvisMarketing"
+    "jarvisHabits", "jarvisCalories"
   ];
 
   const config = window.JARVIS_FIREBASE_CONFIG || {};
@@ -571,23 +567,9 @@
       err.code = "functions/unauthenticated";
       return err;
     }
-    // Private per-user documents outside the synced users/{uid} doc (which
-    // has a 1MB limit). Only these subcollections are reachable, always
-    // under the signed-in user's own path; firestore.rules enforces the
-    // same, and makes the server-written ones read-only.
-    const DATA_COLLECTIONS = ["marketing", "marketingIdeas", "marketingFindings", "marketingSnapshots", "marketingState", "marketingUsage"];
-    function dataSegments(path) {
-      if (!auth.currentUser) throw signedOutError();
-      const parts = String(path || "").split("/").filter(Boolean);
-      if (!parts.length || DATA_COLLECTIONS.indexOf(parts[0]) === -1) throw new Error("Unsupported data path: " + path);
-      return ["users", auth.currentUser.uid].concat(parts);
-    }
-    function dataCall(fn) {
-      try { return Promise.resolve(fn()); } catch (err) { return Promise.reject(err); }
-    }
     window.JarvisCloud = {
       isSignedIn: function () { return !!(auth && auth.currentUser); },
-      // options.timeout (ms) for slow functions such as idea generation.
+      // options.timeout (ms) for slow functions.
       call: function (name, data, options) {
         if (!auth.currentUser) return Promise.reject(signedOutError());
         const ready = functionsClient
@@ -600,31 +582,15 @@
           return client.mod.httpsCallable(client.instance, name, options || undefined)(data || {});
         }).then(function (result) { return result.data; });
       },
-      data: {
-        get: function (path) {
-          return dataCall(function () {
-            return fb.getDoc(fb.doc.apply(null, [db].concat(dataSegments(path)))).then(function (snap) {
-              return snap.exists() ? snap.data() : null;
-            });
-          });
-        },
-        set: function (path, value, merge) {
-          return dataCall(function () {
-            return fb.setDoc(fb.doc.apply(null, [db].concat(dataSegments(path))), value, { merge: !!merge });
-          });
-        },
-        remove: function (path) {
-          return dataCall(function () {
-            return fb.deleteDoc(fb.doc.apply(null, [db].concat(dataSegments(path))));
-          });
-        },
-        list: function (collectionPath) {
-          return dataCall(function () {
-            return fb.getDocs(fb.collection.apply(null, [db].concat(dataSegments(collectionPath)))).then(function (snap) {
-              return snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
-            });
-          });
-        }
+      // What the retired sections (Business, Marketing, Trading, AI Video) left in this account, and erasing it. The places
+      // are a fixed list in js/retired-data.js, always under the signed-in account's own path; nothing else can be reached.
+      scanRetired: function () {
+        if (!auth.currentUser) return Promise.reject(signedOutError());
+        return window.JarvisRetiredData.scanCloud({ fb: fb, db: db, uid: auth.currentUser.uid });
+      },
+      eraseRetired: function (scan) {
+        if (!auth.currentUser) return Promise.reject(signedOutError());
+        return window.JarvisRetiredData.eraseCloud({ fb: fb, db: db, uid: auth.currentUser.uid }, scan);
       }
     };
 

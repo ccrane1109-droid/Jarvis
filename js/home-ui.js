@@ -2,7 +2,7 @@
    JARVIS — Home: the Upcoming Schedule card and quick actions.
 
    Draws what schedule-logic.js works out from the same items the Calendar shows (events, your tasks, and the
-   dates kept in Business). Nothing is saved here: ticking, opening and creating all go through the Calendar,
+   dates of your goals). Nothing is saved here: ticking, opening and creating all go through the Calendar,
    so Home never disagrees with it. The Daily Briefing reads its one-line summary from here too.
    ========================================================================== */
 
@@ -44,19 +44,16 @@
     if (o.when) sub.push(o.when);
     if (o.timeInSub && !it.allDay) sub.push(C.timeLabel(it.time) + (it.point || !it.endTime ? "" : " \u2013 " + C.timeLabel(it.endTime)));
     if (it.source === "task") sub.push("Task");
-    else if (it.source === "idea") { sub.push(it.platformLabel); sub.push(it.stageLabel); }
-    else if (it.source === "bizContent") sub.push("Content planner");
-    else if (it.source === "bizTask") sub.push("Business task");
-    else if (it.source === "bizGoal" || it.source === "launch" || it.source === "goal") sub.push(it.category === "launch" ? "Launch" : "Goal");
+    else if (it.source === "goal") sub.push("Goal");
     else { const cat = C.categoryInfo(it.category).label; if (it.kind !== "event" && C.kindInfo(it.kind).label !== cat) sub.push(C.kindInfo(it.kind).label); sub.push(cat); }
-    const tickable = it.source === "task" || it.source === "bizTask" || it.source === "idea" || (it.source === "event" && it.point);
+    const tickable = it.source === "task" || (it.source === "event" && it.point);
     const state = o.state === "now" ? '<span class="hm-badge">On now</span>' : "";
     return '<div class="hm-row' + (it.passed ? " is-passed" : "") + '" style="--cc:' + colorOf(it) + '">' +
       '<button type="button" class="hm-open" data-hm="open" data-key="' + esc(it.key) + '" aria-label="' + esc(it.title + ", " + (o.when ? o.when + ", " : "") + time + (it.completed ? ", done" : "")) + '">' +
         '<span class="hm-time">' + esc(o.hideTime ? "" : time) + '</span><span class="hm-bar"></span>' +
         '<span class="hm-main"><span class="hm-rtitle' + (it.completed ? " is-done" : "") + '">' + esc(it.title) + '</span><span class="hm-sub">' + esc(sub.join(" · ")) + '</span></span>' + state +
       '</button>' +
-      (tickable ? '<button type="button" class="hm-tick' + (it.completed ? " done" : "") + '" data-hm="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? (it.source === "idea" ? "Posted: " : "Done: ") : (it.source === "idea" ? "Mark posted: " : "Mark done: ")) + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
+      (tickable ? '<button type="button" class="hm-tick' + (it.completed ? " done" : "") + '" data-hm="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
     '</div>';
   }
 

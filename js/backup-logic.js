@@ -47,10 +47,7 @@
     // sign-in, failed uploads silent). They are here now so a save that never reached the cloud is not replaced by an older
     // cloud copy, and two devices' workouts are combined rather than one overwriting the other. LEGACY_KEYS below.
     "jarvisWorkouts", "jarvisRoutines", "jarvisPrograms", "jarvisBodyweight", "jarvisMeasurements",
-    "jarvisStrengthSettings", "jarvisCustomExercises", "jarvisFavoriteExercises",
-    // The Video Lab (Marketing): videos, campaigns and, in later updates, evaluations, results and reports. Its own key, not part
-    // of the older shared document, so a growing set of scripts and retention curves can't crowd it and nothing is replaced whole.
-    "jarvisVideoIntel"
+    "jarvisStrengthSettings", "jarvisCustomExercises", "jarvisFavoriteExercises"
   ];
   // Keys that used to be in the original shared document (users/{uid}, field "store"). A device brings what that old copy
   // holds into its own data once, combined (never replacing), before using the backup for them. The old copy is only read.
@@ -268,22 +265,6 @@
     return { settings: !ls ? cs : !cs ? ls : stamp(cs) > stamp(ls) ? cs : ls, days: days };
   }
 
-  // The Video Lab store: { version, settings, videos[], campaigns[], evaluations[], snapshots[], curves[], reports[], experiments[],
-  // recommendations[] }. Every list is merged by record id (so both devices' records are kept and the newer version of one record
-  // wins, this device's on a tie). A deleted record is a tombstone with a newer updatedAt, so a deletion reaches the other device and
-  // an undo wins over it. Lists this version doesn't know (from a newer version of the app) are merged the same way, not dropped.
-  function mergeVideoIntel(local, cloud) {
-    if (!isObj(local)) return isObj(cloud) ? cloud : local;
-    if (!isObj(cloud)) return local;
-    const out = Object.assign({}, cloud, local);
-    Object.keys(out).forEach(function (k) {
-      if (Array.isArray(local[k]) || Array.isArray(cloud[k])) out[k] = mergeById(Array.isArray(local[k]) ? local[k] : [], Array.isArray(cloud[k]) ? cloud[k] : []);
-    });
-    out.settings = mergeObjects(isObj(local.settings) ? local.settings : {}, isObj(cloud.settings) ? cloud.settings : {});
-    out.version = Math.max(num(local.version), num(cloud.version)) || 1;
-    return out;
-  }
-
   const STRATEGY = {
     jarvisNutritionLog: mergeDateMeals,
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
@@ -298,8 +279,7 @@
     // exercise ids, which are matched by their value, so two devices' stars are both kept
     jarvisWorkouts: mergeById, jarvisRoutines: mergeById, jarvisPrograms: mergeById, jarvisBodyweight: mergeById, jarvisMeasurements: mergeById,
     jarvisCustomExercises: mergeById, jarvisFavoriteExercises: mergeById,
-    jarvisStrengthSettings: mergeObjects,
-    jarvisVideoIntel: mergeVideoIntel
+    jarvisStrengthSettings: mergeObjects
   };
 
   // Is this old-copy value the kind of thing the key holds (a list, or for the one settings key an object)? A damaged or foreign value
@@ -324,6 +304,6 @@
     BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS,
     hashText: hashText, chunkText: chunkText, partId: partId, assemble: assemble, isEmptyText: isEmptyText,
     decide: decide, mergeText: mergeText, legacyShapeOk: legacyShapeOk,
-    mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeVideoIntel: mergeVideoIntel, mergeWakeCheck: mergeWakeCheck
+    mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeWakeCheck: mergeWakeCheck
   };
 });

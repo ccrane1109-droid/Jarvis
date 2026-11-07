@@ -16,8 +16,14 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // Owner-editable marketing data: settings (budget, caps, watchlist,
-      // brand profile), the content idea library and audience notes.
+      // Left over from the removed Marketing section. Kept ONLY so the one-time
+      // "Erase the data from the removed sections?" question in JARVIS (see
+      // js/retired-data.js) can delete these three collections from a browser.
+      // Once every device has answered it, these three rules can be deleted.
+      // The server-written Marketing collections (marketingUsage, marketingCache,
+      // marketingSnapshots, marketingState, marketingPosts) have no rule on
+      // purpose: a browser can neither read nor write them. Remove them in the
+      // Firebase console (see functions/README.md).
       match /marketing/{docId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
@@ -26,26 +32,6 @@ service cloud.firestore {
       }
       match /marketingFindings/{findingId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Written only by the server (Cloud Functions bypass these rules), so
-      // usage records, cached results and research history can't be edited
-      // from a browser.
-      match /marketingUsage/{month} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;
-      }
-      match /marketingCache/{entry} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;
-      }
-      match /marketingSnapshots/{handle} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;
-      }
-      match /marketingState/{docId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow write: if false;
       }
 
       // Reminders are created and edited only through the server's

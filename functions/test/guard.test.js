@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { makeGuard } = require("../lib/guard");
-const { InsightError } = require("../lib/insight");
+const { ServerError } = require("../lib/errors");
 
 class FakeHttpsError extends Error {
   constructor(code, message, details) { super(message); this.code = code; this.details = details; }
@@ -11,13 +11,13 @@ class FakeHttpsError extends Error {
 
 function setup() {
   const logs = [];
-  const guarded = makeGuard({ InsightError, HttpsError: FakeHttpsError, logger: { error: (msg, data) => logs.push({ msg, data }) } });
+  const guarded = makeGuard({ ServerError, HttpsError: FakeHttpsError, logger: { error: (msg, data) => logs.push({ msg, data }) } });
   return { guarded, logs };
 }
 
 test("expected errors keep their code and message and aren't logged as crashes", async () => {
   const { guarded, logs } = setup();
-  await assert.rejects(guarded("marketingStatus", async () => { throw new InsightError("permission-denied", "Not allowed."); }),
+  await assert.rejects(guarded("reminders", async () => { throw new ServerError("permission-denied", "Not allowed."); }),
     (e) => e instanceof FakeHttpsError && e.code === "permission-denied" && e.message === "Not allowed.");
   assert.equal(logs.length, 0);
 });

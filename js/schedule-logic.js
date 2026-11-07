@@ -2,9 +2,9 @@
    JARVIS — Schedule: what is coming up, and what is late (pure functions, no page access, so they can be
    tested outside the browser).
 
-   Everything works on calendar items (the shape calendar-logic.js makes): events, your tasks, and the dates that
-   live in Business (task deadlines, goal target dates, product and brand launch dates). The Home screen's
-   Upcoming Schedule card, the Daily Briefing and the Calendar all read the same items, so they never disagree.
+   Everything works on calendar items (the shape calendar-logic.js makes): events, your tasks, and the target dates of
+   your Habits goals. The Home screen's Upcoming Schedule card, the Daily Briefing and the Calendar all read the same
+   items, so they never disagree.
 
    Nothing here invents anything: a date nobody entered is not on the schedule, and an item you ticked is
    never overdue.
@@ -22,7 +22,7 @@
   function rank(p) { return p === "high" ? 0 : p === "low" ? 2 : 1; }
   function str(v) { return typeof v === "string" ? v.trim() : ""; }
 
-  /* ---------------- dates that live in Business, as calendar items ---------------- */
+  /* ---------------- goal dates, as calendar items ---------------- */
 
   function dateItem(o) {
     return {
@@ -32,24 +32,10 @@
     };
   }
 
-  // biz: the Business data ({ tasks, goals, products, profile }); personalGoals: the Habits goals. -> items dated from..to.
-  function businessItems(biz, personalGoals, from, to) {
-    const b = biz && typeof biz === "object" ? biz : {}, out = [];
+  // personalGoals: the Habits goals. -> items for the target dates that fall from..to.
+  function goalItems(personalGoals, from, to) {
+    const out = [];
     const inRange = function (d) { return C.isDate(d) && d >= from && d <= to; };
-    (Array.isArray(b.tasks) ? b.tasks : []).forEach(function (t) {
-      if (t && typeof t.id === "string" && str(t.text) && inRange(t.deadline)) out.push(dateItem({ key: "biztask:" + t.id, id: t.id, source: "bizTask", title: str(t.text), kind: "task", category: "business", priority: t.priority, completed: t.completed, date: t.deadline }));
-    });
-    (Array.isArray(b.goals) ? b.goals : []).forEach(function (g) {
-      if (g && typeof g.id === "string" && str(g.title) && inRange(g.targetDate)) out.push(dateItem({ key: "bizgoal:" + g.id, id: g.id, source: "bizGoal", title: "Goal: " + str(g.title), kind: "milestone", category: "business", priority: g.priority, completed: g.status === "Complete", date: g.targetDate, readOnly: true }));
-    });
-    (Array.isArray(b.products) ? b.products : []).forEach(function (p) {
-      if (p && typeof p.id === "string" && str(p.name) && inRange(p.launchDate)) out.push(dateItem({ key: "launch:" + p.id, id: p.id, source: "launch", title: "Launch: " + str(p.name), kind: "milestone", category: "launch", priority: "high", completed: p.status === "Live", date: p.launchDate, readOnly: true }));
-    });
-    (Array.isArray(b.content) ? b.content : []).forEach(function (c) {
-      if (c && typeof c.id === "string" && str(c.title) && inRange(c.scheduledDate)) out.push(dateItem({ key: "bizcontent:" + c.id, id: c.id, source: "bizContent", title: "Post: " + str(c.title), kind: "content", category: "content", priority: "medium", completed: c.status === "Posted", date: c.scheduledDate, readOnly: true }));
-    });
-    const prof = b.profile && typeof b.profile === "object" ? b.profile : {};
-    if (inRange(prof.launchDate)) out.push(dateItem({ key: "launch:brand", id: "brand", source: "launch", title: "Launch: " + (str(prof.name) || "your brand"), kind: "milestone", category: "launch", priority: "high", completed: false, date: prof.launchDate, readOnly: true }));
     (Array.isArray(personalGoals) ? personalGoals : []).forEach(function (g) {
       if (g && typeof g.id === "string" && str(g.name) && inRange(g.targetDate)) out.push(dateItem({ key: "goal:" + g.id, id: g.id, source: "goal", title: "Goal: " + str(g.name), kind: "milestone", category: "personal", priority: "medium", completed: !!g.completed, date: g.targetDate, readOnly: true }));
     });
@@ -153,6 +139,6 @@
 
   return {
     LOOKBACK_DAYS: LOOKBACK_DAYS, DEADLINE_DAYS: DEADLINE_DAYS, LIST_MAX: LIST_MAX,
-    businessItems: businessItems, summarize: summarize, daySlots: daySlots, DAY_START: DAY_START, DAY_END: DAY_END, isOverdue: isOverdue, whenLabel: whenLabel, daysUntil: daysUntil, briefingLine: briefingLine, byDay: byDay
+    goalItems: goalItems, summarize: summarize, daySlots: daySlots, DAY_START: DAY_START, DAY_END: DAY_END, isOverdue: isOverdue, whenLabel: whenLabel, daysUntil: daysUntil, briefingLine: briefingLine, byDay: byDay
   };
 });

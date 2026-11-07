@@ -1,7 +1,7 @@
 /* ==========================================================================
    JARVIS — shared utilities and app boot
-   Exposes window.JarvisCore for use by workout.js, habits.js, business.js,
-   trading.js. Handles top-level tab switching and toast notifications.
+   Exposes window.JarvisCore for use by workout.js, habits.js, nutrition.js and the
+   other screens. Handles top-level tab switching and toast notifications.
    ========================================================================== */
 
 (function () {
@@ -212,16 +212,6 @@
       if (line) rows.push('<div class="briefing-row"><strong>Schedule:</strong> ' + escapeHtml(line) + '</div>');
     }
 
-    if (window.JarvisBusiness && typeof window.JarvisBusiness.getSummary === "function") {
-      const biz = window.JarvisBusiness.getSummary();
-      const netClass = biz.net >= 0 ? "text-positive" : "text-negative";
-      rows.push(
-        '<div class="briefing-row"><strong>Business:</strong> Net <span class="' + netClass + '">' + formatCurrency(biz.net) + '</span>' +
-        ' &middot; ' + biz.activeGoals + ' active goal' + (biz.activeGoals === 1 ? "" : "s") +
-        (biz.totalGoals === 0 ? " (no goals logged yet)" : "") + '</div>'
-      );
-    }
-
     if (window.JarvisHabits && typeof window.JarvisHabits.getSummary === "function") {
       const h = window.JarvisHabits.getSummary();
       const habitsText = h.total === 0
@@ -259,14 +249,6 @@
       } else {
         rows.push('<div class="briefing-row"><strong>Nutrition:</strong> ' + n.todayTotal + ' cal logged today &middot; score ' + n.score + '/100</div>');
       }
-    }
-
-    if (window.JarvisVideo && typeof window.JarvisVideo.getSummary === "function") {
-      const v = window.JarvisVideo.getSummary();
-      const videoText = v.total === 0
-        ? "no generations yet"
-        : v.week + " this week &middot; " + v.completed + "/" + v.total + " completed";
-      rows.push('<div class="briefing-row"><strong>AI Video:</strong> ' + videoText + '</div>');
     }
 
     if (rows.length === 0) {
@@ -308,7 +290,7 @@
   // reminder from a notification), so the bar always shows where you are. When the open section is one of the ones
   // behind "More", that button takes its name so the current section is still named on screen.
   const PRIMARY_NAV = ["navBtnHome", "navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnCalendar"];
-  const SHORT_NAV_LABELS = { navBtnTrading: "Trading" };
+  const SHORT_NAV_LABELS = {};
   const TEXT_FIELD = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=range]):not([type=file]), textarea, select";
 
   function initBottomNav() {
@@ -409,14 +391,6 @@
     });
     syncBottomNav = initBottomNav();
 
-    const subNavBtns = Array.prototype.slice.call(document.querySelectorAll(".sub-nav-btn"));
-    const subPanels = Array.prototype.slice.call(document.querySelectorAll(".sub-panel"));
-    setupTabGroup(subNavBtns, subPanels, function (targetId) {
-      if (window.JarvisTrading && typeof window.JarvisTrading.onSubTabChange === "function") {
-        window.JarvisTrading.onSubTabChange(targetId);
-      }
-    });
-
     const workoutSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".workout-sub-nav-btn"));
     const workoutSubPanels = Array.prototype.slice.call(document.querySelectorAll(".workout-sub-panel"));
     setupTabGroup(workoutSubNavBtns, workoutSubPanels, function (targetId) {
@@ -424,10 +398,6 @@
         window.JarvisWorkout.onSubTabChange(targetId);
       }
     });
-
-    const videoSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".video-sub-nav-btn"));
-    const videoSubPanels = Array.prototype.slice.call(document.querySelectorAll(".video-sub-panel"));
-    setupTabGroup(videoSubNavBtns, videoSubPanels);
 
     const nutritionSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".nutrition-sub-nav-btn"));
     const nutritionSubPanels = Array.prototype.slice.call(document.querySelectorAll(".nutrition-sub-panel"));
@@ -452,18 +422,6 @@
         window.JarvisDiscipline.onSubTabChange(targetId);
       }
     });
-
-    const businessSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".business-sub-nav-btn"));
-    const businessSubPanels = Array.prototype.slice.call(document.querySelectorAll(".business-sub-panel"));
-    setupTabGroup(businessSubNavBtns, businessSubPanels, function (targetId) {
-      if (window.JarvisBusiness && typeof window.JarvisBusiness.onSubTabChange === "function") {
-        window.JarvisBusiness.onSubTabChange(targetId);
-      }
-    });
-
-    const marketingSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".marketing-sub-nav-btn"));
-    const marketingSubPanels = Array.prototype.slice.call(document.querySelectorAll(".marketing-sub-panel"));
-    setupTabGroup(marketingSubNavBtns, marketingSubPanels);
 
     initScrollFades();
 
@@ -559,19 +517,9 @@
         if (window.console) console.error("The day planner failed to start; the rest of the app is unaffected", err);
       }
       if (window.JarvisReminders && typeof window.JarvisReminders.init === "function") window.JarvisReminders.init();
-      if (window.JarvisBusiness && typeof window.JarvisBusiness.init === "function") window.JarvisBusiness.init();
-      if (window.JarvisTrading && typeof window.JarvisTrading.init === "function") window.JarvisTrading.init();
       if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.init === "function") window.JarvisVideoConnections.init();
-      if (window.JarvisVideo && typeof window.JarvisVideo.init === "function") window.JarvisVideo.init();
-      if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
       if (window.JarvisFormCheck && typeof window.JarvisFormCheck.init === "function") window.JarvisFormCheck.init();
-      if (window.JarvisContentIntel && typeof window.JarvisContentIntel.init === "function") window.JarvisContentIntel.init();
-      try {
-        if (window.JarvisVideoLab && typeof window.JarvisVideoLab.init === "function") window.JarvisVideoLab.init();
-      } catch (err) {
-        if (window.console) console.error("The Video Lab failed to start; the rest of Marketing is unaffected", err);
-      }
-      // The Calendar and Home read dates from Habits and Business, so they start after both have loaded.
+      // The Calendar and Home read dates from Habits, so they start after it has loaded.
       try {
         if (window.JarvisCalendar && typeof window.JarvisCalendar.init === "function") window.JarvisCalendar.init();
       } catch (err) {
@@ -608,6 +556,11 @@
         if (window.JarvisWakeCheck && typeof window.JarvisWakeCheck.init === "function") window.JarvisWakeCheck.init();
       } catch (err) {
         if (window.console) console.error("Wake check failed to start", err);
+      }
+      try {
+        if (window.JarvisRetiredUI && typeof window.JarvisRetiredUI.init === "function") window.JarvisRetiredUI.init();
+      } catch (err) {
+        if (window.console) console.error("The check for leftover data failed to run; nothing was erased", err);
       }
       maybeAutoShowBriefing();
     }

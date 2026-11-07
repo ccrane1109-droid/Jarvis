@@ -23,7 +23,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const insight = require("./insight");
+const errors = require("./errors");
 
 const MAX_DEVICES = 10;
 const PAYLOAD_MAX_BYTES = 1500;
@@ -40,7 +40,7 @@ const HOST_SUFFIXES = [".push.apple.com", ".push.services.mozilla.com", ".notify
 const subsPath = (uid) => "users/" + uid + "/pushSubscriptions";
 const statePath = (uid) => "users/" + uid + "/reminderState/push";
 
-function fail(code, message) { return new insight.InsightError(code, message); }
+function fail(code, message) { return new errors.ServerError(code, message); }
 
 function hostAllowed(host) {
   const h = String(host || "").toLowerCase();
@@ -244,7 +244,7 @@ async function test(uid, deps, data, queueEvent) {
 }
 
 async function handle(uid, data, deps, queueEvent) {
-  insight.requireOwner(uid, deps);
+  errors.requireOwner(uid, deps);
   const d = data && typeof data === "object" ? data : {};
   switch (d.action) {
     case "config": return config(uid, deps, d);

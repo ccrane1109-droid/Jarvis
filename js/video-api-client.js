@@ -1,8 +1,8 @@
 /* ==========================================================================
-   JARVIS — AI Video API client
-   Shared request helpers used by both the Clip Generator and Studio
-   features: fills a JSON body template with values, resolves a dot-path
-   out of a JSON response, and performs the actual fetch.
+   JARVIS — AI connection request helpers
+   Used by Nutrition's AI recipe calculator (the file keeps its old name, from
+   when AI Video shared it): fills a JSON body template with values, resolves
+   a dot-path out of a JSON response, and performs the actual fetch.
    ========================================================================== */
 
 (function () {

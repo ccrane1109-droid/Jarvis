@@ -1,7 +1,7 @@
 "use strict";
 
 // Wraps a callable handler so the browser always gets a clear error:
-// expected problems (InsightError) keep their code and message; anything
+// expected problems (ServerError) keep their code and message; anything
 // unexpected is logged with a short reference the app shows, so the
 // matching entry is easy to find in Firebase console > Functions > Logs.
 // Logs carry the error message and stack only — never request data or keys.
@@ -13,9 +13,9 @@ function makeGuard(deps) {
     try {
       return await fn();
     } catch (err) {
-      if (err instanceof deps.InsightError) throw new deps.HttpsError(err.code, err.message);
+      if (err instanceof deps.ServerError) throw new deps.HttpsError(err.code, err.message);
       const ref = crypto.randomBytes(4).toString("hex");
-      deps.logger.error("Unexpected marketing function error", {
+      deps.logger.error("Unexpected server function error", {
         fn: name,
         ref: ref,
         message: err && err.message,
