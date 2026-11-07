@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=74">
+<link rel="stylesheet" href="style.css?v=75">
 </head>
 <body>
 
@@ -4092,6 +4092,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-competitors" role="tab" aria-selected="false" aria-controls="mkt-competitors" id="mktSubNavCompetitors">Competitors</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-trends" role="tab" aria-selected="false" aria-controls="mkt-trends" id="mktSubNavTrends">Trends</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-ideas" role="tab" aria-selected="false" aria-controls="mkt-ideas" id="mktSubNavIdeas">Content Studio</button>
+      <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-videolab" role="tab" aria-selected="false" aria-controls="mkt-videolab" id="mktSubNavVideoLab">Video Lab</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-library" role="tab" aria-selected="false" aria-controls="mkt-library" id="mktSubNavLibrary">Saved Library</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-history" role="tab" aria-selected="false" aria-controls="mkt-history" id="mktSubNavHistory">Research History</button>
       <button type="button" class="marketing-sub-nav-btn" data-subtarget="mkt-settings" role="tab" aria-selected="false" aria-controls="mkt-settings" id="mktSubNavSettings">Settings</button>
@@ -4395,6 +4396,13 @@ npx firebase-tools deploy --only firestore:rules</pre>
         <button type="button" class="btn btn-secondary" id="mktIdeaSaveAllBtn">Save all to Library</button>
       </div>
     
+    </div>
+
+    <!-- ---------- Video Lab ---------- -->
+    <div id="mkt-videolab" class="marketing-sub-panel nr-scope vl-scope" role="tabpanel" aria-labelledby="mktSubNavVideoLab">
+      <h2 class="nr-section-title">Video Lab</h2>
+      <p class="nr-section-sub">Plan, publish and learn from every Gratiel video in one place.</p>
+      <div id="vlRoot"></div>
     </div>
 
     <!-- ---------- Saved Library ---------- -->
@@ -5302,70 +5310,72 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=74"></script>
-<script src="js/backup-logic.js?v=74"></script>
-<script src="js/cloud-backup.js?v=74"></script>
-<script type="module" src="js/auth.js?v=74"></script>
-<script src="js/app.js?v=74"></script>
-<script src="js/exercises.js?v=74"></script>
-<script src="js/workout-logic.js?v=74"></script>
-<script src="js/exercise-logic.js?v=74"></script>
-<script src="js/exercise-guides.js?v=74"></script>
-<script src="js/routine-logic.js?v=74"></script>
-<script src="js/workout.js?v=74"></script>
-<script src="js/workout-ui.js?v=74"></script>
-<script src="js/routines-ui.js?v=74"></script>
-<script src="js/progress-logic.js?v=74"></script>
-<script src="js/insights-logic.js?v=74"></script>
-<script src="js/charts.js?v=74"></script>
-<script src="js/history-ui.js?v=74"></script>
-<script src="js/insights-ui.js?v=74"></script>
-<script src="js/library-ui.js?v=74"></script>
-<script src="js/progress-ui.js?v=74"></script>
-<script src="js/nutrition.js?v=74"></script>
-<script src="js/nutrition-label-parse.js?v=74"></script>
-<script src="js/nutrition-label-scan.js?v=74"></script>
-<script src="js/groceries.js?v=74"></script>
-<script src="js/habit-logic.js?v=74"></script>
-<script src="js/dayplan-logic.js?v=74"></script>
-<script src="js/habits.js?v=74"></script>
-<script src="js/dayplan-ui.js?v=74"></script>
-<script src="js/calendar-logic.js?v=74"></script>
-<script src="js/content-logic.js?v=74"></script>
-<script src="js/schedule-logic.js?v=74"></script>
-<script src="js/ics-logic.js?v=74"></script>
-<script src="js/assistant-logic.js?v=74"></script>
-<script src="js/calendar-ui.js?v=74"></script>
-<script src="js/assistant-ui.js?v=74"></script>
-<script src="js/calendar-reminders-logic.js?v=74"></script>
-<script src="js/calendar-reminders-ui.js?v=74"></script>
-<script src="js/ics-ui.js?v=74"></script>
-<script src="js/home-ui.js?v=74"></script>
-<script src="js/discipline-logic.js?v=74"></script>
-<script src="js/discipline-program.js?v=74"></script>
-<script src="js/discipline-habits.js?v=74"></script>
-<script src="js/discipline-insights.js?v=74"></script>
-<script src="js/discipline-charts.js?v=74"></script>
-<script src="js/discipline-delivery.js?v=74"></script>
-<script src="js/discipline.js?v=74"></script>
-<script src="js/wakecheck-logic.js?v=74"></script>
-<script src="js/wakecheck.js?v=74"></script>
-<script src="functions/lib/reminder-spec.js?v=74"></script>
-<script src="functions/lib/reminder-events.js?v=74"></script>
-<script src="js/reminders.js?v=74"></script>
-<script src="js/business.js?v=74"></script>
-<script src="js/trading.js?v=74"></script>
-<script src="js/blobstore.js?v=74"></script>
-<script src="js/video-api-client.js?v=74"></script>
-<script src="js/video-connections.js?v=74"></script>
-<script src="js/video.js?v=74"></script>
-<script src="js/video-studio.js?v=74"></script>
-<script src="functions/lib/idea-spec.js?v=74"></script>
-<script src="functions/lib/niche-spec.js?v=74"></script>
-<script src="js/marketing-stats.js?v=74"></script>
-<script src="js/niche-research.js?v=74"></script>
-<script src="js/content-intelligence.js?v=74"></script>
-<script src="js/formcheck-logic.js?v=74"></script>
-<script src="js/form-check.js?v=74"></script>
+<script src="js/firebase-config.js?v=75"></script>
+<script src="js/backup-logic.js?v=75"></script>
+<script src="js/cloud-backup.js?v=75"></script>
+<script type="module" src="js/auth.js?v=75"></script>
+<script src="js/app.js?v=75"></script>
+<script src="js/exercises.js?v=75"></script>
+<script src="js/workout-logic.js?v=75"></script>
+<script src="js/exercise-logic.js?v=75"></script>
+<script src="js/exercise-guides.js?v=75"></script>
+<script src="js/routine-logic.js?v=75"></script>
+<script src="js/workout.js?v=75"></script>
+<script src="js/workout-ui.js?v=75"></script>
+<script src="js/routines-ui.js?v=75"></script>
+<script src="js/progress-logic.js?v=75"></script>
+<script src="js/insights-logic.js?v=75"></script>
+<script src="js/charts.js?v=75"></script>
+<script src="js/history-ui.js?v=75"></script>
+<script src="js/insights-ui.js?v=75"></script>
+<script src="js/library-ui.js?v=75"></script>
+<script src="js/progress-ui.js?v=75"></script>
+<script src="js/nutrition.js?v=75"></script>
+<script src="js/nutrition-label-parse.js?v=75"></script>
+<script src="js/nutrition-label-scan.js?v=75"></script>
+<script src="js/groceries.js?v=75"></script>
+<script src="js/habit-logic.js?v=75"></script>
+<script src="js/dayplan-logic.js?v=75"></script>
+<script src="js/habits.js?v=75"></script>
+<script src="js/dayplan-ui.js?v=75"></script>
+<script src="js/calendar-logic.js?v=75"></script>
+<script src="js/content-logic.js?v=75"></script>
+<script src="js/schedule-logic.js?v=75"></script>
+<script src="js/ics-logic.js?v=75"></script>
+<script src="js/assistant-logic.js?v=75"></script>
+<script src="js/calendar-ui.js?v=75"></script>
+<script src="js/assistant-ui.js?v=75"></script>
+<script src="js/calendar-reminders-logic.js?v=75"></script>
+<script src="js/calendar-reminders-ui.js?v=75"></script>
+<script src="js/ics-ui.js?v=75"></script>
+<script src="js/home-ui.js?v=75"></script>
+<script src="js/discipline-logic.js?v=75"></script>
+<script src="js/discipline-program.js?v=75"></script>
+<script src="js/discipline-habits.js?v=75"></script>
+<script src="js/discipline-insights.js?v=75"></script>
+<script src="js/discipline-charts.js?v=75"></script>
+<script src="js/discipline-delivery.js?v=75"></script>
+<script src="js/discipline.js?v=75"></script>
+<script src="js/wakecheck-logic.js?v=75"></script>
+<script src="js/wakecheck.js?v=75"></script>
+<script src="functions/lib/reminder-spec.js?v=75"></script>
+<script src="functions/lib/reminder-events.js?v=75"></script>
+<script src="js/reminders.js?v=75"></script>
+<script src="js/business.js?v=75"></script>
+<script src="js/trading.js?v=75"></script>
+<script src="js/blobstore.js?v=75"></script>
+<script src="js/video-api-client.js?v=75"></script>
+<script src="js/video-connections.js?v=75"></script>
+<script src="js/video.js?v=75"></script>
+<script src="js/video-studio.js?v=75"></script>
+<script src="functions/lib/idea-spec.js?v=75"></script>
+<script src="functions/lib/niche-spec.js?v=75"></script>
+<script src="js/marketing-stats.js?v=75"></script>
+<script src="js/niche-research.js?v=75"></script>
+<script src="js/content-intelligence.js?v=75"></script>
+<script src="js/video-intel-logic.js?v=75"></script>
+<script src="js/video-intel-ui.js?v=75"></script>
+<script src="js/formcheck-logic.js?v=75"></script>
+<script src="js/form-check.js?v=75"></script>
 </body>
 </html>

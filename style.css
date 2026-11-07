@@ -4228,3 +4228,49 @@ button.hs-day:hover { background: var(--card-hover); }
 .cal-key-row dd { margin: 0; color: var(--text-dim); }
 .cal-keys kbd { display: inline-block; padding: 2px 8px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--bg-elevated); color: var(--text); font: inherit; font-size: 14px; }
 #calModal .cal-actions .btn-primary { min-height: 44px; }
+
+/* ---------------- Video Lab (Marketing > Video Lab) ---------------- */
+.vl-hint { font-size: 14px; color: var(--text-dim); margin: 0 0 10px; }
+.vl-toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+.vl-toolbar .btn, .vl-actions .btn, .vl-sheet .btn { min-height: 44px; }
+.vl-card { margin-bottom: 12px; }
+.vl-title { font-size: 17px; font-weight: 700; margin: 0 0 8px; overflow-wrap: anywhere; }
+.vl-title:focus { outline: none; }
+.vl-title:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; border-radius: 4px; }
+.vl-line { font-size: 14px; color: var(--text-dim); margin: 4px 0; overflow-wrap: anywhere; }
+.vl-hook { font-size: 15px; font-style: italic; margin: 8px 0; overflow-wrap: anywhere; }
+.vl-link { background: none; border: 0; color: var(--accent-hover); text-decoration: underline; font: inherit; min-height: 44px; padding: 0 4px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.vl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.vl-actions a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.vl-empty { margin: 0; color: var(--text-dim); font-size: 15px; }
+.vl-undo { position: fixed; left: 16px; right: 16px; bottom: 20px; z-index: 150; max-width: 520px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 14px; background: #1f2740; border: 1px solid var(--card-border); border-radius: 12px; box-shadow: var(--shadow); }
+.vl-undo.hidden { display: none; }
+.vl-undo-text { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.vl-undo .btn { flex: none; min-height: 44px; }
+@media (max-width: 900px) { .vl-undo { bottom: calc(78px + env(safe-area-inset-bottom)); } }
+body.vl-sheet-open { overflow: hidden; }
+.vl-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.vl-sheet-head h2 { font-size: 20px; margin: 0; overflow-wrap: anywhere; }
+.vl-sheet-head h2:focus { outline: none; }
+.vl-form { display: flex; flex-direction: column; gap: 14px; }
+.vl-form .form-row.two-col > div { min-width: 0; }
+.vl-group { border: 0; padding: 0; margin: 0; min-width: 0; }
+.vl-group legend { font-size: 14px; font-weight: 600; color: var(--text); padding: 0; margin-bottom: 2px; }
+.vl-check { display: flex; width: 100%; }
+.vl-check input[type="checkbox"] { width: 22px; height: 22px; flex: none; }
+.vl-sub { font-size: 16px; margin: 6px 0 0; }
+.vl-err { font-size: 14px; color: var(--red); margin: 0; }
+.vl-err:empty { display: none; }
+.vl-errsum { color: var(--red); border: 1px solid var(--red); background: var(--red-dim); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0; font-size: 15px; }
+.vl-errsum[hidden] { display: none; }
+.vl-form [aria-invalid="true"] { border-color: var(--red); }
+.vl-camp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.vl-camp { border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 12px; background: var(--bg-elevated); }
+.vl-camp-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .vl-scope * { transition: none !important; animation: none !important; } }
+/* Video Lab: the same scoped primary blue the other screens use (white on the global accent is 3.2:1), full-size fields, and badges at 12px */
+.vl-scope .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+.vl-scope .btn-primary:hover:not(:disabled) { background: #2a66d4; border-color: #2a66d4; }
+.vl-scope input:not([type="checkbox"]), .vl-scope select, .vl-scope textarea { min-height: 44px; }
+.vl-scope .badge { font-size: 12px; }
+.vl-scope .badge-accent { color: #cfe0ff; }

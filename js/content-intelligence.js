@@ -1236,6 +1236,13 @@
     edit.type = "button";
     edit.addEventListener("click", function () { openEditor(idea.id, -1); });
     actions.appendChild(edit);
+    if (window.JarvisVideoLab && typeof window.JarvisVideoLab.addFromIdea === "function") {
+      const vl = el("button", "btn btn-secondary", "Add to Video Lab");
+      vl.type = "button";
+      vl.setAttribute("aria-label", "Add " + idea.title + " to the Video Lab");
+      vl.addEventListener("click", function () { window.JarvisVideoLab.addFromIdea(idea.id); });
+      actions.appendChild(vl);
+    }
     const del = el("button", "btn-icon danger", "Delete");
     del.type = "button";
     del.setAttribute("aria-label", "Delete " + idea.title);
@@ -1503,6 +1510,8 @@
   window.JarvisContentIntel = {
     init: init,
     getIdeas: function () { return state.ideas.slice(); },
+    // Your content pillars from Settings, read-only (the Video Lab offers these; it never changes them).
+    getPillars: function () { return (state.settings || DEFAULT_SETTINGS).contentPillars.slice(); },
     updateIdea: updateIdea,
     openIdea: openIdea,
     newIdea: newIdea

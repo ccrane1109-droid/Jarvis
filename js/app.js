@@ -566,6 +566,11 @@
       if (window.JarvisVideoStudio && typeof window.JarvisVideoStudio.init === "function") window.JarvisVideoStudio.init();
       if (window.JarvisFormCheck && typeof window.JarvisFormCheck.init === "function") window.JarvisFormCheck.init();
       if (window.JarvisContentIntel && typeof window.JarvisContentIntel.init === "function") window.JarvisContentIntel.init();
+      try {
+        if (window.JarvisVideoLab && typeof window.JarvisVideoLab.init === "function") window.JarvisVideoLab.init();
+      } catch (err) {
+        if (window.console) console.error("The Video Lab failed to start; the rest of Marketing is unaffected", err);
+      }
       // The Calendar and Home read dates from Habits and Business, so they start after both have loaded.
       try {
         if (window.JarvisCalendar && typeof window.JarvisCalendar.init === "function") window.JarvisCalendar.init();
