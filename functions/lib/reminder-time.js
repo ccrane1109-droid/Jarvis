@@ -29,6 +29,28 @@ function addDays(isoDate, n) {
   return DateTime.fromISO(isoDate, { zone: "utc" }).plus({ days: n }).toISODate();
 }
 
+const DAY_MS = 24 * 3600000;
+
+// The exact moment (milliseconds) a wall-clock time on a local date happens in a
+// zone, or NaN if the date or time isn't valid. The two odd cases are decided
+// here, on purpose, instead of by whatever the time library happens to pick:
+//  - a time that doesn't exist: the library's result, shifted forward by the gap;
+//  - a time that happens twice: always the FIRST occurrence (before the clocks go back).
+function localInstant(isoDate, time, zone) {
+  const dt = DateTime.fromISO(isoDate + "T" + time, { zone: zone });
+  if (!dt.isValid) return NaN;
+  const ms = dt.toMillis();
+  // The UTC offset (minutes) in force a day earlier. If the clocks went back since then,
+  // this wall-clock time may also have happened earlier, under that bigger offset.
+  const earlierOffset = DateTime.fromMillis(ms - DAY_MS, { zone: zone }).offset;
+  if (earlierOffset > dt.offset) {
+    const candidate = ms + (dt.offset - earlierOffset) * 60000;
+    // Only genuine if that earlier moment really is under the earlier offset (so it shows the same wall-clock time).
+    if (DateTime.fromMillis(candidate, { zone: zone }).offset === earlierOffset) return candidate;
+  }
+  return ms;
+}
+
 // The moments on one local calendar day that this schedule fires, earliest first.
 function occurrencesOnDate(schedule, zone, isoDate) {
   if (!schedule || !Array.isArray(schedule.times)) return [];
@@ -41,9 +63,8 @@ function occurrencesOnDate(schedule, zone, isoDate) {
   const seen = {};
   const out = [];
   schedule.times.forEach(function (time) {
-    const dt = DateTime.fromISO(isoDate + "T" + time, { zone: zone });
-    if (!dt.isValid) return;
-    const ms = dt.toMillis();
+    const ms = localInstant(isoDate, time, zone);
+    if (isNaN(ms)) return;
     if (!seen[ms]) { seen[ms] = true; out.push(new Date(ms)); }
   });
   return out.sort(function (a, b) { return a - b; });
@@ -100,9 +121,9 @@ function inQuietHours(date, quiet, zone) {
 // The moment quiet hours next end, at or after `date` (used to hold a reminder until then).
 function quietEndAfter(date, quiet, zone) {
   const dt = DateTime.fromJSDate(date, { zone: zone });
-  let end = DateTime.fromISO(dt.toISODate() + "T" + quiet.end, { zone: zone });
-  if (end.toMillis() <= date.getTime()) end = DateTime.fromISO(dt.plus({ days: 1 }).toISODate() + "T" + quiet.end, { zone: zone });
-  return end.toJSDate();
+  let end = localInstant(dt.toISODate(), quiet.end, zone);
+  if (end <= date.getTime()) end = localInstant(dt.plus({ days: 1 }).toISODate(), quiet.end, zone);
+  return new Date(end);
 }
 
-module.exports = { isValidZone, localDate, occurrencesOnDate, nextOccurrence, upcoming, todayOccurrences, inQuietHours, quietEndAfter };
+module.exports = { isValidZone, localDate, localInstant, occurrencesOnDate, nextOccurrence, upcoming, todayOccurrences, inQuietHours, quietEndAfter };

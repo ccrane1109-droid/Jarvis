@@ -20,7 +20,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const insight = require("./insight");
+const errors = require("./errors");
 const spec = require("./reminder-spec");
 const time = require("./reminder-time");
 
@@ -29,7 +29,7 @@ const UPCOMING_SHOWN = 3;
 const remindersPath = (uid) => "users/" + uid + "/reminders";
 const settingsPath = (uid) => "users/" + uid + "/reminderSettings/main";
 
-function fail(code, message) { return new insight.InsightError(code, message); }
+function fail(code, message) { return new errors.ServerError(code, message); }
 
 async function readSettings(deps, uid) {
   const snap = await deps.db.doc(settingsPath(uid)).get();
@@ -165,7 +165,7 @@ async function saveSettings(uid, deps, raw, applyToAll) {
 
 // The `reminders` callable: { action, ... }.
 async function handle(uid, data, deps) {
-  insight.requireOwner(uid, deps);
+  errors.requireOwner(uid, deps);
   const d = data && typeof data === "object" ? data : {};
   switch (d.action) {
     case "list": return list(uid, deps);

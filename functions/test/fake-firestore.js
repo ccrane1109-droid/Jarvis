@@ -8,6 +8,16 @@
 
 const MAX_DOC_BYTES = 1048576;
 
+const DELETE_FIELD = { __deleteField: true };
+const isPlain = (v) => v !== null && typeof v === "object" && !Array.isArray(v) && v !== DELETE_FIELD;
+function mergeInto(target, patch) {
+  Object.keys(patch).forEach((k) => {
+    if (patch[k] === DELETE_FIELD) delete target[k];
+    else if (isPlain(patch[k])) { if (!isPlain(target[k])) target[k] = {}; mergeInto(target[k], patch[k]); }
+    else target[k] = JSON.parse(JSON.stringify(patch[k]));
+  });
+}
+
 function createFakeFirestore() {
   const store = new Map();                  // path -> data
   const db = {
@@ -19,7 +29,8 @@ function createFakeFirestore() {
     failNext: [],                           // error codes to fail the next calls with, one each
     dropAckNext: 0,                         // the next N transactions commit, but the caller is told they failed
     beforeCommit: null,                     // function run after a transaction's reads, before it commits (another device writes here)
-    counts: { reads: 0, commits: 0 }
+    counts: { reads: 0, commits: 0 },
+    writes: []                              // every setDoc / deleteDoc: { op, path, merge? }
   };
 
   function guard() {
@@ -55,6 +66,26 @@ function createFakeFirestore() {
       const prefix = col.path + "/";
       const docs = Array.from(store.keys()).filter((p) => p.startsWith(prefix) && p.indexOf("/", prefix.length) === -1).map(snapOf);
       return Promise.resolve({ docs: docs, metadata: { fromCache: db.fromCache } });
+    },
+    // Writes used by the retired-data erase: setDoc (with merge and deleteField, like the real SDK) and deleteDoc.
+    deleteField: () => DELETE_FIELD,
+    setDoc(ref, data, opts) {
+      const bad = guard();
+      if (bad) return bad;
+      db.writes.push({ op: "set", path: ref.path, merge: !!(opts && opts.merge) });
+      if (opts && opts.merge) {
+        const cur = store.has(ref.path) ? clone(store.get(ref.path)) : {};
+        mergeInto(cur, data);
+        store.set(ref.path, cur);
+      } else store.set(ref.path, clone(data));
+      return Promise.resolve();
+    },
+    deleteDoc(ref) {
+      const bad = guard();
+      if (bad) return bad;
+      db.writes.push({ op: "delete", path: ref.path });
+      store.delete(ref.path);
+      return Promise.resolve();
     },
     runTransaction(_db, fn) {
       const bad = guard();

@@ -1512,7 +1512,7 @@
 
   // Shared by Recipes, Food Log, and Saved Foods: sends one or more
   // {name, quantity} items to the user's own configured "nutrition" AI
-  // connection (Bring-Your-Own — see AI Video > Connections) and asks it to
+  // connection (Bring-Your-Own — see Recipes > Set Up / Manage AI Connection) and asks it to
   // estimate calories/protein/carbs/fat/fiber (and optionally micronutrients)
   // for each one, in the same order, instead of the user looking each one up
   // and doing the math by hand. Resolves to {ok:true, estimates:[...]} or
@@ -1606,10 +1606,7 @@
   }
 
   function handleGoToAiConnections() {
-    const videoNavBtn = document.getElementById("navBtnVideo");
-    const connectionsTabBtn = document.querySelector('.video-sub-nav-btn[data-subtarget="video-connections"]');
-    if (videoNavBtn) videoNavBtn.click();
-    if (connectionsTabBtn) connectionsTabBtn.click();
+    if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.openManager === "function") window.JarvisVideoConnections.openManager();
   }
 
   // What the last scan read off the label, per form: the label's own numbers and serving, kept so they can be

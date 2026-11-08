@@ -55,7 +55,7 @@ test("the workout family is backed up, not in the original shared document, and 
     assert.ok(L.BACKUP_KEYS.includes(k), k + " is backed up");
     assert.ok(!synced.includes(k), k + " is no longer in the shared document's list");
   });
-  assert.ok(synced.includes("jarvisHabits") && synced.includes("jarvisBusiness"), "the other synced keys are untouched");
+  assert.ok(synced.includes("jarvisHabits") && synced.includes("jarvisCalories"), "the other synced keys are untouched");
   assert.equal(L.legacyShapeOk("jarvisWorkouts", []), true); assert.equal(L.legacyShapeOk("jarvisWorkouts", "oops"), false);
   assert.equal(L.legacyShapeOk("jarvisStrengthSettings", { compareSex: "male" }), true); assert.equal(L.legacyShapeOk("jarvisStrengthSettings", []), false);
 });

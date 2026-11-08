@@ -1,53 +1,43 @@
 # JARVIS server (Firebase Cloud Functions) — optional
 
-Marketing works without this server: competitors, hand-logged competitor
-numbers, research notes, the idea library and settings are saved in the
-`jarvisMarketing` key, which JARVIS's normal account sync already stores in
-`users/{uid}`. The server adds the features that need API keys, and holds
-those keys as Firebase secrets so they never reach a browser or this repo:
+The server does two things: it stores and times **Reminders**, and it sends
+**phone notifications**. Nothing else in JARVIS needs it. It holds the
+notification keys as Firebase secrets so they never reach a browser or this repo:
 
 | Function | What it does | Costs money? |
 |---|---|---|
-| `marketingStatus` | Server/key status, this month's usage and budget, last research run | No |
-| `insightRequest` | Allow-listed InsightSocial lookups (profiles cached 12h, searches 20h), capped monthly | InsightSocial credits, only on a fresh request |
-| `researchNiche` | "Research My Niche": a **quick refresh** (3 TikTok keywords that rotate day by day, 30 credits) or a **full sweep** (up to 7 TikTok keywords + 3 Instagram hashtags, up to 220 credits; suggested once a week). Both are limited per run and per month, and the posts found are saved to your research library | InsightSocial credits, only for searches not already saved in the last 20 hours |
 | `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included. Also what you do about each one: mark it done, skip it, snooze it, undo that, and the recent history | Nothing beyond free-tier Firestore |
 | `notifications` | Phone notifications: remembers which phones you turned notifications on for, and sends the "Send a test now" and "Test in 90 seconds" messages | Nothing (free push services from Apple, Google, Mozilla and Microsoft) |
 | `reminderTick` | Runs **every minute** (Cloud Scheduler). Finds reminders that are due, records each one once, and sends it to your phones. Reminders more than 30 minutes late are marked missed, not sent | Free tier covers it; see "Reminder delivery" below |
-| `marketingLibrary` | Reads your research library (every post past runs found) and bookmarks posts | No |
-| `runResearch` | "Run research now": refreshes every watchlist handle (at most once per 30 min) | InsightSocial credits (1 request per handle) |
-| `dailyResearch` | Same as above, automatically every day at 08:00 New York time | InsightSocial credits (1 request per handle) |
-| `generateIdeas` | Content ideas from Claude, using your saved research | Claude API tokens, blocked when the AI budget would be exceeded |
 
 ## One-time setup
 
-There are two separate pieces. The app's **Server Health** card (Marketing →
-Overview) tells you which one is missing.
+There are two separate pieces.
 
-### A. Firestore rules (optional; free, no command line, about 2 minutes)
+### A. Firestore rules (free, no command line, about 2 minutes)
 
-Not needed for Research My Niche, search results, or the credit caps: the app
-sends your saved settings and niche with each server call, and results come
-back through the server. The rules are only needed for the competitor
-snapshot history and run list that the Competitors/Research tabs read straight
-from Firestore, and they fix "Firestore blocked this". Works on the free plan.
-Publishing them replaces the project's whole rules file, so check it first if
-other apps use this Firebase project.
+The rules let your signed-in account read and write its own data (account sync,
+the cloud backup) and keep Reminders and the phone-notification records
+writable only by the server. Works on the free plan. Publishing them replaces
+the project's whole rules file, so check it first if other apps use this
+Firebase project.
 
 1. Open `firestore.rules` in this GitHub repo and copy all of it.
 2. Firebase console → project **jarvis-f01e7** → Firestore Database → **Rules**.
 3. Replace everything in the editor with what you copied, then **Publish**.
 
-These rules keep the existing `users/{uid}` rule JARVIS's sync already uses
-and add the Marketing documents underneath it. Only your signed-in account can
-read your data; usage, cache, snapshots and run history can only be written by
-the server.
+These rules keep the existing `users/{uid}` rule JARVIS's sync already uses.
+Only your signed-in account can read your data. Three rules for the removed
+Marketing section (`marketing`, `marketingIdeas`, `marketingFindings`) are kept
+for now so JARVIS's one-time "Erase the data from the removed sections?"
+question can delete those documents from your account; once you have answered
+it on every device you use, you can delete those three rules.
 
-### B. Marketing server (Cloud Functions)
+### B. The server (Cloud Functions)
 
-Fixes "Couldn't get a response from the Marketing server" (the Firebase SDK
-reports this as `internal` when no usable response comes back, which is what
-happens when the functions aren't deployed).
+Needed for Reminders and phone notifications. (The Firebase SDK reports
+"internal" when no usable response comes back, which is what happens when the
+functions aren't deployed.)
 
 1. **Blaze plan**: Firebase console → ⚙ → Usage and billing. Cloud Functions,
    scheduled functions and secrets require it. Set a budget alert in Google
@@ -62,15 +52,8 @@ happens when the functions aren't deployed).
    npx firebase-tools login --no-localhost
    npx firebase-tools use jarvis-f01e7
    ```
-3. **Store the keys as secrets** (paste each when prompted; it isn't echoed):
-   ```
-   npx firebase-tools functions:secrets:set INSIGHTSOCIAL_API_KEY
-   npx firebase-tools functions:secrets:set ANTHROPIC_API_KEY
-   ```
-   No Claude API key yet? Enter `none` for `ANTHROPIC_API_KEY`. Everything
-   except idea generation works, and the app says the key isn't set.
-   Claude API keys come from console.anthropic.com and are billed separately
-   from a Claude.ai subscription.
+3. **Notification keys.** Reminders and phone notifications use the key pair
+   made in B2 below; there is nothing else to enter here.
 4. **Deploy** (you'll be asked for `OWNER_UID`: copy your user's UID from
    Firebase console → Authentication → Users):
    ```
@@ -101,31 +84,39 @@ notifications on again.
 
 ### C. Check it worked
 
-- Firebase console → Functions should list `marketingStatus`,
-  `insightRequest`, `runResearch`, `researchNiche`, `marketingLibrary`,
-  `reminders`, `notifications`, `reminderTick`, `dailyResearch` and
-  `generateIdeas`. Cloud Scheduler (Google Cloud console) should show the jobs
-  for `dailyResearch` and `reminderTick`.
-- In JARVIS: Marketing → Overview → Server Health → **Check again**. Every row
-  should say OK.
+- Firebase console → Functions should list `reminders`, `notifications` and
+  `reminderTick`. Cloud Scheduler (Google Cloud console) should show the job
+  for `reminderTick`.
+- In JARVIS: Habits → Reminders → the notification tests ("Send a test now").
 - If a row shows "unexpected error (reference abc123ef)", search for that
   reference in Firebase console → Functions → Logs.
 
+### D. If you used the removed Marketing section: clean up the server side
+
+JARVIS can erase what the removed sections saved on your phone and in your
+account (it asks once, and only erases if you tap "Erase permanently"). It
+cannot touch what was set up on the Firebase side. These steps are optional and
+free; do them if you want that gone too. They are done in the Firebase / Google
+Cloud console, or with the same Cloud Shell as above.
+
+1. **Delete the old functions.** Firebase console → Functions → delete
+   `marketingStatus`, `insightRequest`, `runResearch`, `researchNiche`,
+   `marketingLibrary`, `dailyResearch` and `generateIdeas`. (The next
+   `npx firebase-tools deploy --only functions` should also offer to delete
+   functions that are no longer in the code; I haven't run it against your
+   project, so check the list it shows before you confirm.) Deleting
+   `dailyResearch` also removes its Cloud Scheduler job, so it stops running.
+2. **Delete the old secrets** `INSIGHTSOCIAL_API_KEY` and `ANTHROPIC_API_KEY`:
+   Google Cloud console → Secret Manager. (If you unsubscribed from InsightSocial,
+   its key no longer does anything either way.)
+3. **Delete the research records the old server saved.** These were written only
+   by the server, so the app is not allowed to erase them: Firebase console →
+   Firestore Database → `users` → your user → delete the collections
+   `marketingSnapshots`, `marketingState`, `marketingUsage`, `marketingCache`
+   and `marketingPosts`. The JARVIS question lists these when it finishes.
+
 ## Changing things later
 
-- Budget, InsightSocial plan price, monthly credit cap, credits per niche
-  research run, AI model, brand profile, content pillars and the competitor
-  watchlist are edited in the app (Marketing → Settings / Competitors). The app
-  sends them with its server calls and the server keeps a clamped copy in
-  `users/{yourUid}/marketing/settings`, which the daily run and the credit caps
-  use. Niche research results are stored at
-  `users/{yourUid}/marketingState/niche`, and the research library (one
-  document per post, written only by the server) at
-  `users/{yourUid}/marketingPosts`. The library keeps up to 1,000 posts: past
-  that, the least recently seen posts that aren't bookmarked are removed.
-  Each research run also compares InsightSocial's reported balance with the
-  cost its searches reported and flags any difference (Marketing → Research
-  History).
 - Reminders are stored at `users/{yourUid}/reminders` (one document each) and
   `users/{yourUid}/reminderSettings/main`, written only by the server. Each
   reminder keeps its own time zone and a `nextFireAt` moment (empty while it is
@@ -148,7 +139,7 @@ notifications on again.
   Cloud Scheduler allows a small number of jobs free per account (3 is what the
   documentation lists; I couldn't confirm whether that is per billing account
   or per project) and about $0.10 per month for each job beyond that. JARVIS
-  adds two jobs (`dailyResearch`, `reminderTick`). When nothing is due the
+  adds one job (`reminderTick`). When nothing is due the
   tick makes two empty database queries a minute, which Firestore counts as
   about one read each: roughly 2,900 reads a day against the 50,000 a day the
   free tier lists.
@@ -180,6 +171,6 @@ notifications on again.
   npx firebase-tools deploy --only functions
   ```
   (`setup-vapid.js` is safe to run every time: it does nothing if the keys
-  already exist.) The Niche tab says when the server needs this ("needs the latest update").
-- Rotate a key: rerun step 3 for that secret, then redeploy.
+  already exist.)
+- Rotate the notification keys: see B2 (`--force-new`), then redeploy. Every phone then needs to turn notifications on again.
 - Tests: `cd functions && npm test` (uses fakes; no real calls).

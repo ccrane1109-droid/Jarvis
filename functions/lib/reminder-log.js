@@ -22,7 +22,7 @@
 
 "use strict";
 
-const insight = require("./insight");
+const errors = require("./errors");
 const spec = require("./reminder-spec");
 const time = require("./reminder-time");
 const events = require("./reminder-events");
@@ -37,7 +37,7 @@ const FUTURE_MOMENTS = 3;
 const remindersPath = (uid) => "users/" + uid + "/reminders";
 const eventsPath = (uid) => "users/" + uid + "/reminderEvents";
 
-function fail(code, message) { return new insight.InsightError(code, message); }
+function fail(code, message) { return new errors.ServerError(code, message); }
 
 // The browser-facing copy of a record. Real titles are fine here: this is you, signed in,
 // in the app. (The lock screen is where private reminders hide their names.)
@@ -160,7 +160,7 @@ async function recent(uid, deps, d) {
 
 // The `reminders` function's answer-and-history actions: { action: "act" | "event" | "events", ... }.
 async function handle(uid, data, deps) {
-  insight.requireOwner(uid, deps);
+  errors.requireOwner(uid, deps);
   const d = data && typeof data === "object" ? data : {};
   switch (d.action) {
     case "act": return act(uid, deps, d);

@@ -1,20 +1,19 @@
 /* ==========================================================================
-   JARVIS — AI connections (shared by AI Video and Nutrition's recipe
-   nutrition calculator)
+   JARVIS — the AI connection for Nutrition's recipe nutrition calculator
+   (the file keeps its old name, from when AI Video shared it)
    localStorage key: jarvisVideoConnections -> [{ id, name, kind, endpointUrl,
      authHeader, apiKey, authStyle, bodyTemplate, responseKind, responsePath,
      extraHeaders }, ...] — extraHeaders is a plain {name: value} object for
      the rare provider (Anthropic's Messages API included) that needs a
      second fixed header beyond the one auth header this form exposes.
 
-   JARVIS doesn't bundle any AI provider. Every AI-powered step (script,
-   voiceover, images, video clips, and now estimating a recipe's nutrition
-   from its ingredient list) is powered by an HTTP connection the user
+   JARVIS doesn't bundle any AI provider. Estimating a recipe's nutrition
+   from its ingredient list is powered by an HTTP connection the user
    configures here: their own endpoint, their own API key, their own request
-   body template. Kept as one shared module (despite the "video" name, which
-   predates the Nutrition use) so every feature that needs a BYO-AI
-   connection reuses the same management UI and storage instead of
-   reinventing it.
+   body template. The key stays on this device (it is never synced) and is
+   sent only to the endpoint the user sets.
+
+   The settings open from Nutrition > Recipes ("Set Up / Manage AI Connection").
    ========================================================================== */
 
 (function () {
@@ -23,39 +22,6 @@
   const LS_KEY = "jarvisVideoConnections";
 
   const KINDS = [
-    {
-      key: "script",
-      label: "Script generation (LLM)",
-      whatToLookFor: "A text-generation / chat API — the kind offered by general-purpose AI chat providers.",
-      placeholderHint: "Placeholders: {{topic}}, {{sceneCount}}. This is a generic starting shape, not any one provider's real request — open your provider's API reference and match their field names exactly (e.g. their docs might call this field \"messages\" or \"input\" instead of \"prompt\").",
-      resultHint: "Dot-path to the generated script text in the JSON response — find the exact field name in your provider's example response (a common shape is something like choices.0.message.content, but this varies by provider).",
-      defaultTemplate: '{\n  "prompt": "{{topic}}",\n  "scene_count": {{sceneCount}}\n}'
-    },
-    {
-      key: "voiceover",
-      label: "Voiceover (text-to-speech)",
-      whatToLookFor: "A text-to-speech API — the kind offered by AI voice / narration providers.",
-      placeholderHint: "Placeholder: {{text}}. This is a generic starting shape — match your provider's actual field names from their docs.",
-      resultHint: "If your provider's response is JSON, give the dot-path to an audio URL or base64 string (e.g. data.0.url). If it returns the audio file directly (no JSON wrapper), switch \"Response type\" below to \"Raw file bytes\" instead.",
-      defaultTemplate: '{\n  "text": "{{text}}",\n  "voice": "default"\n}'
-    },
-    {
-      key: "image",
-      label: "Image generation",
-      whatToLookFor: "An image-generation API — the kind offered by AI image providers.",
-      placeholderHint: "Placeholders: {{prompt}}, {{aspectRatio}}. This is a generic starting shape — match your provider's actual field names from their docs.",
-      resultHint: "Dot-path to an image URL or base64 string in the response, e.g. data.0.url — the exact field name depends on your provider.",
-      defaultTemplate: '{\n  "prompt": "{{prompt}}",\n  "aspect_ratio": "{{aspectRatio}}"\n}'
-    },
-    {
-      key: "clipVideo",
-      label: "Video clip generation",
-      whatToLookFor: "A video-generation API. Heads up: most of these don't hand back a finished video right away — you submit a request and have to check back later for the result. This app only sends one request and reads one response, so it only works with a provider/plan that can return the finished video synchronously, in that single response. If your provider only offers the \"submit then poll\" style, this screen isn't able to drive it yet.",
-      placeholderHint: "Placeholders: {{prompt}}, {{aspectRatio}}, {{duration}}, {{referenceVideo}}. This is a generic starting shape — match your provider's actual field names from their docs.",
-      resultHint: "Dot-path to the generated video's URL in the response, e.g. video_url — the exact field name depends on your provider.",
-      defaultTemplate: '{\n  "prompt": "{{prompt}}",\n  "aspect_ratio": "{{aspectRatio}}",\n  "duration": {{duration}}\n}',
-      referenceVideoHint: "{{referenceVideo}} is base64 of an optional \"inspiration\" video attached on the Clip Generator screen — an empty string if none was attached. Only wire it into your template if your provider accepts a reference/style video (check its docs for the field name)."
-    },
     {
       key: "nutrition",
       label: "Nutrient calculation (LLM)",
@@ -168,13 +134,6 @@
     document.getElementById("vcResponsePath").value = existing ? existing.responsePath : (preset ? preset.responsePath : "");
     document.getElementById("vcPlaceholderHint").textContent = info.placeholderHint;
     document.getElementById("vcResponseHint").textContent = info.resultHint;
-    const referenceVideoHint = document.getElementById("vcReferenceVideoHint");
-    if (info.referenceVideoHint) {
-      referenceVideoHint.textContent = info.referenceVideoHint;
-      referenceVideoHint.classList.remove("hidden");
-    } else {
-      referenceVideoHint.classList.add("hidden");
-    }
     document.getElementById("vcDeleteBtn").style.display = existing ? "" : "none";
     window.JarvisCore.openModal("videoConnectionModal");
   }
@@ -248,9 +207,37 @@
     }
   }
 
+  // The manager dialog (Nutrition > Recipes opens it). The edit form opens on top of it.
+  let managerOpener = null;
+  function openManager() {
+    const m = document.getElementById("aiConnectionsModal");
+    if (!m) return;
+    managerOpener = document.activeElement;
+    m.classList.remove("hidden");
+    const t = document.getElementById("aiConnectionsModalTitle");
+    if (t) window.setTimeout(function () { t.focus(); }, 0);
+  }
+  function closeManager() {
+    const m = document.getElementById("aiConnectionsModal");
+    if (!m || m.classList.contains("hidden")) return;
+    m.classList.add("hidden");
+    const back = managerOpener; managerOpener = null;
+    window.setTimeout(function () { if (back && document.body.contains(back) && typeof back.focus === "function") back.focus(); }, 0);
+  }
+  function onEscape(e) {
+    if (e.key !== "Escape") return;
+    const edit = document.getElementById("videoConnectionModal");
+    if (edit && !edit.classList.contains("hidden")) { e.preventDefault(); window.JarvisCore.closeModal("videoConnectionModal"); return; }
+    const m = document.getElementById("aiConnectionsModal");
+    if (m && !m.classList.contains("hidden")) { e.preventDefault(); closeManager(); }
+  }
+
   function init() {
     load();
     render();
+    const closeBtn = document.getElementById("aiConnectionsCloseBtn");
+    if (closeBtn) closeBtn.addEventListener("click", closeManager);
+    document.addEventListener("keydown", onEscape);
     const groups = document.getElementById("videoConnectionsGroups");
     if (groups) groups.addEventListener("click", handleGroupsClick);
     const form = document.getElementById("videoConnectionForm");
@@ -267,6 +254,7 @@
     getByKind: getByKind,
     getById: getById,
     renderDropdownOptions: renderDropdownOptions,
+    openManager: openManager,
     KINDS: KINDS
   };
 })();

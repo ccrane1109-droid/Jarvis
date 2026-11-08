@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const spec = require("../lib/reminder-spec");
 const reminders = require("../lib/reminders");
-const insight = require("../lib/insight");
+const errors = require("../lib/errors");
 const { OWNER, fakeDb, deps } = require("./helpers");
 
 const NOW = new Date("2026-10-14T15:00:00Z"); // 11 AM in New York
@@ -191,7 +191,7 @@ test("only the owner can use it, and one account's reminders are separate from a
   await assert.rejects(call(d, { action: "list" }, "intruder"), (e) => e.code === "permission-denied");
   await assert.rejects(call(d, { action: "create", reminder: base() }, "intruder"), (e) => e.code === "permission-denied");
   assert.equal(stored(d).length, 0);
-  await assert.rejects(call(d, { action: "explode" }), (e) => e instanceof insight.InsightError && e.code === "invalid-argument");
+  await assert.rejects(call(d, { action: "explode" }), (e) => e instanceof errors.ServerError && e.code === "invalid-argument");
   await assert.rejects(call(d, null), (e) => e.code === "invalid-argument");
 });
 
