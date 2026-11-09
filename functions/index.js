@@ -20,6 +20,7 @@ const reminders = require("./lib/reminders");
 const reminderLog = require("./lib/reminder-log");
 const push = require("./lib/push");
 const delivery = require("./lib/delivery");
+const shopify = require("./lib/shopify");
 const webpush = require("web-push");
 const { makeGuard } = require("./lib/guard");
 
@@ -57,6 +58,14 @@ exports.reminders = onCall(
     const handler = reminderLog.ACTIONS.indexOf(data.action) !== -1 ? reminderLog : reminders;
     return handler.handle(uidOf(request), data, deps());
   }));
+
+// Shopify store connection (Business tab): connect, check, disconnect. Owner only. The store's Client ID and Client
+// Secret are kept in a part of the database that browsers can't read (firestore.rules), and are never sent back to
+// the page. Costs nothing: Shopify doesn't charge for these calls. A connect or check can make up to four short
+// requests to Shopify, hence the longer time limit.
+exports.shopify = onCall(
+  Object.assign({}, BASE, { timeoutSeconds: 60 }),
+  (request) => guarded("shopify", () => shopify.handle(uidOf(request), request.data || {}, deps())));
 
 // Phone notifications: turning them on for a phone, sending a test, and (below) the
 // once-a-minute run that sends reminders that have come due.

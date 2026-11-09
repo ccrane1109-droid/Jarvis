@@ -1,13 +1,16 @@
 # JARVIS server (Firebase Cloud Functions) — optional
 
-The server does two things: it stores and times **Reminders**, and it sends
-**phone notifications**. Nothing else in JARVIS needs it. It holds the
-notification keys as Firebase secrets so they never reach a browser or this repo:
+The server does three things: it stores and times **Reminders**, it sends
+**phone notifications**, and it holds the connection to your **Shopify store**
+(Business tab). Nothing else in JARVIS needs it. It holds the notification keys
+as Firebase secrets, and your Shopify credentials in a part of the database
+browsers cannot read, so none of them reach a browser or this repo:
 
 | Function | What it does | Costs money? |
 |---|---|---|
 | `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included. Also what you do about each one: mark it done, skip it, snooze it, undo that, and the recent history | Nothing beyond free-tier Firestore |
 | `notifications` | Phone notifications: remembers which phones you turned notifications on for, and sends the "Send a test now" and "Test in 90 seconds" messages | Nothing (free push services from Apple, Google, Mozilla and Microsoft) |
+| `shopify` | Business tab → Shopify store: connect, check, disconnect. Exchanges your app's Client ID and Client Secret for a short-lived access token, reads the store's name to prove it works, and keeps the credentials server-side. Reads nothing else and writes nothing to the store | Nothing (Shopify doesn't charge for these calls; Firebase's free tier covers it) |
 | `reminderTick` | Runs **every minute** (Cloud Scheduler). Finds reminders that are due, records each one once, and sends it to your phones. Reminders more than 30 minutes late are marked missed, not sent | Free tier covers it; see "Reminder delivery" below |
 
 ## One-time setup
@@ -115,6 +118,51 @@ Cloud console, or with the same Cloud Shell as above.
    `marketingSnapshots`, `marketingState`, `marketingUsage`, `marketingCache`
    and `marketingPosts`. The JARVIS question lists these when it finishes.
 
+### E. Connect your Shopify store (Business tab)
+
+Shopify doesn't let a web page call its Admin API (browsers are refused), and it no
+longer shows a permanent token for new apps, so JARVIS connects through this server
+using a small app you create in your own Shopify account. Facts below are from
+Shopify's documentation (shopify.dev → "Access tokens", "Create apps using the Dev
+Dashboard"); I have tested JARVIS against a stand-in for Shopify, not against your
+store, and Shopify's screens may be worded a little differently from what's written here.
+
+1. **Deploy the update** (once, from Cloud Shell, as in "After an update" below). This
+   adds the `shopify` function. Until you do, the Business tab says the server doesn't
+   have the Shopify feature yet.
+2. **Create the app in Shopify.** Shopify admin → Settings → Apps → Develop apps →
+   **Build apps in Dev Dashboard** (this opens dev.shopify.com, signed in as you).
+   Create an app, name it (for example "JARVIS"), then create a **version** of it:
+   - choose the Admin API access scopes. Pick **read-only** ones only (names that start
+     with `read_`). To let JARVIS show orders and products later, choose `read_orders`
+     and `read_products`; for just the connection check no scope is needed. Scopes can be
+     changed later by releasing a new version and approving it in Shopify.
+   - **Release** the version.
+3. **Install the app on your store** (the app page → Installs → Install app → pick your store).
+   The app and the store must belong to the same Shopify organization, which they will if you
+   made the app while logged into your own account. (Shopify refuses with
+   `shop_not_permitted` otherwise.)
+4. **Copy the Client ID and the Client Secret** from the app's Settings in the Dev Dashboard
+   (Shopify's guide says you get them once a version is released).
+5. **In JARVIS**: Business → Shopify store → enter your store's address (the
+   `your-store.myshopify.com` one; not your own website's address), the Client ID and the
+   Client Secret, then **Connect**. JARVIS shows the store's name, its address and the
+   permissions Shopify granted, and says whether they are all read-only.
+
+Where the credentials live: `users/{yourUid}/shopify/connection`, which the security rules close
+to browsers completely (`allow read, write: if false`); only this server can read it. The page never
+receives the Client Secret or the access token back, they aren't logged, and they aren't copied
+into error messages. They are stored as plain fields in that document (Google encrypts Firestore at
+rest), not in Secret Manager, because you enter them in the app rather than from this terminal.
+
+**Disconnect** in JARVIS deletes the saved credentials and token from the database. It does not
+remove the app from your store: to cut off access completely, also uninstall the app (or delete
+it) in Shopify. If you ever think the Client Secret was exposed, rotate it in the Dev Dashboard and
+reconnect.
+
+The access token lasts about a day (Shopify's figure for this kind of app); the server asks for a
+new one automatically when the old one is close to running out.
+
 ## Changing things later
 
 - Reminders are stored at `users/{yourUid}/reminders` (one document each) and
@@ -158,6 +206,7 @@ Cloud console, or with the same Cloud Shell as above.
   list are worked out from these records by `functions/lib/reminder-events.js`,
   the same file the page uses, with no Claude calls. Records are kept; nothing
   deletes them yet (about 20 a day at most).
+- The Shopify connection is stored at `users/{yourUid}/shopify/connection`, written and read only by the server.
 - Phone subscriptions, reminder records and reminder bookkeeping are stored at
   `users/{yourUid}/pushSubscriptions`, `reminderEvents` and `reminderState`,
   written only by the server and not readable from a browser. A phone's push

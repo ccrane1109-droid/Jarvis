@@ -34,6 +34,13 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
+      // The Shopify store connection. Holds the store's Client Secret and access token, so it is closed to
+      // browsers entirely: only the server (Cloud Functions bypass these rules) can read or write it, and the
+      // page gets just the store's name and permissions from the server's `shopify` function.
+      match /shopify/{docId} {
+        allow read, write: if false;
+      }
+
       // Reminders are created and edited only through the server's
       // `reminders` function, which checks them and works out when each is due.
       match /reminders/{reminderId} {
