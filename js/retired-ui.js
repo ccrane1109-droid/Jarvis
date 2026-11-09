@@ -92,7 +92,7 @@
   function askHtml() {
     const here = areasOn(found.local, found.local && found.local.connections > 0).concat(found.idb ? ["AI Video"] : []).filter(function (a, i, arr) { return arr.indexOf(a) === i; });
     const there = cloudAreas(found.cloud);
-    let h = '<p>Business, Marketing, Trading and AI Video have been removed from JARVIS. What you saved in them is still stored:</p><ul class="rd-list">';
+    let h = '<p>The old Business, Marketing, Trading and AI Video sections have been removed from JARVIS. What you saved in them is still stored:</p><ul class="rd-list">';
     if (here.length) h += '<li><strong>On this phone:</strong> ' + esc(list(here)) + '</li>';
     if (there.length) h += '<li><strong>In your account:</strong> ' + esc(list(there)) + '</li>';
     h += '</ul>' +

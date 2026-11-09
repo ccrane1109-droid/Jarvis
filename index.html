@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=76">
+<link rel="stylesheet" href="style.css?v=77">
 </head>
 <body>
 
@@ -121,6 +121,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
       <button type="button" class="main-nav-btn" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
       <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
+      <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
     </nav>
     <div class="profile-menu-wrap">
       <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -2630,6 +2631,16 @@ npx firebase-tools deploy --only firestore:rules</pre>
   </section>
 
 
+  <!-- ===================== BUSINESS ===================== -->
+  <section id="panel-business" class="tab-panel bz-scope" role="tabpanel" aria-labelledby="navBtnBusiness">
+    <div class="panel-header">
+      <h1>Business</h1>
+      <p class="panel-subtitle">Start by connecting your Shopify store. Nothing here is made up: it only shows what Shopify tells your JARVIS server.</p>
+    </div>
+    <p id="bzLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <div id="bzShopify"></div>
+  </section>
+
 </main>
 
 <!-- ===================== MODALS ===================== -->
@@ -3027,6 +3038,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="more-item" data-nav="navBtnDiscipline">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Discipline</span>
       </button>
+      <button type="button" class="more-item" data-nav="navBtnBusiness">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5l1.4-4.6a1 1 0 01.96-.7h12.28a1 1 0 01.96.7l1.4 4.6"/><path d="M4.5 9.5v9.8a1 1 0 001 1h13a1 1 0 001-1V9.5"/><path d="M3.5 9.5a2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0"/></svg><span>Business</span>
+      </button>
     </div>
   </div>
 </div>
@@ -3082,61 +3096,62 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=76"></script>
-<script src="js/backup-logic.js?v=76"></script>
-<script src="js/cloud-backup.js?v=76"></script>
-<script type="module" src="js/auth.js?v=76"></script>
-<script src="js/app.js?v=76"></script>
-<script src="js/exercises.js?v=76"></script>
-<script src="js/workout-logic.js?v=76"></script>
-<script src="js/exercise-logic.js?v=76"></script>
-<script src="js/exercise-guides.js?v=76"></script>
-<script src="js/routine-logic.js?v=76"></script>
-<script src="js/workout.js?v=76"></script>
-<script src="js/workout-ui.js?v=76"></script>
-<script src="js/routines-ui.js?v=76"></script>
-<script src="js/progress-logic.js?v=76"></script>
-<script src="js/insights-logic.js?v=76"></script>
-<script src="js/charts.js?v=76"></script>
-<script src="js/history-ui.js?v=76"></script>
-<script src="js/insights-ui.js?v=76"></script>
-<script src="js/library-ui.js?v=76"></script>
-<script src="js/progress-ui.js?v=76"></script>
-<script src="js/nutrition.js?v=76"></script>
-<script src="js/nutrition-label-parse.js?v=76"></script>
-<script src="js/nutrition-label-scan.js?v=76"></script>
-<script src="js/groceries.js?v=76"></script>
-<script src="js/habit-logic.js?v=76"></script>
-<script src="js/dayplan-logic.js?v=76"></script>
-<script src="js/habits.js?v=76"></script>
-<script src="js/dayplan-ui.js?v=76"></script>
-<script src="js/calendar-logic.js?v=76"></script>
-<script src="js/schedule-logic.js?v=76"></script>
-<script src="js/ics-logic.js?v=76"></script>
-<script src="js/assistant-logic.js?v=76"></script>
-<script src="js/calendar-ui.js?v=76"></script>
-<script src="js/assistant-ui.js?v=76"></script>
-<script src="js/calendar-reminders-logic.js?v=76"></script>
-<script src="js/calendar-reminders-ui.js?v=76"></script>
-<script src="js/ics-ui.js?v=76"></script>
-<script src="js/home-ui.js?v=76"></script>
-<script src="js/discipline-logic.js?v=76"></script>
-<script src="js/discipline-program.js?v=76"></script>
-<script src="js/discipline-habits.js?v=76"></script>
-<script src="js/discipline-insights.js?v=76"></script>
-<script src="js/discipline-charts.js?v=76"></script>
-<script src="js/discipline-delivery.js?v=76"></script>
-<script src="js/discipline.js?v=76"></script>
-<script src="js/wakecheck-logic.js?v=76"></script>
-<script src="js/wakecheck.js?v=76"></script>
-<script src="functions/lib/reminder-spec.js?v=76"></script>
-<script src="functions/lib/reminder-events.js?v=76"></script>
-<script src="js/reminders.js?v=76"></script>
-<script src="js/video-api-client.js?v=76"></script>
-<script src="js/video-connections.js?v=76"></script>
-<script src="js/formcheck-logic.js?v=76"></script>
-<script src="js/form-check.js?v=76"></script>
-<script src="js/retired-data.js?v=76"></script>
-<script src="js/retired-ui.js?v=76"></script>
+<script src="js/firebase-config.js?v=77"></script>
+<script src="js/backup-logic.js?v=77"></script>
+<script src="js/cloud-backup.js?v=77"></script>
+<script type="module" src="js/auth.js?v=77"></script>
+<script src="js/app.js?v=77"></script>
+<script src="js/exercises.js?v=77"></script>
+<script src="js/workout-logic.js?v=77"></script>
+<script src="js/exercise-logic.js?v=77"></script>
+<script src="js/exercise-guides.js?v=77"></script>
+<script src="js/routine-logic.js?v=77"></script>
+<script src="js/workout.js?v=77"></script>
+<script src="js/workout-ui.js?v=77"></script>
+<script src="js/routines-ui.js?v=77"></script>
+<script src="js/progress-logic.js?v=77"></script>
+<script src="js/insights-logic.js?v=77"></script>
+<script src="js/charts.js?v=77"></script>
+<script src="js/history-ui.js?v=77"></script>
+<script src="js/insights-ui.js?v=77"></script>
+<script src="js/library-ui.js?v=77"></script>
+<script src="js/progress-ui.js?v=77"></script>
+<script src="js/nutrition.js?v=77"></script>
+<script src="js/nutrition-label-parse.js?v=77"></script>
+<script src="js/nutrition-label-scan.js?v=77"></script>
+<script src="js/groceries.js?v=77"></script>
+<script src="js/habit-logic.js?v=77"></script>
+<script src="js/dayplan-logic.js?v=77"></script>
+<script src="js/habits.js?v=77"></script>
+<script src="js/dayplan-ui.js?v=77"></script>
+<script src="js/calendar-logic.js?v=77"></script>
+<script src="js/schedule-logic.js?v=77"></script>
+<script src="js/ics-logic.js?v=77"></script>
+<script src="js/assistant-logic.js?v=77"></script>
+<script src="js/calendar-ui.js?v=77"></script>
+<script src="js/assistant-ui.js?v=77"></script>
+<script src="js/calendar-reminders-logic.js?v=77"></script>
+<script src="js/calendar-reminders-ui.js?v=77"></script>
+<script src="js/ics-ui.js?v=77"></script>
+<script src="js/home-ui.js?v=77"></script>
+<script src="js/discipline-logic.js?v=77"></script>
+<script src="js/discipline-program.js?v=77"></script>
+<script src="js/discipline-habits.js?v=77"></script>
+<script src="js/discipline-insights.js?v=77"></script>
+<script src="js/discipline-charts.js?v=77"></script>
+<script src="js/discipline-delivery.js?v=77"></script>
+<script src="js/discipline.js?v=77"></script>
+<script src="js/wakecheck-logic.js?v=77"></script>
+<script src="js/wakecheck.js?v=77"></script>
+<script src="functions/lib/reminder-spec.js?v=77"></script>
+<script src="functions/lib/reminder-events.js?v=77"></script>
+<script src="js/reminders.js?v=77"></script>
+<script src="js/video-api-client.js?v=77"></script>
+<script src="js/video-connections.js?v=77"></script>
+<script src="js/formcheck-logic.js?v=77"></script>
+<script src="js/form-check.js?v=77"></script>
+<script src="js/retired-data.js?v=77"></script>
+<script src="js/retired-ui.js?v=77"></script>
+<script src="js/shopify-ui.js?v=77"></script>
 </body>
 </html>

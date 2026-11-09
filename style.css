@@ -3821,3 +3821,41 @@ body.rd-open { overflow: hidden; }
 #videoConnectionModal input:not([type="hidden"]), #videoConnectionModal select { min-height: 44px; }
 #aiConnectionsModal .field-hint, #aiConnectionsModal .list-item-meta, #videoConnectionModal .field-hint { color: var(--text-dim); }
 #videoConnectionModal .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+
+/* ---------------- Business tab: Shopify store connection ---------------- */
+.bz-scope .card p { margin: 0 0 10px; font-size: 15px; }
+.bz-scope .bz-small { font-size: 13px; color: var(--text-dim); }
+.bz-scope code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--bg-elevated); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.bz-details { border: 1px solid var(--card-border); border-radius: var(--radius-sm); margin: 0 0 14px; background: var(--bg-elevated); }
+.bz-details > summary { min-height: 44px; display: flex; align-items: center; padding: 8px 12px; cursor: pointer; font-size: 15px; font-weight: 600; }
+.bz-details > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.bz-details[open] > summary { border-bottom: 1px solid var(--card-border); margin-bottom: 10px; }
+.bz-steps { margin: 0 12px 10px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+.bz-code { margin: 0 12px 10px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--card-border); border-radius: var(--radius-sm); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bz-form .form-row { margin-bottom: 14px; }
+.bz-form input { min-height: 44px; width: 100%; }
+.bz-secret { -webkit-text-security: disc; }
+.bz-secret-row { display: flex; gap: 8px; align-items: stretch; }
+.bz-secret-row input { flex: 1 1 auto; min-width: 0; }
+.bz-secret-row .btn { min-width: 72px; min-height: 44px; }
+.bz-scope .btn { min-height: 44px; }
+.bz-scope .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+.bz-scope .btn-primary:hover:not(:disabled), .bz-scope .btn-primary:focus-visible { background: #2a63c9; border-color: #2a63c9; color: #fff; }
+.bz-scope .field-hint { color: var(--text-dim); }
+.bz-scope .btn-danger { background: #7a2b37; border-color: var(--red); color: #fff; }
+.bz-scope .btn-danger:hover:not(:disabled) { background: #8d3340; }
+.bz-error { border: 1px solid var(--red); background: var(--red-dim); border-radius: var(--radius-sm); padding: 10px 12px; color: var(--text); overflow-wrap: anywhere; }
+.bz-error:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bz-store-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.bz-store-name { font-size: 20px; margin: 0; overflow-wrap: anywhere; }
+.bz-store-name:focus { outline: none; }
+.bz-store-shop { margin: 2px 0 0 !important; color: var(--text-dim); font-size: 14px !important; overflow-wrap: anywhere; }
+.bz-badge { display: inline-block; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--card-border); }
+.bz-badge-ok { color: var(--green); background: var(--green-dim); border-color: var(--green); }
+.bz-badge-bad { color: var(--red); background: var(--red-dim); border-color: var(--red); }
+.bz-chips { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.bz-chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--card-border); overflow-wrap: anywhere; }
+.bz-chip-warn { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-dim); }
+.bz-warn { border: 1px solid var(--yellow); background: var(--yellow-dim); border-radius: var(--radius-sm); padding: 10px 12px; color: var(--text); }
+.bz-confirm { border: 1px solid var(--red); background: var(--red-dim); border-radius: var(--radius-sm); padding: 12px; margin-top: 10px; }
+.bz-confirm p { margin: 0 0 10px; }

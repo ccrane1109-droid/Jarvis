@@ -388,6 +388,7 @@
       syncBottomNav();
       if (targetId === "panel-calendar" && window.JarvisCalendar && typeof window.JarvisCalendar.onShow === "function") window.JarvisCalendar.onShow();
       if (targetId === "panel-home" && window.JarvisHome && typeof window.JarvisHome.onShow === "function") window.JarvisHome.onShow();
+      if (targetId === "panel-business" && window.JarvisShopify && typeof window.JarvisShopify.onShow === "function") window.JarvisShopify.onShow();
     });
     syncBottomNav = initBottomNav();
 
@@ -556,6 +557,11 @@
         if (window.JarvisWakeCheck && typeof window.JarvisWakeCheck.init === "function") window.JarvisWakeCheck.init();
       } catch (err) {
         if (window.console) console.error("Wake check failed to start", err);
+      }
+      try {
+        if (window.JarvisShopify && typeof window.JarvisShopify.init === "function") window.JarvisShopify.init();
+      } catch (err) {
+        if (window.console) console.error("The Business tab failed to start; the rest of the app is unaffected", err);
       }
       try {
         if (window.JarvisRetiredUI && typeof window.JarvisRetiredUI.init === "function") window.JarvisRetiredUI.init();
