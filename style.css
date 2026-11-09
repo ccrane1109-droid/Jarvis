@@ -3799,7 +3799,7 @@ button.hs-day:hover { background: var(--card-hover); }
 /* Video Lab: the same scoped primary blue the other screens use (white on the global accent is 3.2:1), full-size fields, and badges at 12px */
 
 /* The one-time question about the removed sections (js/retired-ui.js) */
-.rd-scope { z-index: 130; }
+.rd-scope { z-index: 130; background: rgba(0, 0, 0, 0.85); }
 .rd-box { max-width: 460px; }
 .rd-box h2 { font-size: 20px; margin: 0 0 10px; overflow-wrap: anywhere; }
 .rd-box h2:focus { outline: none; }
@@ -3826,9 +3826,13 @@ body.rd-open { overflow: hidden; }
 .bz-scope .card p { margin: 0 0 10px; font-size: 15px; }
 .bz-scope .bz-small { font-size: 13px; color: var(--text-dim); }
 .bz-scope code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--bg-elevated); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
-.bz-details { border: 1px solid var(--card-border); border-radius: var(--radius-sm); margin: 0 0 14px; background: var(--bg-elevated); }
-.bz-details > summary { min-height: 44px; display: flex; align-items: center; padding: 8px 12px; cursor: pointer; font-size: 15px; font-weight: 600; }
-.bz-details > :not(summary) { margin-left: 12px; margin-right: 12px; }
+.bz-details { border: 1px solid var(--card-border); border-radius: var(--radius-sm); margin: 14px 0; background: var(--bg-elevated); }
+.bz-details > summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; }
+.bz-details > summary::-webkit-details-marker { display: none; }
+.bz-details > summary::after { content: ""; flex: 0 0 auto; width: 9px; height: 9px; margin-right: 4px; border-right: 2px solid var(--text-dim); border-bottom: 2px solid var(--text-dim); transform: rotate(45deg); transition: transform 0.15s ease; }
+.bz-details[open] > summary::after { transform: rotate(225deg); }
+@media (prefers-reduced-motion: reduce) { .bz-details > summary::after { transition: none; } }
+.bz-scope .bz-details > p { margin-left: 12px; margin-right: 12px; }
 .bz-details[open] > summary { border-bottom: 1px solid var(--card-border); margin-bottom: 10px; }
 .bz-steps { margin: 0 12px 10px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
 .bz-code { margin: 0 12px 10px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--card-border); border-radius: var(--radius-sm); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -3857,5 +3861,6 @@ body.rd-open { overflow: hidden; }
 .bz-chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--card-border); overflow-wrap: anywhere; }
 .bz-chip-warn { border-color: var(--yellow); color: var(--yellow); background: var(--yellow-dim); }
 .bz-warn { border: 1px solid var(--yellow); background: var(--yellow-dim); border-radius: var(--radius-sm); padding: 10px 12px; color: var(--text); }
+.bz-scope .bz-warn { color: var(--text); font-size: 14px; }
 .bz-confirm { border: 1px solid var(--red); background: var(--red-dim); border-radius: var(--radius-sm); padding: 12px; margin-top: 10px; }
 .bz-confirm p { margin: 0 0 10px; }
