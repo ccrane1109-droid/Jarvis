@@ -3,8 +3,9 @@
 
    The page never talks to Shopify. It sends the store address, Client ID and Client Secret to the JARVIS server's
    `shopify` function once (functions/lib/shopify.js), and the server keeps them where browsers can't read. What
-   comes back, and all this page ever shows, is the store's name and address, the permissions Shopify granted, and
-   when it was last confirmed. The Client Secret is only ever held in the form field while you type it: it is
+   comes back, and all this page ever shows, is the store's name and address, the permissions Shopify granted, when
+   it was last confirmed, and the Sales snapshot (order counts and totals for today, 7 and 30 days, and the latest
+   orders). The snapshot is held in memory for five minutes and never saved in the browser. The Client Secret is only ever held in the form field while you type it: it is
    cleared after a successful connect, never stored in the browser, and never shown again.
 
    Keys: none. Nothing about the store is saved in this browser (so nothing here is touched by the retired
@@ -15,6 +16,8 @@
   "use strict";
 
   let started = false, busy = false, view = null, confirming = false, lastFocus = "";
+  let sales = null, salesBusy = false, salesAt = 0;       // the latest sales snapshot, kept in memory only (never saved in the browser)
+  const SALES_FRESH_MS = 5 * 60 * 1000;
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return window.JarvisCore.escapeHtml(s); }
@@ -116,6 +119,76 @@
       problem + seen + perms + confirm + '</div>';
   }
 
+  /* ---------------- the sales snapshot ---------------- */
+
+  function money(amount, currency) {
+    const n = Number(amount);
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency }).format(n); } catch (e) { return amount + " " + currency; }
+  }
+  function when2(iso) {
+    const t = Date.parse(iso || "");
+    return isNaN(t) ? "" : new Date(t).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+  function timeOnly(iso) {
+    const t = Date.parse(iso || "");
+    return isNaN(t) ? "" : new Date(t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
+  function salesBody() {
+    if (!sales || sales.loading) return '<p role="status">Reading your orders from Shopify\u2026</p>';
+    if (sales.error) {
+      return '<p class="bz-error" role="alert">' + esc(sales.error) + '</p>' + (sales.setup ? serverSetup() : "");
+    }
+    const d = sales.data;
+    const rows = d.periods.map(function (p) {
+      let right;
+      if (p.orders === 0) right = '<span class="bz-none">No orders</span>';
+      else {
+        const count = (p.atLeast ? "at least " : "") + p.orders + " order" + (p.orders === 1 ? "" : "s");
+        right = '<strong>' + esc(count) + '</strong>' + (p.total === null ? ' <span class="bz-small">(more than one currency, so not added together)</span>' : ' <span class="bz-amt">' + esc((p.atLeast ? "at least " : "") + money(p.total, d.currency)) + '</span>');
+      }
+      return '<div class="bz-prow"><dt>' + esc(p.label) + '</dt><dd>' + right + '</dd></div>';
+    }).join("");
+    const recent = d.recent.length
+      ? '<h3 class="bz-sub">Latest orders</h3><ol class="bz-recent">' + d.recent.map(function (r) {
+          return '<li><span class="bz-oname">' + esc(r.name || "Order") + '</span> <span class="bz-small">' + esc(when2(r.at)) + '</span> <span class="bz-amt">' + esc(money(r.total, r.currency)) + '</span></li>';
+        }).join("") + '</ol>'
+      : '<p class="bz-small">No orders in the last 30 days.</p>';
+    const ex = d.excluded || { cancelled: 0, test: 0 };
+    const left = (ex.cancelled || ex.test) ? " Left out: " + ex.cancelled + " cancelled, " + ex.test + " test." : "";
+    const cut = d.truncated ? ' <strong>This store has more recent orders than JARVIS reads at once, so the figures marked "at least" may be higher.</strong>' : "";
+    return '<dl class="bz-rows">' + rows + '</dl>' + recent +
+      '<p class="bz-small bz-foot">Order totals are what Shopify reports for each order. Days are in your phone\u2019s time zone (' + esc(d.tz) + '). As of ' + esc(timeOnly(d.asOf)) + '.' + esc(left) + cut + '</p>';
+  }
+
+  function renderSales() {
+    const host = $("bzSales");
+    if (!host) return;
+    const focusId = document.activeElement && host.contains(document.activeElement) ? document.activeElement.id : "";
+    host.innerHTML = '<section class="card bz-card" aria-labelledby="bzSalesTitle"><div class="card-title-row"><h2 class="card-title" id="bzSalesTitle">Sales snapshot</h2>' +
+      '<button type="button" class="btn btn-secondary" id="bzSalesRefresh"' + (salesBusy ? ' aria-disabled="true"' : "") + '>' + (salesBusy ? "Reading\u2026" : "Refresh") + '</button></div>' + salesBody() + '</section>';
+    if (focusId) { const f = $(focusId); if (f) f.focus(); }
+  }
+
+  function loadSales(force) {
+    if (salesBusy || !view || !view.connected || !cloud()) return Promise.resolve();
+    if (!force && sales && sales.data && Date.now() - salesAt < SALES_FRESH_MS) return Promise.resolve();
+    salesBusy = true;
+    if (!sales || !sales.data) sales = { loading: true };
+    renderSales();
+    let tz = "UTC";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) { /* UTC */ }
+    return call({ action: "sales", tz: tz }).then(function (d) {
+      salesBusy = false; salesAt = Date.now(); sales = { data: d };
+      renderSales(); setStatus("Sales snapshot updated.");
+    }, function (err) {
+      salesBusy = false;
+      const x = describeError(err);
+      sales = { error: x.text, setup: x.setup, data: null };
+      renderSales(); setStatus(x.text);
+    });
+  }
+
   /* ---------------- render ---------------- */
 
   function setStatus(text) { const e = $("bzLive"); if (e) e.textContent = text || ""; }
@@ -140,7 +213,9 @@
       if (o.setup) h += serverSetup();
     }
     h += '</section>';
+    if (cloud() && view && view.connected) h += '<div id="bzSales"></div>';
     host.innerHTML = h;
+    renderSales();
     if (o.error) showError(o.error);
     if (lastFocus) { const f = $(lastFocus); lastFocus = ""; if (f) f.focus(); }
   }
@@ -163,6 +238,7 @@
     return call({ action: "status" }).then(function (s) {
       view = s && typeof s === "object" ? s : { connected: false };
       busy = false; render();
+      if (view.connected) loadSales(false);
     }, function (err) {
       busy = false; view = null;
       const d = describeError(err);
@@ -185,8 +261,10 @@
       view = s;
       confirming = false;
       lastFocus = "bzStoreName";
+      sales = null;
       render();
       setStatus("Connected to " + (s && (s.shopName || s.shop) || "your store") + ".");
+      loadSales(true);
     }, function (err) {
       busy = false;
       const d = describeError(err);
@@ -232,7 +310,7 @@
     const yes = $("bzDisconnectYes");
     if (yes) { yes.disabled = true; yes.textContent = "Disconnecting…"; }
     call({ action: "disconnect" }).then(function () {
-      busy = false; view = { connected: false }; confirming = false;
+      busy = false; view = { connected: false }; confirming = false; sales = null;
       render({ openSteps: false });
       setStatus("Disconnected. The saved credentials were deleted from your JARVIS server.");
       const t = $("bzTitle"); if (t) { t.setAttribute("tabindex", "-1"); t.focus(); }
@@ -249,6 +327,7 @@
     if (!t) return;
     switch (t.id) {
       case "bzCheck": check(); break;
+      case "bzSalesRefresh": loadSales(true); break;
       case "bzRetry": view = null; load(); break;
       case "bzDisconnect": confirming = true; lastFocus = "bzDisconnectNo"; render(); break;
       case "bzDisconnectNo": confirming = false; lastFocus = "bzDisconnect"; render(); break;
