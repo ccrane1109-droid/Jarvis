@@ -43,6 +43,8 @@
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
     "jarvisFormCheckHistory",
     "jarvisCalendarEvents", "jarvisCalendarSettings",
+    // The Learning & Research Hub: books, research projects, notes, actions and weekly reviews (each a list of records with ids).
+    "jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews",
     // The workout family. These lived in the original shared document (whole value per key, the cloud copy winning at
     // sign-in, failed uploads silent). They are here now so a save that never reached the cloud is not replaced by an older
     // cloud copy, and two devices' workouts are combined rather than one overwriting the other. LEGACY_KEYS below.
@@ -270,6 +272,8 @@
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
     jarvisTasks: mergeById, jarvisGoals: mergeById, jarvisGroceryList: mergeById, jarvisGroceryMealPlan: mergeById, jarvisFormCheckHistory: mergeById,
     jarvisCalendarEvents: mergeById, jarvisCalendarSettings: mergeNewest,
+    // deleted records stay as tombstones (deletedAt, with a newer updatedAt) for 30 days so a deletion reaches the other device
+    jarvisLearnBooks: mergeById, jarvisLearnResearch: mergeById, jarvisLearnNotes: mergeById, jarvisLearnActions: mergeById, jarvisLearnReviews: mergeById,
     jarvisGroceryPantry: mergeMapNewest,
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,

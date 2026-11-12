@@ -286,3 +286,24 @@ test("calendar events: a deletion on one device reaches the other, and an undo w
   const s = JSON.parse(B.mergeText("jarvisCalendarSettings", JSON.stringify({ weekStart: 0, updatedAt: 10 }), JSON.stringify({ weekStart: 1, updatedAt: 20 })).text);
   assert.equal(s.weekStart, 1);
 });
+
+test("learning hub: books, research, notes, actions and reviews are backed up and merged by record", () => {
+  const keys = ["jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews"];
+  keys.forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k + " is in the backup list"));
+  const rec = (o) => Object.assign({ id: "r1", title: "Atomic Habits", createdAt: 100, updatedAt: 100 }, o);
+  keys.forEach((k) => {
+    const merge = (a, b) => JSON.parse(B.mergeText(k, JSON.stringify(a), JSON.stringify(b)).text);
+    // a record made on each device: both kept
+    assert.equal(merge([rec({ id: "a" })], [rec({ id: "b" })]).length, 2, k + ": records from both devices are kept");
+    // the same record edited on both: the newer edit wins
+    assert.equal(merge([rec({ title: "old", updatedAt: 200 })], [rec({ title: "new", updatedAt: 300 })])[0].title, "new", k + ": the newer edit wins");
+    assert.equal(merge([rec({ title: "mine", updatedAt: 400 })], [rec({ title: "theirs", updatedAt: 300 })])[0].title, "mine", k + ": and so does this device's when it is newer");
+    // a deletion on one device reaches the other; an undo (newer still) wins over it
+    const gone = merge([rec({ deletedAt: 500, updatedAt: 500 })], [rec()]);
+    assert.deepEqual([gone.length, gone[0].deletedAt], [1, 500], k + ": the deletion wins, so the record does not come back");
+    const back = merge([rec({ updatedAt: 900 })], [rec({ deletedAt: 500, updatedAt: 500 })]);
+    assert.equal(back[0].deletedAt, undefined, k + ": an undo made after the deletion wins");
+    // a copy that can't be read never replaces one that can
+    assert.deepEqual(JSON.parse(B.mergeText(k, JSON.stringify([rec()]), "{not json").text).length, 1, k + ": an unreadable copy is ignored");
+  });
+});

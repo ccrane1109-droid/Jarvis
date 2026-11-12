@@ -122,6 +122,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
       <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
+      <button type="button" class="main-nav-btn" data-target="panel-learning" role="tab" aria-selected="false" aria-controls="panel-learning" id="navBtnLearning">Learning</button>
     </nav>
     <div class="profile-menu-wrap">
       <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -135,7 +136,7 @@
           <div class="backup-title" id="backupTitle">Cloud backup</div>
           <div class="backup-status" id="backupStatus" role="status" aria-live="polite" data-tone="off">Sign in to back up your workouts, food log, tasks, goals and Discipline to your account.</div>
           <button type="button" class="btn backup-btn hidden" id="backupNowBtn"></button>
-          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, calendar events, Discipline, Wake check, groceries, form-check history. Workouts, habits and the rest sync separately.</p>
+          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, calendar events, Discipline, Wake check, groceries, form-check history, the Learning hub (books, research, notes, actions, reviews). Workouts, habits and the rest sync separately.</p>
           <div class="backup-help hidden" id="backupHelp">
             <p>Backup needs one update to your Firebase security rules, which only you can deploy. In Cloud Shell, run these one at a time:</p>
             <pre>cd ~/Jarvis
@@ -2641,6 +2642,25 @@ npx firebase-tools deploy --only firestore:rules</pre>
     <div id="bzShopify"></div>
   </section>
 
+  <!-- ===================== LEARNING & RESEARCH ===================== -->
+  <section id="panel-learning" class="tab-panel ln-scope" role="tabpanel" aria-labelledby="navBtnLearning">
+    <div class="panel-header">
+      <h1>Learning &amp; Research</h1>
+      <p class="panel-subtitle">The books you read, the research you do, what you learned and what you'll do with it. Every number comes from what you enter here.</p>
+    </div>
+    <p id="lnLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <nav class="sub-nav ln-sub-nav" aria-label="Learning sections">
+      <button type="button" class="sub-nav-btn active" data-ln="dashboard" aria-current="page">Dashboard</button>
+      <button type="button" class="sub-nav-btn" data-ln="books">Books</button>
+      <button type="button" class="sub-nav-btn" data-ln="research">Research</button>
+      <button type="button" class="sub-nav-btn" data-ln="knowledge">Knowledge</button>
+      <button type="button" class="sub-nav-btn" data-ln="actions">Actions</button>
+      <button type="button" class="sub-nav-btn" data-ln="review">Review</button>
+    </nav>
+    <div id="lnView"></div>
+    <div id="lnUndo" class="ln-undo hidden"></div>
+  </section>
+
 </main>
 
 <!-- ===================== MODALS ===================== -->
@@ -3041,6 +3061,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="more-item" data-nav="navBtnBusiness">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5l1.4-4.6a1 1 0 01.96-.7h12.28a1 1 0 01.96.7l1.4 4.6"/><path d="M4.5 9.5v9.8a1 1 0 001 1h13a1 1 0 001-1V9.5"/><path d="M3.5 9.5a2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0"/></svg><span>Business</span>
       </button>
+      <button type="button" class="more-item" data-nav="navBtnLearning">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15.5H6.5A2.5 2.5 0 004 21z"/><path d="M4 21a2.5 2.5 0 012.5-2.5H20"/><path d="M9 7.5h6"/></svg><span>Learning</span>
+      </button>
     </div>
   </div>
 </div>
@@ -3153,5 +3176,13 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/retired-data.js?v=78"></script>
 <script src="js/retired-ui.js?v=78"></script>
 <script src="js/shopify-ui.js?v=78"></script>
+<script src="js/learning-logic.js?v=78"></script>
+<script src="js/learning-store.js?v=78"></script>
+<script src="js/learning-ui.js?v=78"></script>
+<script src="js/learning-books-ui.js?v=78"></script>
+<script src="js/learning-research-ui.js?v=78"></script>
+<script src="js/learning-library-ui.js?v=78"></script>
+<script src="js/learning-actions-ui.js?v=78"></script>
+<script src="js/learning-review-ui.js?v=78"></script>
 </body>
 </html>
