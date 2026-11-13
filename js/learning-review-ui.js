@@ -29,7 +29,7 @@
   // Every figure counted from the records of that week.
   function glance(SUM) {
     const f = SUM.figures;
-    return '<section class="card ln-card" aria-labelledby="lnRvNow"><div class="card-title-row"><h2 class="card-title" id="lnRvNow">The week in numbers</h2></div><div class="ln-tiles">' +
+    return '<section class="card ln-card" aria-labelledby="lnRvNow"><div class="card-title-row"><h2 class="card-title" id="lnRvNow">The week in numbers</h2></div><div class="ln-tiles ln-tiles-2">' +
       tileHtml(String(f.pages), "Pages read") + tileHtml(String(f.minutes), "Minutes read") + tileHtml(String(f.books), "Books finished") +
       tileHtml(String(f.research), "Research completed") + tileHtml(String(f.lessons), "Lessons reviewed") +
       tileHtml(f.cardsPct === null ? "–" : f.cardsPct + "%", "Flashcards recalled", f.cards ? A.plural(f.cards, "answer") : "no answers") +

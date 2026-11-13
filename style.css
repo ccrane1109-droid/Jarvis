@@ -4196,3 +4196,7 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .ln-quickpages-l { font-size: 13px; color: var(--text-dim); margin-right: 2px; }
 .ln-saveto { margin: 0 0 8px; }
 .ln-scope .badge, .ln-sheet .badge { font-size: 13px; }
+
+/* eight labelled figures: two to a row on a phone so no word is broken in half, four on a wide screen */
+.ln-tiles.ln-tiles-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .ln-tiles.ln-tiles-2 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
