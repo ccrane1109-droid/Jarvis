@@ -90,6 +90,7 @@ const APP_SHELL = [
   "./js/learning-goals-logic.js?v=78",
   "./js/learning-links-logic.js?v=78",
   "./js/learning-reading-logic.js?v=78",
+  "./js/learning-weekly-logic.js?v=78",
   "./js/learning-store.js?v=78",
   "./js/learning-ui.js?v=78",
   "./js/learning-books-ui.js?v=78",

@@ -4178,3 +4178,13 @@ body.ln-sheet-open .ln-fab { display: none; }
 .ln-sessions { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ln-session { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
 @media (max-width: 360px) { .ln-tile-n { font-size: 21px; } .ln-clock { font-size: 38px; } .ln-tiles { gap: 6px; } .ln-tile { padding: 8px; } }
+
+/* ---------------- Learning hub: weekly review ---------------- */
+.ln-cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+.ln-cmp th, .ln-cmp td { padding: 8px 4px; text-align: right; border-bottom: 1px solid var(--card-border); font-variant-numeric: tabular-nums; }
+.ln-cmp thead th { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.ln-cmp th[scope="row"], .ln-cmp thead th:first-child { text-align: left; font-weight: 600; overflow-wrap: anywhere; }
+.ln-cmp td:last-child { white-space: nowrap; }
+.ln-intent { margin: 4px 0 12px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--bg-elevated); border-radius: var(--radius-sm); overflow-wrap: anywhere; white-space: pre-wrap; }
+details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+@media (max-width: 380px) { .ln-cmp { font-size: 13px; } .ln-cmp th, .ln-cmp td { padding: 8px 2px; } }
