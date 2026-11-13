@@ -120,6 +120,7 @@
     }).join("") + '</div>';
   }
   function topicsCount() { const n = LK.topics(store.state()).length; return plural(n, "topic"); }
+  A.kparts = A.kparts || {};          // the Knowledge screen's own file may not have loaded; these parts then simply have no screen to appear on
   A.kparts.topics = {
     html: function () {
       return A.toolbar("knowledge", [{ name: "tq", kind: "search", label: "Search topics", placeholder: "Search topics" }]) +
