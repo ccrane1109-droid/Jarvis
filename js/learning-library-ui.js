@@ -77,12 +77,15 @@
     const n = note || { type: L.NOTE_TYPE.some(function (t) { return t.key === p.type; }) ? p.type : "takeaway", title: "", text: p.text || "", evidence: "", page: "", tags: p.tags || [], category: "", bookIds: p.bookIds || [], researchIds: p.researchIds || [], sourceId: p.sourceId || "", important: false };
     const S = store.state(), books = store.list("books"), research = store.list("research");
     const topTags = L.allTags(S.notes).slice(0, 8);
-    const moreOpen = !isNew || (n.bookIds || []).length || (n.researchIds || []).length || (n.tags || []).length;
+    // A new note starts short: its kind and its words. Details (title, topics, links...) open by themselves only when editing a note that has some.
+    const moreOpen = !isNew && !!(n.title || n.page || n.category || n.important || (n.bookIds || []).length || (n.researchIds || []).length || (n.tags || []).length || (n.linkIds || []).length);
+    const saveTo = isNew ? (n.bookIds || []).map(function (id) { const b = store.get("books", id); return b ? b.title : ""; }).concat((n.researchIds || []).map(function (id) { const r = store.get("research", id); return r ? r.title : ""; })).filter(Boolean) : [];
     const remembered = !!(n.srs && n.srs.on);
     // The two things that matter come first (what kind, and the words); everything else is one tap away.
     const body =
       A.fSelect("type", "Kind of note", A.opts(L.NOTE_TYPE), n.type, { required: true }) +
       A.fArea("text", TEXT_LABEL[n.type] || "Note", n.text, { rows: 5, max: 10000, required: true }) +
+      (saveTo.length ? '<p class="ln-item-sub ln-saveto">Saving to ' + esc(saveTo.join(", ")) + '. Change this under More details.</p>' : "") +
       '<div id="lnRememberRow" class="form-row"><label class="ln-check"><input type="checkbox" name="remember"' + (remembered ? " checked" : "") + '><span>Remember this: review it after 1, 3, 7, 14 and 30 days</span></label>' +
       '<p class="field-hint">' + (remembered ? esc(A.srsLabel(n.srs)) + ". Unticking stops the reviews and keeps your history." : "Spaced repetition. You’ll be asked to recall it and can answer Easy, Good, Hard or Forgot.") + '</p></div>' +
       '<div id="lnEvRow">' + A.fArea("evidence", EVIDENCE_LABEL[n.type] || "Supporting evidence", n.evidence, { rows: 3, max: 5000, placeholder: "What backs this up? A figure, a quote, a link…" }) + '</div>' +

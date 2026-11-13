@@ -198,7 +198,7 @@
         { name: "status", kind: "select", label: "Filter by status", options: [["", "All statuses"]].concat(L.BOOK_STATUS.map(function (x) { return [x.key, x.label]; })) },
         { name: "category", kind: "select", label: "Filter by category", options: [["", "All categories"]].concat(cats.map(function (c) { return [c, c]; })) },
         { name: "sort", kind: "select", label: "Sort books", options: [["recent", "Recently updated"], ["added", "Recently added"], ["title", "Title A–Z"], ["progress", "Most progress"], ["rating", "Top rated"]] }
-      ]);
+      ], { fold: 1 });
   }
 
   /* ---------------- a book's own page ---------------- */
@@ -223,7 +223,7 @@
       (p !== null ? A.barHtml(p, "Progress: " + p + "% read") : "") +
       '<p class="ln-big">' + (A.progressText(b) ? esc(A.progressText(b)) : "No page logged yet") + (p === null ? ' <span class="ln-item-sub">Add the total pages (Edit) to see a progress bar.</span>' : "") + '</p>' +
       (facts.length ? '<p class="ln-item-sub">' + esc(facts.join(" · ")) + '</p>' : "") +
-      (b.status !== "completed" ? A.pageForm(b, "ln-page-lg") : "") +
+      (b.status !== "completed" ? A.pageForm(b, "ln-page-lg") + A.quickPagesHtml(b) : "") +
       (A.readingBookHtml ? A.readingBookHtml(b) : "") +
       (b.status === "completed" ? '<div class="ln-rate-quick" role="group" aria-label="Your rating">' + [1, 2, 3, 4, 5].map(function (n) {
         return '<button type="button" class="ln-star-btn' + (b.rating >= n ? " on" : "") + '" data-act="rate" data-id="' + esc(b.id) + '" data-v="' + n + '" aria-pressed="' + (b.rating === n) + '" aria-label="' + n + ' star' + (n > 1 ? "s" : "") + '">★</button>';

@@ -4112,7 +4112,7 @@ body.ln-sheet-open .ln-fab { display: none; }
 .ln-bars-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
 .ln-bars-track { flex: 1 1 auto; display: flex; align-items: flex-end; }
 .ln-bars-fill { display: block; width: 100%; background: linear-gradient(180deg, #8b7bff, var(--accent)); border-radius: 3px 3px 0 0; }
-.ln-bars-l { display: block; height: 16px; font-size: 12px; line-height: 16px; color: var(--text-dim); text-align: center; margin-top: 4px; overflow: hidden; }
+.ln-bars-l { display: block; height: 17px; font-size: 13px; line-height: 17px; color: var(--text-dim); text-align: center; margin-top: 4px; overflow: hidden; }
 
 .ln-kinds { gap: 6px; }
 .ln-kind-l { min-width: 0; }
@@ -4174,7 +4174,7 @@ body.ln-sheet-open .ln-fab { display: none; }
 .ln-cal-d { display: flex; align-items: center; justify-content: center; height: 38px; border-radius: var(--radius-sm); border: 1px solid var(--card-border); background: var(--bg-elevated); font-size: 14px; font-variant-numeric: tabular-nums; }
 .ln-cal-read { background: var(--accent-dim); border-color: var(--accent); color: #fff; font-weight: 700; }
 .ln-cal-today { outline: 2px solid var(--text); outline-offset: 1px; }
-.ln-cal-future { opacity: 0.45; }
+.ln-cal-future { background: transparent; border-style: dashed; color: var(--text-dim); }
 .ln-sessions { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ln-session { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
 @media (max-width: 360px) { .ln-tile-n { font-size: 21px; } .ln-clock { font-size: 38px; } .ln-tiles { gap: 6px; } .ln-tile { padding: 8px; } }
@@ -4188,3 +4188,11 @@ body.ln-sheet-open .ln-fab { display: none; }
 .ln-intent { margin: 4px 0 12px; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--bg-elevated); border-radius: var(--radius-sm); overflow-wrap: anywhere; white-space: pre-wrap; }
 details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
 @media (max-width: 380px) { .ln-cmp { font-size: 13px; } .ln-cmp th, .ln-cmp td { padding: 8px 2px; } }
+
+/* ---------------- Learning hub: readable small text, quick page buttons ---------------- */
+.ln-scope .field-hint, .ln-sheet .field-hint, .ln-scope .empty-state-compact { font-size: 13px; line-height: 1.4; }
+.ln-quickpages { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.ln-quickpages .btn { min-width: 56px; min-height: 44px; padding: 0 10px; }
+.ln-quickpages-l { font-size: 13px; color: var(--text-dim); margin-right: 2px; }
+.ln-saveto { margin: 0 0 8px; }
+.ln-scope .badge, .ln-sheet .badge { font-size: 13px; }

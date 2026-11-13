@@ -119,7 +119,7 @@
         { name: "q", kind: "search", label: "Search actions", placeholder: "Search lessons and plans" },
         { name: "status", kind: "select", label: "Filter by status", options: [["", "All statuses"]].concat(L.ACTION_STATUS.map(function (x) { return [x.key, x.label]; })) },
         { name: "sort", kind: "select", label: "Sort actions", options: [["date", "Target date"], ["newest", "Newest first"], ["status", "By status"]] }
-      ]) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(count()) + '</p><div id="lnResults">' + results() + '</div>';
+      ], { fold: 1 }) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(count()) + '</p><div id="lnResults">' + results() + '</div>';
   }
 
   A.register("actions", {

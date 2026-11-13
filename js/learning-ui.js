@@ -404,6 +404,24 @@
     if (last && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
     else say(next.title + ": page " + n + (L.progress(next) !== null ? ", " + L.progress(next) + " percent" : "") + ".");
   }
+  // One-tap progress: "+10" adds that many pages to where you are (never past the last page), through the same page log as typing a number.
+  function quickPagesHtml(b) {
+    if (b.status === "completed") return "";
+    return '<div class="ln-quickpages" role="group" aria-label="Add pages to ' + esc(b.title) + '"><span class="ln-quickpages-l">Add pages</span>' +
+      [5, 10, 25].map(function (k) { return '<button type="button" class="btn btn-secondary" data-act="page-add" data-id="' + esc(b.id) + '" data-n="' + k + '" aria-label="Add ' + k + ' pages to ' + esc(b.title) + '">+' + k + '</button>'; }).join("") + '</div>';
+  }
+  function quickPages(id, k) {
+    const b = store.get("books", id);
+    if (!b || !(k > 0)) return;
+    let n = b.currentPage + k;
+    if (b.totalPages > 0 && n > b.totalPages) n = b.totalPages;
+    if (n === b.currentPage) { say("Already on the last page."); return; }
+    const before = b, res = applyPage(b, n);
+    if (!res.ok) { saveFailed(); return; }
+    const next = res.book;
+    if (next.totalPages > 0 && n >= next.totalPages && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
+    else notice(next.title + ": page " + n + " (+" + (n - before.currentPage) + ").", "Undo", function () { store.put("books", before); });
+  }
   function setBookStatus(id, status) {
     const b = store.get("books", id);
     if (!b || b.status === status) return;
@@ -420,6 +438,7 @@
   const shared = {
     click: function (act, el) {
       if (api.acts[act]) { api.acts[act](el, act); return true; }
+      if (act === "page-add") { quickPages(el.getAttribute("data-id"), Number(el.getAttribute("data-n"))); return true; }
       if (act === "status-book") { setBookStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
       if (act === "status-action") { setActionStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
       if (act.indexOf("note-") === 0 || act === "tag-filter") return api.noteClick ? api.noteClick(act, el) : false;
@@ -457,7 +476,7 @@
       h += books.length ? '<div class="ln-list">' + books.slice(0, 6).map(function (b) {
         return '<div class="ln-item"><button type="button" class="ln-item-open" data-go="books" data-id="' + esc(b.id) + '">' + coverHtml(b, "ln-cover-sm") +
           '<span class="ln-item-main"><span class="ln-item-title">' + esc(b.title) + '</span><span class="ln-item-sub">' + esc(b.author || "No author") + '</span>' + barHtml(L.progress(b), b.title + ": " + L.progress(b) + "% read") +
-          '<span class="ln-item-sub">' + esc(progressText(b) || "No page logged yet") + '</span></span></button>' + pageForm(b) + '</div>';
+          '<span class="ln-item-sub">' + esc(progressText(b) || "No page logged yet") + '</span></span></button>' + pageForm(b) + quickPagesHtml(b) + '</div>';
       }).join("") + '</div>' : '<p class="empty-state-compact">No book in progress. Add one, or set a book on your list to Reading.</p>';
       h += '</section>';
 
@@ -564,7 +583,7 @@
     fText: fText, fArea: fArea, fSelect: fSelect, rowHtml: rowHtml, opts: opts, datalist: datalist, formValues: formValues, showErrors: showErrors,
     toolbar: toolbar, filtersActive: filtersActive, DEFAULT_FILTERS: DEFAULT_FILTERS,
     openSheet: openSheet, closeSheet: closeSheet, confirmSheet: confirmSheet,
-    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, srsLabel: srsLabel, bars: bars,
+    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, quickPagesHtml: quickPagesHtml, srsLabel: srsLabel, bars: bars,
     quickAdd: {}, acts: {}, dashTop: []
   };
   window.JarvisLearning = api;

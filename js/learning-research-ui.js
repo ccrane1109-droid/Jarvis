@@ -219,7 +219,7 @@
         { name: "category", kind: "select", label: "Filter by category", options: [["", "All categories"]].concat(cats.map(function (c) { return [c, c]; })) },
         { name: "archived", kind: "select", label: "Archived projects", options: [["", "Hide archived"], ["show", "Show archived too"], ["only", "Only archived"]] },
         { name: "sort", kind: "select", label: "Sort research", options: [["recent", "Recently updated"], ["priority", "Priority"], ["added", "Recently added"], ["title", "Title A–Z"]] }
-      ]) + (A.state.filters.research.active ? '<p class="ln-item-sub">Showing active research only (researching or analyzing).</p>' : "") +
+      ], { fold: 1 }) + (A.state.filters.research.active ? '<p class="ln-item-sub">Showing active research only (researching or analyzing).</p>' : "") +
       '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(listCount()) + '</p><div id="lnResults">' + listResults() + '</div>';
   }
 

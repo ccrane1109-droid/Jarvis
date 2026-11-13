@@ -49,7 +49,7 @@
     let h = '<section class="card ln-card" aria-labelledby="lnRvCmp"><div class="card-title-row"><h2 class="card-title" id="lnRvCmp">Compared with the week before</h2></div>';
     if (prev.empty) return h + '<p class="empty-state-compact">Nothing was recorded the week before (' + esc(range(prevWeek)) + '), so there is nothing to compare with.</p></section>';
     const rows = W.compare(SUM, prev);
-    h += '<table class="ln-cmp"><caption class="visually-hidden">This week against the week of ' + esc(A.fmtDate(prevWeek)) + '</caption><thead><tr><th scope="col">&nbsp;</th><th scope="col">This week</th><th scope="col">Before</th><th scope="col">Change</th></tr></thead><tbody>' +
+    h += '<table class="ln-cmp"><caption class="visually-hidden">This week against the week of ' + esc(A.fmtDate(prevWeek)) + '</caption><thead><tr><th scope="col"><span class="visually-hidden">Measure</span></th><th scope="col">This week</th><th scope="col">Before</th><th scope="col">Change</th></tr></thead><tbody>' +
       rows.map(function (r) { return '<tr><th scope="row">' + esc(r.label) + '</th><td>' + esc(valueText(r, r.now)) + '</td><td>' + esc(valueText(r, r.before)) + '</td><td>' + changeHtml(r) + '</td></tr>'; }).join("") + '</tbody></table>';
     return h + '<p class="field-hint">Compared with ' + esc(range(prevWeek)) + '. Figures are recounted from your records, so they always match what is stored.</p></section>';
   }
