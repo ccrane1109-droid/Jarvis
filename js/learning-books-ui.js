@@ -181,13 +181,24 @@
   function list() {
     const S = store.state(), cats = L.allCategories({ books: S.books });
     const f = A.state.filters.books;
-    return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Books</h2><button type="button" class="btn btn-primary" data-act="add-book">+ Add book</button></div>' +
-      A.toolbar("books", [
+    const head = '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Books</h2><button type="button" class="btn btn-primary" data-act="add-book">+ Add book</button></div>';
+    if (A.readingHtml) {
+      const part = A.state.bpart === "stats" ? "stats" : "library";
+      const seg = '<div class="ln-seg ln-seg-parts ln-seg-2" role="group" aria-label="Books views">' + [["library", "My books"], ["stats", "Reading stats"]].map(function (x) {
+        return '<button type="button" class="ln-seg-btn" data-act="bpart" data-v="' + x[0] + '" aria-pressed="' + (part === x[0]) + '">' + x[1] + '</button>';
+      }).join("") + '</div>';
+      if (part === "stats") return head + seg + A.readingHtml();
+      return head + seg + booksToolbar(cats) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(listCount()) + '</p><div id="lnResults">' + listResults() + '</div>';
+    }
+    return head + booksToolbar(cats) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(listCount()) + '</p><div id="lnResults">' + listResults() + '</div>';
+  }
+  function booksToolbar(cats) {
+    return A.toolbar("books", [
         { name: "q", kind: "search", label: "Search books", placeholder: "Search title, author, category" },
         { name: "status", kind: "select", label: "Filter by status", options: [["", "All statuses"]].concat(L.BOOK_STATUS.map(function (x) { return [x.key, x.label]; })) },
         { name: "category", kind: "select", label: "Filter by category", options: [["", "All categories"]].concat(cats.map(function (c) { return [c, c]; })) },
         { name: "sort", kind: "select", label: "Sort books", options: [["recent", "Recently updated"], ["added", "Recently added"], ["title", "Title A–Z"], ["progress", "Most progress"], ["rating", "Top rated"]] }
-      ]) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(listCount()) + '</p><div id="lnResults">' + listResults() + '</div>';
+      ]);
   }
 
   /* ---------------- a book's own page ---------------- */
@@ -213,6 +224,7 @@
       '<p class="ln-big">' + (A.progressText(b) ? esc(A.progressText(b)) : "No page logged yet") + (p === null ? ' <span class="ln-item-sub">Add the total pages (Edit) to see a progress bar.</span>' : "") + '</p>' +
       (facts.length ? '<p class="ln-item-sub">' + esc(facts.join(" · ")) + '</p>' : "") +
       (b.status !== "completed" ? A.pageForm(b, "ln-page-lg") : "") +
+      (A.readingBookHtml ? A.readingBookHtml(b) : "") +
       (b.status === "completed" ? '<div class="ln-rate-quick" role="group" aria-label="Your rating">' + [1, 2, 3, 4, 5].map(function (n) {
         return '<button type="button" class="ln-star-btn' + (b.rating >= n ? " on" : "") + '" data-act="rate" data-id="' + esc(b.id) + '" data-v="' + n + '" aria-pressed="' + (b.rating === n) + '" aria-label="' + n + ' star' + (n > 1 ? "s" : "") + '">★</button>';
       }).join("") + '<span class="ln-item-sub">' + (b.rating ? b.rating + " out of 5" : "Tap a star to rate it") + '</span></div>' : "") +

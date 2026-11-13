@@ -4151,3 +4151,30 @@ body.ln-sheet-open .ln-fab { display: none; }
 .ln-ck-add .ln-err { flex: 1 1 100%; margin: 0; }
 .ln-group { margin-top: 14px; }
 .ln-group .ln-h3 { margin-bottom: 2px; }
+
+/* ---------------- Learning hub: reading stats and timer ---------------- */
+.ln-seg.ln-seg-2, .ln-seg.ln-seg-n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ln-seg.ln-seg-n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ln-seg.ln-seg-sm { margin: 8px 0; max-width: 420px; }
+.ln-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.ln-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+.ln-tile-n { font-size: 24px; font-weight: 700; line-height: 1.1; }
+.ln-tile-l { font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.ln-tile-s { font-size: 13px; line-height: 1.25; color: var(--text-dim); overflow-wrap: anywhere; }
+.ln-clock { font-size: 44px; font-weight: 700; line-height: 1.1; margin: 4px 0; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.ln-timer-start .form-row { margin-bottom: 8px; }
+.ln-readline { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 10px 0 0; }
+.ln-cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ln-cal-title { font-weight: 600; text-align: center; flex: 1 1 auto; }
+.ln-cal-btn { min-width: 44px; min-height: 44px; padding: 0; }
+.ln-cal { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 3px; }
+.ln-cal th { font-size: 13px; font-weight: 600; color: var(--text-dim); padding: 2px 0; }
+.ln-cal th abbr { text-decoration: none; }
+.ln-cal td { padding: 0; text-align: center; }
+.ln-cal-d { display: flex; align-items: center; justify-content: center; height: 38px; border-radius: var(--radius-sm); border: 1px solid var(--card-border); background: var(--bg-elevated); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ln-cal-read { background: var(--accent-dim); border-color: var(--accent); color: #fff; font-weight: 700; }
+.ln-cal-today { outline: 2px solid var(--text); outline-offset: 1px; }
+.ln-cal-future { opacity: 0.45; }
+.ln-sessions { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ln-session { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+@media (max-width: 360px) { .ln-tile-n { font-size: 21px; } .ln-clock { font-size: 38px; } .ln-tiles { gap: 6px; } .ln-tile { padding: 8px; } }

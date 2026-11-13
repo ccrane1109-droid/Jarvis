@@ -373,18 +373,33 @@
       '<input type="number" id="lnp_' + esc(b.id) + '" name="page" inputmode="numeric" min="0"' + (b.totalPages > 0 ? ' max="' + b.totalPages + '"' : "") + ' value="' + b.currentPage + '" data-fk="page_' + esc(b.id) + '">' +
       '<button type="submit" class="btn btn-secondary">Update page</button><p class="ln-err hidden" data-err="page" role="alert"></p></form>';
   }
-  function savePage(form) {
-    const id = form.getAttribute("data-id"), b = store.get("books", id);
-    if (!b) return;
-    const raw = form.elements.page.value.trim();
-    const n = /^\d{1,6}$/.test(raw) ? Number(raw) : NaN;
-    const bad = isNaN(n) ? "Enter a page number." : (b.totalPages > 0 && n > b.totalPages) ? "That's past the last page (" + b.totalPages + ")." : "";
-    if (bad) { showErrors(form, { page: bad }); return; }
-    if (n === b.currentPage) { say("Still on page " + n + "."); return; }
+  // A page number typed by hand -> { n } or { error }. Used by the page boxes and by the reading timer's "page you reached".
+  function checkPage(b, raw) {
+    const t = String(raw == null ? "" : raw).trim();
+    const n = /^\d{1,6}$/.test(t) ? Number(t) : NaN;
+    if (isNaN(n)) return { error: "Enter a page number." };
+    if (b.totalPages > 0 && n > b.totalPages) return { error: "That's past the last page (" + b.totalPages + ")." };
+    return { n: n };
+  }
+  // Records a new current page for a book through the one path every page update takes, so each page is counted once.
+  // -> { ok, same, book } ; ok is false only when the save failed.
+  function applyPage(b, n) {
+    if (n === b.currentPage) return { ok: true, same: true, book: b };
     const today = store.today(), now = Date.now();
     let next = L.withPage(b, n, today, now);
     if ((b.status === "want" || b.status === "paused") && n > b.currentPage) next = Object.assign(next, { status: "reading", startDate: b.startDate || today });
-    if (!store.put("books", next)) { saveFailed(); return; }
+    if (!store.put("books", next)) return { ok: false, book: b };
+    return { ok: true, book: next };
+  }
+  function savePage(form) {
+    const id = form.getAttribute("data-id"), b = store.get("books", id);
+    if (!b) return;
+    const c = checkPage(b, form.elements.page.value);
+    if (c.error) { showErrors(form, { page: c.error }); return; }
+    const n = c.n, res = applyPage(b, n);
+    if (res.same) { say("Still on page " + n + "."); return; }
+    if (!res.ok) { saveFailed(); return; }
+    const next = res.book;
     const last = next.totalPages > 0 && n >= next.totalPages;
     if (last && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
     else say(next.title + ": page " + n + (L.progress(next) !== null ? ", " + L.progress(next) + " percent" : "") + ".");
@@ -549,7 +564,7 @@
     fText: fText, fArea: fArea, fSelect: fSelect, rowHtml: rowHtml, opts: opts, datalist: datalist, formValues: formValues, showErrors: showErrors,
     toolbar: toolbar, filtersActive: filtersActive, DEFAULT_FILTERS: DEFAULT_FILTERS,
     openSheet: openSheet, closeSheet: closeSheet, confirmSheet: confirmSheet,
-    setBookStatus: setBookStatus, setActionStatus: setActionStatus, srsLabel: srsLabel, bars: bars,
+    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, srsLabel: srsLabel, bars: bars,
     quickAdd: {}, acts: {}, dashTop: []
   };
   window.JarvisLearning = api;
