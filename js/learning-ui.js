@@ -344,6 +344,7 @@
     if (goEl) {
       e.preventDefault();
       const note = goEl.getAttribute("data-open-note") || "";
+      if (goEl.getAttribute("data-go") === "knowledge") state.kpart = "notes";
       go(goEl.getAttribute("data-go"), goEl.getAttribute("data-id") || "", note ? { openNote: note, replaceFilters: Object.assign({}, DEFAULT_FILTERS[goEl.getAttribute("data-go")] || {}) } : { openNote: "" });
       return;
     }
@@ -493,6 +494,7 @@
     let f = {};
     try { f = JSON.parse(el.getAttribute("data-filters")) || {}; } catch (x) { f = {}; }
     const tab = el.getAttribute("data-go");
+    if (tab === "knowledge") state.kpart = "notes";
     state.filters[tab] = Object.assign({}, DEFAULT_FILTERS[tab] || {}, f);
   }
 

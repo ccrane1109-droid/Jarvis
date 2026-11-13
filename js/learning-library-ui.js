@@ -40,7 +40,7 @@
         '<button type="button" class="btn btn-secondary" data-act="note-remember" data-id="' + esc(n.id) + '" data-on="0">Stop reviewing</button>'
       : '<button type="button" class="btn btn-secondary" data-act="note-remember" data-id="' + esc(n.id) + '" data-on="1">Remember this</button>';
     return '<details class="ln-note' + (n.title ? "" : " ln-note-plain") + '" id="lnnote_' + esc(n.id) + '" data-keep="' + esc(key) + '"' + (isOpen ? " open" : "") + '>' +
-      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", typeLabel(n.type)) + (n.important ? A.badge("yellow", "★ Starred") : "") + (due ? A.badge("red", "Review due") : "") + (n.inbox ? A.badge("neutral", "To organize") : "") + '</span>' +
+      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", typeLabel(n.type)) + (n.important ? A.badge("yellow", "★ Starred") : "") + (n.type === "finding" && !n.evidence ? A.badge("neutral", "No evidence yet") : "") + (due ? A.badge("red", "Review due") : "") + (n.inbox ? A.badge("neutral", "To organize") : "") + '</span>' +
       '<span class="ln-note-title">' + esc(title) + '</span><span class="ln-item-sub">' + esc([day ? A.fmtShort(day) : "", A.noteSource(n)].filter(Boolean).join(" · ")) + '</span></summary>' +
       '<div class="ln-note-body">' +
       (n.type === "quote" ? '<blockquote class="ln-quote">' + esc(n.text) + '</blockquote>' : '<p class="ln-text">' + esc(n.text) + '</p>') +
@@ -54,10 +54,13 @@
       '<div class="ln-item-btns ln-note-btns"><button type="button" class="btn btn-secondary" data-act="note-edit" data-id="' + esc(n.id) + '">Edit</button>' +
       '<button type="button" class="btn btn-secondary" data-act="note-star" data-id="' + esc(n.id) + '" aria-pressed="' + (!!n.important) + '">' + (n.important ? "Unstar" : "Star") + '</button>' +
       (n.inbox ? '<button type="button" class="btn btn-secondary" data-act="note-organized" data-id="' + esc(n.id) + '">Mark organized</button>' : "") +
-      reviewBtns +
-      '<button type="button" class="btn btn-secondary" data-act="note-flashcard" data-id="' + esc(n.id) + '">Make a flashcard</button>' +
       '<button type="button" class="btn btn-secondary" data-act="note-action" data-id="' + esc(n.id) + '">Turn into an action</button>' +
-      '<button type="button" class="btn btn-secondary ln-danger" data-act="note-delete" data-id="' + esc(n.id) + '">Delete</button></div></div></details>';
+      reviewBtns +
+      '<button type="button" class="btn btn-secondary ln-danger" data-act="note-delete" data-id="' + esc(n.id) + '">Delete</button></div>' +
+      '<details class="ln-more ln-more-act" data-keep="more_' + esc(n.id) + '"' + (A.state.open["more_" + n.id] ? " open" : "") + '><summary>More: link, collect, flashcard</summary><div class="ln-item-btns">' +
+      '<button type="button" class="btn btn-secondary" data-act="note-link" data-id="' + esc(n.id) + '">Link to other notes</button>' +
+      '<button type="button" class="btn btn-secondary" data-act="note-collect" data-id="' + esc(n.id) + '">Add to a collection</button>' +
+      '<button type="button" class="btn btn-secondary" data-act="note-flashcard" data-id="' + esc(n.id) + '">Make a flashcard</button></div></details></div></details>';
   }
 
   /* ---------------- the editor ---------------- */
@@ -114,6 +117,7 @@
       title: isNew ? "Add a note" : "Edit note", body: body, submit: isNew ? "Save note" : "Save changes", focus: "#lnf_text",
       onOpen: sync,
       onChange: function (t, el) { if (t.id === "lnf_type" || t.name === "researchIds") sync(el); },
+      onInput: function (t, el) { if (A.pickFilter) A.pickFilter(el, t); },
       onAct: function (act, btn, el) {
         if (act === "tag-add") {
           const input = el.querySelector("#lnf_tags"), cur = L.parseTags(input.value), t = btn.getAttribute("data-tag");
@@ -147,6 +151,8 @@
     if (act === "note-pause") { const n = store.get("notes", id); if (n && n.srs) { const next = n.srs.paused ? SRS.resume(n.srs, store.today()) : SRS.pause(n.srs); if (!store.patch("notes", id, { srs: next })) A.saveFailed(); else A.say(next.paused ? "Reviews paused." : "Reviews resumed."); } return true; }
     if (act === "note-organized") { if (!store.patch("notes", id, { inbox: undefined })) A.saveFailed(); return true; }
     if (act === "note-flashcard") { const n = store.get("notes", id); if (n && A.editCard) A.editCard(null, { question: "", answer: n.text, bookIds: n.bookIds, researchIds: n.researchIds, tags: n.tags, noteId: n.id }); return true; }
+    if (act === "note-link") { const n = store.get("notes", id); if (n && A.openLinkSheet) A.openLinkSheet(n); return true; }
+    if (act === "note-collect") { const n = store.get("notes", id); if (n && A.openCollectSheet) A.openCollectSheet(n); return true; }
     if (act === "note-star") { const n = store.get("notes", id); if (n && !store.patch("notes", id, { important: !n.important })) A.saveFailed(); return true; }
     if (act === "note-delete") { deleteNote(id); return true; }
     if (act === "note-action") {
@@ -154,7 +160,7 @@
       if (n) A.editAction(null, { sourceType: "note", sourceId: id, lesson: A.snippet(n.title || n.text, 480) });
       return true;
     }
-    if (act === "tag-filter") { A.go("knowledge", "", { replaceFilters: Object.assign({}, A.DEFAULT_FILTERS.knowledge, { tag: el.getAttribute("data-tag") }) }); return true; }
+    if (act === "tag-filter") { A.state.kpart = "notes"; A.go("knowledge", "", { replaceFilters: Object.assign({}, A.DEFAULT_FILTERS.knowledge, { tag: el.getAttribute("data-tag") }) }); return true; }
     return false;
   }
 
@@ -184,11 +190,10 @@
     const S = store.state(), n = L.filterNotes(S.notes, S, logicFilter()).length, total = L.live(S.notes).length;
     return n === total ? A.plural(total, "note") : n + " of " + total + " notes";
   }
-  function view() {
+  function notesBody() {
     const S = store.state();
     const tags = L.allTags(S.notes), cats = L.allCategories(S);
-    return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Knowledge</h2><button type="button" class="btn btn-primary" data-act="add-note-lib">+ Add note</button></div>' +
-      (A.inboxHtml ? A.inboxHtml() : "") +
+    return (A.inboxHtml ? A.inboxHtml() : "") +
       A.toolbar("knowledge", [
         { name: "q", kind: "search", label: "Search all notes", placeholder: "Search your notes" },
         { name: "type", kind: "select", label: "Filter by kind of note", options: [["", "All kinds"]].concat(L.NOTE_TYPE.map(function (t) { return [t.key, t.label]; })) },
@@ -203,10 +208,28 @@
       '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(count()) + '</p><div id="lnResults">' + results() + '</div>';
   }
 
+  // Knowledge has three views: your notes, your topics, and collections. The last two are in learning-topics-ui.js.
+  const PARTS = [["notes", "Notes"], ["topics", "Topics"], ["collections", "Collections"]];
+  A.state.kpart = "notes";
+  A.kparts = A.kparts || {};
+  function view() {
+    if (A.state.openNote) A.state.kpart = "notes";
+    let part = A.state.kpart;
+    if (part !== "notes" && !A.kparts[part]) part = A.state.kpart = "notes";
+    const add = part === "collections" ? '<button type="button" class="btn btn-primary" data-act="coll-add">+ New collection</button>' : part === "notes" ? '<button type="button" class="btn btn-primary" data-act="add-note-lib">+ Add note</button>' : "";
+    const seg = '<div class="ln-seg ln-seg-parts ln-seg-3" role="group" aria-label="Knowledge views">' + PARTS.map(function (x) {
+      return '<button type="button" class="ln-seg-btn" data-act="kpart" data-v="' + x[0] + '" aria-pressed="' + (part === x[0]) + '">' + x[1] + '</button>';
+    }).join("") + '</div>';
+    return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Knowledge</h2>' + add + '</div>' + seg + (part === "notes" ? notesBody() : A.kparts[part].html());
+  }
+  A.acts["kpart"] = function (el) { A.state.kpart = el.getAttribute("data-v"); A.state.collId = ""; A.render(); };
+  function activeResults() { const p = A.kparts[A.state.kpart]; return p && p.results ? p.results() : results(); }
+  function activeCount() { const p = A.kparts[A.state.kpart]; return p && p.count ? p.count() : count(); }
+
   A.register("knowledge", {
     html: view,
-    results: results,
-    count: count,
+    results: activeResults,
+    count: activeCount,
     after: function (host) {
       const id = A.state.openNote;
       if (!id) return;

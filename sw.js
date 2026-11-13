@@ -87,6 +87,8 @@ const APP_SHELL = [
   "./js/learning-srs.js?v=78",
   "./js/learning-logic.js?v=78",
   "./js/learning-cards-logic.js?v=78",
+  "./js/learning-goals-logic.js?v=78",
+  "./js/learning-links-logic.js?v=78",
   "./js/learning-store.js?v=78",
   "./js/learning-ui.js?v=78",
   "./js/learning-books-ui.js?v=78",
@@ -95,6 +97,8 @@ const APP_SHELL = [
   "./js/learning-actions-ui.js?v=78",
   "./js/learning-review-ui.js?v=78",
   "./js/learning-study-ui.js?v=78",
+  "./js/learning-topics-ui.js?v=78",
+  "./js/learning-goals-ui.js?v=78",
   "./js/learning-capture-ui.js?v=78"
 ];
 

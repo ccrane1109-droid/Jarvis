@@ -4118,3 +4118,36 @@ body.ln-sheet-open .ln-fab { display: none; }
 .ln-kind-l { min-width: 0; }
 .ln-saved-note { color: var(--green); font-size: 14px; margin: 0 0 10px; }
 .ln-inbox { border-color: var(--accent-dim); }
+
+/* ---------------- Learning hub: goals, topics, collections, connections ---------------- */
+.ln-scope [hidden], .ln-sheet [hidden] { display: none !important; }
+.ln-seg.ln-seg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ln-goal { margin-bottom: 14px; }
+.ln-goal-title { font-size: 17px; margin: 8px 0 6px; overflow-wrap: anywhere; font-weight: 600; }
+.ln-goal-amount { margin: 6px 0 2px; font-size: 18px; }
+.ln-goal-hist, .ln-goal-old { margin: 10px 0; }
+.ln-related { margin: 10px 0 4px; padding-top: 6px; border-top: 1px solid var(--card-border); }
+.ln-more-act { margin: 8px 0 0; }
+.ln-pick-search { margin-bottom: 8px; }
+.ln-pick-list { max-height: 240px; }
+.ln-pick-empty { padding: 10px 12px; margin: 0; }
+.ln-coll-note { margin-bottom: 12px; }
+.ln-coll-remove { margin-top: 6px; }
+.ln-topic, .ln-coll { margin-bottom: 0; }
+
+/* ---------------- Learning hub: research organization ---------------- */
+.ln-seg-src { margin-top: 8px; max-width: 360px; }
+.ln-cred { color: var(--text-dim); overflow-wrap: anywhere; }
+.ln-cks { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ln-ck { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 2px 4px; border-radius: var(--radius-sm); }
+.ln-ck-label { flex: 1 1 200px; display: flex; align-items: center; gap: 10px; min-height: 44px; min-width: 0; cursor: pointer; }
+.ln-ck-label input { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+.ln-ck-text { overflow-wrap: anywhere; line-height: 1.35; }
+.ln-ck-done .ln-ck-text { color: var(--text-dim); text-decoration: line-through; }
+.ln-ck-date { flex: none; }
+.ln-ck-btn { min-height: 44px; min-width: 44px; padding: 4px 8px; font-size: 14px; }
+.ln-ck-add { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.ln-ck-add input[type="text"] { flex: 1 1 180px; min-width: 0; min-height: 44px; }
+.ln-ck-add .ln-err { flex: 1 1 100%; margin: 0; }
+.ln-group { margin-top: 14px; }
+.ln-group .ln-h3 { margin-bottom: 2px; }
