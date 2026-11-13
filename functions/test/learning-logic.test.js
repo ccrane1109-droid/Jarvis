@@ -157,7 +157,7 @@ test("quick status changes fill in what follows, and nothing is invented", () =>
   let b = L.withStatus(book({ status: "want", currentPage: 0 }), "reading", TODAY, NOW);
   assert.deepEqual([b.status, b.startDate], ["reading", TODAY]);
   b = L.withStatus(book({ status: "reading", currentPage: 120, startDate: "2026-10-20", log: [{ d: "2026-10-20", p: 0 }] }), "completed", TODAY, NOW);
-  assert.deepEqual([b.status, b.endDate, b.currentPage, b.startDate, b.log[b.log.length - 1]], ["completed", TODAY, 300, "2026-10-20", { d: TODAY, p: 300 }]);
+  assert.deepEqual([b.status, b.endDate, b.currentPage, b.startDate, b.log[b.log.length - 1]], ["completed", TODAY, 300, "2026-10-20", { d: "2026-10-20", p: 0 }], "the bar fills, but pages never logged are not counted as read on the day you tapped Completed");
   b = L.withStatus(book({ status: "reading", totalPages: 0, currentPage: 7 }), "completed", TODAY, NOW);
   assert.deepEqual([b.endDate, b.currentPage], [TODAY, 7], "no total: the page is left as it is");
   b = L.withStatus(b, "paused", TODAY, NOW);

@@ -29,6 +29,10 @@
   "use strict";
 
   const KEYS = { books: "jarvisLearnBooks", research: "jarvisLearnResearch", notes: "jarvisLearnNotes", actions: "jarvisLearnActions", reviews: "jarvisLearnReviews" };
+  // The id prefix of each kind. Other modules (cards, goals, reading sessions, collections) add theirs with registerKind().
+  const PREFIX = { books: "bk", research: "rs", notes: "nt", actions: "ac", reviews: "wk" };
+  // The spaced-repetition rules live in learning-srs.js (loaded first in the page; required in Node).
+  function srsMod() { return typeof module === "object" && module.exports ? require("./learning-srs") : (typeof self !== "undefined" ? self : globalThis).JarvisLearningSRS; }
   const TOMBSTONE_DAYS = 30;
   const MAX_COVER_CHARS = 90000;       // a resized cover is about 20-40 KB; this is the ceiling
   const MAX_LOG = 400;
@@ -39,13 +43,17 @@
   const ACTION_STATUS = [{ key: "todo", label: "Not Started" }, { key: "doing", label: "In Progress" }, { key: "done", label: "Implemented" }];
   const NOTE_TYPE = [
     { key: "takeaway", label: "Key takeaway" }, { key: "chapter", label: "Chapter summary" }, { key: "quote", label: "Quote" },
-    { key: "reflection", label: "Reflection" }, { key: "finding", label: "Finding" }, { key: "note", label: "Note" }
+    { key: "reflection", label: "Reflection" }, { key: "finding", label: "Finding" }, { key: "opinion", label: "My opinion" },
+    { key: "idea", label: "Research idea" }, { key: "question", label: "Question" }, { key: "note", label: "Note" }
   ];
+  // Kinds of note that can be reviewed with spaced repetition (an idea or a question is not a lesson to remember).
+  const SRS_TYPES = ["takeaway", "chapter", "quote", "reflection", "finding", "opinion", "note"];
+  const SOURCE_STATE = [{ key: "unreviewed", label: "Not reviewed" }, { key: "reading", label: "Reading" }, { key: "reviewed", label: "Reviewed" }];
   const SOURCE_KIND = [{ key: "article", label: "Article" }, { key: "video", label: "Video" }, { key: "website", label: "Website" }, { key: "paper", label: "Paper" }, { key: "book", label: "Book" }, { key: "other", label: "Other" }];
 
   const keysOf = function (list) { return list.map(function (x) { return x.key; }); };
   const labelOf = function (list, key) { const f = list.filter(function (x) { return x.key === key; })[0]; return f ? f.label : ""; };
-  const BOOK_KEYS = keysOf(BOOK_STATUS), RESEARCH_KEYS = keysOf(RESEARCH_STATUS), PRIORITY_KEYS = keysOf(PRIORITY), ACTION_KEYS = keysOf(ACTION_STATUS), NOTE_KEYS = keysOf(NOTE_TYPE), SOURCE_KEYS = keysOf(SOURCE_KIND);
+  const BOOK_KEYS = keysOf(BOOK_STATUS), RESEARCH_KEYS = keysOf(RESEARCH_STATUS), PRIORITY_KEYS = keysOf(PRIORITY), ACTION_KEYS = keysOf(ACTION_STATUS), NOTE_KEYS = keysOf(NOTE_TYPE), SOURCE_KEYS = keysOf(SOURCE_KIND), SOURCE_STATE_KEYS = keysOf(SOURCE_STATE);
 
   /* ---------------- small helpers ---------------- */
 
@@ -120,16 +128,27 @@
     return Object.assign({}, book, { currentPage: page, log: log, updatedAt: now });
   }
 
-  // Pages read between two dates (inclusive), from the logged updates only. Counting starts at the first logged update.
-  function pagesInRange(book, from, to) {
-    const log = (Array.isArray(book && book.log) ? book.log : []).filter(function (e) { return e && isDate(e.d) && typeof e.p === "number"; });
-    if (!log.length) return 0;
+  // Pages read per day, from the logged updates only. Each page is counted once: a day's pages are how far past the furthest page
+  // reached so far the update went. So correcting a page number downwards, or going back to re-read, adds nothing, and the
+  // pages in between are counted when you get past the old high point (100 -> 120 -> corrected to 110 -> 130 is 30 pages, not 40).
+  // The first logged update is the starting point and adds nothing. -> [{ d, pages }] oldest first, one entry per day with updates.
+  function dailyPages(book) {
+    const log = (Array.isArray(book && book.log) ? book.log : []).filter(function (e) { return e && isDate(e.d) && typeof e.p === "number" && isFinite(e.p) && e.p >= 0; });
+    if (!log.length) return [];
     log.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
-    let base = log[0].p;
-    log.forEach(function (e) { if (e.d < from) base = e.p; });
-    const within = log.filter(function (e) { return e.d >= from && e.d <= to; });
-    if (!within.length) return 0;
-    return Math.max(0, within[within.length - 1].p - base);
+    let high = log[0].p;
+    const byDay = {}, order = [];
+    log.forEach(function (e, i) {
+      const gained = i === 0 ? 0 : Math.max(0, e.p - high);
+      high = Math.max(high, e.p);
+      if (!(e.d in byDay)) { byDay[e.d] = 0; order.push(e.d); }
+      byDay[e.d] += gained;
+    });
+    return order.map(function (d) { return { d: d, pages: byDay[d] }; });
+  }
+  // Pages read between two dates (inclusive).
+  function pagesInRange(book, from, to) {
+    return dailyPages(book).reduce(function (sum, e) { return e.d >= from && e.d <= to ? sum + e.pages : sum; }, 0);
   }
   function lastLogged(book) {
     const log = (Array.isArray(book && book.log) ? book.log : []).filter(function (e) { return e && isDate(e.d); });
@@ -161,7 +180,23 @@
     if (!isObj(raw)) return null;
     const url = cleanUrl(raw.url);
     if (!url || typeof raw.id !== "string" || !raw.id) return null;
-    return { id: raw.id, title: line(raw.title, 200) || hostOf(url), url: url, kind: pick(SOURCE_KEYS, raw.kind, "article"), note: line(raw.note, 500), addedAt: num(raw.addedAt) };
+    return { id: raw.id, title: line(raw.title, 200) || hostOf(url), url: url, kind: pick(SOURCE_KEYS, raw.kind, "article"), note: line(raw.note, 500), addedAt: num(raw.addedAt),
+      state: pick(SOURCE_STATE_KEYS, raw.state, "unreviewed"), credibility: para(raw.credibility, 600) };
+  }
+  // A research checklist: [{ id, text, done, doneAt }]. doneAt is the day it was ticked (only when it is ticked).
+  function readChecklist(raw) {
+    const seen = {};
+    return (Array.isArray(raw) ? raw : []).map(function (x) {
+      if (!isObj(x) || typeof x.id !== "string" || !x.id || seen[x.id]) return null;
+      const text = line(x.text, 200);
+      if (!text) return null;
+      seen[x.id] = true;
+      return { id: x.id, text: text, done: x.done === true, doneAt: x.done === true && isDate(x.doneAt) ? x.doneAt : "" };
+    }).filter(Boolean).slice(0, 60);
+  }
+  function checklistProgress(r) {
+    const list = (r && r.checklist) || [], done = list.filter(function (x) { return x.done; }).length;
+    return { done: done, total: list.length, pct: list.length ? Math.round(done / list.length * 100) : null };
   }
   function readResearch(raw) {
     if (!isObj(raw) || typeof raw.id !== "string" || !raw.id) return null;
@@ -173,7 +208,8 @@
     return undef(Object.assign(base(raw), {
       title: title, category: line(raw.category, 60), question: para(raw.question, 500), purpose: para(raw.purpose, 1000),
       priority: pick(PRIORITY_KEYS, raw.priority, "medium"), status: status, conclusion: para(raw.conclusion, 5000),
-      completedAt: status === "completed" && isDate(raw.completedAt) ? raw.completedAt : "", sources: sources
+      completedAt: status === "completed" && isDate(raw.completedAt) ? raw.completedAt : "", sources: sources,
+      checklist: readChecklist(raw.checklist), archived: raw.archived === true ? true : undefined, template: line(raw.template, 40) || undefined
     }));
   }
   function readNote(raw) {
@@ -183,7 +219,8 @@
     return undef(Object.assign(base(raw), {
       type: pick(NOTE_KEYS, raw.type, "note"), title: line(raw.title, 200), text: text, evidence: para(raw.evidence, 5000), page: line(raw.page, 40),
       tags: parseTags(raw.tags), category: line(raw.category, 60), bookIds: idList(raw.bookIds), researchIds: idList(raw.researchIds),
-      sourceId: typeof raw.sourceId === "string" ? raw.sourceId.slice(0, 80) : "", important: raw.important === true, day: isDate(raw.day) ? raw.day : ""
+      sourceId: typeof raw.sourceId === "string" ? raw.sourceId.slice(0, 80) : "", important: raw.important === true, day: isDate(raw.day) ? raw.day : "",
+      linkIds: idList(raw.linkIds), inbox: raw.inbox === true ? true : undefined, srs: srsMod().read(raw.srs) || undefined
     }));
   }
   function readAction(raw) {
@@ -195,14 +232,19 @@
     return undef(Object.assign(base(raw), {
       lesson: lesson, plan: para(raw.plan, 2000), sourceType: st, sourceId: st === "other" || st === "none" ? "" : (typeof raw.sourceId === "string" ? raw.sourceId.slice(0, 80) : ""),
       sourceLabel: st === "other" ? line(raw.sourceLabel, 200) : "", targetDate: isDate(raw.targetDate) ? raw.targetDate : "", status: status,
-      implementedAt: status === "done" && isDate(raw.implementedAt) ? raw.implementedAt : ""
+      implementedAt: status === "done" && isDate(raw.implementedAt) ? raw.implementedAt : "", inbox: raw.inbox === true ? true : undefined
     }));
   }
   function readReview(raw) {
     if (!isObj(raw) || typeof raw.id !== "string" || !raw.id || !isDate(raw.weekStart)) return null;
-    return undef(Object.assign(base(raw), { weekStart: raw.weekStart, reflection: para(raw.reflection, 5000), focusNext: para(raw.focusNext, 2000) }));
+    // reflection = "my biggest lesson" and focusNext = "what I want to improve next week" (the two boxes the first version had);
+    // struggled and applied are new. A review saved before they existed simply has them empty.
+    return undef(Object.assign(base(raw), { weekStart: raw.weekStart, reflection: para(raw.reflection, 5000), struggled: para(raw.struggled, 5000), applied: para(raw.applied, 5000), focusNext: para(raw.focusNext, 2000) }));
   }
   const READERS = { books: readBook, research: readResearch, notes: readNote, actions: readAction, reviews: readReview };
+  // Other modules add their own kind of record: { kind, key (storage key), prefix (id prefix), read(raw) -> record | null }.
+  function registerKind(def) { KEYS[def.kind] = def.key; PREFIX[def.kind] = def.prefix; READERS[def.kind] = def.read; }
+  function kinds() { return Object.keys(KEYS); }
 
   // What is stored -> { items: records this version understands, kept: anything else exactly as it was (so saving never loses it) }
   function readList(kind, stored) {
@@ -255,7 +297,55 @@
     if (!status) e.status = "Choose a status.";
     if (!priority) e.priority = "Choose a priority.";
     if (Object.keys(e).length) return fail(e);
-    return done({ title: title, category: line(i.category, 60), question: para(i.question, 500), purpose: para(i.purpose, 1000), priority: priority, status: status, conclusion: para(i.conclusion, 5000), completedAt: status === "completed" ? (isDate(i.completedAt) ? i.completedAt : today) : "" });
+    const v = { title: title, category: line(i.category, 60), question: para(i.question, 500), purpose: para(i.purpose, 1000), priority: priority, status: status, conclusion: para(i.conclusion, 5000), completedAt: status === "completed" ? (isDate(i.completedAt) ? i.completedAt : today) : "" };
+    if (Array.isArray(i.checklist)) v.checklist = cleanChecklist(i.checklist, today);     // left out of the form: the checklist is not touched
+    if (typeof i.archived === "boolean") v.archived = i.archived && status === "completed" ? true : undefined;
+    if (typeof i.template === "string") v.template = line(i.template, 40) || undefined;
+    return done(v);
+  }
+
+  // A checklist from a form or a template: [{ id?, text, done? }] -> clean items. A ticked item with no date gets today's.
+  function cleanChecklist(list, today) {
+    const seen = {}, out = [];
+    (Array.isArray(list) ? list : []).forEach(function (x, idx) {
+      if (!isObj(x)) return;
+      const text = line(x.text, 200);
+      if (!text) return;
+      let id = typeof x.id === "string" && x.id && x.id.length <= 80 ? x.id : "ck" + idx + "_" + text.length;
+      while (seen[id]) id += "x";
+      seen[id] = true;
+      const doneNow = x.done === true;
+      out.push({ id: id, text: text, done: doneNow, doneAt: doneNow ? (isDate(x.doneAt) ? x.doneAt : (today || "")) : "" });
+    });
+    return out.slice(0, 60);
+  }
+  // Tick or untick one item (the date it was ticked is kept while it stays ticked).
+  function toggleChecklistItem(r, itemId, today, now) {
+    const list = (r.checklist || []).map(function (x) {
+      return x.id !== itemId ? x : { id: x.id, text: x.text, done: !x.done, doneAt: !x.done ? today : "" };
+    });
+    return Object.assign({}, r, { checklist: list, updatedAt: now });
+  }
+
+  // Three optional starting points for a new research project. Everything in them can be edited before and after saving.
+  const TEMPLATES = [
+    { key: "business", label: "Business and Market Research", category: "Business",
+      question: "Is there a real market for this, and how would I win customers in it?",
+      purpose: "Decide whether and how to move forward with evidence about the market, the customer and the competition.",
+      checklist: ["Describe the customer and the problem they have", "List five direct and indirect competitors", "Compare their pricing, offers and positioning", "Find evidence of demand (searches, sales, communities)", "Talk to or survey at least five potential customers", "Estimate costs, margins and the price people will pay", "List the main risks and what is still unknown", "Write the opportunity in one paragraph and choose the next step"] },
+    { key: "psychology", label: "Consumer Psychology Research", category: "Psychology",
+      question: "Why do people choose, delay or avoid this, and what influences them?",
+      purpose: "Understand the motivations, barriers and biases behind a buying or behaviour decision so I can act on them.",
+      checklist: ["Define the specific behaviour I want to understand", "Read two or three studies or reliable summaries on it", "List the main motivations and the main barriers", "Collect real customer language (reviews, comments, interviews)", "Note the biases or triggers that could be at work", "Write a hypothesis I could test", "Plan a small test and what would count as a result", "Summarise what I learned and how I will apply it"] },
+    { key: "general", label: "General Learning Research", category: "Learning",
+      question: "What do I want to understand, and how will I know I understand it?",
+      purpose: "Build a clear, sourced understanding of a topic and decide how to use it.",
+      checklist: ["Write the question in one sentence", "List what I already know and what I am unsure about", "Find at least three sources", "Read each source and note the key points", "Compare where the sources agree and disagree", "Write my conclusion in my own words", "Decide one way to apply what I learned"] }
+  ];
+
+  function checklistFromTemplate(key, makeId) {
+    const t = TEMPLATES.filter(function (x) { return x.key === key; })[0];
+    return t ? t.checklist.map(function (text, i) { return { id: makeId ? makeId(i) : "ck" + i + "_" + text.length, text: text, done: false, doneAt: "" }; }) : [];
   }
 
   function checkSource(input, ctx) {
@@ -265,7 +355,7 @@
     const kind = pick(SOURCE_KEYS, i.kind, "");
     if (!kind) e.kind = "Choose what kind of source it is.";
     if (Object.keys(e).length) return fail(e);
-    return done({ title: line(i.title, 200) || hostOf(url), url: url, kind: kind, note: line(i.note, 500) });
+    return done({ title: line(i.title, 200) || hostOf(url), url: url, kind: kind, note: line(i.note, 500), state: pick(SOURCE_STATE_KEYS, i.state, "unreviewed"), credibility: para(i.credibility, 600) });
   }
 
   // ctx: { today, books: [live books], research: [live research] } so links can be checked.
@@ -286,8 +376,21 @@
       const ok = (c.research || []).some(function (r) { return researchIds.indexOf(r.id) !== -1 && (r.sources || []).some(function (s) { return s.id === sourceId; }); });
       if (!ok && c.research) sourceId = "";
     }
+    // notes this one points to (never itself; each must still exist when the list of notes is known)
+    const linkIds = idList(i.linkIds).filter(function (x) { return x !== c.selfId; });
+    const noteSet = {};
+    (c.notes || []).forEach(function (n) { noteSet[n.id] = true; });
+    const links = c.notes ? linkIds.filter(function (x) { return noteSet[x]; }) : linkIds;
     if (Object.keys(e).length) return fail(e);
-    return done({ type: type, title: line(i.title, 200), text: text, evidence: type === "finding" ? para(i.evidence, 5000) : "", page: line(i.page, 40), tags: parseTags(i.tags), category: line(i.category, 60), bookIds: bookIds, researchIds: researchIds, sourceId: researchIds.length ? sourceId : "", important: i.important === true, day: c.today && isDate(c.today) ? c.today : "" });
+    // Spaced repetition: only acts when the form says so (remember is true or false); a lesson already scheduled and
+    // still ticked is left exactly as it is (so editing the wording never un-pauses it or moves its date).
+    let srs = c.existingSrs || null;
+    if (typeof i.remember === "boolean" && SRS_TYPES.indexOf(type) !== -1) {
+      const S = srsMod();
+      if (i.remember) srs = c.existingSrs && c.existingSrs.on ? c.existingSrs : S.setEnabled(c.existingSrs || null, true, c.today || "");
+      else if (c.existingSrs) srs = S.setEnabled(c.existingSrs, false, c.today || "");
+    }
+    return done({ type: type, title: line(i.title, 200), text: text, evidence: type === "finding" || type === "opinion" ? para(i.evidence, 5000) : "", page: line(i.page, 40), tags: parseTags(i.tags), category: line(i.category, 60), bookIds: bookIds, researchIds: researchIds, sourceId: researchIds.length ? sourceId : "", important: i.important === true, day: c.today && isDate(c.today) ? c.today : "", linkIds: links, inbox: i.inbox === true ? true : undefined, srs: srs || undefined });
   }
 
   // ctx: { today, books, research, notes } for checking where the lesson came from.
@@ -308,25 +411,27 @@
     let target = i.targetDate || "";
     if (target && !isDate(target)) e.targetDate = "That target date isn't valid.";
     if (Object.keys(e).length) return fail(e);
-    return done({ lesson: lesson, plan: para(i.plan, 2000), sourceType: st, sourceId: sourceId, sourceLabel: sourceLabel, targetDate: target, status: status, implementedAt: status === "done" ? (isDate(i.implementedAt) ? i.implementedAt : (c.today || "")) : "" });
+    return done({ lesson: lesson, plan: para(i.plan, 2000), sourceType: st, sourceId: sourceId, sourceLabel: sourceLabel, targetDate: target, status: status, implementedAt: status === "done" ? (isDate(i.implementedAt) ? i.implementedAt : (c.today || "")) : "", inbox: i.inbox === true ? true : undefined });
   }
 
   function checkReview(input) {
     const i = input || {};
     if (!isDate(i.weekStart) || weekStart(i.weekStart) !== i.weekStart) return fail({ weekStart: "A review belongs to a week that starts on a Monday." });
-    return done({ weekStart: i.weekStart, reflection: para(i.reflection, 5000), focusNext: para(i.focusNext, 2000) });
+    return done({ weekStart: i.weekStart, reflection: para(i.reflection, 5000), struggled: para(i.struggled, 5000), applied: para(i.applied, 5000), focusNext: para(i.focusNext, 2000) });
   }
 
   // Changing a book's status from a quick control (not the full form): what else follows.
   //   Reading: the start date is filled in if there isn't one. Completed: the finish date is filled in if there isn't one and
-  //   the last page is logged (when the total is known). Anything else: the finish date is cleared.
+  //   the current page becomes the last page (when the total is known) so the bar is full. That page is NOT added to the
+  //   reading log: pages you never logged are not counted as read on the day you tapped Completed. Anything else: the
+  //   finish date is cleared.
   function withStatus(book, status, today, now) {
     if (BOOK_KEYS.indexOf(status) === -1) return book;
-    let b = Object.assign({}, book, { status: status, updatedAt: now });
+    const b = Object.assign({}, book, { status: status, updatedAt: now });
     if (status === "reading" && !b.startDate) b.startDate = today;
     if (status === "completed") {
       if (!b.endDate) b.endDate = today;
-      if (num(b.totalPages) > 0 && num(b.currentPage) < b.totalPages) b = withPage(b, b.totalPages, today, now);
+      if (num(b.totalPages) > 0 && num(b.currentPage) < b.totalPages) b.currentPage = b.totalPages;
     } else b.endDate = "";
     return b;
   }
@@ -334,7 +439,12 @@
   // (kept if it already had one) and cleared when it is taken out of Completed.
   function withResearchStatus(r, status, today, now) {
     if (RESEARCH_KEYS.indexOf(status) === -1) return r;
-    return Object.assign({}, r, { status: status, completedAt: status === "completed" ? (r.completedAt || today) : "", updatedAt: now });
+    const next = Object.assign({}, r, { status: status, completedAt: status === "completed" ? (r.completedAt || today) : "", updatedAt: now });
+    if (status !== "completed") next.archived = undefined;                 // only completed projects are archived
+    return next;
+  }
+  function withArchived(r, archived, now) {
+    return r.status === "completed" ? Object.assign({}, r, { archived: archived ? true : undefined, updatedAt: now }) : r;
   }
   function withActionStatus(a, status, today, now) {
     if (ACTION_KEYS.indexOf(status) === -1) return a;
@@ -378,7 +488,9 @@
       if (f.active && r.status !== "researching" && r.status !== "analyzing") return false;
       if (f.priority && r.priority !== f.priority) return false;
       if (f.category && cmpText(r.category, f.category) !== 0) return false;
-      return !f.q || matchesQuery(f.q, haystack([r.title, r.category, r.question, r.purpose, r.conclusion].concat((r.sources || []).map(function (s) { return s.title + " " + s.url; }))));
+      // archived projects are hidden unless asked for: f.archived "show" lists everything, "only" lists just the archived ones
+      if (f.archived === "only" ? !r.archived : (f.archived !== "show" && r.archived)) return false;
+      return !f.q || matchesQuery(f.q, haystack([r.title, r.category, r.question, r.purpose, r.conclusion].concat((r.sources || []).map(function (s) { return s.title + " " + s.url + " " + (s.credibility || ""); }), (r.checklist || []).map(function (x) { return x.text; }))));
     });
     const sorts = {
       priority: function (a, b) { return PRIO_RANK[a.priority] - PRIO_RANK[b.priority] || num(b.updatedAt) - num(a.updatedAt); },
@@ -411,6 +523,8 @@
       if (f.bookId && (n.bookIds || []).indexOf(f.bookId) === -1) return false;
       if (f.researchId && (n.researchIds || []).indexOf(f.researchId) === -1) return false;
       if (f.important && !n.important) return false;
+      if (f.inbox && !n.inbox) return false;
+      if (f.remember && !(n.srs && n.srs.on)) return false;
       if (f.category && cmpText(noteCategory(n, state), f.category) !== 0) return false;
       const d = dayOfRecord(n);
       if (f.from && (!d || d < f.from)) return false;
@@ -464,6 +578,16 @@
 
   function notesFor(notes, kind, id) { return live(notes).filter(function (n) { return (kind === "book" ? (n.bookIds || []) : (n.researchIds || [])).indexOf(id) !== -1; }); }
   function actionsFor(actions, kind, id) { return live(actions).filter(function (a) { return a.sourceType === kind && a.sourceId === id; }); }
+
+  // Things saved with Quick Capture that have not been organised yet: notes, actions and flashcards, newest first.
+  // -> [{ kind: "notes" | "actions" | "cards", record }]
+  function inboxItems(state) {
+    const out = [];
+    ["notes", "actions", "cards"].forEach(function (kind) {
+      live(state && state[kind]).forEach(function (r) { if (r.inbox) out.push({ kind: kind, record: r }); });
+    });
+    return out.sort(function (a, b) { return num(b.record.createdAt) - num(a.record.createdAt); });
+  }
 
   /* ---------------- dashboard ---------------- */
 
@@ -542,15 +666,16 @@
   }
 
   return {
-    KEYS: KEYS, TOMBSTONE_DAYS: TOMBSTONE_DAYS, MAX_COVER_CHARS: MAX_COVER_CHARS, MAX_LOG: MAX_LOG,
-    BOOK_STATUS: BOOK_STATUS, RESEARCH_STATUS: RESEARCH_STATUS, PRIORITY: PRIORITY, ACTION_STATUS: ACTION_STATUS, NOTE_TYPE: NOTE_TYPE, SOURCE_KIND: SOURCE_KIND, labelOf: labelOf,
+    KEYS: KEYS, PREFIX: PREFIX, registerKind: registerKind, kinds: kinds, TOMBSTONE_DAYS: TOMBSTONE_DAYS, MAX_COVER_CHARS: MAX_COVER_CHARS, MAX_LOG: MAX_LOG,
+    BOOK_STATUS: BOOK_STATUS, RESEARCH_STATUS: RESEARCH_STATUS, PRIORITY: PRIORITY, ACTION_STATUS: ACTION_STATUS, NOTE_TYPE: NOTE_TYPE, SOURCE_KIND: SOURCE_KIND, SOURCE_STATE: SOURCE_STATE, SRS_TYPES: SRS_TYPES, labelOf: labelOf,
     isDate: isDate, addDays: addDays, diffDays: diffDays, weekStart: weekStart, localDate: localDate,
     live: live, stamp: stamp, tombstone: tombstone, restore: restore, purge: purge,
     parseTags: parseTags, cleanUrl: cleanUrl, hostOf: hostOf, coverOk: coverOk,
-    progress: progress, pagesLeft: pagesLeft, withPage: withPage, pagesInRange: pagesInRange, lastLogged: lastLogged,
+    progress: progress, pagesLeft: pagesLeft, withPage: withPage, dailyPages: dailyPages, pagesInRange: pagesInRange, lastLogged: lastLogged,
     readList: readList, readBook: readBook, readResearch: readResearch, readNote: readNote, readAction: readAction, readReview: readReview,
     checkBook: checkBook, checkResearch: checkResearch, checkSource: checkSource, checkNote: checkNote, checkAction: checkAction, checkReview: checkReview,
-    withStatus: withStatus, withResearchStatus: withResearchStatus, withActionStatus: withActionStatus,
+    withStatus: withStatus, withResearchStatus: withResearchStatus, withArchived: withArchived, withActionStatus: withActionStatus,
+    TEMPLATES: TEMPLATES, checklistFromTemplate: checklistFromTemplate, cleanChecklist: cleanChecklist, checklistProgress: checklistProgress, toggleChecklistItem: toggleChecklistItem, inboxItems: inboxItems,
     filterBooks: filterBooks, filterResearch: filterResearch, filterNotes: filterNotes, filterActions: filterActions, noteCategory: noteCategory,
     allTags: allTags, allCategories: allCategories, notesFor: notesFor, actionsFor: actionsFor,
     stats: stats, currentBooks: currentBooks, activeResearch: activeResearch, recentNotes: recentNotes, upcomingActions: upcomingActions, weeklyReview: weeklyReview

@@ -17,8 +17,9 @@
   "use strict";
 
   const L = window.JarvisLearningLogic;
-  const KINDS = ["books", "research", "notes", "actions", "reviews"];
-  const PREFIX = { books: "bk", research: "rs", notes: "nt", actions: "ac", reviews: "wk" };
+  // The lists: the first five are built in; the rest (flashcards, goals, reading sessions, collections) are added by the modules that
+  // define them (L.registerKind), so this is read when the store starts, after every module has loaded.
+  let KINDS = ["books", "research", "notes", "actions", "reviews"];
   let data = {}, kept = {}, loadError = {}, saveError = "";
   let started = false;
   const listeners = [];
@@ -65,11 +66,11 @@
 
   const api = {
     KINDS: KINDS,
-    init: function () { if (started) return; started = true; load(); },
+    init: function () { if (started) return; started = true; KINDS = L.kinds(); api.KINDS = KINDS; load(); },
     reload: function () { load(); KINDS.forEach(emit); },
     // Every record of a kind, deleted ones included (the logic functions skip those themselves).
     all: function (kind) { return data[kind] || []; },
-    state: function () { return { books: data.books, research: data.research, notes: data.notes, actions: data.actions, reviews: data.reviews }; },
+    state: function () { const out = {}; KINDS.forEach(function (k) { out[k] = data[k] || []; }); return out; },
     // Live records only.
     list: function (kind) { return L.live(data[kind]); },
     get: function (kind, id) { const r = find(kind, id); return r && !r.deletedAt ? r : null; },
@@ -82,7 +83,7 @@
     // A new record from checked form values. -> the record, or null if it couldn't be saved.
     add: function (kind, value, extra) {
       const now = Date.now();
-      const rec = Object.assign({ id: core().uid(PREFIX[kind]), createdAt: now, updatedAt: now }, value, extra || {});
+      const rec = Object.assign({ id: core().uid(L.PREFIX[kind]), createdAt: now, updatedAt: now }, value, extra || {});
       return commit(kind, data[kind].concat([rec])) ? rec : null;
     },
     // Replaces a record by id with a whole new version (use after a logic function built it, or with patch values).
@@ -106,38 +107,43 @@
       const back = L.restore(cur, Date.now());
       return commit(kind, data[kind].map(function (r) { return r.id === id ? back : r; })) ? back : null;
     },
-    // Deleting a book or research project leaves its notes and actions in the library: this unlinks them so nothing
+    // Deleting a book or research project leaves its notes, flashcards and actions in the library: this unlinks them so nothing
     // points at something that no longer exists. An action keeps where it was learned as plain text (label).
     // Returns the changes made so Undo can put them back.
     unlinkFrom: function (kind, id, label) {
-      const changes = { notes: [], actions: [] };
+      const changes = { notes: [], cards: [], collections: [], actions: [] };
       const now = Date.now();
       const field = kind === "book" ? "bookIds" : "researchIds";
-      const nextNotes = data.notes.map(function (n) {
-        if ((n[field] || []).indexOf(id) === -1) return n;
-        changes.notes.push(n);
-        const c = Object.assign({}, n, { updatedAt: now });
-        c[field] = n[field].filter(function (x) { return x !== id; });
-        if (field === "researchIds" && !c.researchIds.length) c.sourceId = "";
-        return c;
+      ["notes", "cards", "collections"].forEach(function (k) {
+        if (!data[k]) return;
+        const next = data[k].map(function (r) {
+          if ((r[field] || []).indexOf(id) === -1) return r;
+          changes[k].push(r);
+          const c = Object.assign({}, r, { updatedAt: now });
+          c[field] = r[field].filter(function (x) { return x !== id; });
+          if (k === "notes" && field === "researchIds" && !c.researchIds.length) c.sourceId = "";
+          return c;
+        });
+        if (changes[k].length) commit(k, next);
       });
       const nextActions = data.actions.map(function (a) {
         if (a.sourceType !== kind || a.sourceId !== id) return a;
         changes.actions.push(a);
         return Object.assign({}, a, label ? { sourceType: "other", sourceId: "", sourceLabel: label, updatedAt: now } : { sourceType: "none", sourceId: "", updatedAt: now });
       });
-      if (changes.notes.length) commit("notes", nextNotes);
       if (changes.actions.length) commit("actions", nextActions);
       return changes;
     },
     relink: function (changes) {
       if (!changes) return;
       const now = Date.now();
-      const nByid = {}, aByid = {};
-      (changes.notes || []).forEach(function (n) { nByid[n.id] = n; });
-      (changes.actions || []).forEach(function (a) { aByid[a.id] = a; });
-      if ((changes.notes || []).length) commit("notes", data.notes.map(function (n) { return nByid[n.id] ? Object.assign({}, nByid[n.id], { updatedAt: now }) : n; }));
-      if ((changes.actions || []).length) commit("actions", data.actions.map(function (a) { return aByid[a.id] ? Object.assign({}, aByid[a.id], { updatedAt: now }) : a; }));
+      Object.keys(changes).forEach(function (k) {
+        const list = changes[k] || [];
+        if (!list.length || !data[k]) return;
+        const by = {};
+        list.forEach(function (r) { by[r.id] = r; });
+        commit(k, data[k].map(function (r) { return by[r.id] ? Object.assign({}, by[r.id], { updatedAt: now }) : r; }));
+      });
     }
   };
 

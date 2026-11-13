@@ -13,12 +13,17 @@
   if (!A) return;
   const L = A.L, store = A.store, esc = A.esc;
 
-  const TYPE_LABEL = { takeaway: "Takeaway", chapter: "Chapter summary", quote: "Quote", reflection: "Reflection", finding: "Finding", note: "Note" };
+  const SRS = window.JarvisLearningSRS;
+  // The heading over the main text box, by kind of note.
+  const TEXT_LABEL = { takeaway: "Takeaway", chapter: "Chapter summary", quote: "Quote", reflection: "Reflection", finding: "Finding", opinion: "My opinion", idea: "Research idea", question: "Question to investigate", note: "Note" };
+  const EVIDENCE_LABEL = { finding: "Supporting evidence", opinion: "Why I think this" };
+  function typeLabel(t) { return L.labelOf(L.NOTE_TYPE, t) || "Note"; }
+  function canRemember(type) { return L.SRS_TYPES.indexOf(type) !== -1; }
 
   /* ---------------- one note, as a fold-out card ---------------- */
 
   function noteCard(n) {
-    const S = store.state(), key = "note_" + n.id, isOpen = !!A.state.open[key];
+    const key = "note_" + n.id, isOpen = !!A.state.open[key], today = store.today();
     const title = n.title || A.snippet(n.text, 100);
     const links = [];
     (n.bookIds || []).forEach(function (id) { const b = store.get("books", id); if (b) links.push('<button type="button" class="ln-link-btn" data-go="books" data-id="' + esc(id) + '">' + esc(b.title) + '</button>'); });
@@ -26,18 +31,31 @@
     let src = null;
     if (n.sourceId) (n.researchIds || []).forEach(function (id) { const r = store.get("research", id); const s = r && r.sources.filter(function (x) { return x.id === n.sourceId; })[0]; if (s) src = s; });
     const day = n.day || (n.createdAt ? L.localDate(n.createdAt) : "");
+    const due = SRS.isDue(n.srs, today), reviewable = canRemember(n.type);
+    const reviewLine = !reviewable ? "" : n.srs && n.srs.on
+      ? '<p class="ln-item-sub ln-review-line">Spaced repetition: ' + esc(A.srsLabel(n.srs)) + (n.srs.reviews.length ? " · reviewed " + A.plural(n.srs.reviews.filter(function (r) { return !r.p; }).length, "time") : "") + '</p>'
+      : '<p class="ln-item-sub ln-review-line">Not being reviewed.</p>';
+    const reviewBtns = !reviewable ? "" : n.srs && n.srs.on
+      ? '<button type="button" class="btn btn-secondary" data-act="note-pause" data-id="' + esc(n.id) + '">' + (n.srs.paused ? "Resume reviews" : "Pause reviews") + '</button>' +
+        '<button type="button" class="btn btn-secondary" data-act="note-remember" data-id="' + esc(n.id) + '" data-on="0">Stop reviewing</button>'
+      : '<button type="button" class="btn btn-secondary" data-act="note-remember" data-id="' + esc(n.id) + '" data-on="1">Remember this</button>';
     return '<details class="ln-note' + (n.title ? "" : " ln-note-plain") + '" id="lnnote_' + esc(n.id) + '" data-keep="' + esc(key) + '"' + (isOpen ? " open" : "") + '>' +
-      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", TYPE_LABEL[n.type] || "Note") + (n.important ? A.badge("yellow", "★ Starred") : "") + '</span>' +
+      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", typeLabel(n.type)) + (n.important ? A.badge("yellow", "★ Starred") : "") + (due ? A.badge("red", "Review due") : "") + (n.inbox ? A.badge("neutral", "To organize") : "") + '</span>' +
       '<span class="ln-note-title">' + esc(title) + '</span><span class="ln-item-sub">' + esc([day ? A.fmtShort(day) : "", A.noteSource(n)].filter(Boolean).join(" · ")) + '</span></summary>' +
       '<div class="ln-note-body">' +
       (n.type === "quote" ? '<blockquote class="ln-quote">' + esc(n.text) + '</blockquote>' : '<p class="ln-text">' + esc(n.text) + '</p>') +
-      (n.evidence ? '<p class="ln-h4">Supporting evidence</p><p class="ln-text">' + esc(n.evidence) + '</p>' : "") +
+      (n.evidence ? '<p class="ln-h4">' + esc(EVIDENCE_LABEL[n.type] || "Supporting evidence") + '</p><p class="ln-text">' + esc(n.evidence) + '</p>' : "") +
       (n.page ? '<p class="ln-item-sub">Page or chapter: ' + esc(n.page) + '</p>' : "") +
       (src ? '<p class="ln-item-sub">Source: <a class="ln-link" href="' + esc(src.url) + '" target="_blank" rel="noopener noreferrer">' + esc(src.title) + '<span class="visually-hidden"> (opens in a new tab)</span></a></p>' : "") +
       (n.tags && n.tags.length ? '<div class="ln-chips" role="group" aria-label="Topics">' + n.tags.map(function (t) { return '<button type="button" class="ln-chip" data-act="tag-filter" data-tag="' + esc(t) + '">#' + esc(t) + '</button>'; }).join("") + '</div>' : "") +
       (links.length ? '<p class="ln-links"><span class="ln-item-sub">Linked to</span> ' + links.join(" ") + '</p>' : "") +
+      (A.relatedHtml ? A.relatedHtml(n) : "") +
+      reviewLine +
       '<div class="ln-item-btns ln-note-btns"><button type="button" class="btn btn-secondary" data-act="note-edit" data-id="' + esc(n.id) + '">Edit</button>' +
       '<button type="button" class="btn btn-secondary" data-act="note-star" data-id="' + esc(n.id) + '" aria-pressed="' + (!!n.important) + '">' + (n.important ? "Unstar" : "Star") + '</button>' +
+      (n.inbox ? '<button type="button" class="btn btn-secondary" data-act="note-organized" data-id="' + esc(n.id) + '">Mark organized</button>' : "") +
+      reviewBtns +
+      '<button type="button" class="btn btn-secondary" data-act="note-flashcard" data-id="' + esc(n.id) + '">Make a flashcard</button>' +
       '<button type="button" class="btn btn-secondary" data-act="note-action" data-id="' + esc(n.id) + '">Turn into an action</button>' +
       '<button type="button" class="btn btn-secondary ln-danger" data-act="note-delete" data-id="' + esc(n.id) + '">Delete</button></div></div></details>';
   }
@@ -56,11 +74,17 @@
     const n = note || { type: L.NOTE_TYPE.some(function (t) { return t.key === p.type; }) ? p.type : "takeaway", title: "", text: p.text || "", evidence: "", page: "", tags: p.tags || [], category: "", bookIds: p.bookIds || [], researchIds: p.researchIds || [], sourceId: p.sourceId || "", important: false };
     const S = store.state(), books = store.list("books"), research = store.list("research");
     const topTags = L.allTags(S.notes).slice(0, 8);
+    const moreOpen = !isNew || (n.bookIds || []).length || (n.researchIds || []).length || (n.tags || []).length;
+    const remembered = !!(n.srs && n.srs.on);
+    // The two things that matter come first (what kind, and the words); everything else is one tap away.
     const body =
       A.fSelect("type", "Kind of note", A.opts(L.NOTE_TYPE), n.type, { required: true }) +
+      A.fArea("text", TEXT_LABEL[n.type] || "Note", n.text, { rows: 5, max: 10000, required: true }) +
+      '<div id="lnRememberRow" class="form-row"><label class="ln-check"><input type="checkbox" name="remember"' + (remembered ? " checked" : "") + '><span>Remember this: review it after 1, 3, 7, 14 and 30 days</span></label>' +
+      '<p class="field-hint">' + (remembered ? esc(A.srsLabel(n.srs)) + ". Unticking stops the reviews and keeps your history." : "Spaced repetition. You’ll be asked to recall it and can answer Easy, Good, Hard or Forgot.") + '</p></div>' +
+      '<div id="lnEvRow">' + A.fArea("evidence", EVIDENCE_LABEL[n.type] || "Supporting evidence", n.evidence, { rows: 3, max: 5000, placeholder: "What backs this up? A figure, a quote, a link…" }) + '</div>' +
+      '<details class="ln-more"' + (moreOpen ? " open" : "") + '><summary>More details: title, topics, links</summary>' +
       A.fText("title", "Title", n.title, { max: 200, hint: "Optional. A short heading makes it easier to find." }) +
-      A.fArea("text", TYPE_LABEL[n.type] || "Note", n.text, { rows: 5, max: 10000, required: true }) +
-      '<div id="lnEvRow">' + A.fArea("evidence", "Supporting evidence", n.evidence, { rows: 3, max: 5000, placeholder: "What backs this finding up? A figure, a quote, a link…" }) + '</div>' +
       A.fText("page", "Page or chapter", n.page, { max: 40, placeholder: "p. 112, Chapter 4…" }) +
       A.fText("tags", "Topics", (n.tags || []).join(", "), { max: 200, placeholder: "habits, sleep, pricing", hint: "Separate topics with commas." }) +
       (topTags.length ? '<div class="ln-chips" role="group" aria-label="Your topics">' + topTags.map(function (t) { return '<button type="button" class="ln-chip" data-sheet-act="tag-add" data-tag="' + esc(t.tag) + '">#' + esc(t.tag) + '</button>'; }).join("") + '</div>' : "") +
@@ -68,12 +92,15 @@
       checks("bookIds", books, n.bookIds || [], "Link to books") + checks("researchIds", research, n.researchIds || [], "Link to research projects") +
       (!books.length && !research.length ? '<p class="field-hint">Add a book or a research project and you can link notes to it.</p>' : "") +
       '<div id="lnSrcRow" hidden>' + A.fSelect("sourceId", "Source", [["", "No specific source"]], "", {}) + '</div>' +
-      '<div class="form-row"><label class="ln-check"><input type="checkbox" name="important"' + (n.important ? " checked" : "") + '><span>Mark as important</span></label></div>';
+      (A.linkPickerHtml ? A.linkPickerHtml(note) : "") +
+      '<div class="form-row"><label class="ln-check"><input type="checkbox" name="important"' + (n.important ? " checked" : "") + '><span>Mark as important</span></label></div></details>';
 
     function sync(el) {
       const type = el.querySelector("#lnf_type").value;
-      el.querySelector("#lnEvRow").hidden = type !== "finding";
-      el.querySelector('label[for="lnf_text"]').firstChild.textContent = TYPE_LABEL[type] || "Note";
+      el.querySelector("#lnEvRow").hidden = !EVIDENCE_LABEL[type];
+      el.querySelector("#lnRememberRow").hidden = !canRemember(type);
+      el.querySelector('label[for="lnf_text"]').firstChild.textContent = TEXT_LABEL[type] || "Note";
+      if (EVIDENCE_LABEL[type]) el.querySelector('label[for="lnf_evidence"]').firstChild.textContent = EVIDENCE_LABEL[type];
       // The source menu lists the sources of the linked research projects.
       const ids = Array.prototype.filter.call(el.querySelectorAll('input[name="researchIds"]:checked'), function () { return true; }).map(function (c) { return c.value; });
       const opts = [["", "No specific source"]];
@@ -95,12 +122,12 @@
         }
       },
       onSubmit: function (v) {
-        const r = L.checkNote(v, { today: store.today(), books: books, research: research });
+        const r = L.checkNote(v, { today: store.today(), books: books, research: research, notes: store.list("notes"), selfId: note ? note.id : "", existingSrs: note ? note.srs : null });
         if (!r.ok) return { ok: false, errors: r.errors };
         const saved = isNew ? store.add("notes", r.value) : store.put("notes", Object.assign({}, note, r.value, { day: note.day || r.value.day }));
         if (!saved) { A.saveFailed(); return { ok: false, errors: {}, message: store.error() }; }
         A.say(isNew ? "Note saved." : "Note updated.");
-        if (isNew) A.notice("Note saved.", "");
+        if (isNew) A.notice(saved.srs && saved.srs.on ? "Note saved. First review " + A.fmtShort(saved.srs.due) + "." : "Note saved.", "");
         return { ok: true };
       }
     });
@@ -116,6 +143,10 @@
   function noteClick(act, el) {
     const id = el.getAttribute("data-id");
     if (act === "note-edit") { const n = store.get("notes", id); if (n) editNote(n); return true; }
+    if (act === "note-remember") { const n = store.get("notes", id); if (n) { const on = el.getAttribute("data-on") === "1"; if (!store.patch("notes", id, { srs: SRS.setEnabled(n.srs || null, on, store.today()) })) A.saveFailed(); else A.say(on ? "Spaced repetition on. First review " + A.fmtShort(store.get("notes", id).srs.due) + "." : "Reviews stopped."); } return true; }
+    if (act === "note-pause") { const n = store.get("notes", id); if (n && n.srs) { const next = n.srs.paused ? SRS.resume(n.srs, store.today()) : SRS.pause(n.srs); if (!store.patch("notes", id, { srs: next })) A.saveFailed(); else A.say(next.paused ? "Reviews paused." : "Reviews resumed."); } return true; }
+    if (act === "note-organized") { if (!store.patch("notes", id, { inbox: undefined })) A.saveFailed(); return true; }
+    if (act === "note-flashcard") { const n = store.get("notes", id); if (n && A.editCard) A.editCard(null, { question: "", answer: n.text, bookIds: n.bookIds, researchIds: n.researchIds, tags: n.tags, noteId: n.id }); return true; }
     if (act === "note-star") { const n = store.get("notes", id); if (n && !store.patch("notes", id, { important: !n.important })) A.saveFailed(); return true; }
     if (act === "note-delete") { deleteNote(id); return true; }
     if (act === "note-action") {
@@ -157,6 +188,7 @@
     const S = store.state();
     const tags = L.allTags(S.notes), cats = L.allCategories(S);
     return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Knowledge</h2><button type="button" class="btn btn-primary" data-act="add-note-lib">+ Add note</button></div>' +
+      (A.inboxHtml ? A.inboxHtml() : "") +
       A.toolbar("knowledge", [
         { name: "q", kind: "search", label: "Search all notes", placeholder: "Search your notes" },
         { name: "type", kind: "select", label: "Filter by kind of note", options: [["", "All kinds"]].concat(L.NOTE_TYPE.map(function (t) { return [t.key, t.label]; })) },
@@ -188,6 +220,8 @@
   });
   A.quickAdd.note = function () { editNote(null, { type: "takeaway" }); };
   A.noteCard = noteCard;
+  A.checks = checks;
+  A.typeLabel = typeLabel;
   A.editNote = editNote;
   A.noteClick = noteClick;
 })();

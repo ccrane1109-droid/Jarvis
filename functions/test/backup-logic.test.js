@@ -20,7 +20,9 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisDisciplineDrafts", // unsaved typing in the Discipline forms; stays on the phone
   "jarvisWorkoutDraft",     // the workout in progress: on the phone only, so an old cloud copy can never replace a newer one
   "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft", // the new logger's bookkeeping and its one-time safety copy
-  "jarvisRetiredState"];    // whether the leftovers of the removed sections have been erased on this device
+  "jarvisRetiredState",
+  "jarvisLearnTimer",       // a reading timer that is running right now: this phone only (a timer on two devices at once would be wrong)
+  "jarvisLearnCaptureType"]; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {
   const used = new Set();
@@ -288,7 +290,7 @@ test("calendar events: a deletion on one device reaches the other, and an undo w
 });
 
 test("learning hub: books, research, notes, actions and reviews are backed up and merged by record", () => {
-  const keys = ["jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews"];
+  const keys = ["jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews", "jarvisLearnCards", "jarvisLearnGoals", "jarvisLearnSessions", "jarvisLearnCollections"];
   keys.forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k + " is in the backup list"));
   const rec = (o) => Object.assign({ id: "r1", title: "Atomic Habits", createdAt: 100, updatedAt: 100 }, o);
   keys.forEach((k) => {

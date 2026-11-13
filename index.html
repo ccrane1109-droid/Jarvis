@@ -136,7 +136,7 @@
           <div class="backup-title" id="backupTitle">Cloud backup</div>
           <div class="backup-status" id="backupStatus" role="status" aria-live="polite" data-tone="off">Sign in to back up your workouts, food log, tasks, goals and Discipline to your account.</div>
           <button type="button" class="btn backup-btn hidden" id="backupNowBtn"></button>
-          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, calendar events, Discipline, Wake check, groceries, form-check history, the Learning hub (books, research, notes, actions, reviews). Workouts, habits and the rest sync separately.</p>
+          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, calendar events, Discipline, Wake check, groceries, form-check history, the Learning hub (books, research, notes, flashcards, goals, reading time, collections, actions, reviews). Workouts, habits and the rest sync separately.</p>
           <div class="backup-help hidden" id="backupHelp">
             <p>Backup needs one update to your Firebase security rules, which only you can deploy. In Cloud Shell, run these one at a time:</p>
             <pre>cd ~/Jarvis
@@ -2655,10 +2655,12 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="sub-nav-btn" data-ln="research">Research</button>
       <button type="button" class="sub-nav-btn" data-ln="knowledge">Knowledge</button>
       <button type="button" class="sub-nav-btn" data-ln="actions">Actions</button>
-      <button type="button" class="sub-nav-btn" data-ln="review">Review</button>
+      <button type="button" class="sub-nav-btn" data-ln="study">Study</button>
+      <button type="button" class="sub-nav-btn" data-ln="review">Weekly</button>
     </nav>
     <div id="lnView"></div>
     <div id="lnUndo" class="ln-undo hidden"></div>
+    <button type="button" id="lnFab" class="ln-fab" aria-haspopup="dialog">+ Capture</button>
   </section>
 
 </main>
@@ -3176,7 +3178,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/retired-data.js?v=78"></script>
 <script src="js/retired-ui.js?v=78"></script>
 <script src="js/shopify-ui.js?v=78"></script>
+<script src="js/learning-srs.js?v=78"></script>
 <script src="js/learning-logic.js?v=78"></script>
+<script src="js/learning-cards-logic.js?v=78"></script>
 <script src="js/learning-store.js?v=78"></script>
 <script src="js/learning-ui.js?v=78"></script>
 <script src="js/learning-books-ui.js?v=78"></script>
@@ -3184,5 +3188,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/learning-library-ui.js?v=78"></script>
 <script src="js/learning-actions-ui.js?v=78"></script>
 <script src="js/learning-review-ui.js?v=78"></script>
+<script src="js/learning-study-ui.js?v=78"></script>
+<script src="js/learning-capture-ui.js?v=78"></script>
 </body>
 </html>

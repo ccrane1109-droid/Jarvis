@@ -45,6 +45,8 @@
     "jarvisCalendarEvents", "jarvisCalendarSettings",
     // The Learning & Research Hub: books, research projects, notes, actions and weekly reviews (each a list of records with ids).
     "jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews",
+    // ...and the later additions: flashcards, learning goals, reading-time sessions, and collections of knowledge.
+    "jarvisLearnCards", "jarvisLearnGoals", "jarvisLearnSessions", "jarvisLearnCollections",
     // The workout family. These lived in the original shared document (whole value per key, the cloud copy winning at
     // sign-in, failed uploads silent). They are here now so a save that never reached the cloud is not replaced by an older
     // cloud copy, and two devices' workouts are combined rather than one overwriting the other. LEGACY_KEYS below.
@@ -274,6 +276,7 @@
     jarvisCalendarEvents: mergeById, jarvisCalendarSettings: mergeNewest,
     // deleted records stay as tombstones (deletedAt, with a newer updatedAt) for 30 days so a deletion reaches the other device
     jarvisLearnBooks: mergeById, jarvisLearnResearch: mergeById, jarvisLearnNotes: mergeById, jarvisLearnActions: mergeById, jarvisLearnReviews: mergeById,
+    jarvisLearnCards: mergeById, jarvisLearnGoals: mergeById, jarvisLearnSessions: mergeById, jarvisLearnCollections: mergeById,
     jarvisGroceryPantry: mergeMapNewest,
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,

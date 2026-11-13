@@ -22,11 +22,11 @@
   const store = window.JarvisLearningStore;
   const TABS = [["dashboard", "Dashboard"], ["books", "Books"], ["research", "Research"], ["knowledge", "Knowledge"], ["actions", "Actions"], ["review", "Review"]];
   const views = {};
-  const DEFAULT_FILTERS = { books: { sort: "recent" }, research: { sort: "recent" }, knowledge: { sort: "newest" }, actions: { sort: "date" } };
+  const DEFAULT_FILTERS = { books: { sort: "recent" }, research: { sort: "recent" }, knowledge: { sort: "newest" }, actions: { sort: "date" }, study: { sort: "newest" } };
   // What is open: which section, and (for a detail page) which record. Filters are remembered while the app is open.
   const state = {
     tab: "dashboard", id: "",
-    filters: { books: { sort: "recent" }, research: { sort: "recent" }, knowledge: { sort: "newest" }, actions: { sort: "date" } },
+    filters: { books: { sort: "recent" }, research: { sort: "recent" }, knowledge: { sort: "newest" }, actions: { sort: "date" }, study: { sort: "newest" } },
     week: "", openNote: "", open: {}
   };
   function filtersActive(tab) {
@@ -72,6 +72,24 @@
   function progressText(b) {
     const p = L.progress(b);
     return p === null ? (b.currentPage > 0 ? "Page " + b.currentPage : "") : "Page " + b.currentPage + " of " + b.totalPages + " · " + p + "%";
+  }
+
+  // The words for a review schedule: "Due today", "Overdue by 3 days", "Next review Nov 14 (in 5 days)", "Paused", "Not in the schedule".
+  function srsLabel(state) {
+    const S = window.JarvisLearningSRS, w = S.when(state, store.today());
+    if (w.kind === "off") return "Not in the review schedule";
+    if (w.kind === "paused") return "Reviews paused";
+    if (w.kind === "overdue") return "Overdue by " + plural(w.days, "day");
+    if (w.kind === "today") return "Due today";
+    return "Next review " + fmtShort(state.due) + " (in " + plural(w.days, "day") + ")";
+  }
+  // A small bar chart: items [{ label, value, title }]. Heights are relative to the biggest value; a zero is an empty slot, never a guess.
+  function bars(items, aria, unit) {
+    const max = items.reduce(function (m, x) { return Math.max(m, x.value); }, 0);
+    return '<ul class="ln-bars" aria-label="' + esc(aria) + '">' + items.map(function (x) {
+      const h = max > 0 && x.value > 0 ? Math.max(4, Math.round(x.value / max * 100)) : 0;
+      return '<li class="ln-bars-col"><span class="ln-bars-track" aria-hidden="true"><span class="ln-bars-fill" style="height:' + h + '%"></span></span><span class="ln-bars-l" aria-hidden="true">' + esc(x.label) + '</span><span class="visually-hidden">' + esc(x.title || (x.label + ": " + x.value + (unit ? " " + unit : ""))) + '</span></li>';
+    }).join("") + '</ul>';
   }
 
   function ctx() {
@@ -309,7 +327,7 @@
   }
   // If something stored couldn't be read, say so on every screen: that list is hidden and is never saved over.
   function integrityBanner() {
-    const names = { books: "Books", research: "Research", notes: "Notes", actions: "Actions", reviews: "Weekly reviews" };
+    const names = { books: "Books", research: "Research", notes: "Notes", actions: "Actions", reviews: "Weekly reviews", cards: "Flashcards", goals: "Goals", sessions: "Reading time", collections: "Collections" };
     const bad = store.KINDS.filter(function (k) { return store.blocked(k); });
     if (!bad.length) return "";
     return '<div class="ln-warn" role="alert"><strong>Some saved ' + esc(bad.map(function (k) { return names[k]; }).join(", ")) + ' could not be read.</strong> ' +
@@ -385,6 +403,7 @@
 
   const shared = {
     click: function (act, el) {
+      if (api.acts[act]) { api.acts[act](el, act); return true; }
       if (act === "status-book") { setBookStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
       if (act === "status-action") { setActionStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
       if (act.indexOf("note-") === 0 || act === "tag-filter") return api.noteClick ? api.noteClick(act, el) : false;
@@ -413,6 +432,8 @@
         '<div class="ln-quick" role="group" aria-label="Add something">' +
         '<button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="book">+ Book</button><button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="research">+ Research</button>' +
         '<button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="note">+ Note</button><button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="action">+ Action</button></div>';
+      // cards other sections add at the top of the Dashboard (Review Knowledge, Goals, Captured)
+      api.dashTop.forEach(function (fn) { try { h += fn(S, today) || ""; } catch (e) { if (window.console) console.error(e); } });
 
       h += '<div class="ln-cols">';
       const books = L.currentBooks(S);
@@ -526,8 +547,8 @@
     fText: fText, fArea: fArea, fSelect: fSelect, rowHtml: rowHtml, opts: opts, datalist: datalist, formValues: formValues, showErrors: showErrors,
     toolbar: toolbar, filtersActive: filtersActive, DEFAULT_FILTERS: DEFAULT_FILTERS,
     openSheet: openSheet, closeSheet: closeSheet, confirmSheet: confirmSheet,
-    setBookStatus: setBookStatus, setActionStatus: setActionStatus,
-    quickAdd: {}
+    setBookStatus: setBookStatus, setActionStatus: setActionStatus, srsLabel: srsLabel, bars: bars,
+    quickAdd: {}, acts: {}, dashTop: []
   };
   window.JarvisLearning = api;
 })();

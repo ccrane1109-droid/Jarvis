@@ -84,14 +84,18 @@ const APP_SHELL = [
   "./js/retired-data.js?v=78",
   "./js/retired-ui.js?v=78",
   "./js/shopify-ui.js?v=78",
+  "./js/learning-srs.js?v=78",
   "./js/learning-logic.js?v=78",
+  "./js/learning-cards-logic.js?v=78",
   "./js/learning-store.js?v=78",
   "./js/learning-ui.js?v=78",
   "./js/learning-books-ui.js?v=78",
   "./js/learning-research-ui.js?v=78",
   "./js/learning-library-ui.js?v=78",
   "./js/learning-actions-ui.js?v=78",
-  "./js/learning-review-ui.js?v=78"
+  "./js/learning-review-ui.js?v=78",
+  "./js/learning-study-ui.js?v=78",
+  "./js/learning-capture-ui.js?v=78"
 ];
 
 // Push notifications (reminders). The rules live in js/push-handlers.js so they can be tested.
