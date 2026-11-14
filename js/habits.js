@@ -1018,6 +1018,29 @@
 
   function handleJumpToToday() { selectDate(window.JarvisCore.todayISODate()); }
 
+  // The app can stay open past midnight (a phone's home-screen app is put to sleep, not closed), and the day shown was picked once, when
+  // it opened. Without this, the morning after, "today" still showed yesterday: the plan and the habits were yesterday's, and a task added
+  // there was put on yesterday. If you were looking at today, move on to the new today; if you were filling in another day, stay on it
+  // but refresh everything that says which day is today.
+  let clockDay = "";
+  function followTheClock() {
+    const today = window.JarvisCore.todayISODate();
+    if (!clockDay) { clockDay = today; return; }
+    if (today === clockDay) return;
+    const wasLookingAtToday = selectedDate === clockDay;
+    clockDay = today;
+    if (wasLookingAtToday) selectDate(today);
+    else {
+      daySelectorWeekOffset = Math.round((parseISODateLocal(getMondayISO(selectedDate)) - parseISODateLocal(getMondayISO(today))) / (7 * 86400000));
+      renderDaySelectorPills();
+      renderTaskList();
+      renderTodayHabitsList();
+    }
+    renderTodayOverview();
+    renderAllHabitViews();
+    renderStats();
+  }
+
   /* ==================== boot ==================== */
 
   function renderAll() {
@@ -1061,6 +1084,10 @@
 
   function init() {
     load();
+    clockDay = selectedDate;
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) followTheClock(); });
+    window.addEventListener("pageshow", followTheClock);
+    window.setInterval(followTheClock, 30000);
 
     $("taskAddToggleBtn").addEventListener("click", handleTaskAddToggle);
     $("taskForm").addEventListener("submit", handleTaskFormSubmit);

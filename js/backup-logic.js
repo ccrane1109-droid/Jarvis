@@ -269,7 +269,31 @@
     return { settings: !ls ? cs : !cs ? ls : stamp(cs) > stamp(ls) ? cs : ls, days: days };
   }
 
+  // Habits: { id, name, targetDays, dailyTarget, completions: { "YYYY-MM-DD": count }, createdAt }. Both devices' habits are kept (matched by id).
+  // Within a habit, the days from both copies are kept (a day on both: the larger count, so a tick is never lost), and the rest of it
+  // (name, targets) is this device's. A habit unticked on one device and left ticked on the other comes back ticked: that is the price of
+  // never losing a tick, and it only applies when BOTH devices changed the habits since they last agreed.
+  function mergeHabits(local, cloud) {
+    if (!Array.isArray(local)) return Array.isArray(cloud) ? cloud : local;
+    if (!Array.isArray(cloud)) return local;
+    const byId = {};
+    cloud.forEach(function (h) { if (isObj(h) && typeof h.id === "string" && h.id) byId[h.id] = h; });
+    const seen = {};
+    const out = local.map(function (h) {
+      if (!isObj(h) || typeof h.id !== "string" || !h.id) return h;
+      seen[h.id] = true;
+      const other = byId[h.id];
+      if (!other) return h;
+      const days = Object.assign({}, isObj(other.completions) ? other.completions : {});
+      Object.keys(isObj(h.completions) ? h.completions : {}).forEach(function (d) { days[d] = Math.max(Number(days[d]) || 0, Number(h.completions[d]) || 0); });
+      return Object.assign({}, h, { completions: days });
+    });
+    cloud.forEach(function (h) { if (isObj(h) && typeof h.id === "string" && h.id && !seen[h.id]) out.push(h); });
+    return out;
+  }
+
   const STRATEGY = {
+    jarvisHabits: mergeHabits,
     jarvisNutritionLog: mergeDateMeals,
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
     jarvisTasks: mergeById, jarvisGoals: mergeById, jarvisGroceryList: mergeById, jarvisGroceryMealPlan: mergeById, jarvisFormCheckHistory: mergeById,
@@ -346,6 +370,26 @@
     return out;
   }
 
+  // What to do at sign-in with a key the original sync keeps as one whole value (habits). `syncedFp` is the fingerprint of the value this
+  // device last knew to be the same as the cloud's (or undefined if it never recorded one).
+  //   "pull"  the cloud has news and this device has nothing unsent: take the cloud's (so a habit unticked elsewhere stays unticked)
+  //   "push"  only this device changed: send it
+  //   "merge" both changed (or nothing is known): keep everything from both
+  //   "same" / "none"
+  function decideStore(localText, cloudValue, syncedFp) {
+    const hasCloud = cloudValue !== undefined && cloudValue !== null;
+    if (localText === null || localText === undefined || isEmptyText(localText)) return hasCloud ? "pull" : "none";
+    if (!hasCloud) return "push";
+    let local;
+    try { local = JSON.parse(localText); } catch (e) { return "pull"; }
+    if (sameJson(local, cloudValue)) return "same";
+    if (typeof syncedFp === "number") {
+      if (fingerprint(local) === syncedFp) return "pull";
+      if (fingerprint(cloudValue) === syncedFp) return "push";
+    }
+    return "merge";
+  }
+
   // Does a cloud manifest ({ updatedAt, hash, device }) hold something this device has not seen? c:
   //   meta       what this device last confirmed with the cloud for the key: { rev, hash, pending: [hashes of its own uploads] } or null
   //   localText  what is stored here now (or null)
@@ -363,7 +407,7 @@
   }
 
   return {
-    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS, remoteNewer: remoteNewer, sameJson: sameJson, canonical: canonical, fingerprint: fingerprint, storeNews: storeNews,
+    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS, remoteNewer: remoteNewer, sameJson: sameJson, canonical: canonical, fingerprint: fingerprint, storeNews: storeNews, decideStore: decideStore, mergeHabits: mergeHabits,
     hashText: hashText, chunkText: chunkText, partId: partId, assemble: assemble, isEmptyText: isEmptyText,
     decide: decide, mergeText: mergeText, legacyShapeOk: legacyShapeOk,
     mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeWakeCheck: mergeWakeCheck

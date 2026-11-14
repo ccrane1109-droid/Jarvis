@@ -2630,6 +2630,25 @@
     resetSavedFoodForm();
     resetRecipeForm();
     renderAll();
+
+    // The app can stay open past midnight (a phone's home-screen app is put to sleep, not closed). Foods are always logged on the real
+    // current day, but the totals on screen were drawn when it was yesterday. Draw them again when the day changes.
+    nutritionDay = window.JarvisCore.todayISODate();
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) followTheClock(); });
+    window.addEventListener("pageshow", followTheClock);
+    window.setInterval(followTheClock, 30000);
+  }
+
+  let nutritionDay = "";
+  function followTheClock() {
+    const today = window.JarvisCore.todayISODate();
+    if (!nutritionDay || today === nutritionDay) return;
+    nutritionDay = today;
+    renderDashboard();
+    renderFoodLog();
+    renderNutrientsMacros();
+    renderNutrients();
+    renderHistoryList();
   }
 
   window.JarvisNutrition = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };

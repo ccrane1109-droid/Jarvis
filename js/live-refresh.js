@@ -13,6 +13,9 @@
      - the same news is acted on once: if a refresh could not absorb a revision, it is not repeated in a loop, and no more
        than one automatic refresh happens every 15 seconds.
 
+   The same goes for a new version of JARVIS itself: a home-screen app that stays open keeps running the code it started with, so the
+   phone could be on an old version for days after a deploy. When a new version takes over, it is picked up the same way.
+
    Nothing is lost by refreshing: every save is already on this device before it is uploaded, a workout in progress is kept
    as a draft, and start-up combines this device's changes with the cloud's instead of replacing them.
    ========================================================================== */
@@ -30,6 +33,7 @@
   const HANDLED_KEY = "jarvisLiveHandled";        // sessionStorage: { storageKey: newest revision already acted on }
   const REFRESHED_KEY = "jarvisLiveRefreshedAt";  // sessionStorage: when the last automatic refresh happened
   const TAB_KEY = "jarvisLiveTab";                // sessionStorage: the tabs to put back after a refresh
+  const APP_KEY = "app-version";                  // the "news" that a new version of JARVIS has taken over (not a storage key)
 
   // ctx: { visible, editing, dialogOpen, sinceRefreshMs, sinceReturnMs, interactedSinceReturn, idleMs }
   //   "wait"   the app is not on screen: decide again when it is
@@ -101,7 +105,7 @@
       pill.id = "liveRefreshPill";
       pill.className = "live-refresh-pill";
       pill.setAttribute("role", "status");
-      pill.innerHTML = '<span class="live-refresh-text">New changes from your other device.</span>' +
+      pill.innerHTML = '<span class="live-refresh-text"></span>' +
         '<button type="button" class="btn btn-primary live-refresh-go" data-live="refresh">Refresh</button>' +
         '<button type="button" class="btn btn-secondary live-refresh-later" data-live="later" aria-label="Not now">Not now</button>';
       pill.addEventListener("click", function (e) {
@@ -112,6 +116,8 @@
       });
       document.body.appendChild(pill);
     }
+    const keys = Object.keys(pending), onlyApp = keys.length === 1 && keys[0] === APP_KEY;
+    pill.querySelector(".live-refresh-text").textContent = onlyApp ? "JARVIS has been updated." : "New changes from your other device.";
     pill.classList.remove("hidden");
   }
   function hidePill() { if (pill) pill.classList.add("hidden"); }
@@ -188,6 +194,18 @@
     evaluate();
   }
 
+  // A new version of JARVIS: the service worker takes over (see sw.js: it activates at once and claims every open page). A page that
+  // had no worker yet is just being served for the first time, which needs no refresh.
+  function watchForNewVersion() {
+    if (!("serviceWorker" in navigator) || !navigator.serviceWorker) return;
+    const sw = navigator.serviceWorker, hadController = !!sw.controller;
+    sw.addEventListener("controllerchange", function () { if (hadController) notify([{ key: APP_KEY, rev: Date.now() }]); });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState !== "visible" || typeof sw.getRegistration !== "function") return;
+      sw.getRegistration().then(function (r) { if (r && typeof r.update === "function") return r.update(); }).catch(function () { /* offline: the check is tried again next time */ });
+    });
+  }
+
   function wire() {
     const touch = function () { lastTouch = Date.now(); touchedSinceReturn = true; };
     ["pointerdown", "keydown", "touchstart", "wheel"].forEach(function (t) { document.addEventListener(t, touch, { passive: true, capture: true }); });
@@ -199,6 +217,7 @@
   }
   if (hasDom) {
     restoreWhenStarted();          // registered as the script runs, so the app's start signal can never be missed
+    watchForNewVersion();
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire();
   }
 

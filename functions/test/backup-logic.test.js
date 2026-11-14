@@ -23,7 +23,8 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisRetiredState",
   "jarvisLearnTimer",       // a reading timer that is running right now: this phone only (a timer on two devices at once would be wrong)
   "jarvisLearnCaptureType",
-  "jarvisLiveHandled", "jarvisLiveRefreshedAt", "jarvisLiveTab"]   // session-only bookkeeping of the "refresh when the other device saved" feature; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
+  "jarvisLiveHandled", "jarvisLiveRefreshedAt", "jarvisLiveTab",
+  "jarvisSyncedFp"]    // the fingerprint of each whole-value key the last time it matched the cloud (this device only)   // session-only bookkeeping of the "refresh when the other device saved" feature; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {
   const used = new Set();
@@ -362,4 +363,52 @@ test("a fingerprint stands for the content, not the order of its fields", () => 
   assert.notEqual(B.fingerprint({ a: 1 }), B.fingerprint({ a: 2 }));
   assert.notEqual(B.fingerprint([1, 2]), B.fingerprint([2, 1]));
   for (const v of [null, 0, "", [], {}]) assert.ok(B.fingerprint(v) > 0, "never 0, so 'no fingerprint' stays distinct: " + JSON.stringify(v));
+});
+
+const habit = (id, days, extra) => Object.assign({ id: id, name: "Habit " + id, targetDays: 7, dailyTarget: 1, completions: days, createdAt: 1 }, extra);
+
+test("habits from two devices are combined: nothing ticked on either is lost", () => {
+  const phone = [habit("h1", { "2026-11-10": 1, "2026-11-11": 1 }), habit("h2", { "2026-11-11": 1 })];
+  const computer = [habit("h1", { "2026-11-09": 1, "2026-11-11": 1 }), habit("h3", { "2026-11-11": 1 })];
+  const m = B.mergeHabits(phone, computer);
+  assert.deepEqual(m.map((h) => h.id), ["h1", "h2", "h3"], "this device's order, then what only the other had");
+  assert.deepEqual(m[0].completions, { "2026-11-09": 1, "2026-11-10": 1, "2026-11-11": 1 }, "the days from both");
+  assert.deepEqual(B.mergeHabits([habit("c", { d1: 2 })], [habit("c", { d1: 5 })])[0].completions, { d1: 5 }, "a day on both: the larger count");
+  assert.equal(B.mergeHabits([habit("a", {}, { name: "Mine" })], [habit("a", {}, { name: "Theirs" })])[0].name, "Mine", "the habit's own fields are this device's");
+  assert.equal(B.mergeText("jarvisHabits", JSON.stringify(phone), JSON.stringify(computer)).ok, true, "and mergeText uses it for the habits key");
+  assert.deepEqual(B.mergeHabits(null, computer), computer);
+  assert.deepEqual(B.mergeHabits(phone, "junk"), phone);
+  const odd = B.mergeHabits([habit("a", {}), "junk", { name: "no id" }], [habit("a", { d: 1 })]);
+  assert.equal(odd.length, 3, "records without an id are kept, not dropped");
+  assert.deepEqual(phone[0].completions, { "2026-11-10": 1, "2026-11-11": 1 }, "the inputs are not changed");
+});
+
+test("at sign-in a whole-value key is pulled, pushed or combined depending on who changed it since they last agreed", () => {
+  const a = [habit("h1", { d1: 1 })], b = [habit("h1", { d1: 1, d2: 1 })], c = [habit("h1", { d1: 1, d3: 1 })];
+  const fpA = B.fingerprint(a);
+  const text = (v) => JSON.stringify(v);
+  assert.equal(B.decideStore(null, a, undefined), "pull", "an empty device takes the cloud's");
+  assert.equal(B.decideStore("[]", a, undefined), "pull", "an empty list counts as empty");
+  assert.equal(B.decideStore(null, undefined, undefined), "none");
+  assert.equal(B.decideStore(text(a), undefined, undefined), "push", "the cloud has nothing: send this device's");
+  assert.equal(B.decideStore(text(a), a, undefined), "same");
+  assert.equal(B.decideStore(JSON.stringify([{ completions: { d1: 1 }, id: "h1", name: "Habit h1", targetDays: 7, dailyTarget: 1, createdAt: 1 }]), a, undefined), "same", "field order does not matter");
+  assert.equal(B.decideStore(text(a), b, fpA), "pull", "this device has nothing unsent: the cloud's newer copy is taken (so an untick elsewhere stays)");
+  assert.equal(B.decideStore(text(b), a, fpA), "push", "only this device changed");
+  assert.equal(B.decideStore(text(c), b, fpA), "merge", "both changed since they agreed: keep everything");
+  assert.equal(B.decideStore(text(c), b, undefined), "merge", "no record of agreeing: keep everything");
+  assert.equal(B.decideStore("not json", a, fpA), "pull", "an unreadable local copy is replaced by the cloud's");
+});
+
+test("the offline-phone story: ticks made while offline survive the next sign-in", () => {
+  // phone and cloud agree; the phone ticks a habit with no signal (the upload fails); the computer ticks another and uploads
+  const agreed = [habit("h1", {}), habit("h2", {})];
+  const fp = B.fingerprint(agreed);
+  const phone = [habit("h1", { "2026-11-14": 1 }), habit("h2", {})];
+  const cloud = [habit("h1", {}), habit("h2", { "2026-11-14": 1 })];
+  const act = B.decideStore(JSON.stringify(phone), cloud, fp);
+  assert.equal(act, "merge");
+  const merged = JSON.parse(B.mergeText("jarvisHabits", JSON.stringify(phone), JSON.stringify(cloud)).text);
+  assert.deepEqual(merged.map((h) => [h.id, Object.keys(h.completions)]), [["h1", ["2026-11-14"]], ["h2", ["2026-11-14"]]], "both ticks are there");
+  // before this change the cloud's copy simply replaced the phone's, and the phone's tick was gone
 });
