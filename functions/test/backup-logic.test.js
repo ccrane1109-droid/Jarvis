@@ -22,7 +22,8 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft", // the new logger's bookkeeping and its one-time safety copy
   "jarvisRetiredState",
   "jarvisLearnTimer",       // a reading timer that is running right now: this phone only (a timer on two devices at once would be wrong)
-  "jarvisLearnCaptureType"]; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
+  "jarvisLearnCaptureType",
+  "jarvisLiveHandled", "jarvisLiveRefreshedAt", "jarvisLiveTab"]   // session-only bookkeeping of the "refresh when the other device saved" feature; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {
   const used = new Set();
@@ -308,4 +309,57 @@ test("learning hub: books, research, notes, actions and reviews are backed up an
     // a copy that can't be read never replaces one that can
     assert.deepEqual(JSON.parse(B.mergeText(k, JSON.stringify([rec()]), "{not json").text).length, 1, k + ": an unreadable copy is ignored");
   });
+});
+
+
+test("the cloud copy is news only when another device wrote something this one does not hold", () => {
+  const m = (o) => Object.assign({ updatedAt: 200, hash: "h-new", device: "d_phone" }, o);
+  const base = { meta: { rev: 100, hash: "h-old", pending: [] }, localText: "[1]", deviceId: "d_computer" };
+  assert.equal(B.remoteNewer(m(), base), true, "newer, from the other device, different content");
+  assert.equal(B.remoteNewer(m({ device: "d_computer" }), base), false, "this device's own upload");
+  assert.equal(B.remoteNewer(m({ updatedAt: 100 }), base), false, "not newer than what was last confirmed");
+  assert.equal(B.remoteNewer(m({ updatedAt: 50 }), base), false, "older");
+  assert.equal(B.remoteNewer(m({ hash: "h-old" }), base), false, "same content as the last confirmed copy");
+  assert.equal(B.remoteNewer(m(), Object.assign({}, base, { meta: { rev: 100, hash: "h-old", pending: ["h-new"] } })), false, "an upload of this device whose confirmation was lost");
+  assert.equal(B.remoteNewer(m({ hash: B.hashText("[1]") }), base), false, "this device already holds exactly this");
+  assert.equal(B.remoteNewer(m(), Object.assign({}, base, { handledRev: 200 })), false, "already refreshed for this revision in this session");
+  assert.equal(B.remoteNewer(m(), Object.assign({}, base, { handledRev: 150 })), true, "a newer one than the one already handled");
+  assert.equal(B.remoteNewer(m(), Object.assign({}, base, { meta: null })), true, "a key never synced here");
+  assert.equal(B.remoteNewer(m(), Object.assign({}, base, { localText: null })), true, "a key this device has nothing for");
+  for (const bad of [null, undefined, "x", {}, { updatedAt: "5" }, { updatedAt: NaN }]) assert.equal(B.remoteNewer(bad, base), false, "a damaged manifest is ignored: " + JSON.stringify(bad));
+});
+
+test("two copies are the same when they hold the same values, whatever the order of the fields", () => {
+  assert.equal(B.sameJson('{"a":1,"b":[{"x":1,"y":2}]}', '{"b":[{"y":2,"x":1}],"a":1}'), true);
+  assert.equal(B.sameJson({ a: 1 }, '{"a":1}'), true);
+  assert.equal(B.sameJson("[1,2]", "[2,1]"), false, "list order matters");
+  assert.equal(B.sameJson('{"a":1}', '{"a":2}'), false);
+  assert.equal(B.sameJson("not json", "[]"), false);
+  assert.equal(B.sameJson("null", "null"), true);
+});
+
+test("the original sync's keys: only a real difference from the cloud is news, and not while this device's own save may still be on its way", () => {
+  const store = { jarvisHabits: [{ id: "h1", name: "Read", log: { "2026-11-14": true } }], jarvisCalories: { "2026-11-14": 1800 }, jarvisWorkouts: [1] };
+  const keys = ["jarvisHabits", "jarvisCalories"];
+  const none = () => false;
+  const mine = { jarvisHabits: JSON.stringify([{ log: { "2026-11-14": true }, name: "Read", id: "h1" }]), jarvisCalories: JSON.stringify({ "2026-11-14": 1800 }) };
+  assert.deepEqual(B.storeNews(store, keys, (k) => mine[k], none), { news: [], again: false }, "the same values in another field order are the same");
+  const phoneChanged = Object.assign({}, mine, { jarvisHabits: JSON.stringify([{ id: "h1", name: "Read", log: {} }]) });
+  const r = B.storeNews(store, keys, (k) => phoneChanged[k], none);
+  assert.deepEqual(r.news.map((n) => n.key), ["jarvisHabits"], "only the key that differs");
+  assert.equal(r.news[0].exact, true);
+  assert.equal(r.news[0].rev, B.fingerprint(store.jarvisHabits));
+  assert.equal(B.storeNews(store, keys, () => null, none).news.length, 2, "a key this device never saved is news");
+  const busy = B.storeNews(store, keys, (k) => phoneChanged[k], (k) => k === "jarvisHabits");
+  assert.deepEqual(busy, { news: [], again: true }, "just saved here: wait and look again");
+  assert.deepEqual(B.storeNews(store, ["jarvisNotThere"], () => null, none), { news: [], again: false }, "a key the cloud does not hold");
+  assert.deepEqual(B.storeNews(null, keys, () => null, none), { news: [], again: false });
+  assert.deepEqual(B.storeNews("x", keys, () => null, none), { news: [], again: false });
+});
+
+test("a fingerprint stands for the content, not the order of its fields", () => {
+  assert.equal(B.fingerprint({ a: 1, b: [1, { c: 2, d: 3 }] }), B.fingerprint({ b: [1, { d: 3, c: 2 }], a: 1 }));
+  assert.notEqual(B.fingerprint({ a: 1 }), B.fingerprint({ a: 2 }));
+  assert.notEqual(B.fingerprint([1, 2]), B.fingerprint([2, 1]));
+  for (const v of [null, 0, "", [], {}]) assert.ok(B.fingerprint(v) > 0, "never 0, so 'no fingerprint' stays distinct: " + JSON.stringify(v));
 });

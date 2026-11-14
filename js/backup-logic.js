@@ -307,8 +307,63 @@
     return { ok: true, text: JSON.stringify(fn(a, b)) };
   }
 
+  /* ---------------- noticing that the other device saved something ---------------- */
+
+  // Key order means nothing in JSON (and the cloud does not keep it), so two copies are "the same" when they hold the same values.
+  function canonical(v) {
+    if (Array.isArray(v)) return v.map(canonical);
+    if (isObj(v)) { const out = {}; Object.keys(v).sort().forEach(function (k) { out[k] = canonical(v[k]); }); return out; }
+    return v;
+  }
+  function sameJson(a, b) {
+    let x, y;
+    try { x = typeof a === "string" ? JSON.parse(a) : a; y = typeof b === "string" ? JSON.parse(b) : b; } catch (e) { return false; }
+    return JSON.stringify(canonical(x)) === JSON.stringify(canonical(y));
+  }
+
+  // A number that stands for what a value holds (not for the order of its fields): the same content always gives the same number.
+  function fingerprint(v) {
+    const text = JSON.stringify(canonical(v));
+    let h = 7;
+    for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) >>> 0;
+    return h || 1;
+  }
+
+  // The original sync keeps a map of whole values (users/{uid}.store). Which of `keys` does it hold that differ from what this device has?
+  //   local(key) -> the stored text or null;  busy(key) -> true while this device has saved the key moments ago or has an upload unanswered
+  //   (then the cloud's copy may only be the older of this device's own saves, so nothing is reported yet and `again` says to look later).
+  // -> { news: [{ key, rev: fingerprint, exact: true }], again }
+  function storeNews(store, keys, local, busy) {
+    const out = { news: [], again: false };
+    if (!isObj(store)) return out;
+    keys.forEach(function (key) {
+      if (!(key in store)) return;
+      const text = local(key);
+      if (text !== null && text !== undefined && sameJson(text, store[key])) return;
+      if (busy(key)) { out.again = true; return; }
+      out.news.push({ key: key, rev: fingerprint(store[key]), exact: true });
+    });
+    return out;
+  }
+
+  // Does a cloud manifest ({ updatedAt, hash, device }) hold something this device has not seen? c:
+  //   meta       what this device last confirmed with the cloud for the key: { rev, hash, pending: [hashes of its own uploads] } or null
+  //   localText  what is stored here now (or null)
+  //   deviceId   this device's id: its own uploads are never "news"
+  //   handledRev the newest revision already acted on in this browser session (so a refresh that cannot absorb it is not repeated forever)
+  function remoteNewer(manifest, c) {
+    if (!isObj(manifest) || typeof manifest.updatedAt !== "number" || !isFinite(manifest.updatedAt)) return false;
+    const meta = c && c.meta ? c.meta : null;
+    if (c && c.deviceId && manifest.device === c.deviceId) return false;
+    if (meta && typeof meta.rev === "number" && manifest.updatedAt <= meta.rev) return false;
+    if (c && typeof c.handledRev === "number" && manifest.updatedAt <= c.handledRev) return false;
+    if (meta && manifest.hash && (meta.hash === manifest.hash || (meta.pending || []).indexOf(manifest.hash) !== -1)) return false;
+    if (c && c.localText !== null && c.localText !== undefined && manifest.hash && hashText(c.localText) === manifest.hash) return false;   // already holds exactly this
+    return true;
+  }
+
   return {
-    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS,
+    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS, remoteNewer: remoteNewer, sameJson: sameJson, canonical: canonical, fingerprint: fingerprint, storeNews: storeNews,
     hashText: hashText, chunkText: chunkText, partId: partId, assemble: assemble, isEmptyText: isEmptyText,
     decide: decide, mergeText: mergeText, legacyShapeOk: legacyShapeOk,
     mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeWakeCheck: mergeWakeCheck

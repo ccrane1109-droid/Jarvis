@@ -29,7 +29,9 @@ function createFakeFirestore() {
     failNext: [],                           // error codes to fail the next calls with, one each
     dropAckNext: 0,                         // the next N transactions commit, but the caller is told they failed
     beforeCommit: null,                     // function run after a transaction's reads, before it commits (another device writes here)
-    counts: { reads: 0, commits: 0 },
+    counts: { reads: 0, commits: 0, listens: 0 },
+    listeners: [],                          // open onSnapshot listeners
+    snapshotError: null,                    // an error code: the next onSnapshot attaches and immediately fails with it
     writes: []                              // every setDoc / deleteDoc: { op, path, merge? }
   };
 
@@ -41,6 +43,20 @@ function createFakeFirestore() {
     return null;
   }
   const clone = (v) => JSON.parse(JSON.stringify(v));
+  // Tell every open listener about documents that were just written or deleted: { path, before } for each.
+  function emit(changed) {
+    db.listeners.slice().forEach((l) => {
+      const prefix = l.col.path + "/";
+      const mine = changed.filter((c) => c.path.startsWith(prefix) && c.path.indexOf("/", prefix.length) === -1);
+      const changes = [];
+      mine.forEach((c) => {
+        const now = store.has(c.path) ? store.get(c.path) : null, matchNow = now && l.match(now), matchBefore = c.before && l.match(c.before);
+        if (matchNow) changes.push({ type: matchBefore ? "modified" : "added", doc: snapOf(c.path) });
+        else if (matchBefore) changes.push({ type: "removed", doc: snapOf(c.path) });
+      });
+      if (changes.length) l.deliver(changes);
+    });
+  }
   const snapOf = (path) => ({
     id: path.split("/").pop(),
     exists: () => store.has(path),
@@ -67,12 +83,37 @@ function createFakeFirestore() {
       const docs = Array.from(store.keys()).filter((p) => p.startsWith(prefix) && p.indexOf("/", prefix.length) === -1).map(snapOf);
       return Promise.resolve({ docs: docs, metadata: { fromCache: db.fromCache } });
     },
+    // A filtered view of a collection and a live listener on it (the part of the real SDK that js/cloud-backup.js uses to hear that
+    // the other device saved). where(field, ">", value) matches documents that HAVE the field and whose value is greater.
+    where: (field, op, value) => ({ field: field, op: op, value: value }),
+    query: (col, ...filters) => ({ path: col.path, isCollection: true, filters: filters }),
+    onSnapshot(q, next, error) {
+      db.counts.listens++;
+      if (db.snapshotError) { const code = db.snapshotError; db.snapshotError = null; Promise.resolve().then(() => error && error(Object.assign(new Error("listen failed"), { code: code }))); return () => {}; }
+      const filters = q.filters || [];
+      const match = (data) => filters.every((f) => typeof data[f.field] === "number" && (f.op === ">" ? data[f.field] > f.value : f.op === "==" ? data[f.field] === f.value : false));
+      const l = {
+        col: { path: q.path }, match: match,
+        deliver: (changes) => { if (db.offline || db.hang) return; next({ metadata: { fromCache: false, hasPendingWrites: false }, docChanges: () => changes, docs: changes.map((c) => c.doc) }); }
+      };
+      db.listeners.push(l);
+      // the first answer: everything that matches, as "added"
+      Promise.resolve().then(() => {
+        if (!db.listeners.includes(l) || db.offline || db.hang) return;
+        const prefix = q.path + "/";
+        const docs = Array.from(store.keys()).filter((p) => p.startsWith(prefix) && p.indexOf("/", prefix.length) === -1 && match(store.get(p))).map(snapOf);
+        next({ metadata: { fromCache: false, hasPendingWrites: false }, docChanges: () => docs.map((d) => ({ type: "added", doc: d })), docs: docs });
+      });
+      return () => { const i = db.listeners.indexOf(l); if (i !== -1) db.listeners.splice(i, 1); };
+    },
     // Writes used by the retired-data erase: setDoc (with merge and deleteField, like the real SDK) and deleteDoc.
     deleteField: () => DELETE_FIELD,
     setDoc(ref, data, opts) {
       const bad = guard();
       if (bad) return bad;
       db.writes.push({ op: "set", path: ref.path, merge: !!(opts && opts.merge) });
+      const before = store.has(ref.path) ? clone(store.get(ref.path)) : null;
+      Promise.resolve().then(() => emit([{ path: ref.path, before: before }]));
       if (opts && opts.merge) {
         const cur = store.has(ref.path) ? clone(store.get(ref.path)) : {};
         mergeInto(cur, data);
@@ -84,7 +125,9 @@ function createFakeFirestore() {
       const bad = guard();
       if (bad) return bad;
       db.writes.push({ op: "delete", path: ref.path });
+      const before = store.has(ref.path) ? clone(store.get(ref.path)) : null;
       store.delete(ref.path);
+      Promise.resolve().then(() => emit([{ path: ref.path, before: before }]));
       return Promise.resolve();
     },
     runTransaction(_db, fn) {
@@ -110,8 +153,10 @@ function createFakeFirestore() {
           writes.forEach((w) => {
             if (w.op === "set" && Buffer.byteLength(JSON.stringify(w.data)) > MAX_DOC_BYTES) throw Object.assign(new Error("document too large"), { code: "invalid-argument" });
           });
+          const changed = writes.map((w) => ({ path: w.path, before: store.has(w.path) ? clone(store.get(w.path)) : null }));
           writes.forEach((w) => { if (w.op === "set") store.set(w.path, w.data); else store.delete(w.path); });
           db.counts.commits++;
+          Promise.resolve().then(() => emit(changed));
           if (db.dropAckNext > 0) { db.dropAckNext--; throw Object.assign(new Error("connection lost"), { code: "unavailable" }); }
           return out;
         });

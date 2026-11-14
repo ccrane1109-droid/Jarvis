@@ -410,12 +410,39 @@
     });
   }
 
+  // Hearing that the OTHER device changed one of the original sync's keys (habits, calories) while this one is open. Same idea as the
+  // backup's listener (cloud-backup.js): this never touches this device's data; it tells js/live-refresh.js, which starts the app again at
+  // a safe moment, and start-up (syncFromCloud above) takes the cloud's copy. The cloud does not keep the order of an object's fields, so
+  // copies are compared by value. Nothing is reported while this device has saved the key in the last 15 seconds or has an upload
+  // unanswered: then the cloud's copy may only be the older of two saves of this device's own.
+  let storeUnwatch = null, lastStoreSnap = null, storeRecheck = null;
+  function checkStore() {
+    const snap = lastStoreSnap, logic = window.JarvisBackupLogic;
+    if (!snap || !logic || typeof snap.exists !== "function" || !snap.exists()) return;
+    if (snap.metadata && (snap.metadata.fromCache || snap.metadata.hasPendingWrites)) return;
+    const data = snap.data();
+    const r = logic.storeNews(data && data.store, SYNCED_KEYS, function (k) { return localStorage.getItem(k); },
+      function (k) { return inflightSyncedPushes > 0 || Date.now() - (lastSyncedSave[k] || 0) < 15000; });
+    window.clearTimeout(storeRecheck); storeRecheck = null;
+    if (r.again) storeRecheck = window.setTimeout(checkStore, 5000);
+    if (r.news.length && window.JarvisLiveRefresh) window.JarvisLiveRefresh.notify(r.news);
+  }
+  function watchSyncedStore(uid) {
+    if (storeUnwatch || typeof fb.onSnapshot !== "function") return;
+    try {
+      const off = fb.onSnapshot(fb.doc(db, "users", uid), function (snap) { lastStoreSnap = snap; checkStore(); }, function () { storeUnwatch = null; });
+      storeUnwatch = typeof off === "function" ? off : null;
+    } catch (e) { storeUnwatch = null; }
+  }
+
   // Monkey-patches JarvisCore.saveJSON exactly once so every future save
   // from any feature module also pushes that key to Firestore in the
   // background. The local synchronous write always happens first and
   // always succeeds regardless of network state; the cloud push is
   // best-effort and never blocks or throws back into the caller.
   let saveJSONPatched = false;
+  let inflightSyncedPushes = 0;    // uploads of the original sync's keys that have not been answered yet
+  const lastSyncedSave = {};       // key -> when this device last saved it
   function installSyncedSaveJSON() {
     if (saveJSONPatched) return;
     saveJSONPatched = true;
@@ -427,7 +454,10 @@
         const ref = fb.doc(db, "users", auth.currentUser.uid);
         const patch = {};
         patch[key] = value;
-        fb.setDoc(ref, { store: patch }, { merge: true }).catch(function () { /* best-effort; local save already succeeded */ });
+        inflightSyncedPushes++;
+        lastSyncedSave[key] = Date.now();
+        const done = function () { inflightSyncedPushes = Math.max(0, inflightSyncedPushes - 1); lastSyncedSave[key] = Date.now(); };
+        fb.setDoc(ref, { store: patch }, { merge: true }).then(done, function () { done(); /* best-effort; local save already succeeded */ });
       }
       if (result !== false && window.JarvisBackup) window.JarvisBackup.onSave(key); // no-op unless it's one of the backup keys and a backup session is running
       return result;
@@ -502,6 +532,7 @@
     syncFromCloud(user.uid).then(function () {
       return startBackup(user);
     }).then(function () {
+      if (!bootStarted) watchSyncedStore(user.uid);
       if (window.JarvisBackup) window.JarvisBackup.appStarted(); // from here on the backup must not rewrite data the app has loaded
       if (!currentUserHasTotp && !pendingTotpSecret) {
         showOnly("authTotpEnrollPrompt");

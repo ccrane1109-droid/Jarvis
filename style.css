@@ -4200,3 +4200,15 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 /* eight labelled figures: two to a row on a phone so no word is broken in half, four on a wide screen */
 .ln-tiles.ln-tiles-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (min-width: 640px) { .ln-tiles.ln-tiles-2 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ---------------- "New changes from your other device" (js/live-refresh.js) ---------------- */
+.live-refresh-pill {
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(70px + env(safe-area-inset-top)); z-index: 230;
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+  width: min(94vw, 460px); box-sizing: border-box; padding: 10px 12px;
+  background: var(--card); color: var(--text); border: 1px solid var(--accent); border-radius: var(--radius-sm); box-shadow: var(--shadow);
+  font-size: 14px; line-height: 1.35;
+}
+.live-refresh-pill.hidden { display: none; }
+.live-refresh-text { flex: 1 1 170px; min-width: 0; }
+.live-refresh-pill .btn { min-height: 44px; padding: 0 14px; }
