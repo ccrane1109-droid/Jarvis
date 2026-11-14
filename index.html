@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=77">
+<link rel="stylesheet" href="style.css?v=78">
 </head>
 <body>
 
@@ -122,6 +122,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
       <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
+      <button type="button" class="main-nav-btn" data-target="panel-learning" role="tab" aria-selected="false" aria-controls="panel-learning" id="navBtnLearning">Learning</button>
     </nav>
     <div class="profile-menu-wrap">
       <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -135,7 +136,7 @@
           <div class="backup-title" id="backupTitle">Cloud backup</div>
           <div class="backup-status" id="backupStatus" role="status" aria-live="polite" data-tone="off">Sign in to back up your workouts, food log, tasks, goals and Discipline to your account.</div>
           <button type="button" class="btn backup-btn hidden" id="backupNowBtn"></button>
-          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, calendar events, Discipline, Wake check, groceries, form-check history. Workouts, habits and the rest sync separately.</p>
+          <p class="backup-scope">Covers: food log, saved foods, recipes, nutrition goals and profile, check-ins, tasks, goals, calendar events, Discipline, Wake check, groceries, form-check history, the Learning hub (books, research, notes, flashcards, goals, reading time, collections, actions, reviews). Workouts, habits and the rest sync separately.</p>
           <div class="backup-help hidden" id="backupHelp">
             <p>Backup needs one update to your Firebase security rules, which only you can deploy. In Cloud Shell, run these one at a time:</p>
             <pre>cd ~/Jarvis
@@ -2635,10 +2636,32 @@ npx firebase-tools deploy --only firestore:rules</pre>
   <section id="panel-business" class="tab-panel bz-scope" role="tabpanel" aria-labelledby="navBtnBusiness">
     <div class="panel-header">
       <h1>Business</h1>
-      <p class="panel-subtitle">Start by connecting your Shopify store. Nothing here is made up: it only shows what Shopify tells your JARVIS server.</p>
+      <p class="panel-subtitle">Connect your Shopify store and see how it's selling. Nothing here is made up: it only shows what Shopify tells your JARVIS server.</p>
     </div>
     <p id="bzLive" class="visually-hidden" role="status" aria-live="polite"></p>
     <div id="bzShopify"></div>
+  </section>
+
+  <!-- ===================== LEARNING & RESEARCH ===================== -->
+  <section id="panel-learning" class="tab-panel ln-scope" role="tabpanel" aria-labelledby="navBtnLearning">
+    <div class="panel-header">
+      <h1>Learning &amp; Research</h1>
+      <p class="panel-subtitle">The books you read, the research you do, what you learned and what you'll do with it. Every number comes from what you enter here.</p>
+    </div>
+    <p id="lnLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <nav class="sub-nav ln-sub-nav" aria-label="Learning sections">
+      <button type="button" class="sub-nav-btn active" data-ln="dashboard" aria-current="page">Dashboard</button>
+      <button type="button" class="sub-nav-btn" data-ln="books">Books</button>
+      <button type="button" class="sub-nav-btn" data-ln="research">Research</button>
+      <button type="button" class="sub-nav-btn" data-ln="knowledge">Knowledge</button>
+      <button type="button" class="sub-nav-btn" data-ln="actions">Actions</button>
+      <button type="button" class="sub-nav-btn" data-ln="goals">Goals</button>
+      <button type="button" class="sub-nav-btn" data-ln="study">Study</button>
+      <button type="button" class="sub-nav-btn" data-ln="review">Weekly</button>
+    </nav>
+    <div id="lnView"></div>
+    <div id="lnUndo" class="ln-undo hidden"></div>
+    <button type="button" id="lnFab" class="ln-fab" aria-haspopup="dialog">+ Capture</button>
   </section>
 
 </main>
@@ -3041,6 +3064,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="more-item" data-nav="navBtnBusiness">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5l1.4-4.6a1 1 0 01.96-.7h12.28a1 1 0 01.96.7l1.4 4.6"/><path d="M4.5 9.5v9.8a1 1 0 001 1h13a1 1 0 001-1V9.5"/><path d="M3.5 9.5a2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0"/></svg><span>Business</span>
       </button>
+      <button type="button" class="more-item" data-nav="navBtnLearning">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15.5H6.5A2.5 2.5 0 004 21z"/><path d="M4 21a2.5 2.5 0 012.5-2.5H20"/><path d="M9 7.5h6"/></svg><span>Learning</span>
+      </button>
     </div>
   </div>
 </div>
@@ -3096,62 +3122,81 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=77"></script>
-<script src="js/backup-logic.js?v=77"></script>
-<script src="js/cloud-backup.js?v=77"></script>
-<script type="module" src="js/auth.js?v=77"></script>
-<script src="js/app.js?v=77"></script>
-<script src="js/exercises.js?v=77"></script>
-<script src="js/workout-logic.js?v=77"></script>
-<script src="js/exercise-logic.js?v=77"></script>
-<script src="js/exercise-guides.js?v=77"></script>
-<script src="js/routine-logic.js?v=77"></script>
-<script src="js/workout.js?v=77"></script>
-<script src="js/workout-ui.js?v=77"></script>
-<script src="js/routines-ui.js?v=77"></script>
-<script src="js/progress-logic.js?v=77"></script>
-<script src="js/insights-logic.js?v=77"></script>
-<script src="js/charts.js?v=77"></script>
-<script src="js/history-ui.js?v=77"></script>
-<script src="js/insights-ui.js?v=77"></script>
-<script src="js/library-ui.js?v=77"></script>
-<script src="js/progress-ui.js?v=77"></script>
-<script src="js/nutrition.js?v=77"></script>
-<script src="js/nutrition-label-parse.js?v=77"></script>
-<script src="js/nutrition-label-scan.js?v=77"></script>
-<script src="js/groceries.js?v=77"></script>
-<script src="js/habit-logic.js?v=77"></script>
-<script src="js/dayplan-logic.js?v=77"></script>
-<script src="js/habits.js?v=77"></script>
-<script src="js/dayplan-ui.js?v=77"></script>
-<script src="js/calendar-logic.js?v=77"></script>
-<script src="js/schedule-logic.js?v=77"></script>
-<script src="js/ics-logic.js?v=77"></script>
-<script src="js/assistant-logic.js?v=77"></script>
-<script src="js/calendar-ui.js?v=77"></script>
-<script src="js/assistant-ui.js?v=77"></script>
-<script src="js/calendar-reminders-logic.js?v=77"></script>
-<script src="js/calendar-reminders-ui.js?v=77"></script>
-<script src="js/ics-ui.js?v=77"></script>
-<script src="js/home-ui.js?v=77"></script>
-<script src="js/discipline-logic.js?v=77"></script>
-<script src="js/discipline-program.js?v=77"></script>
-<script src="js/discipline-habits.js?v=77"></script>
-<script src="js/discipline-insights.js?v=77"></script>
-<script src="js/discipline-charts.js?v=77"></script>
-<script src="js/discipline-delivery.js?v=77"></script>
-<script src="js/discipline.js?v=77"></script>
-<script src="js/wakecheck-logic.js?v=77"></script>
-<script src="js/wakecheck.js?v=77"></script>
-<script src="functions/lib/reminder-spec.js?v=77"></script>
-<script src="functions/lib/reminder-events.js?v=77"></script>
-<script src="js/reminders.js?v=77"></script>
-<script src="js/video-api-client.js?v=77"></script>
-<script src="js/video-connections.js?v=77"></script>
-<script src="js/formcheck-logic.js?v=77"></script>
-<script src="js/form-check.js?v=77"></script>
-<script src="js/retired-data.js?v=77"></script>
-<script src="js/retired-ui.js?v=77"></script>
-<script src="js/shopify-ui.js?v=77"></script>
+<script src="js/firebase-config.js?v=78"></script>
+<script src="js/backup-logic.js?v=78"></script>
+<script src="js/cloud-backup.js?v=78"></script>
+<script type="module" src="js/auth.js?v=78"></script>
+<script src="js/app.js?v=78"></script>
+<script src="js/exercises.js?v=78"></script>
+<script src="js/workout-logic.js?v=78"></script>
+<script src="js/exercise-logic.js?v=78"></script>
+<script src="js/exercise-guides.js?v=78"></script>
+<script src="js/routine-logic.js?v=78"></script>
+<script src="js/workout.js?v=78"></script>
+<script src="js/workout-ui.js?v=78"></script>
+<script src="js/routines-ui.js?v=78"></script>
+<script src="js/progress-logic.js?v=78"></script>
+<script src="js/insights-logic.js?v=78"></script>
+<script src="js/charts.js?v=78"></script>
+<script src="js/history-ui.js?v=78"></script>
+<script src="js/insights-ui.js?v=78"></script>
+<script src="js/library-ui.js?v=78"></script>
+<script src="js/progress-ui.js?v=78"></script>
+<script src="js/nutrition.js?v=78"></script>
+<script src="js/nutrition-label-parse.js?v=78"></script>
+<script src="js/nutrition-label-scan.js?v=78"></script>
+<script src="js/groceries.js?v=78"></script>
+<script src="js/habit-logic.js?v=78"></script>
+<script src="js/dayplan-logic.js?v=78"></script>
+<script src="js/habits.js?v=78"></script>
+<script src="js/dayplan-ui.js?v=78"></script>
+<script src="js/calendar-logic.js?v=78"></script>
+<script src="js/schedule-logic.js?v=78"></script>
+<script src="js/ics-logic.js?v=78"></script>
+<script src="js/assistant-logic.js?v=78"></script>
+<script src="js/calendar-ui.js?v=78"></script>
+<script src="js/assistant-ui.js?v=78"></script>
+<script src="js/calendar-reminders-logic.js?v=78"></script>
+<script src="js/calendar-reminders-ui.js?v=78"></script>
+<script src="js/ics-ui.js?v=78"></script>
+<script src="js/home-ui.js?v=78"></script>
+<script src="js/discipline-logic.js?v=78"></script>
+<script src="js/discipline-program.js?v=78"></script>
+<script src="js/discipline-habits.js?v=78"></script>
+<script src="js/discipline-insights.js?v=78"></script>
+<script src="js/discipline-charts.js?v=78"></script>
+<script src="js/discipline-delivery.js?v=78"></script>
+<script src="js/discipline.js?v=78"></script>
+<script src="js/wakecheck-logic.js?v=78"></script>
+<script src="js/wakecheck.js?v=78"></script>
+<script src="functions/lib/reminder-spec.js?v=78"></script>
+<script src="functions/lib/reminder-events.js?v=78"></script>
+<script src="js/reminders.js?v=78"></script>
+<script src="js/video-api-client.js?v=78"></script>
+<script src="js/video-connections.js?v=78"></script>
+<script src="js/formcheck-logic.js?v=78"></script>
+<script src="js/form-check.js?v=78"></script>
+<script src="js/retired-data.js?v=78"></script>
+<script src="js/retired-ui.js?v=78"></script>
+<script src="js/shopify-ui.js?v=78"></script>
+<script src="js/learning-srs.js?v=78"></script>
+<script src="js/learning-logic.js?v=78"></script>
+<script src="js/learning-cards-logic.js?v=78"></script>
+<script src="js/learning-goals-logic.js?v=78"></script>
+<script src="js/learning-links-logic.js?v=78"></script>
+<script src="js/learning-reading-logic.js?v=78"></script>
+<script src="js/learning-weekly-logic.js?v=78"></script>
+<script src="js/learning-store.js?v=78"></script>
+<script src="js/learning-ui.js?v=78"></script>
+<script src="js/learning-books-ui.js?v=78"></script>
+<script src="js/learning-research-ui.js?v=78"></script>
+<script src="js/learning-library-ui.js?v=78"></script>
+<script src="js/learning-actions-ui.js?v=78"></script>
+<script src="js/learning-review-ui.js?v=78"></script>
+<script src="js/learning-study-ui.js?v=78"></script>
+<script src="js/learning-topics-ui.js?v=78"></script>
+<script src="js/learning-goals-ui.js?v=78"></script>
+<script src="js/learning-reading-ui.js?v=78"></script>
+<script src="js/learning-capture-ui.js?v=78"></script>
 </body>
 </html>

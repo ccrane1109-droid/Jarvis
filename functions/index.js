@@ -64,7 +64,7 @@ exports.reminders = onCall(
 // the page. Costs nothing: Shopify doesn't charge for these calls. A connect or check can make up to four short
 // requests to Shopify, hence the longer time limit.
 exports.shopify = onCall(
-  Object.assign({}, BASE, { timeoutSeconds: 60 }),
+  Object.assign({}, BASE, { timeoutSeconds: 90 }),
   (request) => guarded("shopify", () => shopify.handle(uidOf(request), request.data || {}, deps())));
 
 // Phone notifications: turning them on for a phone, sending a test, and (below) the

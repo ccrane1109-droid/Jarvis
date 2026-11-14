@@ -1,14 +1,16 @@
 /* ==========================================================================
    JARVIS — Shopify store connection (owner only, server side).
 
-   What it does: lets the owner connect their own Shopify store, checks that the connection works, and
-   removes it. It reads one fact from the store (its name) to prove the connection is real. It does not
-   read orders, products or customers, and it never writes anything to the store.
+   What it does: lets the owner connect their own Shopify store, checks that the connection works (by reading
+   the store's name), removes it, and, on request, reads the last 30 days of orders to total them up for the
+   "Sales snapshot" (order name, time, total, cancelled and test flags; see shopify-sales.js). It does not read
+   products or customers, asks for no customer details, stores no orders, and never writes anything to the store.
 
    Why it lives on the server: Shopify does not allow browsers to call its Admin API, and the credentials
    must never sit in the page. The page sends the store address, Client ID and Client Secret here once;
    they are kept in a part of the database that browsers cannot read (see firestore.rules), and the page
-   only ever gets back the store's name and address, the permissions Shopify granted, and times.
+   only ever gets back the store's name and address, the permissions Shopify granted, times and, for the
+   sales snapshot, order counts and totals.
 
    How it connects (Shopify "client credentials grant", for an app made in the Dev Dashboard by the same
    organization that owns the store): POST the Client ID and Client Secret to
@@ -32,6 +34,7 @@
 "use strict";
 
 const errors = require("./errors");
+const sales = require("./shopify-sales");
 
 const API_VERSION = "2026-10";           // Shopify's latest stable Admin API version at the time of writing (supported 12+ months)
 const TIMEOUT_MS = 10000;
@@ -40,6 +43,11 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000;  // ask for a new token when fewer than
 const FALLBACK_LIFETIME_MS = 60 * 60 * 1000; // if Shopify doesn't say how long a token lasts, assume one hour
 const MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const FIELD_MAX = 300;
+const ORDERS_PAGE = 100;          // orders per request (Shopify allows more; this keeps each request small)
+const ORDERS_MAX_PAGES = 10;      // so at most 1,000 orders are read in one go
+const ORDERS_BUDGET_MS = 45000;   // stop asking for more pages after this long, and say so
+// Newest first, only the fields the snapshot needs. No customer details are asked for.
+const ORDERS_QUERY = "query($first: Int!, $after: String) { orders(first: $first, after: $after, sortKey: CREATED_AT, reverse: true) { pageInfo { hasNextPage endCursor } nodes { name createdAt cancelledAt test currentTotalPriceSet { shopMoney { amount currencyCode } } } } }";
 
 const connPath = (uid) => "users/" + uid + "/shopify/connection";
 const SHOP_RE = /^[a-z0-9](?:[a-z0-9-]{0,60}[a-z0-9])?\.myshopify\.com$/;
@@ -247,12 +255,80 @@ async function check(uid, deps) {
   }
 }
 
+// One page of orders. -> { status: "unauthorized" } | { status: "ok", nodes, hasNext, cursor }; throws a ServerError for anything else.
+async function readOrdersPage(shop, token, after, deps) {
+  const res = await request(deps, "https://" + shop + "/admin/api/" + API_VERSION + "/graphql.json", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Shopify-Access-Token": token },
+    body: JSON.stringify({ query: ORDERS_QUERY, variables: { first: ORDERS_PAGE, after: after } })
+  });
+  if (res.status === 401) return { status: "unauthorized" };
+  if (res.status !== 200) throw statusProblem(res.status, res.text, [token]);
+  const json = parseJson(res.text);
+  if (json && Array.isArray(json.errors) && json.errors.length) {
+    const first = json.errors[0] || {};
+    if (first.extensions && first.extensions.code === "THROTTLED") throw fail("unavailable", "Shopify asked JARVIS to slow down. Try again in a minute.");
+    throw fail("failed-precondition", "Shopify refused the request for your orders: " + (safeText(first.message, [token]) || "no reason given") + ".");
+  }
+  const conn = json && json.data && json.data.orders;
+  if (!conn) throw fail("failed-precondition", "Shopify answered with no order data. The app may be missing the read_orders permission.");
+  if (!Array.isArray(conn.nodes)) throw fail("failed-precondition", "Shopify's answer didn't have the list of orders JARVIS expected, so nothing was counted.");
+  const info = conn.pageInfo || {};
+  const cursor = typeof info.endCursor === "string" && info.endCursor.length <= 500 ? info.endCursor : "";
+  return { status: "ok", nodes: conn.nodes, hasNext: info.hasNextPage === true, cursor: cursor };
+}
+
+// Orders and what they add up to for Today / Last 7 days / Last 30 days (in the phone's time zone). Reads, never writes.
+async function salesSnapshot(uid, data, deps) {
+  if (data.tz !== undefined && !sales.validZone(data.tz)) throw fail("invalid-argument", "That time zone isn't recognised.");
+  const conn = await load(uid, deps);
+  if (!conn) throw fail("failed-precondition", "Connect your Shopify store first.");
+  const missing = function (c) { return !(Array.isArray(c.scope) && c.scope.indexOf("read_orders") !== -1); };
+  let c = await freshToken(uid, conn, deps, false);
+  if (missing(c)) c = await freshToken(uid, c, deps, true);       // the permissions may have changed since the token was issued
+  if (missing(c)) throw fail("failed-precondition", "Your Shopify app doesn't have the read_orders permission, so JARVIS can't see your orders. In the Dev Dashboard, release a new version of the app that includes read_orders and approve it in Shopify.");
+
+  const nowMs = deps.now().getTime();
+  const win = sales.windowsFor(nowMs, data.tz || "UTC");
+  const started = Date.now();
+  const all = [];
+  let after = null, pages = 0, truncated = false, refreshed = false, newestSeen = Infinity;
+  for (;;) {
+    let page = await readOrdersPage(c.shop, c.token, after, deps);
+    if (page.status === "unauthorized" && !refreshed) {
+      refreshed = true;
+      c = await freshToken(uid, c, deps, true);
+      page = await readOrdersPage(c.shop, c.token, after, deps);
+    }
+    if (page.status !== "ok") throw fail("failed-precondition", "Shopify no longer accepts this connection. Disconnect and connect again.");
+    pages++;
+    let reachedOlder = false;
+    for (const node of page.nodes) {
+      const o = sales.normalizeOrder(node);
+      if (o.error) throw fail("failed-precondition", "Shopify's answer wasn't what JARVIS expected (" + o.error + "), so nothing was counted.");
+      if (o.atMs > newestSeen + 1000) throw fail("failed-precondition", "Shopify didn't return the orders newest first, so nothing was counted.");
+      newestSeen = o.atMs;
+      all.push(o);
+      if (o.atMs < win.earliest) reachedOlder = true;
+    }
+    if (reachedOlder || !page.hasNext || !page.cursor) break;
+    if (pages >= ORDERS_MAX_PAGES || Date.now() - started > ORDERS_BUDGET_MS) { truncated = true; break; }
+    after = page.cursor;
+  }
+  const out = sales.summarize(all, win);
+  if (truncated) {
+    const oldest = all.length ? all[all.length - 1].atMs : win.nowMs;
+    out.periods.forEach(function (p) { if (win.starts[p.key] < oldest) p.atLeast = true; });
+  }
+  return Object.assign({ ok: true, asOf: new Date(nowMs).toISOString(), tz: win.tz, truncated: truncated, scanned: all.length }, out);
+}
+
 async function disconnect(uid, deps) {
   await deps.db.doc(connPath(uid)).delete();
   return { connected: false };
 }
 
-const ACTIONS = ["status", "connect", "check", "disconnect"];
+const ACTIONS = ["status", "connect", "check", "sales", "disconnect"];
 
 // deps: { db, ownerUid, now, log, fetch?, timeoutMs? }
 async function handle(uid, data, deps) {
@@ -262,6 +338,7 @@ async function handle(uid, data, deps) {
     case "status": return publicStatus(await load(uid, deps));
     case "connect": return connect(uid, d, deps);
     case "check": return check(uid, deps);
+    case "sales": return salesSnapshot(uid, d, deps);
     case "disconnect": return disconnect(uid, deps);
     default: throw fail("invalid-argument", "Unknown Shopify action.");
   }

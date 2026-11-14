@@ -10,7 +10,7 @@ browsers cannot read, so none of them reach a browser or this repo:
 |---|---|---|
 | `reminders` | Reminders: create, edit, delete, turn on or off, time zone and quiet hours (Habits → Reminders). Stores them and works out when each is next due, daylight saving included. Also what you do about each one: mark it done, skip it, snooze it, undo that, and the recent history | Nothing beyond free-tier Firestore |
 | `notifications` | Phone notifications: remembers which phones you turned notifications on for, and sends the "Send a test now" and "Test in 90 seconds" messages | Nothing (free push services from Apple, Google, Mozilla and Microsoft) |
-| `shopify` | Business tab → Shopify store: connect, check, disconnect. Exchanges your app's Client ID and Client Secret for a short-lived access token, reads the store's name to prove it works, and keeps the credentials server-side. Reads nothing else and writes nothing to the store | Nothing (Shopify doesn't charge for these calls; Firebase's free tier covers it) |
+| `shopify` | Business tab → Shopify store: connect, check, disconnect. Exchanges your app's Client ID and Client Secret for a short-lived access token, reads the store's name to prove it works, and keeps the credentials server-side. Also reads the last 30 days of orders (name, time, total, whether cancelled or a test) to total them for the Sales snapshot. Reads no customer details, stores no orders, and writes nothing to the store | Nothing (Shopify doesn't charge for these calls; Firebase's free tier covers it) |
 | `reminderTick` | Runs **every minute** (Cloud Scheduler). Finds reminders that are due, records each one once, and sends it to your phones. Reminders more than 30 minutes late are marked missed, not sent | Free tier covers it; see "Reminder delivery" below |
 
 ## One-time setup
@@ -134,9 +134,10 @@ store, and Shopify's screens may be worded a little differently from what's writ
    **Build apps in Dev Dashboard** (this opens dev.shopify.com, signed in as you).
    Create an app, name it (for example "JARVIS"), then create a **version** of it:
    - choose the Admin API access scopes. Pick **read-only** ones only (names that start
-     with `read_`). To let JARVIS show orders and products later, choose `read_orders`
-     and `read_products`; for just the connection check no scope is needed. Scopes can be
-     changed later by releasing a new version and approving it in Shopify.
+     with `read_`). Choose `read_orders` (needed for the Sales snapshot) and, if you like,
+     `read_products` (not used yet). Scopes can be changed later by releasing a new version
+     and approving it in Shopify; JARVIS asks Shopify for a fresh token when it finds
+     `read_orders` missing, so you shouldn't need to reconnect after adding it.
    - **Release** the version.
 3. **Install the app on your store** (the app page → Installs → Install app → pick your store).
    The app and the store must belong to the same Shopify organization, which they will if you
@@ -159,6 +160,26 @@ rest), not in Secret Manager, because you enter them in the app rather than from
 remove the app from your store: to cut off access completely, also uninstall the app (or delete
 it) in Shopify. If you ever think the Client Secret was exposed, rotate it in the Dev Dashboard and
 reconnect.
+
+**Sales snapshot** (Business tab, under the store card). Orders and totals for Today, the last 7 days
+and the last 30 days, plus your latest orders, read from Shopify when you open the tab (and when you tap
+Refresh; the figures are kept in memory for five minutes, never saved in the browser or the database).
+How it counts, so you can check it against Shopify's own reports:
+- Days are calendar days in your phone's time zone; "last 7 days" and "last 30 days" include today.
+- Each order's amount is its current total price in the store's currency as Shopify reports it (so it
+  reflects returns and edits, and includes whatever Shopify includes in an order total, such as shipping
+  and tax). Nothing is converted. If orders come in more than one currency they are not added together.
+- Cancelled orders and test orders are left out and counted on the screen.
+- It reads newest first and stops once it passes 30 days back, up to 1,000 orders. If a store has more
+  recent orders than that, the screen says "at least" instead of showing a partial total as complete.
+- It never looks further back than 30 days: Shopify's default `read_orders` permission only covers the
+  last 60 days (per Shopify's documentation), and reaching further needs an extra approval.
+- If anything in Shopify's answer isn't what JARVIS expects (a missing time or total, orders not newest
+  first), it shows an error and counts nothing; it never fills in a zero.
+Not yet verified: this has been tested against a stand-in for Shopify. The exact field names it asks
+for (name, createdAt, cancelledAt, test, currentTotalPriceSet, and the orders query's sort and paging
+options) come from my knowledge of Shopify's Admin API; I couldn't open Shopify's reference pages from
+the environment I built this in. If Shopify rejects one, the Business tab shows Shopify's own message.
 
 The access token lasts about a day (Shopify's figure for this kind of app); the server asks for a
 new one automatically when the old one is close to running out.
