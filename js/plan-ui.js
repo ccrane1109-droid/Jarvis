@@ -621,7 +621,13 @@
   }
 
   window.JarvisPlan = {
-    onShow: function () { start(); shown = true; if (A.weekReconcile) A.weekReconcile(); A.render(); },
+    onShow: function () {
+      start(); shown = true; if (A.weekReconcile) A.weekReconcile();
+      // links of tasks that were deleted long ago (30+ days) are dropped; only when the task list has loaded
+      const have = A.tasks();
+      if (have.length) { const cur = store.all("links"), kept = PL.purgeLinks(cur, have.map(function (t) { return t.id; }), Date.now()); if (kept.length !== cur.length) store.replace("links", kept); }
+      A.render();
+    },
     onHide: function () { shown = false; },
     go: function (view, extra) { start(); A.go(view, extra); },
     app: A,

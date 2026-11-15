@@ -285,6 +285,8 @@
     let body = A.fText("title", "Title", title, { max: 140, placeholder: "Defaults to the task or ingredient name" });
     body += A.fSelect("ingredientId", "Ingredient", ingOpts, ing || "");
     body += A.fSelect("taskId", "Task in this block", [["", "No task"]].concat(openTaskChoices(c, taskId)), taskId, { hint: "The task takes this day and time. A block with a task can't repeat." });
+    const link = taskId ? PL.linkOf(c.links, taskId) : null;
+    body += '<div data-for-task>' + A.fText("estMin", "Time you expect the task to take (minutes, optional)", link && link.estMin ? link.estMin : "", { mode: "numeric", placeholder: "e.g. 90", hint: "Used for suggested times. The block's length is what you planned; this is your estimate for the task itself." }) + '</div>';
     body += A.fText("date", "Day", date, { type: "date" });
     body += '<div class="form-row two-col"><div><label for="spf_start">Start</label><select id="spf_start" name="start">' + A.optionsHtml(timeOptions(c, [start], false), start) + '</select><p class="sp-err hidden" data-err="start" role="alert"></p></div><div><label for="spf_end">End</label><select id="spf_end" name="end">' + A.optionsHtml(timeOptions(c, [end], true), end) + '</select><p class="sp-err hidden" data-err="end" role="alert"></p></div></div>';
     if (repeats) body += '<fieldset class="pw-scope"><legend>Apply changes to</legend><label><input type="radio" name="scope" value="this" checked> This day only</label><label><input type="radio" name="scope" value="all"> Every time it repeats</label></fieldset>';
@@ -302,6 +304,7 @@
       const freq = root.querySelector('[name="repeatFreq"]').value, task = root.querySelector('[name="taskId"]').value;
       const scope = root.querySelector('[name="scope"]:checked');
       const rep = root.querySelector("[data-for-repeat]");
+      root.querySelector("[data-for-task]").classList.toggle("hidden", !task);
       rep.classList.toggle("hidden", !!task || (!!repeats && scope && scope.value === "this"));
       root.querySelector("[data-for-weekly]").classList.toggle("hidden", freq !== "weekly");
       const dateRow = root.querySelector('[name="date"]').closest(".form-row");
@@ -322,6 +325,13 @@
     const fields = { title: v.title, ingredientId: v.ingredientId, notes: v.notes, start: v.start, end: v.end };
     const days = Array.isArray(v.repeatDays) ? v.repeatDays : [];
     lastIngredient = v.ingredientId || lastIngredient;
+    let estLinks = null;
+    if (v.taskId && v.estMin !== undefined) {
+      const est = PL.setEstimate(store.all("links"), v.taskId, v.estMin, {});
+      if (!est.ok) return { ok: false, errors: { estMin: est.error } };
+      estLinks = est.links;
+    }
+    const saveEst = function () { if (estLinks && !store.replace("links", estLinks)) A.saveFailed(); };
     if (!cur) {
       let r;
       if (v.taskId) r = W.placeTask(blocks, v.taskId, { date: v.date, start: v.start, end: v.end, ingredientId: v.ingredientId }, tasks, Object.assign({}, cc));
@@ -331,6 +341,7 @@
       if (r.taskPatch) patches.push(Object.assign({ taskId: v.taskId }, r.taskPatch));
       if (v.taskId && (v.title || v.notes)) { const e = W.editBlock(blocks, saved.id, { notes: v.notes }, cc); if (e.ok) blocks = e.blocks; }
       if (!saveBlocks(blocks, patches)) return { ok: false, message: store.error() };
+      saveEst();
       A.say("Block added");
       return { ok: true };
     }
@@ -365,6 +376,7 @@
     const finalBlock = W.blockById(blocks, id);
     if (!finalBlock.taskId) blocks = W.setBlockDone(blocks, id, occDate, !!v.done, {}).blocks;
     if (!saveBlocks(blocks, patches)) return { ok: false, message: store.error() };
+    if (finalBlock.taskId && finalBlock.taskId === v.taskId) saveEst();
     if (finalBlock.taskId) {
       const t = A.taskById(finalBlock.taskId);
       if (t && !!t.completed !== !!v.done) A.toggleTask(t.id);
@@ -476,8 +488,9 @@
     const c = wctx(), t = A.taskById(el.getAttribute("data-id"));
     if (!t) return;
     const day = W.weekDates(c.weekStart).indexOf(t.date) !== -1 && t.date >= c.today ? t.date : (state.day || c.today);
-    const free = W.freeSlots(day, c, 60, [])[0];
-    openBlockSheet({ date: day, taskId: t.id, start: free ? W.toTime(free.start) : undefined, end: free ? W.toTime(free.start + 60) : undefined });
+    const l = PL.linkOf(c.links, t.id), len = l && l.estMin ? Math.max(W.MIN_LEN, l.estMin) : 60;
+    const free = W.freeSlots(day, c, len, [])[0];
+    openBlockSheet({ date: day, taskId: t.id, start: free ? W.toTime(free.start) : undefined, end: free ? W.toTime(Math.min(free.start + len, 1439)) : undefined });
   };
   A.acts["suggest-apply"] = function (el) {
     const id = el.getAttribute("data-id");
