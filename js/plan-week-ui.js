@@ -99,10 +99,10 @@
     const past = o.date < c.today || (o.date === c.today && o.endMin <= c.nowMin);
     const len = o.endMin - o.startMin;
     const work = o.workedMin !== null ? o.workedMin + " of " + len + " min" : (past && !done ? "not logged" : "");
-    const label = title + ", " + W.DAY_NAMES[W.weekday(o.date)] + " " + fmtTime(o.start) + " to " + fmtTime(o.end) + ", " + ingName(c, o.ingredientId) + (t ? ", task" : "") + (done ? ", done" : "") + (o.recurring ? ", repeats" : "") + ". Press Enter to edit.";
-    return '<div class="pw-block' + (done ? " is-done" : "") + (past && !done && o.workedMin === null ? " is-missed" : "") + '" role="button" tabindex="0" data-drag="block" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '" data-len="' + len + '" aria-label="' + esc(label) + '" ' +
+    const label = title + ", " + W.DAY_NAMES[W.weekday(o.date)] + " " + fmtTime(o.start) + " to " + fmtTime(o.end) + ", " + ingName(c, o.ingredientId) + (t ? ", task" : "") + (done ? ", done" : "") + (o.recurring ? ", repeats" : "") + ". Opens the block.";
+    return '<div class="pw-block' + (done ? " is-done" : "") + (past && !done && o.workedMin === null ? " is-missed" : "") + '" data-drag="block" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '" data-len="' + len + '" ' +
       'style="top:' + top + 'px;height:' + h + 'px;left:calc(' + (100 * seg.col / seg.cols) + '% + 2px);width:calc(' + (100 / seg.cols) + '% - 4px);--c:' + color + ';--bg:' + W.tint(color, 0.24) + '">' +
-      '<span class="pw-b-main"><span class="pw-b-title">' + esc(title) + '</span>' + (h >= 40 ? '<span class="pw-b-time">' + esc(fmtTime(o.start)) + ' – ' + esc(fmtTime(o.end)) + (o.recurring ? " · repeats" : "") + '</span>' : "") + (h >= 58 && work ? '<span class="pw-b-work">' + esc(work) + '</span>' : "") + '</span>' +
+      '<button type="button" class="pw-b-main" aria-label="' + esc(label) + '"><span class="pw-b-title">' + esc(title) + '</span>' + (h >= 40 ? '<span class="pw-b-time">' + esc(fmtTime(o.start)) + ' – ' + esc(fmtTime(o.end)) + (o.recurring ? " · repeats" : "") + '</span>' : "") + (h >= 58 && work ? '<span class="pw-b-work">' + esc(work) + '</span>' : "") + '</button>' +
       '<input type="checkbox" class="pw-b-check" data-act="block-done" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '"' + (t ? ' data-task="' + esc(t.id) + '"' : "") + (done ? " checked" : "") + ' aria-label="' + (t ? "Task done: " : "Done: ") + esc(title) + '">' +
       '<span class="pw-resize" data-drag="resize" aria-hidden="true"></span></div>';
   }
@@ -241,7 +241,7 @@
       store.init();
       const c = wctx(); cachedCtx = c;
       const occ = W.occurrences(c.blocks, c.weekStart, PL.addDays(c.weekStart, 6)), st = W.weekStats(c);
-      let h = headHtml(c) + alertsHtml(c) + topHtml(c);
+      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + alertsHtml(c) + topHtml(c);
       h += '<div class="pw-layout">' + ingredientsHtml(c) + gridHtml(c, occ) + '</div>';
       if (!occ.length && W.liveIngredients(c.ingredients).length) h += '<p class="sp-dim pw-empty">Nothing is planned this week yet. Drag an ingredient or a task onto a day.</p>';
       h += '<div class="pw-panels">' + suggestHtml(c) + statsHtml(c, st) + reviewHtml(c, st) + '</div>';
@@ -559,12 +559,6 @@
       openBlockSheet({ date: col.getAttribute("data-date"), start: W.toTime(m), end: W.toTime(Math.min(m + 60, 1439)) });
     }
   }
-  function onViewKey(e) {
-    if (state.view !== "weekly" || (e.key !== "Enter" && e.key !== " ")) return;
-    const blk = e.target.closest && e.target.closest(".pw-block");
-    if (blk && e.target === blk) { e.preventDefault(); openBlockSheet({ id: blk.getAttribute("data-block"), date: blk.getAttribute("data-date") }); }
-  }
-
   /* ---------------- dragging (mouse, and press-and-hold on touch) ---------------- */
 
   function visibleCols() { return Array.prototype.filter.call(document.querySelectorAll("#spView .pw-col"), function (c) { return c.offsetParent !== null; }); }
@@ -704,7 +698,6 @@
     if (!host || host.getAttribute("data-pw-wired")) return;
     host.setAttribute("data-pw-wired", "1");
     host.addEventListener("click", onViewClick, true);
-    host.addEventListener("keydown", onViewKey);
     host.addEventListener("pointerdown", onDown);
     document.addEventListener("pointermove", onMove, { passive: false });
     document.addEventListener("pointerup", onUp);

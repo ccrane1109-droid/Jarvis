@@ -4225,6 +4225,7 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .sp-scope :focus-visible, .sp-sheet :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sp-scope [data-focus-top]:focus, .sp-sheet .sp-sheet-title:focus { outline: none; }
 .sp-scope .badge, .sp-sheet .badge { font-size: 13px; }
+.sp-scope .badge-accent, .sp-sheet .badge-accent { color: #bcd3ff; }
 
 .sp-sub-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 6px; overflow-x: visible; padding-right: 0; }
 .sp-sub-nav .sub-nav-btn { margin-right: 0; min-height: 44px; padding: 8px 4px; text-align: center; font-size: 15px; }
@@ -4422,11 +4423,12 @@ body.sp-sheet-open { overflow: hidden; }
   .pw-head-n { display: none; }
 }
 .pw-block { position: absolute; z-index: 2; box-sizing: border-box; overflow: hidden; display: flex; align-items: flex-start; gap: 4px; padding: 3px 4px 3px 7px; background: var(--bg); background-color: var(--bg); border: 1px solid rgba(255, 255, 255, 0.08); border-left: 4px solid var(--c); border-radius: 6px; color: var(--text); font-size: 13px; line-height: 1.2; cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.pw-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 5; }
+.pw-block:focus-within { z-index: 5; }
+.pw-b-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
 .pw-block.is-done .pw-b-title { text-decoration: line-through; opacity: 0.7; }
 .pw-block.is-missed { border-style: dashed; border-left-style: solid; }
 .pw-block.is-dragging { opacity: 0.35; }
-.pw-b-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pw-b-main { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 0; margin: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: inherit; touch-action: pan-y; }
 .pw-b-title { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pw-b-time, .pw-b-work { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pw-b-check { width: 24px; height: 24px; flex: none; margin: 0; cursor: pointer; }

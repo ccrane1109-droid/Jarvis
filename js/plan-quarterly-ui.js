@@ -82,7 +82,7 @@
     html: function () {
       const m = A.model(), year = state.year, q = state.quarter, today = A.store.today();
       const key = PL.quarterKey(year, q);
-      let h = '<div class="sp-head">' + stepper(String(year), "year-nav", "year-nav", "Previous year", "Next year") + '</div>';
+      let h = '<h2 class="visually-hidden">Quarterly plan</h2><div class="sp-head">' + stepper(String(year), "year-nav", "year-nav", "Previous year", "Next year") + '</div>';
       h += timeline(m, year, today);
       const late = m.all("priority").concat(m.all("milestone")).filter(function (n) { return inQuarter(n, year, q) && m.health(n.id) === "overdue"; });
       h += '<h2 class="sp-h2 sp-qtitle">Q' + q + ' ' + year + ' <span class="sp-dim">' + QNAME[q] + '</span></h2>' + overdueBox(m, late);
@@ -107,7 +107,7 @@
   A.register("monthly", {
     html: function () {
       const m = A.model(), mk = state.month, today = A.store.today();
-      let h = '<div class="sp-head">' + stepper(A.monthLabel(mk), "month-nav", "month-nav", "Previous month", "Next month") + '</div>';
+      let h = '<h2 class="visually-hidden">Monthly plan</h2><div class="sp-head">' + stepper(A.monthLabel(mk), "month-nav", "month-nav", "Previous month", "Next month") + '</div>';
       const late = m.overdueMilestones().filter(function (n) { return n.month === mk; });
       h += overdueBox(m, late);
       h += '<h3 class="sp-h3">Money for ' + esc(PL.monthName(mk, true)) + '</h3>' + A.periodBlock("month", mk) +

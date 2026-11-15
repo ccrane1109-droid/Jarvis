@@ -621,7 +621,7 @@
   }
 
   window.JarvisPlan = {
-    onShow: function () { start(); shown = true; A.render(); },
+    onShow: function () { start(); shown = true; if (A.weekReconcile) A.weekReconcile(); A.render(); },
     onHide: function () { shown = false; },
     go: function (view, extra) { start(); A.go(view, extra); },
     app: A,
