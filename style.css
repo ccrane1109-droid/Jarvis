@@ -4428,9 +4428,9 @@ body.sp-sheet-open { overflow: hidden; }
 .pw-block.is-done .pw-b-title { text-decoration: line-through; opacity: 0.7; }
 .pw-block.is-missed { border-style: dashed; border-left-style: solid; }
 .pw-block.is-dragging { opacity: 0.35; }
-.pw-b-main { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 0; margin: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: inherit; touch-action: pan-y; }
+.pw-b-main { flex: 1; min-width: 0; max-width: 100%; overflow: hidden; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; padding: 0; margin: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: inherit; touch-action: pan-y; }
 .pw-b-title { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.pw-b-time, .pw-b-work { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pw-b-time, .pw-b-work { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .pw-b-check { width: 24px; height: 24px; flex: none; margin: 0; cursor: pointer; }
 .pw-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; cursor: ns-resize; touch-action: none; }
 .pw-resize::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 24px; height: 3px; margin-left: -12px; border-radius: 2px; background: rgba(255, 255, 255, 0.25); }
