@@ -386,6 +386,7 @@ test("carry forward: unfinished tasks from days gone by, moved only when asked, 
   assert.equal(moved.find((t) => t.id === "x").order, 7, "tasks already on that day keep their place");
   assert.deepEqual(moved.find((t) => t.id === "d"), tasks.find((t) => t.id === "d"), "the rest is untouched");
   assert.equal(moved.find((t) => t.id === "c").date, "2026-11-02", "a done task is never moved");
+  assert.equal(W.carryTasks(tasks, ["a", "c"], "2026-11-05").find((t) => t.id === "c").date, "2026-11-02", "even when its id is in the list");
   assert.equal(tasks.find((t) => t.id === "a").date, "2026-11-02", "the original list is not changed");
 });
 
