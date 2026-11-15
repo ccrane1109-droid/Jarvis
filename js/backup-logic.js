@@ -47,6 +47,9 @@
     "jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews",
     // ...and the later additions: flashcards, learning goals, reading-time sessions, and collections of knowledge.
     "jarvisLearnCards", "jarvisLearnGoals", "jarvisLearnSessions", "jarvisLearnCollections",
+    // The Strategic Planning Center: yearly objectives / quarterly priorities / monthly milestones, money by month, task links,
+    // the plan's settings, and the weekly planner's ingredients, time blocks and weekly records.
+    "jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanSettings", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks",
     // The workout family. These lived in the original shared document (whole value per key, the cloud copy winning at
     // sign-in, failed uploads silent). They are here now so a save that never reached the cloud is not replaced by an older
     // cloud copy, and two devices' workouts are combined rather than one overwriting the other. LEGACY_KEYS below.
@@ -301,6 +304,9 @@
     // deleted records stay as tombstones (deletedAt, with a newer updatedAt) for 30 days so a deletion reaches the other device
     jarvisLearnBooks: mergeById, jarvisLearnResearch: mergeById, jarvisLearnNotes: mergeById, jarvisLearnActions: mergeById, jarvisLearnReviews: mergeById,
     jarvisLearnCards: mergeById, jarvisLearnGoals: mergeById, jarvisLearnSessions: mergeById, jarvisLearnCollections: mergeById,
+    // plan records carry updatedAt (the newer wins) and deletedAt tombstones for 30 days; the settings are one record
+    jarvisPlanNodes: mergeById, jarvisPlanPeriods: mergeById, jarvisPlanLinks: mergeById, jarvisPlanIngredients: mergeById, jarvisPlanBlocks: mergeById, jarvisPlanWeeks: mergeById,
+    jarvisPlanSettings: mergeNewest,
     jarvisGroceryPantry: mergeMapNewest,
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,

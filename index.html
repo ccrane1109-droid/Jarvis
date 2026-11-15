@@ -123,6 +123,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-learning" role="tab" aria-selected="false" aria-controls="panel-learning" id="navBtnLearning">Learning</button>
+      <button type="button" class="main-nav-btn" data-target="panel-strategy" role="tab" aria-selected="false" aria-controls="panel-strategy" id="navBtnStrategy">Strategy</button>
     </nav>
     <div class="profile-menu-wrap">
       <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -2664,6 +2665,23 @@ npx firebase-tools deploy --only firestore:rules</pre>
     <button type="button" id="lnFab" class="ln-fab" aria-haspopup="dialog">+ Capture</button>
   </section>
 
+  <!-- ===================== STRATEGIC PLANNING CENTER ===================== -->
+  <section id="panel-strategy" class="tab-panel sp-scope" role="tabpanel" aria-labelledby="navBtnStrategy">
+    <div class="panel-header">
+      <h1>Strategic Planning</h1>
+      <p class="panel-subtitle">Three-year vision, yearly objectives, quarterly priorities, monthly milestones, then your tasks and time blocks. Progress comes from the tasks you finish and the money you enter.</p>
+    </div>
+    <p id="spLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <nav class="sub-nav sp-sub-nav" aria-label="Planning horizon">
+      <button type="button" class="sub-nav-btn active" data-sp="yearly" aria-current="page">Yearly</button>
+      <button type="button" class="sub-nav-btn" data-sp="quarterly">Quarterly</button>
+      <button type="button" class="sub-nav-btn" data-sp="monthly">Monthly</button>
+      <button type="button" class="sub-nav-btn" data-sp="weekly">Weekly</button>
+    </nav>
+    <div id="spView"></div>
+    <div id="spUndo" class="sp-undo hidden"></div>
+  </section>
+
 </main>
 
 <!-- ===================== MODALS ===================== -->
@@ -3067,6 +3085,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="more-item" data-nav="navBtnLearning">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15.5H6.5A2.5 2.5 0 004 21z"/><path d="M4 21a2.5 2.5 0 012.5-2.5H20"/><path d="M9 7.5h6"/></svg><span>Learning</span>
       </button>
+      <button type="button" class="more-item" data-nav="navBtnStrategy">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="M4 7l6-3 6 5 5-4"/></svg><span>Strategy</span>
+      </button>
     </div>
   </div>
 </div>
@@ -3199,5 +3220,10 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/learning-goals-ui.js?v=79"></script>
 <script src="js/learning-reading-ui.js?v=79"></script>
 <script src="js/learning-capture-ui.js?v=79"></script>
+<script src="js/plan-logic.js?v=79"></script>
+<script src="js/plan-store.js?v=79"></script>
+<script src="js/plan-ui.js?v=79"></script>
+<script src="js/plan-yearly-ui.js?v=79"></script>
+<script src="js/plan-quarterly-ui.js?v=79"></script>
 </body>
 </html>

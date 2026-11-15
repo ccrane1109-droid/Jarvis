@@ -140,7 +140,11 @@
     selectedDate = window.JarvisCore.todayISODate();
   }
 
-  function saveTasks() { Storage.saveTasks(tasks); }
+  // Anything that saves the task list also tells the page (the Strategy tab keeps its progress in step with the tasks you tick off here).
+  function saveTasks() {
+    Storage.saveTasks(tasks);
+    try { document.dispatchEvent(new CustomEvent("jarvis-tasks-changed")); } catch (e) { /* an old browser without CustomEvent: nothing listens anyway */ }
+  }
   function saveHabits() { Storage.saveHabits(habits); }
   function saveGoalsData() { Storage.saveGoals(goals); }
 
@@ -1073,6 +1077,21 @@
     renderTodayOverview();
   }
   function getSelectedDate() { return selectedDate; }
+  // A new task made by another part of the app (the Strategy tab). It is the same record the To-Do form makes, in the same list.
+  function addTask(fields) {
+    const f = fields || {}, text = String(f.text || "").trim();
+    if (!text) return null;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(f.date || "") ? f.date : selectedDate;
+    const t = {
+      text: text, priority: ["low", "medium", "high"].indexOf(f.priority) !== -1 ? f.priority : "medium",
+      time: /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || "") ? f.time : "", category: String(f.category || "").trim(), goalId: f.goalId || null,
+      id: window.JarvisCore.uid("task"), date: date, completed: false, order: nextOrderForDate(date), createdAt: Date.now()
+    };
+    tasks.push(t);
+    saveTasks();
+    renderTaskList(); renderDaySelectorPills(); renderTodayOverview();
+    return t;
+  }
 
   function onSubTabChange(targetId) {
     if (targetId === "habits-plan" && window.JarvisDayPlan && typeof window.JarvisDayPlan.onShow === "function") window.JarvisDayPlan.onShow();
@@ -1127,5 +1146,5 @@
     renderAll();
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, selectDate: selectDate, getGoals: function () { return goals; } };
+  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; } };
 })();
