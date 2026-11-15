@@ -519,12 +519,13 @@
       A.fSelect("startYear", "Year 1 of the roadmap", years, String(s.startYear), { hint: "The roadmap shows this year and the next two." }) +
       A.fSelect("revenueMetric", "How revenue is measured", [["sales", "Monthly sales revenue (default)"], ["mrr", "MRR (monthly recurring revenue)"]], s.revenueMetric, { hint: "Sales revenue adds months up. MRR is a snapshot, so a quarter or year shows its latest month. Only choose MRR if your business has subscriptions." }) +
       '<h3 class="sp-h4">Weekly planner</h3><div class="form-row two-col"><div>' + times("dayStart", "Day starts", s.dayStart) + '</div><div>' + times("dayEnd", "Day ends", s.dayEnd) + '</div></div>' +
-      A.fSelect("interval", "Time blocks snap to", [["30", "30 minutes"], ["60", "1 hour"]], String(s.interval));
+      A.fSelect("interval", "Time blocks snap to", [["30", "30 minutes"], ["60", "1 hour"]], String(s.interval)) +
+      A.fSelect("dailyLimitHours", "Daily workload limit", [6, 7, 8, 9, 10, 11, 12, 14].map(function (h) { return [String(h), h + " hours"]; }), String(s.dailyLimitHours), { hint: "Blocks and calendar events above this on one day get a warning. Rest blocks don't count." });
     A.openSheet({
       title: "Plan settings", body: body, submit: "Save",
       onSubmit: function (v) {
         if (v.dayStart >= v.dayEnd) return { ok: false, errors: { dayEnd: "The day has to end after it starts." } };
-        if (!store.setSettings({ vision: v.vision, startYear: Number(v.startYear), revenueMetric: v.revenueMetric, dayStart: v.dayStart, dayEnd: v.dayEnd, interval: Number(v.interval) })) return { ok: false, message: store.error() };
+        if (!store.setSettings({ vision: v.vision, startYear: Number(v.startYear), revenueMetric: v.revenueMetric, dayStart: v.dayStart, dayEnd: v.dayEnd, interval: Number(v.interval), dailyLimitHours: Number(v.dailyLimitHours) })) return { ok: false, message: store.error() };
         A.say("Saved");
         return { ok: true };
       }
@@ -610,7 +611,12 @@
     $("spUndo").addEventListener("click", onClick);
     store.subscribe(function () { A.bump(); });
     // A task was ticked, added or moved anywhere (Habits, Calendar, here): the progress shown follows it.
-    document.addEventListener("jarvis-tasks-changed", function () { A.bump(); if (shown && !sheet) A.render(); });
+    document.addEventListener("jarvis-tasks-changed", function () {
+      A.bump();
+      const a = document.activeElement;
+      if (a && a.matches && a.matches("textarea, input[type=text], input[type=number]") && $("spView").contains(a)) return;   // don't redraw under what is being typed
+      if (shown && !sheet) A.render();
+    });
     document.addEventListener("jarvis-habits-day-changed", function () { A.bump(); if (shown && !sheet) A.render(); });
   }
 
@@ -618,8 +624,25 @@
     onShow: function () { start(); shown = true; A.render(); },
     onHide: function () { shown = false; },
     go: function (view, extra) { start(); A.go(view, extra); },
-    app: A
+    app: A,
+    // What Habits needs for the task form and the task rows (it never reads the plan's lists itself).
+    choices: function (currentId) {
+      start();
+      const out = [], nodes = PL.liveNodes(store.all("nodes"));
+      [["objective", "Yearly objectives"], ["priority", "Quarterly priorities"], ["milestone", "Monthly milestones"]].forEach(function (g) {
+        nodes.filter(function (n) { return n.type === g[0] && (n.status !== "dropped" || n.id === currentId); })
+          .sort(function (a, b) { return (a.year - b.year) || ((a.quarter || 0) - (b.quarter || 0)) || (a.order - b.order); })
+          .forEach(function (n) { out.push({ id: n.id, label: n.title + (n.type === "objective" ? " (" + n.year + ")" : n.type === "priority" ? " (Q" + n.quarter + " " + n.year + ")" : " (" + A.monthLabel(n.month) + ")"), group: g[1] }); });
+      });
+      return out;
+    },
+    nodeIdOfTask: function (taskId) { start(); const l = PL.linkOf(store.all("links"), taskId); return l && l.nodeId && store.get("nodes", l.nodeId) ? l.nodeId : ""; },
+    nodeTitleOfTask: function (taskId) { start(); const l = PL.linkOf(store.all("links"), taskId), n = l && l.nodeId ? store.get("nodes", l.nodeId) : null; return n ? n.title : ""; },
+    setTaskLink: function (taskId, nodeId) { start(); const ok = A.linkTask(taskId, nodeId || ""); if (ok) A.bump(); return ok; }
   };
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("[data-open-strategy]")) { const b = $("navBtnStrategy"); if (b) b.click(); }
+  });
   window.JarvisPlanApp = A;
   document.addEventListener("DOMContentLoaded", start);
 })();

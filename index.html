@@ -1815,6 +1815,11 @@ npx firebase-tools deploy --only firestore:rules</pre>
               <select id="taskGoalSelect"><option value="">None</option></select>
             </div>
           </div>
+          <div class="form-row hidden" id="taskPlanRow">
+            <label for="taskPlanSelect">Counts toward the plan (optional)</label>
+            <select id="taskPlanSelect"><option value="">Not linked</option></select>
+            <p class="field-hint">Link it to a yearly objective, quarterly priority or monthly milestone in Strategy. Finishing it moves their progress.</p>
+          </div>
           <details class="collapsible-section" id="taskRepeatDetails">
             <summary>Also add this task to other days this week</summary>
             <div class="collapsible-body">
@@ -1917,6 +1922,10 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Goals ---------- -->
     <div id="habits-goals" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavGoals">
+      <div class="card strategy-hint">
+        <p>Planning bigger than personal goals? The Strategy tab links a three-year vision to yearly objectives, quarterly priorities, monthly milestones and your tasks. These goals stay exactly as they are, and you can follow any of them from there.</p>
+        <button type="button" class="btn btn-secondary" data-open-strategy>Open Strategy</button>
+      </div>
       <div class="card">
         <h2 class="card-title" id="habitsGoalFormTitle">Create a Goal</h2>
         <form id="habitsGoalForm" class="stacked-form" novalidate>
@@ -3225,5 +3234,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/plan-ui.js?v=79"></script>
 <script src="js/plan-yearly-ui.js?v=79"></script>
 <script src="js/plan-quarterly-ui.js?v=79"></script>
+<script src="js/plan-week-logic.js?v=79"></script>
+<script src="js/plan-week-ui.js?v=79"></script>
 </body>
 </html>

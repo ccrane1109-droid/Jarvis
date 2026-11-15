@@ -53,6 +53,9 @@ test("settings: sensible defaults, sales (not MRR) for revenue, three plan years
   // a day that ends before it starts is ignored
   assert.equal(P.settings({ dayStart: "20:00", dayEnd: "08:00" }, TODAY).dayStart, "06:00");
   assert.equal(P.settings({ dayStart: "07:30", dayEnd: "21:00" }, TODAY).dayStart, "07:30");
+  assert.equal(P.settings({}, TODAY).dailyLimitHours, 10);
+  assert.equal(P.settings({ dailyLimitHours: 8.5 }, TODAY).dailyLimitHours, 8.5);
+  [2, 17, 8.3, "x", null].forEach((v) => assert.equal(P.settings({ dailyLimitHours: v }, TODAY).dailyLimitHours, 10, String(v)));
 });
 
 /* ---------------- making and editing nodes ---------------- */

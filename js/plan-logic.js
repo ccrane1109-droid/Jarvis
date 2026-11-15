@@ -14,7 +14,7 @@
      periods   jarvisPlanPeriods   { id: "y:2026" | "q:2026-Q1" | "m:2026-11", scope, key, revenueTarget, budget, revenue,
                                      spend, hiresPlanned, hiresMade, hiringNote, updatedAt }
      links     jarvisPlanLinks     { id (= the task's id), nodeId, estMin, createdAt, updatedAt, deletedAt? }
-     settings  jarvisPlanSettings  { startYear, vision, revenueMetric: sales|mrr, dayStart, dayEnd, interval, updatedAt }
+     settings  jarvisPlanSettings  { startYear, vision, revenueMetric: sales|mrr, dayStart, dayEnd, interval, dailyLimitHours, updatedAt }
 
    How progress is worked out (nothing is guessed):
      tasks     done tasks / all tasks linked to this node or anything under it. Each task is counted once. A milestone
@@ -103,7 +103,7 @@
   function nextOrder(list) { return list.reduce(function (m, r) { return Math.max(m, Number(r.order) || 0); }, 0) + 1; }
 
   /* ---------------- settings ---------------- */
-  const DEFAULT_SETTINGS = { startYear: 0, vision: "", revenueMetric: "sales", dayStart: "06:00", dayEnd: "22:00", interval: 30, updatedAt: 0 };
+  const DEFAULT_SETTINGS = { startYear: 0, vision: "", revenueMetric: "sales", dayStart: "06:00", dayEnd: "22:00", interval: 30, dailyLimitHours: 10, updatedAt: 0 };
   function isTime(t) { return typeof t === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(t); }
   function settings(raw, today) {
     const r = isObj(raw) ? raw : {};
@@ -114,6 +114,8 @@
     s.revenueMetric = r.revenueMetric === "mrr" ? "mrr" : "sales";
     if (isTime(r.dayStart) && isTime(r.dayEnd) && r.dayStart < r.dayEnd) { s.dayStart = r.dayStart; s.dayEnd = r.dayEnd; }
     s.interval = Number(r.interval) === 60 ? 60 : 30;
+    const lim = Number(r.dailyLimitHours);
+    s.dailyLimitHours = Number.isFinite(lim) && lim >= 3 && lim <= 16 && Math.round(lim * 2) === lim * 2 ? lim : 10;
     s.updatedAt = Number(r.updatedAt) || 0;
     return s;
   }
