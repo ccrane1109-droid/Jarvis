@@ -269,7 +269,31 @@
     return { settings: !ls ? cs : !cs ? ls : stamp(cs) > stamp(ls) ? cs : ls, days: days };
   }
 
+  // Habits: { id, name, targetDays, dailyTarget, completions: { "YYYY-MM-DD": count }, createdAt }. Both devices' habits are kept (matched by id).
+  // Within a habit, the days from both copies are kept (a day on both: the larger count, so a tick is never lost), and the rest of it
+  // (name, targets) is this device's. A habit unticked on one device and left ticked on the other comes back ticked: that is the price of
+  // never losing a tick, and it only applies when BOTH devices changed the habits since they last agreed.
+  function mergeHabits(local, cloud) {
+    if (!Array.isArray(local)) return Array.isArray(cloud) ? cloud : local;
+    if (!Array.isArray(cloud)) return local;
+    const byId = {};
+    cloud.forEach(function (h) { if (isObj(h) && typeof h.id === "string" && h.id) byId[h.id] = h; });
+    const seen = {};
+    const out = local.map(function (h) {
+      if (!isObj(h) || typeof h.id !== "string" || !h.id) return h;
+      seen[h.id] = true;
+      const other = byId[h.id];
+      if (!other) return h;
+      const days = Object.assign({}, isObj(other.completions) ? other.completions : {});
+      Object.keys(isObj(h.completions) ? h.completions : {}).forEach(function (d) { days[d] = Math.max(Number(days[d]) || 0, Number(h.completions[d]) || 0); });
+      return Object.assign({}, h, { completions: days });
+    });
+    cloud.forEach(function (h) { if (isObj(h) && typeof h.id === "string" && h.id && !seen[h.id]) out.push(h); });
+    return out;
+  }
+
   const STRATEGY = {
+    jarvisHabits: mergeHabits,
     jarvisNutritionLog: mergeDateMeals,
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
     jarvisTasks: mergeById, jarvisGoals: mergeById, jarvisGroceryList: mergeById, jarvisGroceryMealPlan: mergeById, jarvisFormCheckHistory: mergeById,
@@ -307,8 +331,83 @@
     return { ok: true, text: JSON.stringify(fn(a, b)) };
   }
 
+  /* ---------------- noticing that the other device saved something ---------------- */
+
+  // Key order means nothing in JSON (and the cloud does not keep it), so two copies are "the same" when they hold the same values.
+  function canonical(v) {
+    if (Array.isArray(v)) return v.map(canonical);
+    if (isObj(v)) { const out = {}; Object.keys(v).sort().forEach(function (k) { out[k] = canonical(v[k]); }); return out; }
+    return v;
+  }
+  function sameJson(a, b) {
+    let x, y;
+    try { x = typeof a === "string" ? JSON.parse(a) : a; y = typeof b === "string" ? JSON.parse(b) : b; } catch (e) { return false; }
+    return JSON.stringify(canonical(x)) === JSON.stringify(canonical(y));
+  }
+
+  // A number that stands for what a value holds (not for the order of its fields): the same content always gives the same number.
+  function fingerprint(v) {
+    const text = JSON.stringify(canonical(v));
+    let h = 7;
+    for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) >>> 0;
+    return h || 1;
+  }
+
+  // The original sync keeps a map of whole values (users/{uid}.store). Which of `keys` does it hold that differ from what this device has?
+  //   local(key) -> the stored text or null;  busy(key) -> true while this device has saved the key moments ago or has an upload unanswered
+  //   (then the cloud's copy may only be the older of this device's own saves, so nothing is reported yet and `again` says to look later).
+  // -> { news: [{ key, rev: fingerprint, exact: true }], again }
+  function storeNews(store, keys, local, busy) {
+    const out = { news: [], again: false };
+    if (!isObj(store)) return out;
+    keys.forEach(function (key) {
+      if (!(key in store)) return;
+      const text = local(key);
+      if (text !== null && text !== undefined && sameJson(text, store[key])) return;
+      if (busy(key)) { out.again = true; return; }
+      out.news.push({ key: key, rev: fingerprint(store[key]), exact: true });
+    });
+    return out;
+  }
+
+  // What to do at sign-in with a key the original sync keeps as one whole value (habits). `syncedFp` is the fingerprint of the value this
+  // device last knew to be the same as the cloud's (or undefined if it never recorded one).
+  //   "pull"  the cloud has news and this device has nothing unsent: take the cloud's (so a habit unticked elsewhere stays unticked)
+  //   "push"  only this device changed: send it
+  //   "merge" both changed (or nothing is known): keep everything from both
+  //   "same" / "none"
+  function decideStore(localText, cloudValue, syncedFp) {
+    const hasCloud = cloudValue !== undefined && cloudValue !== null;
+    if (localText === null || localText === undefined || isEmptyText(localText)) return hasCloud ? "pull" : "none";
+    if (!hasCloud) return "push";
+    let local;
+    try { local = JSON.parse(localText); } catch (e) { return "pull"; }
+    if (sameJson(local, cloudValue)) return "same";
+    if (typeof syncedFp === "number") {
+      if (fingerprint(local) === syncedFp) return "pull";
+      if (fingerprint(cloudValue) === syncedFp) return "push";
+    }
+    return "merge";
+  }
+
+  // Does a cloud manifest ({ updatedAt, hash, device }) hold something this device has not seen? c:
+  //   meta       what this device last confirmed with the cloud for the key: { rev, hash, pending: [hashes of its own uploads] } or null
+  //   localText  what is stored here now (or null)
+  //   deviceId   this device's id: its own uploads are never "news"
+  //   handledRev the newest revision already acted on in this browser session (so a refresh that cannot absorb it is not repeated forever)
+  function remoteNewer(manifest, c) {
+    if (!isObj(manifest) || typeof manifest.updatedAt !== "number" || !isFinite(manifest.updatedAt)) return false;
+    const meta = c && c.meta ? c.meta : null;
+    if (c && c.deviceId && manifest.device === c.deviceId) return false;
+    if (meta && typeof meta.rev === "number" && manifest.updatedAt <= meta.rev) return false;
+    if (c && typeof c.handledRev === "number" && manifest.updatedAt <= c.handledRev) return false;
+    if (meta && manifest.hash && (meta.hash === manifest.hash || (meta.pending || []).indexOf(manifest.hash) !== -1)) return false;
+    if (c && c.localText !== null && c.localText !== undefined && manifest.hash && hashText(c.localText) === manifest.hash) return false;   // already holds exactly this
+    return true;
+  }
+
   return {
-    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS,
+    BACKUP_KEYS: BACKUP_KEYS, LEGACY_KEYS: LEGACY_KEYS, CHUNK_CHARS: CHUNK_CHARS, remoteNewer: remoteNewer, sameJson: sameJson, canonical: canonical, fingerprint: fingerprint, storeNews: storeNews, decideStore: decideStore, mergeHabits: mergeHabits,
     hashText: hashText, chunkText: chunkText, partId: partId, assemble: assemble, isEmptyText: isEmptyText,
     decide: decide, mergeText: mergeText, legacyShapeOk: legacyShapeOk,
     mergeById: mergeById, mergeDateMeals: mergeDateMeals, mergeMapNewest: mergeMapNewest, mergeNewest: mergeNewest, mergeObjects: mergeObjects, mergeDiscipline: mergeDiscipline, mergeWakeCheck: mergeWakeCheck

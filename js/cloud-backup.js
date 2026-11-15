@@ -11,8 +11,13 @@
    When it runs:
      - at sign-in (reconcile): every key is compared with the cloud copy
        and pushed, pulled or merged (JarvisBackupLogic.decide).
-     - after that, each save of one of these keys is uploaded a couple of
-       seconds later (several quick saves become one upload).
+     - after that, each save of one of these keys is uploaded about a second
+       later (several quick saves become one upload), and straight away when
+       the app is put away.
+     - while the app is open, a listener on the cloud copies tells this device
+       the moment the OTHER device uploads something newer. It never changes
+       this device's data itself (see below); it asks js/live-refresh.js to
+       start the app again at a safe moment, which then combines the two.
      - on "Back up now", and when the phone comes back online.
 
    The workout keys (jarvisWorkouts and the rest of that family) used to live in the original shared document, where
@@ -47,7 +52,7 @@
   const SAFETY_KEY = "jarvisBackupSafety";   // the previous local copy of a key, kept when a merge replaces it
   const DEVICE_KEY = "jarvisBackupDevice";   // a random id for this browser, written into manifests
   const COLLECTION = "appData";
-  const SAVE_DELAY_MS = 2000;
+  const SAVE_DELAY_MS = 1000;
   const RETRY_MS = [5000, 15000, 45000, 120000, 300000];
   const SAFETY_MAX_CHARS = 1500000;
   const MAX_ATTEMPTS = 3;                    // read-decide-write rounds per key when another device keeps winning
@@ -95,6 +100,8 @@
     const keys = opts.keys || logic.BACKUP_KEYS;
     const legacyKeys = (opts.legacyKeys || logic.LEGACY_KEYS || []).filter(function (k) { return keys.indexOf(k) !== -1; });
 
+    const remoteListeners = [];
+    let unwatch = null;
     const dirty = {};     // keys saved on this device and not yet confirmed in the cloud
     const blocked = {};   // keys that need a reload before they can be combined with the cloud
     const listeners = [];
@@ -212,7 +219,7 @@
           const cur = ms.exists() ? ms.data() : null;
           const curRev = cur ? cur.updatedAt : null;
           const isOwn = !!(cur && ownHashes.indexOf(cur.hash) !== -1);
-          if (curRev !== basisRev && !isOwn) return { conflict: true };
+          if (curRev !== basisRev && !isOwn) return { conflict: true, rev: curRev };
           const pieces = logic.chunkText(text);
           const rev = Math.max(now(), (curRev || 0) + 1);
           pieces.forEach(function (p, i) { tx.set(ref(logic.partId(key, i)), { text: p, rev: rev }); });
@@ -374,6 +381,7 @@
             reconciled = true;
             meta.lastOkAt = now(); saveMeta();
             finishRound();
+            watch();
             return null;
           });
         }).catch(failed);
@@ -390,7 +398,7 @@
       if (m && m.hash === h) return Promise.resolve();   // already what the cloud has
       const own = addPending(key, h);
       return pushText(key, text, m ? m.rev : null, own).then(function (res) {
-        if (res.conflict) { blocked[key] = true; return; }
+        if (res.conflict) { blocked[key] = true; tellRemote([{ key: key, rev: res.rev }]); return; }
         setMeta(key, { rev: res.rev, hash: h, pending: [] });
       });
     }
@@ -436,6 +444,39 @@
       return null;
     }
 
+    /* ---- hearing that the other device saved ---- */
+
+    function tellRemote(news) {
+      if (stopped || !news.length) return;
+      remoteListeners.slice().forEach(function (fn) { try { fn(news); } catch (e) { /* a broken listener shouldn't stop backup */ } });
+    }
+    // One cheap listener on the key manifests (the small documents that say what is current; chunks have no `updatedAt`, so they are not
+    // included). The first answer lists them all; after that only the ones that change are sent, so it costs about one read per upload
+    // from the other device. Anything it can't do is quietly skipped: the app then behaves exactly as it did before this listener existed.
+    function onManifests(snap) {
+      if (stopped || !snap) return;
+      if (snap.metadata && snap.metadata.fromCache) return;     // a cache's answer is not news from the cloud
+      const changes = typeof snap.docChanges === "function" ? snap.docChanges() : [];
+      const news = [];
+      changes.forEach(function (ch) {
+        if (!ch || ch.type === "removed" || !ch.doc) return;
+        const key = ch.doc.id;
+        if (keys.indexOf(key) === -1) return;
+        const m = ch.doc.data();
+        if (logic.remoteNewer(m, { meta: metaOf(key), localText: storage.getItem(key), deviceId: deviceId })) news.push({ key: key, rev: m.updatedAt });
+      });
+      tellRemote(news);
+    }
+    function watch() {
+      if (unwatch || stopped || !reconciled || state === "mismatch" || state === "rules") return;
+      if (typeof fb.onSnapshot !== "function" || typeof fb.query !== "function" || typeof fb.where !== "function") return;
+      try {
+        const q = fb.query(fb.collection(db, "users", uid, COLLECTION), fb.where("updatedAt", ">", 0));
+        const off = fb.onSnapshot(q, onManifests, function () { unwatch = null; /* offline or refused: the status line says so; tried again when the app is shown or back online */ });
+        unwatch = typeof off === "function" ? off : null;
+      } catch (e) { unwatch = null; }
+    }
+
     /* ---- timers ---- */
 
     function clearTimerSafe() { if (saveTimer !== null) { clearTimer(saveTimer); saveTimer = null; } }
@@ -471,9 +512,12 @@
       // Backup was paused because another account's backup is recorded on this device; the user chose to use this one.
       acceptAccount: function () { meta = { uid: uid, keys: {}, legacy: {}, lastOkAt: null }; saveMeta(); return reconcile(); },
       markAppStarted: function () { appStarted = true; },
+      // `fn([{ key, rev }])` is called when the cloud holds something this device has not seen, from another device.
+      onRemote: function (fn) { remoteListeners.push(fn); },
+      watch: watch,
       status: status,
       subscribe: subscribe,
-      stop: function () { stopped = true; clearTimerSafe(); clearRetry(); listeners.length = 0; },
+      stop: function () { stopped = true; clearTimerSafe(); clearRetry(); listeners.length = 0; remoteListeners.length = 0; if (unwatch) { try { unwatch(); } catch (e) { /* already closed */ } unwatch = null; } },
       // exposed for tests
       _meta: function () { return meta; }
     };
@@ -517,16 +561,23 @@
         current.retryNow();
       });
     }
-    window.addEventListener("online", function () { if (current && ["offline", "error"].indexOf(current.status().state) !== -1) current.retryNow(); });
-    document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "hidden" && current) current.flush();
+    window.addEventListener("online", function () {
+      if (!current) return;
+      if (["offline", "error"].indexOf(current.status().state) !== -1) current.retryNow(); else current.watch();
     });
+    document.addEventListener("visibilitychange", function () {
+      if (!current) return;
+      if (document.visibilityState === "hidden") current.flush();
+      else current.watch();       // back on screen: make sure the listener for the other device's saves is still there
+    });
+    window.addEventListener("pagehide", function () { if (current) current.flush(); });
   }
 
   function attach(opts) {
     if (current) current.stop();
     current = create(Object.assign({ storage: window.localStorage }, opts));
     current.subscribe(paint);
+    current.onRemote(function (news) { if (window.JarvisLiveRefresh) window.JarvisLiveRefresh.notify(news); });
     wirePage();
     return current;
   }

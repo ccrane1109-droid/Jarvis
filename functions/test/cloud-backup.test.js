@@ -56,7 +56,7 @@ test("a new phone (or cleared storage) gets everything back from the cloud", asy
   assert.equal(fresh.session.status().state, "ok");
 });
 
-test("saves are uploaded together a couple of seconds later, and the status goes pending -> ok", async () => {
+test("saves are uploaded together about a second later, and the status goes pending -> ok", async () => {
   const t = setup({ local: { jarvisTasks: tasks("a") } });
   await t.session.reconcile();
   const seen = [];
@@ -68,9 +68,9 @@ test("saves are uploaded together a couple of seconds later, and the status goes
   assert.equal(t.session.status().state, "pending");
   assert.equal(t.session.status().waiting, 1);
   const commitsBefore = t.cloud.db.counts.commits;
-  await t.clock.tick(1500);
-  assert.equal(t.cloud.db.counts.commits, commitsBefore, "not yet");
   await t.clock.tick(600);
+  assert.equal(t.cloud.db.counts.commits, commitsBefore, "not yet");
+  await t.clock.tick(500);
   assert.equal(t.cloud.db.counts.commits, commitsBefore + 1, "one upload for both saves");
   assert.equal(cloudText(t.cloud, "jarvisTasks"), tasks("a", "b", "c"));
   assert.equal(t.session.status().state, "ok");
@@ -410,4 +410,170 @@ test("the rules file allows the owner, and only the owner, into appData", () => 
   const m = src.match(/match \/appData\/\{docId\} \{([\s\S]*?)\}/);
   assert.ok(m, "an appData rule exists");
   assert.match(m[1], /allow read, write: if request\.auth != null && request\.auth\.uid == userId;/);
+});
+
+
+/* ---------------- hearing that the other device saved ---------------- */
+
+// Two devices on one cloud: `open` signs one in and starts its app (from then on it never changes its own data).
+async function openDevice(cloud, local) {
+  const t = setup({ cloud: cloud, local: local });
+  const news = [];
+  t.session.onRemote((n) => news.push(...n));
+  await t.session.reconcile();
+  t.session.markAppStarted();
+  await settle();
+  t.news = news;
+  return t;
+}
+async function savePlan(t, text) {
+  t.storage.setItem("jarvisTasks", text);
+  t.session.onSave("jarvisTasks");
+  await t.clock.tick(1100);
+  await settle();
+}
+
+test("the other device saves while this one is open: this one is told at once, and nothing on it is changed", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  assert.deepEqual(computer.news, [], "nothing new yet");
+  await savePlan(phone, tasks("a", "b"));
+  assert.equal(computer.news.length, 1);
+  assert.equal(computer.news[0].key, "jarvisTasks");
+  assert.equal(computer.news[0].rev, manifest(cloud, "jarvisTasks").updatedAt, "with the revision, so it is acted on once");
+  assert.equal(computer.storage.getItem("jarvisTasks"), tasks("a"), "the open app's data is left alone; the refresh combines it on start");
+  assert.deepEqual(phone.news, [], "a device is never told about its own upload");
+});
+
+test("hearing about it costs no extra reads of the whole backup", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const reads = cloud.db.counts.reads;
+  await savePlan(phone, tasks("a", "b"));
+  await savePlan(phone, tasks("a", "b", "c"));
+  assert.equal(computer.news.length, 2, "each upload is one piece of news");
+  assert.equal(cloud.db.counts.reads, reads, "no list of the whole collection was read to learn it");
+});
+
+test("only the small manifests are listened to, never the data chunks", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, {});
+  const phone = await openDevice(cloud, { jarvisTasks: JSON.stringify(Array.from({ length: 4000 }, (_, i) => ({ id: "t" + i, text: "x".repeat(200) }))) });
+  await phone.clock.tick(1100); await settle();
+  const pieces = Array.from(cloud.db.store.keys()).filter((p) => p.indexOf("/appData/") !== -1 && p.indexOf(L.partId("jarvisTasks", 0).split("/").pop().slice(0, 12)) !== -1).length;
+  assert.ok(manifest(cloud, "jarvisTasks").parts > 1 && pieces >= 2, "the big value was stored in more than one piece");
+  assert.equal(computer.news.filter((n) => n.key !== "jarvisTasks").length, 0, "yet only the key itself is reported");
+  assert.ok(computer.news.length <= 1, "once");
+});
+
+test("something this device already holds is not news", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  // the computer gets the same content by another route (another tab, a restore) before the news arrives
+  computer.storage.setItem("jarvisTasks", tasks("a", "b"));
+  await savePlan(phone, tasks("a", "b"));
+  assert.deepEqual(computer.news, []);
+});
+
+test("a device that was asleep hears what it missed when it starts listening again", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  computer.session.stop();                                   // the app was frozen in the background
+  const woke = setup({ cloud: cloud, storage: computer.storage });
+  const news = [];
+  woke.session.onRemote((n) => news.push(...n));
+  await woke.session.reconcile();                            // first pass after it wakes: nothing newer yet
+  woke.session.markAppStarted();
+  await settle();
+  assert.deepEqual(news, []);
+  woke.session.stop();
+  const again = setup({ cloud: cloud, storage: computer.storage, clock: woke.clock });
+  const news2 = [];
+  again.session.onRemote((n) => news2.push(...n));
+  await again.session.reconcile(); again.session.markAppStarted();
+  await savePlan(phone, tasks("a", "while asleep"));
+  await settle();
+  assert.equal(news2.length, 1, "told as soon as it is listening");
+});
+
+test("the first answer from the cloud already holds something newer: it is reported", async () => {
+  const cloud = createFakeFirestore();
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const computer = setup({ cloud: cloud, local: { jarvisTasks: tasks("a") } });
+  await computer.session.reconcile();
+  computer.session.stop();
+  await savePlan(phone, tasks("a", "b"));
+  const woke = setup({ cloud: cloud, storage: computer.storage });
+  const news = [];
+  woke.session.onRemote((n) => news.push(...n));
+  await woke.session.reconcile();                            // this pass pulls it in at start: not news
+  woke.session.markAppStarted();
+  await settle();
+  assert.deepEqual(news, [], "what start-up already took is not news");
+});
+
+test("a listener that fails never breaks backup, and is put back when asked", async () => {
+  const cloud = createFakeFirestore();
+  cloud.db.snapshotError = "permission-denied";
+  const t = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  assert.equal(t.session.status().state, "ok", "backup itself is fine");
+  const before = cloud.db.counts.listens;
+  t.session.watch();
+  await settle();
+  assert.equal(cloud.db.counts.listens, before + 1, "asking again attaches a new listener");
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  await savePlan(phone, tasks("a", "b"));
+  assert.equal(t.news.length, 1, "and it works");
+});
+
+test("no listener is started when backup is refused, offline, or paused for another account", async () => {
+  const denied = createFakeFirestore(); denied.db.denied = true;
+  const a = setup({ cloud: denied, local: { jarvisTasks: tasks("a") } });
+  await a.session.reconcile();
+  assert.equal(denied.db.counts.listens, 0);
+  const off = createFakeFirestore(); off.db.offline = true;
+  const b = setup({ cloud: off, local: { jarvisTasks: tasks("a") } });
+  await b.session.reconcile();
+  assert.equal(off.db.counts.listens, 0);
+  const ok = createFakeFirestore();
+  const c = setup({ cloud: ok, local: { jarvisTasks: tasks("a"), [B.META_KEY]: JSON.stringify({ uid: "someone-else", keys: {}, legacy: {}, lastOkAt: null }) } });
+  await c.session.reconcile();
+  assert.equal(c.session.status().state, "mismatch");
+  assert.equal(ok.db.counts.listens, 0);
+});
+
+test("stopping a session closes its listener", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  assert.equal(cloud.db.listeners.length, 2);
+  computer.session.stop();
+  assert.equal(cloud.db.listeners.length, 1);
+  await savePlan(phone, tasks("a", "b"));
+  assert.deepEqual(computer.news, []);
+});
+
+test("a cloud library without listeners (or a stub) leaves backup working as before", async () => {
+  const cloud = createFakeFirestore();
+  delete cloud.fb.onSnapshot;
+  const t = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  assert.equal(t.session.status().state, "ok");
+  assert.equal(cloud.db.counts.listens, 0);
+});
+
+test("an upload that loses to the other device's newer save also reports it, with that revision", async () => {
+  const cloud = createFakeFirestore();
+  const computer = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  const phone = await openDevice(cloud, { jarvisTasks: tasks("a") });
+  // both save; the phone's reaches the cloud first, so the computer's upload finds a newer copy and waits
+  phone.storage.setItem("jarvisTasks", tasks("a", "phone")); phone.session.onSave("jarvisTasks");
+  computer.storage.setItem("jarvisTasks", tasks("a", "computer")); computer.session.onSave("jarvisTasks");
+  await phone.clock.tick(1100); await settle();
+  await computer.clock.tick(1100); await settle();
+  assert.deepEqual(computer.session.status().reload, ["jarvisTasks"], "waits for the refresh that combines them");
+  assert.ok(computer.news.length >= 1 && computer.news.every((n) => n.key === "jarvisTasks" && typeof n.rev === "number"));
 });

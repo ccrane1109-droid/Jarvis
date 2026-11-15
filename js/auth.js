@@ -88,6 +88,11 @@
     "jarvisHabits", "jarvisCalories"
   ];
 
+  // Of the keys above, the ones whose two copies are COMBINED at sign-in when both devices changed them (instead of the cloud's copy
+  // replacing this device's, which lost anything this device had saved while offline). See decideStore in js/backup-logic.js.
+  const MERGED_STORE_KEYS = ["jarvisHabits"];
+  const SYNCED_FP_KEY = "jarvisSyncedFp";   // this device only: the fingerprint of each key's value the last time it matched the cloud
+
   const config = window.JARVIS_FIREBASE_CONFIG || {};
   const isConfigured = !!(config.apiKey && config.apiKey !== "REPLACE_ME");
 
@@ -378,36 +383,86 @@
     return snapshot;
   }
 
+  function readFingerprints() { try { const m = JSON.parse(localStorage.getItem(SYNCED_FP_KEY) || "{}"); return m && typeof m === "object" ? m : {}; } catch (e) { return {}; } }
+  function rememberFingerprint(key, value) {
+    const logic = window.JarvisBackupLogic;
+    if (!logic) return;
+    const m = readFingerprints();
+    m[key] = logic.fingerprint(value);
+    try { localStorage.setItem(SYNCED_FP_KEY, JSON.stringify(m)); } catch (e) { /* the next sign-in then combines instead of replacing: safe */ }
+  }
+
   // Runs once right after login: reconciles this device's local data with
   // the account's cloud copy (cloud wins per-key if present, otherwise the
   // local value is pushed up) so nothing already on the device is lost the
   // first time an existing local-only user logs into their new account.
+  // For habits (see MERGED_STORE_KEYS) the two copies are combined when both devices changed them since they last agreed.
   function syncFromCloud(uid) {
     const ref = fb.doc(db, "users", uid);
     return fb.getDoc(ref).then(function (snap) {
       const cloudStore = (snap.exists() && snap.data().store) || null;
       const localSnapshot = readLocalSnapshot();
+      const logic = window.JarvisBackupLogic;
 
       if (!cloudStore) {
         if (Object.keys(localSnapshot).length === 0) return null;
-        return fb.setDoc(ref, { store: localSnapshot }, { merge: true });
+        return fb.setDoc(ref, { store: localSnapshot }, { merge: true }).then(function () {
+          Object.keys(localSnapshot).forEach(function (k) { rememberFingerprint(k, localSnapshot[k]); });
+        });
       }
 
+      const toSend = {};
       Object.keys(cloudStore).forEach(function (key) {
-        if (SYNCED_KEYS.indexOf(key) !== -1) writeLocalOnly(key, cloudStore[key]);
+        if (SYNCED_KEYS.indexOf(key) === -1) return;
+        if (!logic || MERGED_STORE_KEYS.indexOf(key) === -1) { writeLocalOnly(key, cloudStore[key]); return; }
+        const local = localStorage.getItem(key), fps = readFingerprints();
+        const act = logic.decideStore(local, cloudStore[key], fps[key]);
+        if (act === "pull") { writeLocalOnly(key, cloudStore[key]); rememberFingerprint(key, cloudStore[key]); }
+        else if (act === "same") rememberFingerprint(key, cloudStore[key]);
+        else if (act === "push") { try { toSend[key] = JSON.parse(local); } catch (e) { /* unreadable: leave the cloud's copy alone */ } }
+        else if (act === "merge") {
+          const merged = logic.mergeText(key, local, JSON.stringify(cloudStore[key]));
+          if (merged.ok) { try { localStorage.setItem(key, merged.text); toSend[key] = JSON.parse(merged.text); } catch (e) { /* storage full: keep what is here */ } }
+        }
       });
 
-      const missingFromCloud = {};
       Object.keys(localSnapshot).forEach(function (key) {
-        if (!(key in cloudStore)) missingFromCloud[key] = localSnapshot[key];
+        if (!(key in cloudStore)) toSend[key] = localSnapshot[key];
       });
-      if (Object.keys(missingFromCloud).length > 0) {
-        return fb.setDoc(ref, { store: missingFromCloud }, { merge: true });
+      if (Object.keys(toSend).length > 0) {
+        return fb.setDoc(ref, { store: toSend }, { merge: true }).then(function () {
+          Object.keys(toSend).forEach(function (k) { rememberFingerprint(k, toSend[k]); });
+        });
       }
       return null;
     }).catch(function (err) {
       toast("Couldn't sync your data from the cloud (" + friendlyAuthError(err) + "). Continuing with what's on this device.");
     });
+  }
+
+  // Hearing that the OTHER device changed one of the original sync's keys (habits, calories) while this one is open. Same idea as the
+  // backup's listener (cloud-backup.js): this never touches this device's data; it tells js/live-refresh.js, which starts the app again at
+  // a safe moment, and start-up (syncFromCloud above) takes the cloud's copy. The cloud does not keep the order of an object's fields, so
+  // copies are compared by value. Nothing is reported while this device has saved the key in the last 15 seconds or has an upload
+  // unanswered: then the cloud's copy may only be the older of two saves of this device's own.
+  let storeUnwatch = null, lastStoreSnap = null, storeRecheck = null;
+  function checkStore() {
+    const snap = lastStoreSnap, logic = window.JarvisBackupLogic;
+    if (!snap || !logic || typeof snap.exists !== "function" || !snap.exists()) return;
+    if (snap.metadata && (snap.metadata.fromCache || snap.metadata.hasPendingWrites)) return;
+    const data = snap.data();
+    const r = logic.storeNews(data && data.store, SYNCED_KEYS, function (k) { return localStorage.getItem(k); },
+      function (k) { return inflightSyncedPushes > 0 || Date.now() - (lastSyncedSave[k] || 0) < 15000; });
+    window.clearTimeout(storeRecheck); storeRecheck = null;
+    if (r.again) storeRecheck = window.setTimeout(checkStore, 5000);
+    if (r.news.length && window.JarvisLiveRefresh) window.JarvisLiveRefresh.notify(r.news);
+  }
+  function watchSyncedStore(uid) {
+    if (storeUnwatch || typeof fb.onSnapshot !== "function") return;
+    try {
+      const off = fb.onSnapshot(fb.doc(db, "users", uid), function (snap) { lastStoreSnap = snap; checkStore(); }, function () { storeUnwatch = null; });
+      storeUnwatch = typeof off === "function" ? off : null;
+    } catch (e) { storeUnwatch = null; }
   }
 
   // Monkey-patches JarvisCore.saveJSON exactly once so every future save
@@ -416,6 +471,8 @@
   // always succeeds regardless of network state; the cloud push is
   // best-effort and never blocks or throws back into the caller.
   let saveJSONPatched = false;
+  let inflightSyncedPushes = 0;    // uploads of the original sync's keys that have not been answered yet
+  const lastSyncedSave = {};       // key -> when this device last saved it
   function installSyncedSaveJSON() {
     if (saveJSONPatched) return;
     saveJSONPatched = true;
@@ -427,7 +484,14 @@
         const ref = fb.doc(db, "users", auth.currentUser.uid);
         const patch = {};
         patch[key] = value;
-        fb.setDoc(ref, { store: patch }, { merge: true }).catch(function () { /* best-effort; local save already succeeded */ });
+        inflightSyncedPushes++;
+        lastSyncedSave[key] = Date.now();
+        const done = function () { inflightSyncedPushes = Math.max(0, inflightSyncedPushes - 1); lastSyncedSave[key] = Date.now(); };
+        fb.setDoc(ref, { store: patch }, { merge: true }).then(function () {
+          done();
+          // the cloud now holds this value: remember it, unless something newer was saved meanwhile (then that save's own push will)
+          if (window.JarvisBackupLogic && window.JarvisBackupLogic.sameJson(localStorage.getItem(key), value)) rememberFingerprint(key, value);
+        }, function () { done(); /* best-effort; local save already succeeded */ });
       }
       if (result !== false && window.JarvisBackup) window.JarvisBackup.onSave(key); // no-op unless it's one of the backup keys and a backup session is running
       return result;
@@ -502,6 +566,7 @@
     syncFromCloud(user.uid).then(function () {
       return startBackup(user);
     }).then(function () {
+      if (!bootStarted) watchSyncedStore(user.uid);
       if (window.JarvisBackup) window.JarvisBackup.appStarted(); // from here on the backup must not rewrite data the app has loaded
       if (!currentUserHasTotp && !pendingTotpSecret) {
         showOnly("authTotpEnrollPrompt");
