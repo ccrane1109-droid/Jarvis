@@ -407,6 +407,86 @@
       overdue: late, revenueTarget: money.revenueTarget, revenueActual: money.revenueActual, revenuePct: money.revenuePct, budget: money.budget, spendActual: money.spendActual, behind: behind };
   }
 
+  /* ---------------- the month: the three outcomes that matter, and the month's tasks ---------------- */
+  // The three most important outcomes of a month. Open milestones first: overdue ones, then the heavier ones (weight), then the sooner
+  // deadline. If the month has fewer than three, the quarter's open priorities fill the rest. Each says why it is listed.
+  function monthOutcomes(ctx, mk) {
+    const m = ctx.model, today = ctx.today, open = function (n) { return n.status === "active" && m.statusOf(n.id) !== "completed"; };
+    const rank = function (a, b) {
+      const la = m.health(a.id) === "overdue" ? 0 : 1, lb = m.health(b.id) === "overdue" ? 0 : 1;
+      return la - lb || (b.weight || 1) - (a.weight || 1) || (m.deadline(a) < m.deadline(b) ? -1 : m.deadline(a) > m.deadline(b) ? 1 : 0) || (a.order - b.order);
+    };
+    const row = function (n) {
+      const left = m.daysLeft(n.id), why = m.health(n.id) === "overdue" ? "overdue by " + (-left) + (left === -1 ? " day" : " days") : left !== null && left <= 7 ? "due " + (left === 0 ? "today" : left === 1 ? "tomorrow" : "in " + left + " days") : (n.weight || 1) > 1 ? "counts " + n.weight + " of 5" : "due " + m.deadline(n);
+      return { id: n.id, type: n.type, title: n.title, pct: m.progress(n.id).pct, status: m.statusOf(n.id), daysLeft: left, weight: n.weight || 1, why: why };
+    };
+    const picks = m.milestonesIn(mk).filter(open).sort(rank).slice(0, 3).map(row);
+    if (picks.length < 3) {
+      const year = Number(mk.slice(0, 4)), q = PL.quarterOfMonth(Number(mk.slice(5)));
+      m.prioritiesOf(year, q).filter(open).sort(rank).slice(0, 3 - picks.length).forEach(function (p) { picks.push(Object.assign(row(p), { why: "quarter priority · " + row(p).why })); });
+    }
+    void today;
+    return picks;
+  }
+  function monthTasksAll(ctx, mk) {
+    return arr(ctx.tasks).filter(function (t) { return t && typeof t.id === "string" && typeof t.date === "string" && t.date.slice(0, 7) === mk && !PL.isArchived(ctx.links, t.id); });
+  }
+  function monthOverview(ctx, mk) {
+    const m = ctx.model, today = ctx.today, ms = m.milestonesIn(mk).filter(function (n) { return n.status !== "dropped"; });
+    const tasks = monthTasksAll(ctx, mk), linked = tasks.filter(function (t) { return m.nodeOfTask(t.id); }), loose = tasks.filter(function (t) { return !m.nodeOfTask(t.id); });
+    const done = function (l) { return l.filter(function (t) { return t.completed; }).length; };
+    const deadlines = upcoming(ctx, 45).filter(function (d) { return d.date.slice(0, 7) === mk && d.date >= today; }).slice(0, 6);
+    return {
+      month: mk, outcomes: monthOutcomes(ctx, mk),
+      milestones: { done: ms.filter(function (n) { return m.progress(n.id).pct === 100; }).length, total: ms.length },
+      tasks: { total: tasks.length, done: done(tasks), open: tasks.length - done(tasks), linkedDone: done(linked), linkedOpen: linked.length - done(linked), looseDone: done(loose), looseOpen: loose.length - done(loose),
+        overdue: tasks.filter(function (t) { return !t.completed && t.date < today; }).length },
+      deadlines: deadlines
+    };
+  }
+  // The month's tasks, relevant ones first. Linked tasks are grouped (by milestone, by priority, or by the category you gave the task);
+  // tasks not linked to anything go to the inbox, one page at a time, so a long list never has to be drawn in full.
+  // f: { q, status: open|done|all, category, priority, group: milestone|priority|category, page, pageSize }
+  function monthTaskLists(ctx, mk, f) {
+    f = f || {};
+    const m = ctx.model, today = ctx.today, status = f.status === "done" || f.status === "all" ? f.status : "open", q = String(f.q || "").trim().toLowerCase();
+    const group = f.group === "priority" || f.group === "category" ? f.group : "milestone", size = Math.max(1, Math.min(50, Number(f.pageSize) || 12));
+    const keep = function (t) {
+      if (status === "open" && t.completed) return false;
+      if (status === "done" && !t.completed) return false;
+      if (f.category && (t.category || "") !== f.category) return false;
+      if (f.priority && (t.priority || "medium") !== f.priority) return false;
+      if (q && String(t.text || "").toLowerCase().indexOf(q) === -1 && String(t.category || "").toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    };
+    const all = monthTasksAll(ctx, mk), mine = all.filter(keep);
+    const order = function (a, b) { return (a.completed ? 1 : 0) - (b.completed ? 1 : 0) || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || (PRIO[b.priority] || 2) - (PRIO[a.priority] || 2) || (a.order || 0) - (b.order || 0); };
+    const linked = mine.filter(function (t) { return m.nodeOfTask(t.id); }), loose = mine.filter(function (t) { return !m.nodeOfTask(t.id); });
+    const groups = {}, list = [];
+    linked.forEach(function (t) {
+      const chain = m.chainOfTask(t.id), node = chain[chain.length - 1];
+      let key, node2 = node, title;
+      if (group === "category") { key = "c:" + (t.category || ""); title = t.category || "No category"; node2 = null; }
+      else if (group === "priority") { node2 = chain.filter(function (n) { return n.type === "priority"; })[0] || chain[0] || node; key = "n:" + node2.id; title = node2.title; }
+      else { key = "n:" + node.id; title = node.title; }
+      if (!groups[key]) { groups[key] = { key: key, title: title, node: node2 ? { id: node2.id, type: node2.type, pct: m.progress(node2.id).pct, deadline: m.deadline(node2), late: m.health(node2.id) === "overdue" } : null, tasks: [] }; list.push(groups[key]); }
+      groups[key].tasks.push(t);
+    });
+    list.forEach(function (g) { g.tasks.sort(order); g.open = g.tasks.filter(function (t) { return !t.completed; }).length; });
+    list.sort(function (a, b) {
+      const ao = a.open ? 0 : 1, bo = b.open ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+      if (a.node && b.node) return (a.node.late ? 0 : 1) - (b.node.late ? 0 : 1) || (a.node.deadline < b.node.deadline ? -1 : a.node.deadline > b.node.deadline ? 1 : 0);
+      return a.title < b.title ? -1 : a.title > b.title ? 1 : 0;
+    });
+    // the inbox: overdue first, then higher priority, then the date
+    loose.sort(function (a, b) { const la = !a.completed && a.date < today ? 0 : 1, lb = !b.completed && b.date < today ? 0 : 1; return la - lb || order(a, b); });
+    const pages = Math.max(1, Math.ceil(loose.length / size)), page = Math.max(1, Math.min(pages, Number(f.page) || 1));
+    const cats = {}; all.forEach(function (t) { if (t.category) cats[t.category] = true; });
+    const archived = arr(ctx.tasks).filter(function (t) { return t && typeof t.date === "string" && t.date.slice(0, 7) === mk && PL.isArchived(ctx.links, t.id); });
+    return { groups: list, linkedCount: linked.length, inbox: { total: loose.length, items: loose.slice((page - 1) * size, page * size), page: page, pages: pages, size: size, all: all.filter(function (t) { return !m.nodeOfTask(t.id); }).length }, categories: Object.keys(cats).sort(), archived: archived.slice(0, 30), archivedCount: archived.length, matching: mine.length, total: all.length };
+  }
+
   function proposals(ctx) {
     const m = ctx.model, today = ctx.today, out = [], dismissed = (m.settings && m.settings.dismissed) || {}, nowMs = ctx.nowMs || Date.now();
     const hidden = function (key) { return dismissed[key] && nowMs - dismissed[key] < 14 * 86400000; };
@@ -433,6 +513,6 @@
   return {
     categoryKind: categoryKind, workoutMinutesByDate: workoutMinutesByDate, timeByCategory: timeByCategory, gratielMinutes: gratielMinutes, freeMinutes: freeMinutes,
     rankTasks: rankTasks, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
-    financeSeries: financeSeries, lastMonths: lastMonths, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, proposals: proposals, hours: hours
+    financeSeries: financeSeries, lastMonths: lastMonths, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, monthOverview: monthOverview, monthOutcomes: monthOutcomes, monthTaskLists: monthTaskLists, proposals: proposals, hours: hours
   };
 });

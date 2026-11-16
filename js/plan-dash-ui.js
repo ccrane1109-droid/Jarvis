@@ -114,7 +114,7 @@
       '<p class="sp-dim">' + (d.today.openCount ? (hiddenInTop ? "What is dated today is in your top three above." : "") : (d.today.done ? "Everything dated today is done." : "No open tasks dated today.")) + '</p>' + (d.today.openCount ? "" : '<button type="button" class="btn btn-secondary" data-act="quick-task">Add a task</button>')) + '</div></li>';
     h += '</ol>';
     if (d.deadlines.length) {
-      h += '<div class="sp-dl-wrap"><h4 class="sp-h4">Upcoming deadlines</h4><ul class="sp-dl">' + d.deadlines.slice(0, 5).map(function (x) {
+      h += '<div class="sp-dl-wrap"><h3 class="sp-h4">Upcoming deadlines</h3><ul class="sp-dl">' + d.deadlines.slice(0, 5).map(function (x) {
         const late = x.daysLeft < 0;
         return '<li><button type="button" class="sp-dl-btn' + (late ? " is-late" : "") + '" data-act="' + (x.kind === "node" ? "detail" : "task-detail") + '" data-id="' + esc(x.id) + '"><span class="sp-dl-t">' + esc(x.title) + '</span><span class="sp-dl-k">' + (x.kind === "node" ? esc(A.typeLabel(x.type)) : "Task") + '</span><span class="sp-dl-d' + (late ? " sp-late" : "") + '">' + esc(dayWord(x.daysLeft)) + '</span></button></li>';
       }).join("") + '</ul></div>';
@@ -170,12 +170,12 @@
       factRow("Success metric", n.successMetric ? esc(n.successMetric) : "") + factRow("Completion criteria", n.criteria ? esc(n.criteria) : "") + factRow("What it is", n.description ? esc(n.description) : "") +
       factRow("Counts as", n.weight > 1 ? "weight " + n.weight + " of 5" : "") + factRow("Notes", n.notes ? esc(n.notes) : "") + '</dl>';
     body += '<details class="sp-how"><summary>How is this worked out?</summary>' + howHtml(n, p) + '</details>';
-    if (kids.length) body += '<h4 class="sp-h4">Made of</h4><ul class="sp-kids">' + kids.map(function (k) {
+    if (kids.length) body += '<h3 class="sp-h4">Made of</h3><ul class="sp-kids">' + kids.map(function (k) {
       const kp = m.progress(k.id);
       return '<li><button type="button" class="sp-kid" data-sheet-act="detail" data-id="' + esc(k.id) + '"><span class="sp-kid-t">' + esc(k.title) + '</span><span class="sp-kid-k">' + esc(A.typeLabel(k.type)) + '</span><span class="sp-kid-p">' + esc(A.pctText(kp.pct)) + '</span>' + A.statusBadge(k.id) + '</button></li>';
     }).join("") + '</ul>';
-    if (habits.length) body += '<h4 class="sp-h4">Habits that support it</h4><ul class="sp-sublist">' + habits.map(function (hb) { return '<li>' + esc(hb.name) + ' <span class="sp-dim">' + esc(hb.line) + '</span></li>'; }).join("") + '</ul>';
-    body += '<h4 class="sp-h4">Tasks linked straight to it <span class="sp-dim">(' + direct.length + ')</span></h4>';
+    if (habits.length) body += '<h3 class="sp-h4">Habits that support it</h3><ul class="sp-sublist">' + habits.map(function (hb) { return '<li>' + esc(hb.name) + ' <span class="sp-dim">' + esc(hb.line) + '</span></li>'; }).join("") + '</ul>';
+    body += '<h3 class="sp-h4">Tasks linked straight to it <span class="sp-dim">(' + direct.length + ')</span></h3>';
     if (direct.length) {
       body += '<ul class="sp-trows">' + direct.slice(0, 12).map(function (t) { return '<li class="sp-trow' + (t.completed ? " is-done" : "") + '">' + check(t.id, t.completed, t.text, "data-sheet-act") + '<span class="sp-trow-t"><span class="sp-trow-n">' + esc(t.text) + '</span><span class="sp-trow-s">' + esc(A.fmtShort(t.date)) + '</span></span></li>'; }).join("") + '</ul>' + (direct.length > 12 ? '<p class="sp-dim">Showing 12 of ' + direct.length + '.</p>' : "");
     } else body += '<p class="sp-dim">None yet. Link a task you already have, or add a new one.</p>';
@@ -239,7 +239,7 @@
     const m = A.model(), chain = m.chainOfTask(taskId), link = PL.linkOf(store.all("links"), taskId), blk = W ? W.blockOfTask(store.all("blocks"), taskId) : null;
     let body = '<p class="sp-task-name">' + esc(t.text) + '</p><dl class="sp-facts sp-det-facts">' + factRow("Day", esc(A.fmtDate(t.date)) + (t.time ? " at " + esc(t.time) : "")) + factRow("Priority", esc(t.priority || "medium")) +
       factRow("Time estimate", link && link.estMin ? link.estMin + " min" : "") + factRow("Time block", blk ? esc(A.fmtShort(blk.date)) + " " + esc(blk.start) + "–" + esc(blk.end) : "") + factRow("Category", t.category ? esc(t.category) : "") + '</dl>';
-    body += '<h4 class="sp-h4">What it contributes to</h4>';
+    body += '<h3 class="sp-h4">What it contributes to</h3>';
     body += chain.length ? '<ol class="sp-chain-mini">' + chain.map(function (n) { return '<li><button type="button" class="sp-crumb" data-sheet-act="detail" data-id="' + esc(n.id) + '">' + esc(n.title) + '</button><span class="sp-dim"> ' + esc(A.typeLabel(n.type).toLowerCase()) + '</span></li>'; }).join("") + '</ol>' : '<p class="sp-dim">Not linked to a goal. Linking it lets finishing it move your progress.</p>';
     body += '<div class="sp-det-actions"><button type="button" class="btn btn-secondary" data-sheet-act="toggle">' + (t.completed ? "Mark not done" : "Mark done") + '</button><button type="button" class="btn btn-secondary" data-sheet-act="link">' + (chain.length ? "Change link" : "Link to a goal") + '</button>' +
       '<button type="button" class="btn btn-secondary" data-sheet-act="schedule">' + (blk ? "Change time block" : "Schedule it") + '</button>' + (t.date !== store.today() && !t.completed ? '<button type="button" class="btn btn-secondary" data-sheet-act="today">Move to today</button>' : "") + '</div>';
@@ -316,8 +316,8 @@
       const m = A.model();
       const nodes = m.all().filter(function (n) { return (n.title + " " + n.description + " " + n.notes + " " + n.successMetric).toLowerCase().indexOf(q) !== -1; }).slice(0, 8);
       const tasks = A.tasks().filter(function (t) { return t && t.text && t.text.toLowerCase().indexOf(q) !== -1 && !PL.isArchived(store.all("links"), t.id); }).slice(0, 8);
-      out.innerHTML = (nodes.length ? '<h4 class="sp-h4">Goals</h4><ul class="sp-kids">' + nodes.map(function (n) { return '<li><button type="button" class="sp-kid" data-sheet-act="detail" data-id="' + esc(n.id) + '"><span class="sp-kid-t">' + esc(n.title) + '</span><span class="sp-kid-k">' + esc(A.typeLabel(n.type)) + '</span><span class="sp-kid-p">' + esc(A.pctText(m.progress(n.id).pct)) + '</span></button></li>'; }).join("") + '</ul>' : "") +
-        (tasks.length ? '<h4 class="sp-h4">Tasks</h4><ul class="sp-kids">' + tasks.map(function (t) { return '<li><button type="button" class="sp-kid" data-sheet-act="task" data-id="' + esc(t.id) + '"><span class="sp-kid-t">' + esc(t.text) + '</span><span class="sp-kid-k">' + esc(A.fmtShort(t.date)) + '</span><span class="sp-kid-p">' + (t.completed ? "done" : "") + '</span></button></li>'; }).join("") + '</ul>' : "") +
+      out.innerHTML = (nodes.length ? '<h3 class="sp-h4">Goals</h3><ul class="sp-kids">' + nodes.map(function (n) { return '<li><button type="button" class="sp-kid" data-sheet-act="detail" data-id="' + esc(n.id) + '"><span class="sp-kid-t">' + esc(n.title) + '</span><span class="sp-kid-k">' + esc(A.typeLabel(n.type)) + '</span><span class="sp-kid-p">' + esc(A.pctText(m.progress(n.id).pct)) + '</span></button></li>'; }).join("") + '</ul>' : "") +
+        (tasks.length ? '<h3 class="sp-h4">Tasks</h3><ul class="sp-kids">' + tasks.map(function (t) { return '<li><button type="button" class="sp-kid" data-sheet-act="task" data-id="' + esc(t.id) + '"><span class="sp-kid-t">' + esc(t.text) + '</span><span class="sp-kid-k">' + esc(A.fmtShort(t.date)) + '</span><span class="sp-kid-p">' + (t.completed ? "done" : "") + '</span></button></li>'; }).join("") + '</ul>' : "") +
         (!nodes.length && !tasks.length ? '<p class="sp-dim">Nothing matches “' + esc(q) + '”.</p>' : "");
     }
     A.openSheet({

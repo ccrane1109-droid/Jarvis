@@ -388,3 +388,95 @@ test("quarter overview: a budget priority is behind when spending runs ahead of 
   const nb = none.behind.find((x) => x.id === bud.id), nr = none.behind.find((x) => x.id === rev.id);
   assert.ok(!nb && !nr, "nothing entered: there is no figure, so neither is called behind");
 });
+
+/* ---------------- the month ---------------- */
+
+function monthPlan() {
+  const pl = plan();
+  const m2 = pl.add({ type: "milestone", title: "Photoshoot done", month: "2026-11", parentId: pl.pri.id, due: "2026-11-30", weight: 4 });
+  const m3 = pl.add({ type: "milestone", title: "Pre-order page live", month: "2026-11", parentId: pl.pri.id, due: "2026-11-06" });
+  const old = pl.add({ type: "milestone", title: "Supplier contract signed", month: "2026-11", parentId: pl.pri.id, due: "2026-11-01" });     // overdue
+  const dec = pl.add({ type: "milestone", title: "December thing", month: "2026-12", parentId: pl.pri.id });
+  return { pl, m2, m3, old, dec };
+}
+
+test("the month's three outcomes: overdue first, then the heavier, then the sooner; each says why", () => {
+  const { pl, m2, m3, old } = monthPlan();
+  const o = I.monthOutcomes(context({ nodes: pl.get() }), "2026-11");
+  assert.deepEqual(o.map((x) => x.id), [old.id, m2.id, m3.id], "overdue first, then weight 4, then the one due in 2 days beats Samples (due 20th, weight 1)");
+  assert.equal(o[0].why, "overdue by 3 days");
+  assert.equal(o[1].why, "counts 4 of 5");
+  assert.equal(o[2].why, "due in 2 days");
+  assert.equal(o.length, 3, "never more than three");
+});
+
+test("the month's outcomes: with fewer than three milestones the quarter's priorities fill in, labelled as such", () => {
+  const pl = plan();                      // one milestone in November, one priority in Q4
+  const o = I.monthOutcomes(context({ nodes: pl.get() }), "2026-11");
+  assert.deepEqual(o.map((x) => x.type), ["milestone", "priority"]);
+  assert.ok(/^quarter priority · /.test(o[1].why));
+  assert.deepEqual(I.monthOutcomes(context({ nodes: pl.get() }), "2027-05"), [], "a month with nothing planned lists nothing");
+});
+
+test("month overview: milestone and task counts, with linked and not linked kept apart", () => {
+  const { pl, m2 } = monthPlan();
+  const tasks = [task("a", { completed: true, date: "2026-11-02" }), task("b", { date: "2026-11-03" }), task("c", { date: "2026-11-20" }), task("d", { date: "2026-11-21", completed: true }), task("e", { date: "2026-12-01" })];
+  const lk = links([["a", m2.id], ["b", m2.id]], pl.get());
+  const ov = I.monthOverview(context({ nodes: pl.get(), tasks, links: lk }), "2026-11");
+  assert.deepEqual(ov.milestones, { done: 0, total: 4 });
+  assert.deepEqual(ov.tasks, { total: 4, done: 2, open: 2, linkedDone: 1, linkedOpen: 1, looseDone: 1, looseOpen: 1, overdue: 1 }, "e is December; b is overdue (Nov 3, today Nov 4)");
+  assert.ok(ov.deadlines.every((d) => d.date.slice(0, 7) === "2026-11" && d.date >= TODAY), "only this month's upcoming deadlines");
+});
+
+test("month tasks: grouped by what they count toward, relevant first, and the inbox pages instead of listing everything", () => {
+  const { pl, m2, m3 } = monthPlan();
+  const tasks = [];
+  for (let i = 1; i <= 40; i++) tasks.push(task("u" + i, { date: "2026-11-" + String((i % 27) + 1).padStart(2, "0"), text: "Loose " + i, priority: i % 5 === 0 ? "high" : "medium" }));
+  tasks.push(task("l1", { date: "2026-11-10", text: "Book the photographer" }), task("l2", { date: "2026-11-05", text: "Pick the page theme" }), task("l3", { date: "2026-11-02", text: "Done already", completed: true }));
+  const lk = links([["l1", m2.id], ["l2", m3.id], ["l3", m3.id]], pl.get());
+  const ctx = context({ nodes: pl.get(), tasks, links: lk });
+  const r = I.monthTaskLists(ctx, "2026-11", { pageSize: 10 });
+  assert.equal(r.inbox.total, 40, "forty tasks are not linked to anything");
+  assert.equal(r.inbox.items.length, 10, "but only one page of ten is returned");
+  assert.equal(r.inbox.pages, 4);
+  assert.deepEqual(r.groups.map((g) => g.title), ["Pre-order page live", "Photoshoot done"], "the milestone due soonest first; the done task is not listed under the default open filter");
+  assert.deepEqual(r.groups[0].tasks.map((t) => t.id), ["l2"]);
+  const first = r.inbox.items[0];
+  assert.ok(first.date < TODAY, "overdue tasks lead the inbox: " + first.date);
+  const p2 = I.monthTaskLists(ctx, "2026-11", { pageSize: 10, page: 2 });
+  assert.equal(p2.inbox.page, 2);
+  assert.equal(I.monthTaskLists(ctx, "2026-11", { pageSize: 10, page: 99 }).inbox.page, 4, "a page past the end is the last page");
+  const all = I.monthTaskLists(ctx, "2026-11", { status: "all", pageSize: 50 });
+  assert.deepEqual(all.groups.find((g) => g.title === "Pre-order page live").tasks.map((t) => t.id), ["l2", "l3"], "open before done");
+});
+
+test("month tasks: search, priority and category filters, and put-away (archived) tasks stay out of the inbox", () => {
+  const { pl, m2 } = monthPlan();
+  const tasks = [task("a", { text: "Email the printer", category: "Gratiel", date: "2026-11-08" }), task("b", { text: "Study for quiz", category: "School", date: "2026-11-09", priority: "high" }), task("c", { text: "Old idea", date: "2026-11-10" }), task("d", { text: "Linked one", date: "2026-11-11", category: "Gratiel" })];
+  let lk = links([["d", m2.id]], pl.get());
+  lk = P.setArchived(lk, "c", true, { now: NOW }).links;
+  const ctx = context({ nodes: pl.get(), tasks, links: lk });
+  assert.deepEqual(I.monthTaskLists(ctx, "2026-11", {}).inbox.items.map((t) => t.id), ["a", "b"], "the archived one is not in the inbox");
+  assert.deepEqual(I.monthTaskLists(ctx, "2026-11", { q: "PRINTER" }).inbox.items.map((t) => t.id), ["a"], "search ignores case");
+  assert.deepEqual(I.monthTaskLists(ctx, "2026-11", { priority: "high" }).inbox.items.map((t) => t.id), ["b"]);
+  assert.deepEqual(I.monthTaskLists(ctx, "2026-11", { category: "Gratiel" }).inbox.items.map((t) => t.id), ["a"], "the linked Gratiel task is in a group, not the inbox");
+  const byCat = I.monthTaskLists(ctx, "2026-11", { group: "category" });
+  assert.deepEqual(byCat.groups.map((g) => g.title), ["Gratiel"], "grouped by the category you gave the task");
+  const r = I.monthTaskLists(ctx, "2026-11", {});
+  assert.equal(r.archivedCount, 1);
+  assert.deepEqual(r.categories, ["Gratiel", "School"]);
+  assert.equal(r.inbox.all, 2, "two tasks are waiting, whatever the filter");
+});
+
+test("month tasks: a long task list stays fast", () => {
+  const { pl, m2 } = monthPlan();
+  const tasks = []; for (let i = 0; i < 3000; i++) tasks.push(task("x" + i, { date: "2026-11-" + String((i % 28) + 1).padStart(2, "0"), text: "Task number " + i, category: i % 7 ? "" : "Gratiel" }));
+  const lk = links(tasks.slice(0, 300).map((t) => [t.id, m2.id]), pl.get());
+  const ctx = context({ nodes: pl.get(), tasks, links: lk });
+  const t0 = Date.now();
+  const ov = I.monthOverview(ctx, "2026-11"), lists = I.monthTaskLists(ctx, "2026-11", { q: "number 12" });
+  const ms = Date.now() - t0;
+  assert.ok(ms < 1500, "3,000 tasks in " + ms + " ms");
+  assert.equal(ov.tasks.total, 3000);
+  assert.ok(lists.inbox.items.length <= 12, "one page");
+});

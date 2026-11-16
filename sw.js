@@ -106,6 +106,7 @@ const APP_SHELL = [
   "./js/learning-capture-ui.js?v=80",
   "./js/plan-logic.js?v=80",
   "./js/plan-store.js?v=80",
+  "./js/plan-charts.js?v=80",
   "./js/plan-ui.js?v=80",
   "./js/plan-yearly-ui.js?v=80",
   "./js/plan-quarterly-ui.js?v=80",

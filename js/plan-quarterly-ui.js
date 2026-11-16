@@ -141,30 +141,113 @@
     return PL.monthKey(y, mo);
   }
 
+  // What you have typed into the month's task filters is kept while you are on the screen; it is not saved.
+  const mf = state.mf = state.mf || { q: "", status: "open", group: "milestone", category: "", priority: "", page: 1 };
+
+  function moneyTick(v, axis) { return axis && v >= 10000 ? "$" + (Math.round(v / 100) / 10) + "K" : A.money(v); }
+
+  function outcomeRow(o) {
+    return '<li class="sp-outcome"><button type="button" class="sp-outcome-b" data-act="detail" data-id="' + esc(o.id) + '"><span class="sp-outcome-t">' + esc(o.title) + '</span><span class="sp-outcome-p">' + esc(A.pctText(o.pct)) + '</span>' + A.bar(o.pct, o.title + " progress", o.status === "atrisk" ? "atrisk" : "ontrack") + '<span class="sp-outcome-w">' + esc(o.why) + '</span></button></li>';
+  }
+  function monthOverviewHtml(ov) {
+    const t = ov.tasks;
+    let h = '<div class="sp-tiles sp-tiles-q"><div class="sp-tile"><span class="sp-tile-l">Milestones</span><span class="sp-tile-v">' + (ov.milestones.total ? ov.milestones.done + "/" + ov.milestones.total : '<span class="sp-dim">none</span>') + '</span></div>' +
+      '<div class="sp-tile"><span class="sp-tile-l">Tasks done</span><span class="sp-tile-v">' + (t.total ? t.done + "/" + t.total : '<span class="sp-dim">none</span>') + '</span></div>' +
+      '<div class="sp-tile"><span class="sp-tile-l">Still open</span><span class="sp-tile-v">' + t.open + '</span><span class="sp-tile-s">' + t.linkedOpen + ' linked</span></div>' +
+      '<div class="sp-tile' + (t.overdue ? " sp-tone-red" : "") + '"><span class="sp-tile-l">Overdue</span><span class="sp-tile-v">' + t.overdue + '</span></div></div>';
+    h += '<h4 class="sp-h4">The most important outcomes</h4>' + (ov.outcomes.length ? '<ul class="sp-outcomes">' + ov.outcomes.map(outcomeRow).join("") + '</ul>' : '<p class="sp-dim">Nothing planned for this month yet. Add a milestone below.</p>');
+    h += '<h4 class="sp-h4">Coming up this month</h4>' + (ov.deadlines.length ? '<ul class="sp-dl">' + ov.deadlines.map(function (d) {
+      return '<li><button type="button" class="sp-dl-btn' + (d.daysLeft <= 1 ? " is-late" : "") + '" data-act="' + (d.kind === "node" ? "detail" : "task-detail") + '" data-id="' + esc(d.id) + '"><span class="sp-dl-t">' + esc(d.title) + '</span><span class="sp-dl-k">' + (d.kind === "node" ? esc(A.typeLabel(d.type)) : "Task") + '</span><span class="sp-dl-d">' + esc(A.fmtShort(d.date)) + '</span></button></li>';
+    }).join("") + '</ul>' : '<p class="sp-dim">No deadlines left this month.</p>');
+    return h;
+  }
+
+  function financeHtml(m, mk) {
+    const I = window.JarvisPlanInsights, Ch = window.JarvisPlanCharts, s = m.periods("month", mk), rec = PL.periodOf(A.store.all("periods"), "month", mk) || {};
+    const budget = rec.budget === undefined ? null : rec.budget, spend = s.spendActual;
+    const remaining = budget !== null && spend !== null ? budget - spend : null;
+    let h = '<div class="sp-tiles sp-tiles-3">' +
+      '<div class="sp-tile"><span class="sp-tile-l">Revenue</span><span class="sp-tile-v">' + (s.revenueActual === null ? '<span class="sp-dim">not entered</span>' : esc(A.money(s.revenueActual))) + '</span><span class="sp-tile-s">' + (s.revenueTarget ? "target " + esc(A.money(s.revenueTarget)) + (s.revenueActual === null ? "" : " · " + Math.round(100 * s.revenueActual / s.revenueTarget) + "%") : "no target set") + '</span></div>' +
+      '<div class="sp-tile"><span class="sp-tile-l">Spent</span><span class="sp-tile-v">' + (spend === null ? '<span class="sp-dim">not entered</span>' : esc(A.money(spend))) + '</span><span class="sp-tile-s">' + (budget !== null ? "budget " + esc(A.money(budget)) : "no budget set") + '</span></div>' +
+      '<div class="sp-tile' + (remaining !== null && remaining < 0 ? " sp-tone-red" : "") + '"><span class="sp-tile-l">Budget left</span><span class="sp-tile-v">' + (remaining === null ? '<span class="sp-dim">–</span>' : esc(A.money(remaining))) + '</span><span class="sp-tile-s">' + (remaining === null ? (budget === null ? "set a budget" : "enter spending") : remaining < 0 ? "over budget" : "still to spend") + '</span></div></div>';
+    const months = I.lastMonths(mk, 6), fin = I.financeSeries(A.store.all("periods"), months);
+    h += Ch.bars({ title: "Revenue and spending, last 6 months", summary: "Revenue and spending for the six months up to " + A.monthLabel(mk) + ". " + fin.map(function (r, i) { return PL.monthName(months[i], false) + ": revenue " + (r.revenue === null ? "not entered" : A.money(r.revenue)) + ", spending " + (r.spend === null ? "not entered" : A.money(r.spend)); }).join("; ") + ".",
+      labels: months.map(function (x) { return PL.monthName(x, false); }), format: moneyTick, height: 190, emptyText: "No revenue or spending has been entered for these months. Enter " + PL.monthName(mk, false) + "'s money to start the graph.",
+      series: [{ name: "Revenue", color: "var(--viz-1)", values: fin.map(function (r) { return r.revenue; }) }, { name: "Spending", color: "var(--viz-2)", values: fin.map(function (r) { return r.spend; }) }] });
+    h += '<button type="button" class="btn btn-secondary" data-act="period" data-scope="month" data-key="' + esc(mk) + '">Enter ' + esc(PL.monthName(mk, false)) + ' money</button>';
+    return h;
+  }
+
+  /* ---- the month's tasks and the inbox ---- */
+
+  function listRow(t, m, withGoal) {
+    const n = m.nodeOfTask(t.id), over = !t.completed && t.date < A.store.today();
+    return '<li class="sp-trow' + (t.completed ? " is-done" : "") + '"><label class="sp-check44"><input type="checkbox" class="sp-trow-check" data-act="task-toggle" data-id="' + esc(t.id) + '"' + (t.completed ? " checked" : "") + ' aria-label="Done: ' + esc(t.text) + '"></label>' +
+      '<button type="button" class="sp-trow-t" data-act="task-detail" data-id="' + esc(t.id) + '"><span class="sp-trow-n">' + esc(t.text) + '</span><span class="sp-trow-s' + (over ? " sp-late" : "") + '">' + esc(A.fmtShort(t.date)) + (over ? " · overdue" : "") + (t.priority === "high" ? " · high" : "") + (t.category ? " · " + esc(t.category) : "") + (withGoal && n ? " · " + esc(n.title) : "") + '</span></button></li>';
+  }
+  function groupsHtml(r, m) {
+    if (!r.total) return '<p class="sp-dim">No tasks are dated this month.</p>';
+    if (!r.groups.length) return '<p class="sp-dim">' + (r.linkedCount === 0 && r.matching === 0 ? "No tasks match these filters." : "No linked tasks to show.") + '</p>';
+    return r.groups.map(function (g) {
+      return '<section class="sp-tgroup" aria-label="' + esc(g.title) + '"><h4 class="sp-tgroup-h"><span class="sp-tgroup-t">' + esc(g.title) + '</span><span class="sp-dim">' + (g.node ? esc(A.pctText(g.node.pct)) + " · " : "") + g.open + ' open</span></h4><ul class="sp-trows">' + g.tasks.map(function (t) { return listRow(t, m, false); }).join("") + '</ul></section>';
+    }).join("");
+  }
+  function inboxRow(t) {
+    const over = !t.completed && t.date < A.store.today();
+    return '<li class="sp-inbox-row' + (t.completed ? " is-done" : "") + '"><div class="sp-inbox-main"><label class="sp-check44"><input type="checkbox" class="sp-trow-check" data-act="task-toggle" data-id="' + esc(t.id) + '"' + (t.completed ? " checked" : "") + ' aria-label="Done: ' + esc(t.text) + '"></label>' +
+      '<button type="button" class="sp-trow-t" data-act="task-detail" data-id="' + esc(t.id) + '"><span class="sp-trow-n">' + esc(t.text) + '</span><span class="sp-trow-s' + (over ? " sp-late" : "") + '">' + esc(A.fmtShort(t.date)) + (over ? " · overdue" : "") + (t.priority === "high" ? " · high" : "") + (t.category ? " · " + esc(t.category) : "") + '</span></button></div>' +
+      '<div class="sp-inbox-btns"><button type="button" class="btn btn-secondary" data-act="link-task" data-id="' + esc(t.id) + '" aria-label="Link ' + esc(t.text) + ' to a goal">Link</button><button type="button" class="btn btn-secondary" data-act="task-schedule-go" data-id="' + esc(t.id) + '" aria-label="Schedule ' + esc(t.text) + '">Schedule</button><button type="button" class="btn btn-secondary" data-act="task-category" data-id="' + esc(t.id) + '" aria-label="Set a category for ' + esc(t.text) + '">Category</button><button type="button" class="btn btn-secondary" data-act="task-archive" data-id="' + esc(t.id) + '" aria-label="Put ' + esc(t.text) + ' away">Put away</button></div></li>';
+  }
+  function inboxHtml(r) {
+    const ib = r.inbox;
+    let h = '';
+    if (!ib.all) h += '<p class="sp-dim">Nothing is waiting. Every task this month counts toward a goal' + (r.archivedCount ? " or has been put away" : "") + '.</p>';
+    else if (!ib.total) h += '<p class="sp-dim">No inbox tasks match these filters (' + ib.all + ' waiting in all).</p>';
+    else {
+      h += '<ul class="sp-inbox">' + ib.items.map(inboxRow).join("") + '</ul>';
+      if (ib.pages > 1) h += '<div class="sp-pager"><button type="button" class="btn btn-secondary" data-act="inbox-page" data-dir="-1"' + (ib.page <= 1 ? " disabled" : "") + '>Previous</button><span class="sp-dim" aria-live="polite">' + ((ib.page - 1) * ib.size + 1) + '–' + Math.min(ib.total, ib.page * ib.size) + ' of ' + ib.total + '</span><button type="button" class="btn btn-secondary" data-act="inbox-page" data-dir="1"' + (ib.page >= ib.pages ? " disabled" : "") + '>Next</button></div>';
+      else h += '<p class="sp-dim">' + A.plural(ib.total, "task") + ' waiting.</p>';
+    }
+    if (r.archivedCount) h += '<details class="sp-away"><summary>Put away (' + r.archivedCount + ')</summary><ul class="sp-trows">' + r.archived.map(function (t) {
+      return '<li class="sp-trow"><span class="sp-trow-t"><span class="sp-trow-n">' + esc(t.text) + '</span><span class="sp-trow-s">' + esc(A.fmtShort(t.date)) + '</span></span><button type="button" class="btn btn-secondary" data-act="task-restore" data-id="' + esc(t.id) + '" aria-label="Bring ' + esc(t.text) + ' back">Bring back</button></li>';
+    }).join("") + '</ul></details>';
+    return h;
+  }
+  function filterBar(r) {
+    const opt = function (v, label, cur) { return '<option value="' + esc(v) + '"' + (String(cur) === String(v) ? " selected" : "") + '>' + esc(label) + '</option>'; };
+    return '<div class="sp-filters"><div class="form-row sp-f-search"><label for="spmq">Search this month\'s tasks</label><input type="search" id="spmq" data-mf="q" value="' + esc(mf.q) + '" placeholder="Search by name or category" autocomplete="off"></div>' +
+      '<div class="sp-f-row"><div class="form-row"><label for="spmstatus">Show</label><select id="spmstatus" data-mf="status">' + opt("open", "Open", mf.status) + opt("done", "Done", mf.status) + opt("all", "All", mf.status) + '</select></div>' +
+      '<div class="form-row"><label for="spmgroup">Group by</label><select id="spmgroup" data-mf="group">' + opt("milestone", "Milestone", mf.group) + opt("priority", "Priority", mf.group) + opt("category", "Category", mf.group) + '</select></div></div>' +
+      '<div class="sp-f-row"><div class="form-row"><label for="spmprio">Priority</label><select id="spmprio" data-mf="priority">' + opt("", "Any", mf.priority) + opt("high", "High", mf.priority) + opt("medium", "Medium", mf.priority) + opt("low", "Low", mf.priority) + '</select></div>' +
+      '<div class="form-row"><label for="spmcat">Category</label><select id="spmcat" data-mf="category">' + opt("", "Any", mf.category) + r.categories.map(function (c) { return opt(c, c, mf.category); }).join("") + '</select></div></div></div>';
+  }
+  function monthLists() { return window.JarvisPlanInsights.monthTaskLists(A.ictx(), state.month, mf); }
+  // Only the lists are redrawn when a filter changes, so the search box keeps its focus while you type.
+  function redrawLists() {
+    const g = A.$("spMonthGroups"), ib = A.$("spInbox");
+    if (!g || !ib) { A.render(); return; }
+    const r = monthLists(), m = A.model();
+    g.innerHTML = groupsHtml(r, m);
+    ib.innerHTML = inboxHtml(r);
+    const sum = A.$("spInboxSum"); if (sum) sum.textContent = A.plural(r.inbox.all, "task") + " waiting";
+  }
+
   A.register("monthly", {
     html: function () {
-      const m = A.model(), mk = state.month, today = A.store.today();
+      const m = A.model(), mk = state.month, I = window.JarvisPlanInsights;
       let h = '<h2 class="visually-hidden">Monthly plan</h2><div class="sp-head">' + stepper(A.monthLabel(mk), "month-nav", "month-nav", "Previous month", "Next month") + '</div>';
       const late = m.overdueMilestones().filter(function (n) { return n.month === mk; });
       h += overdueBox(m, late);
-      h += '<h3 class="sp-h3">Money for ' + esc(PL.monthName(mk, true)) + '</h3>' + A.periodBlock("month", mk) +
-        '<button type="button" class="btn btn-secondary" data-act="period" data-scope="month" data-key="' + esc(mk) + '">Enter ' + esc(PL.monthName(mk, false)) + ' money</button>';
+      const ov = I.monthOverview(A.ictx(), mk);
+      h += A.section("m-overview", "Overview", monthOverviewHtml(ov), { open: true, summary: (ov.milestones.total ? ov.milestones.done + " of " + ov.milestones.total + " milestones" : "no milestones") + " · " + (ov.tasks.total ? ov.tasks.done + " of " + ov.tasks.total + " tasks" : "no tasks") });
       const ms = m.milestonesIn(mk);
-      h += '<h3 class="sp-h3">Milestones</h3>' + (ms.length ? '<div class="sp-stack">' + ms.map(function (n) { return A.nodeCard(n, {}); }).join("") + '</div>' : '<p class="sp-dim">No milestones for this month yet.</p>') +
-        '<button type="button" class="btn btn-secondary" data-act="add-milestone" data-month="' + esc(mk) + '">Add milestone</button>';
-      // the month's tasks: the ones counting toward the plan, then the ones that are not linked to anything
-      const tasks = A.tasks().filter(function (t) { return t && typeof t.date === "string" && t.date.slice(0, 7) === mk; }).sort(function (a, b) { return a.date.localeCompare(b.date) || (a.order || 0) - (b.order || 0); });
-      const linked = tasks.filter(function (t) { return m.nodeOfTask(t.id); }), loose = tasks.filter(function (t) { return !m.nodeOfTask(t.id); });
-      h += '<h3 class="sp-h3">Tasks this month <span class="sp-dim">(' + linked.length + ' linked, ' + loose.length + ' not linked)</span></h3>';
-      if (!tasks.length) h += '<p class="sp-dim">No tasks dated this month.</p>';
-      const row = function (t) {
-        const n = m.nodeOfTask(t.id);
-        return '<li class="sp-task' + (t.completed ? " is-done" : "") + '"><label class="sp-task-check"><input type="checkbox" data-act="task-toggle" data-id="' + esc(t.id) + '"' + (t.completed ? " checked" : "") + '><span class="sp-task-text">' + esc(t.text) + '</span></label>' +
-          '<span class="sp-task-meta">' + esc(A.fmtShort(t.date)) + (n ? " · " + esc(n.title) : "") + '</span><button type="button" class="btn btn-secondary sp-task-unlink" data-act="link-task" data-id="' + esc(t.id) + '" aria-label="' + (n ? "Change the link of " : "Link ") + esc(t.text) + '">' + (n ? "Change" : "Link") + '</button></li>';
-      };
-      if (linked.length) h += '<h4 class="sp-h4">Counting toward the plan</h4><ul class="sp-tasks">' + linked.map(row).join("") + '</ul>';
-      if (loose.length) h += '<h4 class="sp-h4">Not linked to anything</h4><ul class="sp-tasks">' + loose.slice(0, 60).map(row).join("") + '</ul>' + (loose.length > 60 ? '<p class="sp-dim">Showing the first 60.</p>' : "");
-      void today;
+      h += A.section("m-milestones", "Milestones", (ms.length ? '<div class="sp-stack">' + ms.map(function (n) { return A.nodeCard(n, { parentLine: true }); }).join("") + '</div>' : '<p class="sp-dim">No milestones for this month yet.</p>') +
+        '<button type="button" class="btn btn-secondary" data-act="add-milestone" data-month="' + esc(mk) + '">Add milestone</button>', { open: true, summary: A.plural(ms.length, "milestone") });
+      const fin = m.periods("month", mk);
+      h += A.section("m-finance", "Finances", financeHtml(m, mk), { open: false, summary: (fin.revenueActual === null ? "no revenue entered" : esc(A.money(fin.revenueActual)) + (fin.revenueTarget ? " of " + esc(A.money(fin.revenueTarget)) : "")) + " · " + (fin.spendActual === null ? "no spending entered" : esc(A.money(fin.spendActual)) + " spent") });
+      const r = monthLists();
+      h += A.section("m-tasks", "Tasks", filterBar(r) + '<div id="spMonthGroups">' + groupsHtml(r, m) + '</div>', { open: true, summary: A.plural(r.linkedCount, "linked task") });
+      h += A.section("m-inbox", "Task inbox", '<p class="sp-dim">Tasks this month that don\'t count toward any goal yet. Link one, give it a time, or put it away.</p><div id="spInbox">' + inboxHtml(r) + '</div>', { open: false, summary: '<span id="spInboxSum">' + esc(A.plural(r.inbox.all, "task") + " waiting") + '</span>' });
       return h;
     }
   });
@@ -172,6 +255,52 @@
   /* ---------------- clicks ---------------- */
 
   A.acts["period-month"] = function (el) { A.acts["period"]({ getAttribute: function (k) { return k === "data-scope" ? "month" : k === "data-key" ? el.getAttribute("data-id") : null; } }); };
+  A.acts["inbox-page"] = function (el) { mf.page = Math.max(1, (mf.page || 1) + Number(el.getAttribute("data-dir"))); redrawLists(); };
+  A.acts["task-schedule-go"] = function (el) { const id = el.getAttribute("data-id"); A.go("weekly"); window.setTimeout(function () { if (A.acts["task-schedule"]) A.acts["task-schedule"]({ getAttribute: function () { return id; } }); }, 60); };
+  A.acts["task-archive"] = function (el) {
+    const id = el.getAttribute("data-id"), t = A.taskById(id);
+    if (!t) return;
+    const r = PL.setArchived(A.store.all("links"), id, true, {});
+    if (!r.ok || !A.store.replace("links", r.links)) { A.saveFailed(); return; }
+    A.notice("Put “" + t.text + "” away. It is still in your task list; the plan just stops showing it.", "Undo", function () { A.store.replace("links", PL.setArchived(A.store.all("links"), id, false, {}).links); A.render(); });
+    A.render();
+  };
+  A.acts["task-restore"] = function (el) {
+    const id = el.getAttribute("data-id");
+    if (!A.store.replace("links", PL.setArchived(A.store.all("links"), id, false, {}).links)) { A.saveFailed(); return; }
+    A.say("Brought back"); A.render();
+  };
+  A.acts["task-category"] = function (el) { A.openCategorySheet(el.getAttribute("data-id")); };
+  // A category is the free text the Habits task form already has; this only writes that same field.
+  A.openCategorySheet = function (taskId) {
+    const t = A.taskById(taskId);
+    if (!t) return;
+    const cats = {}; A.tasks().forEach(function (x) { if (x && x.category) cats[x.category] = true; });
+    A.openSheet({
+      title: "Category", submit: "Save",
+      body: '<p class="sp-dim">For “' + esc(t.text) + '”. Leave it empty to clear it.</p>' + A.fText("category", "Category", t.category || "", { max: 40, placeholder: "e.g. Gratiel, School, Personal" }) +
+        '<datalist id="spCatList">' + Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '"></option>'; }).join("") + '</datalist>',
+      onOpen: function (root) { const i = root.querySelector('[name="category"]'); if (i) i.setAttribute("list", "spCatList"); },
+      onSubmit: function (v) {
+        const H = window.JarvisHabits, c = String(v.category || "").replace(/\s+/g, " ").trim().slice(0, 40);
+        if (!H || !H.commitTasks) return { ok: false, message: "Tasks aren't available right now." };
+        H.commitTasks(A.tasks().map(function (x) { return x.id === taskId ? Object.assign({}, x, { category: c }) : x; }));
+        A.say(c ? "Category saved" : "Category cleared");
+        return { ok: true };
+      }
+    });
+  };
+  // the month's filters
+  (function () {
+    function onFilter(e) {
+      const el = e.target, k = el && el.getAttribute && el.getAttribute("data-mf");
+      if (!k) return;
+      mf[k] = el.value; mf.page = 1;
+      if (k === "q") { window.clearTimeout(onFilter.t); onFilter.t = window.setTimeout(redrawLists, 120); } else redrawLists();
+    }
+    document.addEventListener("input", function (e) { if (e.target && e.target.getAttribute && e.target.getAttribute("data-mf") === "q") onFilter(e); });
+    document.addEventListener("change", onFilter);
+  })();
   A.acts["year-nav"] = function (el) { state.year += Number(el.getAttribute("data-dir")); A.render(); };
   A.acts["pick-quarter"] = function (el) { state.quarter = Number(el.getAttribute("data-v")); A.render(); };
   A.acts["month-nav"] = function (el) { state.month = shiftMonth(state.month, Number(el.getAttribute("data-dir"))); state.year = Number(state.month.slice(0, 4)); A.render(); };
