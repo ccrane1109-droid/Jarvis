@@ -335,6 +335,78 @@
 
   /* ---------------- suggestions that need your approval ---------------- */
   // Each proposal describes a change and what applying it would do. Dismissed ones (settings.dismissed[key], within 14 days) stay hidden.
+  /* ---------------- the quarter at a glance, and what would help the ones that are behind ---------------- */
+  // Every figure is a count or a date taken from the plan. The "what would help" lines are fixed rules, each one tied to something it can
+  // see (no milestones yet, an overdue milestone, a milestone with no tasks, nothing dated in the next 7 days, a workload sum); none is a forecast.
+  function money(n) { return "$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+  function helpFor(ctx, p) {
+    const m = ctx.model, today = ctx.today, out = [];
+    if (p.measure !== "tasks") return helpForMeasure(ctx, p);
+    const open = m.subtreeTasks(p.id).filter(function (t) { return !t.completed; });
+    if (!m.parentOf(p)) out.push({ kind: "link-parent", id: p.id, text: "It isn't under a yearly objective, so it doesn't count toward your year. Link it to one." });
+    const ms = m.milestonesOf(p.id).filter(function (k) { return k.status !== "dropped"; });
+    if (!ms.length && !m.tasksDirect(p.id).length) out.push({ kind: "breakdown", id: p.id, text: "It has no milestones or tasks yet, so nothing can move. Break it into monthly milestones." });
+    ms.filter(function (k) { return m.health(k.id) === "overdue"; }).slice(0, 2).forEach(function (k) { out.push({ kind: "open", id: k.id, text: "“" + k.title + "” was due " + m.deadline(k) + ". Finish it, or move its deadline." }); });
+    ms.filter(function (k) { return k.month <= today.slice(0, 7) && !m.subtreeTasks(k.id).length && m.progress(k.id).pct !== 100; }).slice(0, 2).forEach(function (k) { out.push({ kind: "link-tasks", id: k.id, text: "“" + k.title + "” has no tasks. Add the first one." }); });
+    const dates = W.weekDates(W.mondayOf(today)), next7 = PL.addDays(today, 7);
+    if (open.length && !open.some(function (t) { return PL.isDate(t.date) && t.date >= today && t.date <= next7; })) out.push({ kind: "schedule-week", id: p.id, text: "Nothing from it is dated in the next 7 days. Schedule one of its " + open.length + " open " + (open.length === 1 ? "task" : "tasks") + "." });
+    const left = m.daysLeft(p.id);
+    if (open.length && left !== null && left > 0) out.push({ kind: "info", id: p.id, text: open.length + " open " + (open.length === 1 ? "task" : "tasks") + " and " + left + (left === 1 ? " day" : " days") + " left: about " + (Math.round(10 * open.length / Math.max(1, left / 7)) / 10) + " a week to finish them all." });
+    else if (open.length && left !== null && left <= 0) out.push({ kind: "info", id: p.id, text: open.length + " open " + (open.length === 1 ? "task is" : "tasks are") + " left after its deadline." });
+    void dates;
+    return out.slice(0, 4);
+  }
+  // A priority measured by money or a number has no tasks to chase: the help is the figure itself, and where to enter it.
+  function helpForMeasure(ctx, p) {
+    const m = ctx.model, pr = m.progress(p.id), left = m.daysLeft(p.id), pc = m.pace(p.id), out = [];
+    const firstMonth = PL.quarterMonths(p.year, p.quarter)[0];
+    if (p.measure === "revenue" || p.measure === "budget") {
+      const label = p.measure === "revenue" ? "revenue" : "spending";
+      if (pr.actual === null) { out.push({ kind: "enter-money", id: firstMonth, text: "No " + label + " has been entered for this quarter's months yet. Enter it so this can be measured." }); return out; }
+      if (p.measure === "revenue") {
+        const remaining = Math.max(0, p.target - pr.actual);
+        if (remaining > 0 && left !== null && left > 0) out.push({ kind: "info", id: p.id, text: money(pr.actual) + " of " + money(p.target) + " so far. " + money(remaining) + " to go in " + left + (left === 1 ? " day" : " days") + ": about " + money(remaining / Math.max(1, left / 7)) + " a week." });
+        else if (remaining > 0) out.push({ kind: "info", id: p.id, text: money(pr.actual) + " of " + money(p.target) + ": " + money(remaining) + " short of the target." });
+      } else {
+        out.push({ kind: "info", id: p.id, text: "Spent " + money(pr.actual) + " of " + money(p.target) + " (" + pr.pct + "% of the budget" + (pc ? " with " + pc.expected + "% of the time passed" : "") + ")." + (pr.over ? " That is over budget by " + money(pr.actual - p.target) + "." : "") });
+      }
+    } else if (p.measure === "number") {
+      out.push({ kind: "info", id: p.id, text: pr.note + (left !== null && left > 0 ? ", " + left + (left === 1 ? " day" : " days") + " left." : ".") });
+    } else if (p.measure === "goal") out.push({ kind: "open", id: p.id, text: pr.note + ". Update that goal in Habits to move this." });
+    return out;
+  }
+  // How far behind, in words that fit the measure: spending is "behind" when it runs ahead of the time passed.
+  function behindPhrase(p, pc) {
+    if (!pc || pc.gap === null) return "";
+    if (p.measure === "budget") return pc.gap > 0 ? "spending " + pc.gap + " points ahead of the time passed" : "";
+    return pc.gap < 0 ? (-pc.gap) + " points behind the pace" : "";
+  }
+  function quarterOverview(ctx, year, quarter) {
+    const m = ctx.model, today = ctx.today;
+    const pris = m.prioritiesOf(year, quarter).filter(function (p) { return p.status !== "dropped"; });
+    const months = PL.quarterMonths(year, quarter), start = PL.monthStart(months[0]), end = PL.monthEnd(months[2]);
+    const state = today < start ? "before" : today > end ? "after" : "during";
+    const expected = state === "before" ? 0 : state === "after" ? 100 : Math.round(100 * PL.diffDays(start, today) / Math.max(1, PL.diffDays(start, end)));
+    const known = pris.map(function (p) { return m.progress(p.id).pct; }).filter(function (v) { return v !== null; });
+    const actual = known.length ? Math.round(known.reduce(function (sum, v) { return sum + Math.min(100, v); }, 0) / known.length) : null;
+    const counts = { notstarted: 0, ontrack: 0, atrisk: 0, completed: 0, paused: 0 };
+    pris.forEach(function (p) { const st = m.statusOf(p.id); if (counts[st] !== undefined) counts[st]++; });
+    const taskSeen = {}, tasks = []; pris.forEach(function (p) { m.subtreeTasks(p.id).forEach(function (t) { if (!taskSeen[t.id]) { taskSeen[t.id] = true; tasks.push(t); } }); });
+    const msSeen = {}, mss = [];
+    pris.forEach(function (p) { m.subtreeMilestones(p.id).forEach(function (k) { if (!msSeen[k.id]) { msSeen[k.id] = true; mss.push(k); } }); });
+    months.forEach(function (mk) { m.milestonesIn(mk).forEach(function (k) { if (!msSeen[k.id] && k.status !== "dropped") { msSeen[k.id] = true; mss.push(k); } }); });
+    const msDone = mss.filter(function (k) { return m.progress(k.id).pct === 100; }).length;
+    const late = pris.filter(function (p) { return m.health(p.id) === "overdue"; }).length + mss.filter(function (k) { return m.health(k.id) === "overdue"; }).length;
+    const money = m.periods("quarter", PL.quarterKey(year, quarter));
+    const behind = pris.filter(function (p) { return p.status === "active" && m.statusOf(p.id) === "atrisk"; }).map(function (p) {
+      const pc = m.pace(p.id);
+      return { id: p.id, title: p.title, measure: p.measure, gap: pc ? pc.gap : null, phrase: behindPhrase(p, pc), helps: helpFor(ctx, p) };
+    });
+    return { year: year, quarter: quarter, start: start, end: end, state: state, expected: expected, actual: actual, gap: actual === null ? null : actual - expected,
+      priorities: pris.length, counts: counts, milestones: { done: msDone, total: mss.length }, tasks: { done: tasks.filter(function (t) { return t.completed; }).length, total: tasks.length },
+      overdue: late, revenueTarget: money.revenueTarget, revenueActual: money.revenueActual, revenuePct: money.revenuePct, budget: money.budget, spendActual: money.spendActual, behind: behind };
+  }
+
   function proposals(ctx) {
     const m = ctx.model, today = ctx.today, out = [], dismissed = (m.settings && m.settings.dismissed) || {}, nowMs = ctx.nowMs || Date.now();
     const hidden = function (key) { return dismissed[key] && nowMs - dismissed[key] < 14 * 86400000; };
@@ -361,6 +433,6 @@
   return {
     categoryKind: categoryKind, workoutMinutesByDate: workoutMinutesByDate, timeByCategory: timeByCategory, gratielMinutes: gratielMinutes, freeMinutes: freeMinutes,
     rankTasks: rankTasks, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
-    financeSeries: financeSeries, lastMonths: lastMonths, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, proposals: proposals, hours: hours
+    financeSeries: financeSeries, lastMonths: lastMonths, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, proposals: proposals, hours: hours
   };
 });

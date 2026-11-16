@@ -57,18 +57,18 @@
     const ms = m.milestonesOf(p.id);
     const rows = ms.length ? '<h4 class="sp-h4">Monthly milestones</h4><ul class="sp-ms-list">' + ms.map(function (n) { return milestoneRow(m, n); }).join("") + '</ul>' : '<p class="sp-dim">No milestones yet. Break this priority into steps by month.</p>';
     const add = '<button type="button" class="btn btn-secondary" data-act="add-milestone" data-parent="' + esc(p.id) + '">Add milestone</button>';
-    return A.nodeCard(p, { children: rows, add: add });
+    return A.nodeCard(p, { children: rows, add: add, parentLine: true });
   }
 
   function monthBlock(m, mk, q) {
-    const s = m.periods("month", mk), ms = m.milestonesIn(mk);
-    let h = '<section class="sp-month" aria-label="' + esc(A.monthLabel(mk)) + '"><header class="sp-month-head"><h4 class="sp-h4">' + esc(PL.monthName(mk, true)) + '</h4><span class="sp-dim">' +
-      (s.revenueActual === null ? "no revenue entered" : esc(A.money(s.revenueActual)) + (s.revenueTarget ? " of " + esc(A.money(s.revenueTarget)) : "") + (s.metric === "mrr" ? " MRR" : " in sales")) + '</span></header>';
-    h += ms.length ? '<ul class="sp-ms-list">' + ms.map(function (n) { return milestoneRow(m, n); }).join("") + '</ul>' : '<p class="sp-dim">No milestones for this month.</p>';
-    h += '<div class="sp-card-actions"><button type="button" class="btn btn-secondary" data-act="add-milestone" data-month="' + esc(mk) + '">Add milestone</button>' +
+    const s = m.periods("month", mk), ms = m.milestonesIn(mk), isNow = mk === A.store.today().slice(0, 7);
+    let b = ms.length ? '<ul class="sp-ms-list">' + ms.map(function (n) { return milestoneRow(m, n); }).join("") + '</ul>' : '<p class="sp-dim">No milestones for this month.</p>';
+    b += '<div class="sp-card-actions"><button type="button" class="btn btn-secondary" data-act="add-milestone" data-month="' + esc(mk) + '">Add milestone</button>' +
       '<button type="button" class="btn btn-secondary" data-act="period" data-scope="month" data-key="' + esc(mk) + '">Enter ' + esc(PL.monthName(mk, false)) + ' money</button>' +
-      '<button type="button" class="btn btn-secondary" data-act="open-month" data-v="' + esc(mk) + '">Open month</button></div></section>';
-    return h;
+      '<button type="button" class="btn btn-secondary" data-act="open-month" data-v="' + esc(mk) + '">Open month</button></div>';
+    const done = ms.filter(function (n) { return m.progress(n.id).pct === 100; }).length;
+    const sum = (ms.length ? done + " of " + ms.length + " milestones" : "no milestones") + " · " + (s.revenueActual === null ? "no revenue entered" : esc(A.money(s.revenueActual)) + (s.revenueTarget ? " of " + esc(A.money(s.revenueTarget)) : "") + (s.metric === "mrr" ? " MRR" : " in sales"));
+    return '<div class="sp-month" aria-label="' + esc(A.monthLabel(mk)) + '">' + A.section("q-mo-" + mk, PL.monthName(mk, true) + (isNow ? " (this month)" : ""), b, { open: isNow, summary: sum }) + '</div>';
   }
 
   function overdueBox(m, list) {
@@ -78,19 +78,56 @@
     }).join("") + '</ul></section>';
   }
 
+  /* ---------------- the quarter at a glance ---------------- */
+
+  const HELP_BTN = { "enter-money": ["period-month", "Enter it"], "link-parent": ["edit-node", "Link to an objective"], breakdown: ["breakdown-from", "Break it down"], open: ["detail", "Open it"], "link-tasks": ["link-tasks", "Add tasks"], "schedule-week": ["go-weekly", "Open the week"] };
+  function helpRow(h) {
+    const b = HELP_BTN[h.kind];
+    return '<li><span class="sp-help-t">' + esc(h.text) + '</span>' + (b ? '<button type="button" class="btn btn-secondary sp-help-b" data-act="' + b[0] + '" data-id="' + esc(h.id) + '">' + esc(b[1]) + '</button>' : "") + '</li>';
+  }
+  function overviewHtml(o, m) {
+    const nt = function (x) { return x === null ? "–" : x + "%"; };
+    const c = o.counts, parts = [];
+    if (c.completed) parts.push(c.completed + " completed");
+    if (c.ontrack) parts.push(c.ontrack + " on track");
+    if (c.atrisk) parts.push(c.atrisk + " at risk");
+    if (c.notstarted) parts.push(c.notstarted + " not started");
+    if (c.paused) parts.push(c.paused + " paused");
+    let h = '<div class="sp-tiles sp-tiles-q">' +
+      '<div class="sp-tile"><span class="sp-tile-l">Complete</span><span class="sp-tile-v">' + (o.actual === null ? '<span class="sp-dim">no data</span>' : o.actual + "%") + '</span>' + A.bar(o.actual, "Quarter completion", o.gap !== null && o.gap < -10 ? "atrisk" : "ontrack") + '</div>' +
+      '<div class="sp-tile"><span class="sp-tile-l">Time passed</span><span class="sp-tile-v">' + nt(o.expected) + '</span>' + A.bar(o.expected, "Time passed", "") + '</div>' +
+      '<div class="sp-tile"><span class="sp-tile-l">Milestones</span><span class="sp-tile-v">' + (o.milestones.total ? o.milestones.done + "/" + o.milestones.total : '<span class="sp-dim">none</span>') + '</span></div>' +
+      '<div class="sp-tile' + (o.overdue ? " sp-tone-red" : "") + '"><span class="sp-tile-l">Overdue</span><span class="sp-tile-v">' + o.overdue + '</span></div></div>';
+    h += A.paceBars({ expected: o.expected, actual: o.actual, gap: o.gap, state: o.state, start: o.start }, o.gap !== null && o.gap < -10 ? "atrisk" : "ontrack");
+    h += '<p class="sp-q-facts">' + (parts.length ? esc(A.plural(o.priorities, "priority", "priorities") + ": " + parts.join(", ")) + ". " : "") + (o.tasks.total ? esc(o.tasks.done + " of " + o.tasks.total + " linked tasks done. ") : "") +
+      (o.revenueTarget !== null ? esc("Revenue " + A.money(o.revenueActual) + " of " + A.money(o.revenueTarget) + ".") : "") + '</p>';
+    h += '<h4 class="sp-h4">Behind or at risk</h4>';
+    if (!o.priorities) h += '<p class="sp-dim">No priorities for this quarter yet.</p>';
+    else if (!o.behind.length) h += '<p class="sp-dim">' + (o.actual === null ? "Not enough data yet to say who is behind." : "Nothing is behind its pace.") + '</p>';
+    else h += '<ul class="sp-behind">' + o.behind.map(function (b) {
+      return '<li class="sp-behind-item"><button type="button" class="sp-link sp-behind-t" data-act="detail" data-id="' + esc(b.id) + '">' + esc(b.title) + '</button><span class="sp-dim">' + esc(b.phrase) + '</span>' +
+        (b.helps.length ? '<p class="sp-help-h">What would help</p><ul class="sp-help">' + b.helps.map(helpRow).join("") + '</ul>' : "") + '</li>';
+    }).join("") + '</ul>';
+    void m;
+    return h;
+  }
+
   A.register("quarterly", {
     html: function () {
       const m = A.model(), year = state.year, q = state.quarter, today = A.store.today();
-      const key = PL.quarterKey(year, q);
+      const key = PL.quarterKey(year, q), I = window.JarvisPlanInsights;
       let h = '<h2 class="visually-hidden">Quarterly plan</h2><div class="sp-head">' + stepper(String(year), "year-nav", "year-nav", "Previous year", "Next year") + '</div>';
       h += timeline(m, year, today);
       const late = m.all("priority").concat(m.all("milestone")).filter(function (n) { return inQuarter(n, year, q) && m.health(n.id) === "overdue"; });
       h += '<h2 class="sp-h2 sp-qtitle">Q' + q + ' ' + year + ' <span class="sp-dim">' + QNAME[q] + '</span></h2>' + overdueBox(m, late);
+      const ov = I.quarterOverview(A.ictx(), year, q);
+      h += A.section("q-perf", "How the quarter is going", overviewHtml(ov, m), { open: true, summary: (ov.actual === null ? "no data yet" : ov.actual + "% done") + " · " + ov.expected + "% of the time" + (ov.behind.length ? " · " + ov.behind.length + " behind" : "") });
       const pri = m.prioritiesOf(year, q), live = pri.filter(function (p) { return p.status !== "dropped"; });
       h += '<h3 class="sp-h3">Priorities <span class="sp-dim">(' + live.length + ' of ' + PL.MAX_PER_SLOT + ')</span></h3><div class="sp-stack">' + pri.map(function (p) { return priorityCard(m, p); }).join("") + '</div>';
       for (let i = live.length; i < PL.MAX_PER_SLOT; i++) h += '<button type="button" class="sp-slot" data-act="add-quarter-priority" aria-label="Add quarterly priority ' + (i + 1) + ' of ' + PL.MAX_PER_SLOT + '"><span aria-hidden="true">+</span> Add quarterly priority</button>';
-      h += '<h3 class="sp-h3">Revenue, budget and hiring for the quarter</h3>' + A.periodBlock("quarter", key) +
-        '<button type="button" class="btn btn-secondary" data-act="period" data-scope="quarter" data-key="' + key + '">Edit Q' + q + ' targets</button>';
+      const money = m.periods("quarter", key);
+      h += A.section("q-money", "Revenue, budget and hiring for the quarter", A.periodBlock("quarter", key) + '<button type="button" class="btn btn-secondary" data-act="period" data-scope="quarter" data-key="' + key + '">Edit Q' + q + ' targets</button>',
+        { open: false, summary: money.revenueTarget === null ? (money.revenueActual === null ? "nothing entered" : esc(A.money(money.revenueActual))) : esc(A.money(money.revenueActual === null ? 0 : money.revenueActual)) + " of " + esc(A.money(money.revenueTarget)) });
       h += '<h3 class="sp-h3">Month by month</h3><div class="sp-months">' + PL.quarterMonths(year, q).map(function (mk) { return monthBlock(m, mk, q); }).join("") + '</div>';
       return h;
     }
@@ -134,6 +171,7 @@
 
   /* ---------------- clicks ---------------- */
 
+  A.acts["period-month"] = function (el) { A.acts["period"]({ getAttribute: function (k) { return k === "data-scope" ? "month" : k === "data-key" ? el.getAttribute("data-id") : null; } }); };
   A.acts["year-nav"] = function (el) { state.year += Number(el.getAttribute("data-dir")); A.render(); };
   A.acts["pick-quarter"] = function (el) { state.quarter = Number(el.getAttribute("data-v")); A.render(); };
   A.acts["month-nav"] = function (el) { state.month = shiftMonth(state.month, Number(el.getAttribute("data-dir"))); state.year = Number(state.month.slice(0, 4)); A.render(); };

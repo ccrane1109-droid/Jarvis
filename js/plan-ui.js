@@ -360,7 +360,9 @@
     let h5 = '<article class="' + cls + '" data-node="' + esc(n.id) + '" aria-label="' + esc(n.title) + '">' +
       '<button type="button" class="sp-card-head" data-act="toggle-card" data-id="' + esc(n.id) + '" aria-expanded="' + open + '">' +
       '<span class="sp-card-title">' + esc(n.title) + '</span>' +
-      '<span class="sp-card-badges">' + A.healthBadge(h) + (o.showType ? A.badge("accent", A.typeLabel(n.type)) : "") + '</span>' +
+      '<span class="sp-card-badges">' + A.statusBadge(n.id) + (o.showType ? A.badge("accent", A.typeLabel(n.type)) : "") + '</span>' +
+      (o.parentLine && parent ? '<span class="sp-card-parent">Supports: ' + esc(parent.title) + '</span>' : "") +
+      (n.successMetric ? '<span class="sp-card-parent">Success metric: ' + esc(n.successMetric) + '</span>' : "") +
       '<span class="sp-card-sub">' + esc(p.note) + (n.due ? " · due " + esc(A.fmtShort(n.due)) : "") + '</span>' + A.bar(p.pct, n.title + " progress", h) +
       '</button>';
     if (open) {

@@ -4305,6 +4305,7 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .sp-card-head:hover { background: var(--card-hover); border-radius: var(--radius-sm); }
 .sp-card-title { flex: 1 1 140px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
 .sp-card-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.sp-card-parent { flex: 1 1 100%; font-size: 12px; color: var(--text-dim); overflow-wrap: anywhere; }
 .sp-card-sub { flex: 1 1 100%; font-size: 13px; color: var(--text-dim); }
 .sp-card-head .sp-bar { flex: 1 1 100%; }
 .sp-card-body { padding: 0 14px 14px; border-top: 1px solid var(--card-border); }
@@ -4342,10 +4343,7 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .sp-qtitle { margin: 6px 0 4px; }
 .sp-alert { border: 1px solid var(--red); background: var(--red-dim); border-radius: var(--radius-sm); padding: 4px 14px 10px; margin: 8px 0; }
 .sp-alert .sp-h3 { margin-top: 8px; color: var(--red); }
-.sp-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.sp-month { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px 12px; min-width: 0; }
-.sp-month-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; } .sp-month-head .sp-h4 { margin: 0; font-size: 15px; color: var(--text); }
-@media (max-width: 900px) { .sp-months { grid-template-columns: 1fr; } }
+.sp-months { display: flex; flex-direction: column; gap: 0; }
 .sp-ms-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .sp-ms { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: var(--bg-elevated); }
 .sp-ms.sp-overdue { border-color: var(--red); background: var(--red-dim); }
@@ -4591,7 +4589,7 @@ span.sp-trow-t { cursor: default; }
 .sp-sec { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); margin: 0 0 10px; }
 .sp-sec-h { display: flex; align-items: center; margin: 0; font-size: inherit; }
 .sp-sec-btn { display: flex; align-items: center; gap: 8px 10px; flex: 1; min-width: 0; min-height: 48px; padding: 6px 14px; background: none; border: 0; color: var(--text); cursor: pointer; text-align: left; }
-.sp-sec-title { font-size: 15px; font-weight: 700; flex: none; }
+.sp-sec-title { font-size: 15px; font-weight: 700; flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .sp-sec-sum { flex: 1; min-width: 0; font-size: 13px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-sec-actions { padding-right: 10px; display: flex; gap: 6px; flex: none; }
 .sp-sec-body { padding: 0 14px 12px; }
@@ -4624,3 +4622,15 @@ span.sp-trow-t { cursor: default; }
 .sp-quick-btn:hover { background: var(--card-hover); border-color: var(--accent-dim); } .sp-quick-btn .sp-dim { font-size: 13px; }
 .sp-search-out { max-height: 50vh; overflow-y: auto; }
 .sp-scope .sp-link-btn, .sp-scope .sp-link { min-height: 44px; display: inline-flex; align-items: center; }
+
+/* Quarterly 2.0: the quarter's overview and what would help */
+.sp-tiles-q { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; }
+.sp-q-facts { margin: 6px 0; font-size: 13px; color: var(--text-dim); }
+.sp-behind { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sp-behind-item { padding: 8px 10px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-left: 4px solid var(--yellow); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 2px; }
+.sp-behind-t { font-size: 15px; font-weight: 600; min-height: 32px; display: inline-flex; align-items: center; }
+.sp-help-h { margin: 6px 0 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.sp-help { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sp-help li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 14px; }
+.sp-help-t { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.sp-help-b { flex: none; }

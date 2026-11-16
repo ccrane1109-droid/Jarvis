@@ -318,3 +318,73 @@ test("an at-risk priority with no task this week asks to add one; a reviewed wee
   const reviewed = W.setWeek([], "2026-10-26", { reviewedAt: NOW }, ctx0()).weeks;
   assert.ok(!I.proposals(context({ tasks: [], nodes: pl.get(), weeks: reviewed })).some((x) => x.kind === "review"));
 });
+
+/* ---------------- the quarter at a glance ---------------- */
+
+test("quarter overview: time passed, progress, counts, and what would help a priority that is behind", () => {
+  const pl = plan(), second = pl.add({ type: "priority", title: "Get the first customers", year: 2026, quarter: 4, parentId: pl.obj.id });
+  pl.add({ type: "priority", title: "Idle priority", year: 2026, quarter: 4 });
+  const tasks = [task("a", { completed: true, date: "2026-11-01" }), task("b", { date: "2026-12-20" }), task("c", { date: "2026-12-22" }), task("d", { date: "2026-12-23" })];
+  const lk = links([["a", pl.ms.id], ["b", pl.ms.id], ["c", pl.ms.id], ["d", pl.ms.id]], pl.get());
+  const o = I.quarterOverview(context({ nodes: pl.get(), tasks, links: lk }), 2026, 4);
+  assert.equal(o.priorities, 3);
+  assert.equal(o.expected, 37, "Oct 1 to Dec 31 is 91 days; Nov 4 is 34 days in: 37%");
+  assert.equal(o.state, "during");
+  assert.equal(o.actual, 25, "one of four tasks done, on the one priority that has a figure; the others have none and are left out");
+  assert.equal(o.gap, -12);
+  assert.deepEqual([o.milestones.done, o.milestones.total, o.tasks.done, o.tasks.total], [0, 1, 1, 4]);
+  assert.deepEqual(o.counts, { notstarted: 2, ontrack: 0, atrisk: 1, completed: 0, paused: 0 });
+  assert.deepEqual(o.behind.map((b) => b.id), [pl.pri.id], "only the priority that is behind its pace is listed");
+  assert.deepEqual(o.behind[0].helps.map((h) => h.kind), ["schedule-week", "info"]);
+  assert.equal(o.behind[0].helps[1].text, "3 open tasks and 57 days left: about 0.4 a week to finish them all.");
+  assert.equal(o.behind[0].gap, -12);
+  void second;
+});
+
+test("quarter overview: the help lines are tied to what the plan shows", () => {
+  const pl = plan({ msDue: "2026-11-01" });                 // the milestone is overdue
+  const lonely = pl.add({ type: "priority", title: "Lonely priority", year: 2026, quarter: 4, due: "2026-10-15" });   // no objective, nothing under it, past its date
+  const tasks = [task("a", { date: "2026-12-28" })];
+  const lk = links([["a", pl.ms.id]], pl.get());
+  const o = I.quarterOverview(context({ nodes: pl.get(), tasks, links: lk }), 2026, 4);
+  const ship = o.behind.find((b) => b.id === pl.pri.id);
+  assert.deepEqual(ship.helps.map((h) => h.kind), ["open", "schedule-week", "info"], "the overdue milestone, then nothing dated in the next 7 days, then the sum");
+  assert.equal(ship.helps[0].id, pl.ms.id, "the overdue milestone is the one named");
+  assert.equal(ship.helps[2].text, "1 open task and 57 days left: about 0.1 a week to finish them all.");
+  const l = o.behind.find((b) => b.id === lonely.id);
+  assert.deepEqual(l.helps.map((h) => h.kind), ["link-parent", "breakdown"], "no objective above it and nothing under it");
+  assert.equal(o.overdue, 2, "the overdue milestone and the overdue lonely priority (Ship itself runs to Dec 31)");
+});
+
+test("quarter overview: before and after the quarter; nothing measurable is null, not zero", () => {
+  const pl = plan();
+  const before = I.quarterOverview(context({ nodes: pl.get() }), 2027, 1);
+  assert.deepEqual([before.state, before.expected, before.actual, before.gap, before.priorities], ["before", 0, null, null, 0]);
+  const after = I.quarterOverview(context({ nodes: pl.get() }), 2026, 3);
+  assert.deepEqual([after.state, after.expected], ["after", 100]);
+  const now = I.quarterOverview(context({ nodes: pl.get() }), 2026, 4);
+  assert.equal(now.actual, 0, "a milestone nobody has ticked off reads 0%: it is a tick-off item, not unknown");
+  assert.equal(now.revenueActual, null, "no money entered: null");
+  assert.equal(now.revenueTarget, null);
+});
+
+test("quarter overview: a budget priority is behind when spending runs ahead of the time, and a revenue priority names its figures", () => {
+  const pl = plan();
+  const bud = pl.add({ type: "priority", title: "Stay inside the marketing budget", year: 2026, quarter: 4, parentId: pl.obj.id, measure: "budget", target: 4000 });
+  const rev = pl.add({ type: "priority", title: "Q4 sales target", year: 2026, quarter: 4, parentId: pl.obj.id, measure: "revenue", target: 20000 });
+  const periods = [{ id: "m:2026-10", scope: "month", key: "2026-10", revenue: 5400, spend: 1300, updatedAt: 1 }, { id: "m:2026-11", scope: "month", key: "2026-11", revenue: 3100, spend: 900, updatedAt: 1 }];
+  const o = I.quarterOverview(context({ nodes: pl.get(), periods }), 2026, 4);
+  const b = o.behind.find((x) => x.id === bud.id);
+  assert.ok(b, "2,200 of 4,000 is 55% spent with 37% of the time gone: at risk");
+  assert.equal(b.phrase, "spending 18 points ahead of the time passed");
+  assert.equal(b.helps.length, 1);
+  assert.equal(b.helps[0].text, "Spent $2,200 of $4,000 (55% of the budget with 37% of the time passed).");
+  assert.ok(!o.behind.some((x) => x.id === rev.id), "8,500 of 20,000 is 43% with 37% of the time gone: on track, so it is not listed");
+  const low = I.quarterOverview(context({ nodes: pl.get(), periods: [{ id: "m:2026-10", scope: "month", key: "2026-10", revenue: 2000, updatedAt: 1 }] }), 2026, 4);
+  const r = low.behind.find((x) => x.id === rev.id);
+  assert.equal(r.phrase, "27 points behind the pace", "10% of the target with 37% of the time gone");
+  assert.equal(r.helps[0].text, "$2,000 of $20,000 so far. $18,000 to go in 57 days: about $2,211 a week.");
+  const none = I.quarterOverview(context({ nodes: pl.get(), periods: [] }), 2026, 4);
+  const nb = none.behind.find((x) => x.id === bud.id), nr = none.behind.find((x) => x.id === rev.id);
+  assert.ok(!nb && !nr, "nothing entered: there is no figure, so neither is called behind");
+});
