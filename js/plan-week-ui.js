@@ -261,20 +261,28 @@
     if (st.byNode.length) h += '<h4 class="sp-h4">Where this week\'s tasks go</h4><ul class="sp-sublist">' + st.byNode.map(function (n) { return '<li>' + esc(n.title) + ' <span class="sp-dim">' + n.done + ' of ' + n.tasks + ' done</span></li>'; }).join("") + '</ul>';
     return A.section("wk-numbers", "This week in numbers", h, { open: false, summary: st.tasksTotal ? st.tasksDone + " of " + st.tasksTotal + " tasks done" : "no tasks dated this week" });
   }
+  // The weekly review: a summary counted from your own records (so you aren't staring at a blank page), then five prompts. Nothing here is
+  // written for you: "Start from the summary" fills only boxes you left empty, and you can change every word.
   function reviewHtml(c, st) {
+    const I = window.JarvisPlanInsights, ic = A.ictx(c.weekStart), rv = I.weekReview(ic);
     const wk = W.weekOf(c.weeks, c.weekStart), r = wk ? W.readWeek(wk) : W.readWeek({}), carry = W.carryForward(c), target = W.carryTarget(c);
-    let h = '<p class="sp-dim">' + esc(st.plannedMin ? "You planned " + hours(st.plannedMin) + " and logged " + (st.loggedBlocks ? hours(st.actualMin) : "no time") + "; " : "") + (st.tasksTotal ? st.tasksDone + " of " + st.tasksTotal + " tasks are done." : "no tasks are dated this week.") + (wk && wk.reviewedAt ? " Reviewed " + esc(new Date(wk.reviewedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })) + "." : "") + '</p>';
-    h += '<form id="pwReviewForm" class="pw-review-form" novalidate>' +
-      '<div class="form-row"><label for="pwWins">What went well?</label><textarea id="pwWins" name="wins" rows="3" maxlength="2000">' + esc(r.wins) + '</textarea></div>' +
-      '<div class="form-row"><label for="pwLessons">What got in the way, or what would you change?</label><textarea id="pwLessons" name="lessons" rows="3" maxlength="2000">' + esc(r.lessons) + '</textarea></div>' +
-      '<div class="form-row"><label for="pwNext">What matters most next week?</label><textarea id="pwNext" name="nextFocus" rows="3" maxlength="2000">' + esc(r.nextFocus) + '</textarea></div>' +
-      '<div class="sp-card-actions"><button type="submit" class="btn btn-primary">Save review</button></div></form>';
+    const over = c.weekStart < W.mondayOf(c.today) || W.weekday(c.today) === 0 || W.weekday(c.today) === 6;     // the week has ended, or it is the weekend
+    const reviewed = !!(wk && wk.reviewedAt);
+    let h = '<h4 class="sp-h4">Your week, from your records</h4><ul class="sp-sublist pw-rv-sum">' + rv.sentences.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>';
+    if (rv.accomplished.length) h += '<details class="sp-away"><summary>Finished this week (' + rv.accomplished.length + ')</summary><ul class="sp-sublist">' + rv.accomplished.slice(0, 12).map(function (t) { return '<li>' + esc(t.text) + ' <span class="sp-dim">' + esc(dayLabel(t.date)) + '</span></li>'; }).join("") + (rv.accomplished.length > 12 ? '<li class="sp-dim">and ' + (rv.accomplished.length - 12) + ' more</li>' : "") + '</ul></details>';
+    h += '<form id="pwReviewForm" class="pw-review-form" novalidate data-wins="' + esc(rv.accomplished.slice(0, 5).map(function (t) { return t.text; }).join("; ")) + '" data-unfinished="' + esc(rv.unfinished.slice(0, 3).map(function (x) { return x.task.text; }).join("; ")) + '" data-prio="' + esc(rv.linkedDone + " of " + rv.tasksDone + " finished tasks counted toward your plan.") + '">' +
+      '<div class="form-row"><label for="pwWins">What did you accomplish?</label><textarea id="pwWins" name="wins" rows="3" maxlength="2000">' + esc(r.wins) + '</textarea></div>' +
+      '<div class="form-row"><label for="pwLessons">What got in the way?</label><textarea id="pwLessons" name="lessons" rows="3" maxlength="2000">' + esc(r.lessons) + '</textarea></div>' +
+      '<div class="form-row"><label for="pwUnfin">Which unfinished tasks matter most?</label><textarea id="pwUnfin" name="unfinished" rows="2" maxlength="2000">' + esc(r.unfinished) + '</textarea></div>' +
+      '<div class="form-row"><label for="pwPrio">Did your time go to your priorities?</label><textarea id="pwPrio" name="onPriorities" rows="2" maxlength="2000">' + esc(r.onPriorities) + '</textarea><p class="field-hint">' + esc((rv.tasksDone ? rv.linkedDone + " of " + rv.tasksDone + " finished tasks counted toward your plan. " : "") + (rv.gratielPlannedMin ? "Gratiel: " + (Math.round(rv.gratielPlannedMin / 6) / 10) + " h planned" + (rv.gratielLoggedMin !== null && rv.gratielLoggedMin !== undefined ? ", " + (Math.round(rv.gratielLoggedMin / 6) / 10) + " h logged." : ", none logged.") : "")) + '</p></div>' +
+      '<div class="form-row"><label for="pwNext">What will you change next week?</label><textarea id="pwNext" name="nextFocus" rows="3" maxlength="2000">' + esc(r.nextFocus) + '</textarea></div>' +
+      '<div class="sp-card-actions"><button type="submit" class="btn btn-primary">Save review</button><button type="button" class="btn btn-secondary" data-act="review-prefill">Start from the summary</button></div></form>';
     if (carry.length) {
       h += '<h4 class="sp-h4">Unfinished from days that have passed</h4><p class="sp-dim">Tick the ones to carry forward. They move to ' + esc(dayLabel(target)) + ' as plain tasks; nothing moves until you press the button.</p><ul class="sp-tasks pw-carry">' +
         carry.map(function (t) { return '<li class="sp-task"><label class="sp-task-check"><input type="checkbox" name="carry" value="' + esc(t.id) + '" checked><span class="sp-task-text">' + esc(t.text) + '</span></label><span class="sp-task-meta">' + esc(dayLabel(t.date)) + '</span></li>'; }).join("") +
         '</ul><button type="button" class="btn btn-secondary" data-act="carry-apply">Move the ticked tasks to ' + esc(dayLabel(target)) + '</button>';
     } else h += '<p class="sp-dim">Nothing unfinished from the days that have passed.</p>';
-    return A.section("wk-review", "Weekly review", h, { open: false, summary: wk && wk.reviewedAt ? "reviewed" : carry.length ? A.plural(carry.length, "unfinished task") : "not written yet" });
+    return A.section("wk-review", "Weekly review", h, { open: over && !reviewed, summary: reviewed ? "reviewed" : over ? "ready to write" : carry.length ? A.plural(carry.length, "unfinished task") : "not written yet" });
   }
 
   A.register("weekly", {
@@ -570,6 +578,16 @@
     A.render();
   };
   A.acts["top-edit"] = function () { openTopSheet(); };
+  // Fills only the boxes that are still empty, with text counted from the week. It is a starting point you edit.
+  A.acts["review-prefill"] = function () {
+    const f = document.getElementById("pwReviewForm");
+    if (!f) return;
+    const put = function (name, value) { if (value && !String(f[name].value).trim()) f[name].value = value; };
+    put("wins", f.getAttribute("data-wins") ? "Finished: " + f.getAttribute("data-wins") + "." : "");
+    put("unfinished", f.getAttribute("data-unfinished"));
+    put("onPriorities", f.getAttribute("data-prio"));
+    A.say("Filled the empty boxes from your records. Edit them as you like.");
+  };
   A.acts["top-remove"] = function (el) {
     const c = wctx(), wk = W.weekOf(c.weeks, c.weekStart), top = (wk ? W.readWeek(wk).top : []).filter(function (x, i) { return i !== Number(el.getAttribute("data-i")); });
     const r = W.setWeek(store.all("weeks"), c.weekStart, { top: top }, {});
@@ -593,7 +611,7 @@
     if (e.target && e.target.id === "pwReviewForm") {
       e.preventDefault();
       const f = e.target, c = wctx();
-      const r = W.setWeek(store.all("weeks"), c.weekStart, { wins: f.wins.value, lessons: f.lessons.value, nextFocus: f.nextFocus.value, reviewedAt: Date.now() }, {});
+      const r = W.setWeek(store.all("weeks"), c.weekStart, { wins: f.wins.value, lessons: f.lessons.value, unfinished: f.unfinished.value, onPriorities: f.onPriorities.value, nextFocus: f.nextFocus.value, reviewedAt: Date.now() }, {});
       if (!r.ok || !store.replace("weeks", r.weeks)) { A.saveFailed(); return; }
       A.notice("Review saved.", "");
       A.render();

@@ -232,6 +232,24 @@
     const sum = A.$("spInboxSum"); if (sum) sum.textContent = A.plural(r.inbox.all, "task") + " waiting";
   }
 
+  // The monthly review: a summary counted from your records, then four prompts. "Start from the summary" fills only empty boxes.
+  function monthReviewHtml(mk) {
+    const I = window.JarvisPlanInsights, W = window.JarvisPlanWeekLogic, rv = I.monthReview(A.ictx(), mk), rec = W.reviewOf(A.store.all("reviews"), mk), r = W.readReview(rec || { month: mk }), today = A.store.today();
+    const names = function (list) { return list.map(function (n) { return n.title; }).join("; "); };
+    let h = '<h4 class="sp-h4">Your month, from your records</h4><ul class="sp-sublist pw-rv-sum">' + rv.sentences.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>';
+    h += '<h4 class="sp-h4">Milestones</h4>' + (rv.milestones.length ? '<ul class="sp-sublist">' + rv.milestones.map(function (n) { return '<li>' + esc(n.title) + ' ' + A.statusBadge(n.id) + '</li>'; }).join("") + '</ul>' : '<p class="sp-dim">None were set for this month.</p>');
+    h += '<h4 class="sp-h4">Goals behind or at risk</h4>' + (rv.behind.length ? '<ul class="sp-sublist">' + rv.behind.map(function (n) { const p = A.model().progress(n.id); return '<li><button type="button" class="sp-link" data-act="detail" data-id="' + esc(n.id) + '">' + esc(n.title) + '</button> <span class="sp-dim">' + esc(A.typeLabel(n.type)) + ' · ' + esc(A.pctText(p.pct)) + '</span></li>'; }).join("") + '</ul>' : '<p class="sp-dim">Nothing is behind its pace.</p>');
+    h += '<h4 class="sp-h4">Progress toward this quarter\'s priorities</h4>' + (rv.priorities.length ? '<ul class="sp-sublist">' + rv.priorities.map(function (p) { return '<li>' + esc(p.title) + ' <span class="sp-dim">' + esc(A.pctText(p.pct)) + '</span> ' + A.statusBadge(p.id) + '</li>'; }).join("") + '</ul>' : '<p class="sp-dim">No priorities this quarter.</p>');
+    h += '<form id="spMonthReviewForm" class="pw-review-form" novalidate data-month="' + esc(mk) + '" data-wins="' + esc(rv.completed.length ? "Milestones completed: " + names(rv.completed) + "." : "") + '" data-behind="' + esc(rv.behind.length ? names(rv.behind) : "") + '" data-next="' + esc(names(rv.nextUp)) + '">' +
+      '<div class="form-row"><label for="mrWins">What were your biggest wins?</label><textarea id="mrWins" name="wins" rows="3" maxlength="2000">' + esc(r.wins) + '</textarea></div>' +
+      '<div class="form-row"><label for="mrBehind">Which goals fell behind, and why?</label><textarea id="mrBehind" name="fellBehind" rows="3" maxlength="2000">' + esc(r.fellBehind) + '</textarea></div>' +
+      '<div class="form-row"><label for="mrProg">How is the quarter\'s progress going?</label><textarea id="mrProg" name="progress" rows="3" maxlength="2000">' + esc(r.progress) + '</textarea></div>' +
+      '<div class="form-row"><label for="mrNext">What are next month\'s priorities?</label><textarea id="mrNext" name="nextFocus" rows="3" maxlength="2000">' + esc(r.nextFocus) + '</textarea>' + (rv.nextUp.length ? '<p class="field-hint">Still open or coming up: ' + esc(names(rv.nextUp)) + '.</p>' : "") + '</div>' +
+      '<div class="sp-card-actions"><button type="submit" class="btn btn-primary">Save review</button><button type="button" class="btn btn-secondary" data-act="month-review-prefill">Start from the summary</button></div></form>';
+    const ended = mk < today.slice(0, 7) || (mk === today.slice(0, 7) && today >= PL.addDays(PL.monthEnd(mk), -2));
+    return A.section("m-review", "Monthly review", h, { open: ended && !r.reviewedAt, summary: r.reviewedAt ? "reviewed" : ended ? "ready to write" : "not written yet" });
+  }
+
   A.register("monthly", {
     html: function () {
       const m = A.model(), mk = state.month, I = window.JarvisPlanInsights;
@@ -248,6 +266,7 @@
       const r = monthLists();
       h += A.section("m-tasks", "Tasks", filterBar(r) + '<div id="spMonthGroups">' + groupsHtml(r, m) + '</div>', { open: true, summary: A.plural(r.linkedCount, "linked task") });
       h += A.section("m-inbox", "Task inbox", '<p class="sp-dim">Tasks this month that don\'t count toward any goal yet. Link one, give it a time, or put it away.</p><div id="spInbox">' + inboxHtml(r) + '</div>', { open: false, summary: '<span id="spInboxSum">' + esc(A.plural(r.inbox.all, "task") + " waiting") + '</span>' });
+      h += monthReviewHtml(mk);
       return h;
     }
   });
@@ -255,6 +274,24 @@
   /* ---------------- clicks ---------------- */
 
   A.acts["period-month"] = function (el) { A.acts["period"]({ getAttribute: function (k) { return k === "data-scope" ? "month" : k === "data-key" ? el.getAttribute("data-id") : null; } }); };
+  A.acts["month-review-prefill"] = function () {
+    const f = document.getElementById("spMonthReviewForm");
+    if (!f) return;
+    const put = function (name, value) { if (value && !String(f[name].value).trim()) f[name].value = value; };
+    put("wins", f.getAttribute("data-wins"));
+    put("fellBehind", f.getAttribute("data-behind") ? "Behind or at risk: " + f.getAttribute("data-behind") + "." : "");
+    put("nextFocus", f.getAttribute("data-next"));
+    A.say("Filled the empty boxes from your records. Edit them as you like.");
+  };
+  document.addEventListener("submit", function (e) {
+    if (!e.target || e.target.id !== "spMonthReviewForm") return;
+    e.preventDefault();
+    const f = e.target, W = window.JarvisPlanWeekLogic, mk = f.getAttribute("data-month");
+    const r = W.setReview(A.store.all("reviews"), mk, { wins: f.wins.value, fellBehind: f.fellBehind.value, progress: f.progress.value, nextFocus: f.nextFocus.value, reviewedAt: Date.now() }, {});
+    if (!r.ok || !A.store.replace("reviews", r.reviews)) { A.saveFailed(); return; }
+    A.notice("Monthly review saved.", "");
+    A.render();
+  });
   A.acts["inbox-page"] = function (el) { mf.page = Math.max(1, (mf.page || 1) + Number(el.getAttribute("data-dir"))); redrawLists(); };
   A.acts["task-schedule-go"] = function (el) { const id = el.getAttribute("data-id"); A.go("weekly"); window.setTimeout(function () { if (A.acts["task-schedule"]) A.acts["task-schedule"]({ getAttribute: function () { return id; } }); }, 60); };
   A.acts["task-archive"] = function (el) {
