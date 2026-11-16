@@ -95,7 +95,7 @@ Sections fold and stay folded (that choice is saved on the device only).
   bar), never as zero.
 * **Reviews:** the weekly and monthly reviews are filled in from your records (done, late, wins, what slipped) by fixed rules. They are
   summaries, not predictions; your own reflections are optional text boxes. Starting a review never overwrites something you already wrote.
-* **Suggestions (automation with approval):** a box lists rule-based proposals: move an overdue milestone's deadline two weeks out, move
+* **Suggestions (automation with approval):** a box under the overview (folded on a phone, with the count in its header) lists rule-based proposals: move an overdue milestone's deadline two weeks out, move
   overdue plan-linked tasks to today, add a task for an at-risk priority with nothing planned this week, write last week's review (only if that
   week had tasks or blocks). **Nothing changes until you press Apply**, and Apply gives an Undo that is recorded as a new edit (so it also
   wins on your other device). “Not now” hides a suggestion for 14 days.
