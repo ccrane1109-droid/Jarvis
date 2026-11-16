@@ -2676,11 +2676,12 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
   <!-- ===================== STRATEGIC PLANNING CENTER ===================== -->
   <section id="panel-strategy" class="tab-panel sp-scope" role="tabpanel" aria-labelledby="navBtnStrategy">
-    <div class="panel-header">
-      <h1>Strategic Planning</h1>
-      <p class="panel-subtitle">Three-year vision, yearly objectives, quarterly priorities, monthly milestones, then your tasks and time blocks. Progress comes from the tasks you finish and the money you enter.</p>
+    <div class="sp-top">
+      <div class="sp-top-title"><h1>Strategy</h1><span id="spSaved" class="sp-saved" role="status" aria-live="polite">All changes saved</span></div>
+      <div class="sp-top-btns"><button type="button" class="btn btn-secondary" data-sp-head="search" aria-haspopup="dialog">Search</button><button type="button" class="btn btn-primary" data-sp-head="quick-add" aria-haspopup="dialog">+ Add</button></div>
     </div>
     <p id="spLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <div id="spDash"></div>
     <nav class="sub-nav sp-sub-nav" aria-label="Planning horizon">
       <button type="button" class="sub-nav-btn active" data-sp="yearly" aria-current="page">Yearly</button>
       <button type="button" class="sub-nav-btn" data-sp="quarterly">Quarterly</button>
@@ -3231,11 +3232,12 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/learning-capture-ui.js?v=80"></script>
 <script src="js/plan-logic.js?v=80"></script>
 <script src="js/plan-store.js?v=80"></script>
+<script src="js/plan-week-logic.js?v=80"></script>
+<script src="js/plan-insights-logic.js?v=80"></script>
 <script src="js/plan-ui.js?v=80"></script>
 <script src="js/plan-yearly-ui.js?v=80"></script>
 <script src="js/plan-quarterly-ui.js?v=80"></script>
-<script src="js/plan-week-logic.js?v=80"></script>
-<script src="js/plan-insights-logic.js?v=80"></script>
+<script src="js/plan-dash-ui.js?v=80"></script>
 <script src="js/plan-week-ui.js?v=80"></script>
 </body>
 </html>

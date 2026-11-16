@@ -165,9 +165,11 @@
   }
   // Every candidate, best first, each with its reasons.
   function rankTasks(ctx) {
+    if (ctx._rank) return ctx._rank;                       // worked out once per context (a screen asks several times)
     const free = ctx.freeMin !== undefined ? ctx.freeMin : freeMinutes(ctx);
-    return candidates(ctx).map(function (t) { const e = explain(t, ctx, free); return { task: t, score: e.score, parts: e.parts, linked: e.linked, chain: e.chain, estMin: e.estMin }; })
+    ctx._rank = candidates(ctx).map(function (t) { const e = explain(t, ctx, free); return { task: t, score: e.score, parts: e.parts, linked: e.linked, chain: e.chain, estMin: e.estMin }; })
       .sort(function (a, b) { return b.score - a.score || (a.task.date < b.task.date ? -1 : a.task.date > b.task.date ? 1 : 0) || (a.task.createdAt || 0) - (b.task.createdAt || 0); });
+    return ctx._rank;
   }
   // Three picks. They are spread out (a second pick from the same milestone loses 6 points), and at most one is a task that isn't tied to
   // the plan unless there aren't enough that are.
@@ -294,7 +296,7 @@
     const tm = timeByCategory(ctx, ws, dates[6]), gr = gratielMinutes(ctx, ws, dates[6]);
     const wk = W.weekOf(ctx.weeks, ws), top = wk ? W.readWeek(wk).top : [];
     const topDone = top.filter(function (x) { const t = x.taskId ? tasks.filter(function (k) { return k.id === x.taskId; })[0] : null; return t && t.completed; }).length;
-    const unfinished = rankTasks(Object.assign({}, ctx, { weekStart: ws })).filter(function (r) { return !r.task.completed; }).slice(0, 5);
+    const unfinished = rankTasks(Object.assign({}, ctx, { weekStart: ws, _rank: undefined, freeMin: undefined })).filter(function (r) { return !r.task.completed; }).slice(0, 5);
     const sentences = [];
     if (inWeek.length) sentences.push("You finished " + done.length + " of " + inWeek.length + " tasks dated this week (" + pct(done.length, inWeek.length) + "%)" + (done.length ? ", " + linkedDone.length + " of them counting toward your plan." : "."));
     else sentences.push("No tasks were dated this week.");

@@ -17,10 +17,16 @@
 
   const PL = window.JarvisPlanLogic;
   const store = window.JarvisPlanStore;
-  const VIEWS = [["yearly", "Yearly"], ["quarterly", "Quarterly"], ["monthly", "Monthly"], ["weekly", "Weekly"]];
   const views = {};
   const A = { acts: {}, PL: PL, store: store };
   const state = { view: "yearly", year: 0, quarter: 0, month: "", open: {}, week: "" };
+  // What this device remembers about how you like the screen: whether the overview is open and which sections you folded.
+  // Kept on this device only (never synced), and the screen works without it.
+  const UI_KEY = "jarvisPlanUi";
+  const ui = { dash: true, collapsed: {} };
+  try { const v = JSON.parse(window.localStorage.getItem(UI_KEY) || "null"); if (v && typeof v === "object") { ui.dash = v.dash !== false; ui.collapsed = v.collapsed && typeof v.collapsed === "object" ? v.collapsed : {}; } } catch (e) { /* no saved layout: the defaults */ }
+  function saveUi() { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (e) { /* the layout just isn't remembered */ } }
+  A.ui = ui; A.saveUi = saveUi;
   let started = false, shown = false, sheet = null, undoTimer = null, version = 0, cached = null, cachedVer = -1;
 
   function $(id) { return document.getElementById(id); }
@@ -41,6 +47,19 @@
     return cached;
   };
   A.bump = function () { version++; };
+  // Everything the insight rules read, assembled once per draw (they never read storage themselves).
+  function calEvents() { return window.JarvisCalendar && window.JarvisCalendar.getEvents ? window.JarvisCalendar.getEvents() : []; }
+  function calZone() { try { return window.JarvisCalendar && window.JarvisCalendarLogic ? window.JarvisCalendarLogic.viewZone(window.JarvisCalendar.getSettings()) : "UTC"; } catch (e) { return "UTC"; } }
+  A.ictx = function (weekStart) {
+    const d = A.data(), W = window.JarvisPlanWeekLogic, now = new Date();
+    let workouts = [];
+    try { const w = window.JarvisCore.loadJSON("jarvisWorkouts", []); workouts = Array.isArray(w) ? w : []; } catch (e) { workouts = []; }
+    return {
+      today: d.today, nowMin: now.getHours() * 60 + now.getMinutes(), nowMs: Date.now(), weekStart: weekStart || state.week || W.mondayOf(d.today),
+      tasks: d.tasks, links: d.links, model: A.model(), blocks: store.all("blocks"), ingredients: store.all("ingredients"), events: calEvents(), zone: calZone(),
+      settings: d.settings, weeks: store.all("weeks"), reviews: store.all("reviews"), periods: d.periods, workouts: workouts
+    };
+  };
 
   /* ---------------- small display helpers ---------------- */
 
@@ -60,6 +79,30 @@
   A.typeLabel = function (t) { return PL.TYPE_LABEL[t] || t; };
   A.monthLabel = function (mk) { return PL.monthName(mk, false) + " " + mk.slice(0, 4); };
 
+  // Status in plain words (Not started, On track, At risk, Completed). Overdue and over-budget get their own red label.
+  const STATUS_CLS = { notstarted: "neutral", ontrack: "green", atrisk: "yellow", completed: "green", paused: "neutral", dropped: "neutral" };
+  A.statusBadge = function (id) {
+    const m = A.model(), st = m.statusOf(id), h = m.health(id);
+    if (!st) return "";
+    if (h === "overdue") return A.badge("red", "Overdue");
+    if (h === "over") return A.badge("red", "Over budget");
+    return A.badge(STATUS_CLS[st] || "neutral", PL.STATUS_LABEL[st] || st);
+  };
+  A.statusTone = function (id) { const st = A.model().statusOf(id), h = A.model().health(id); return h === "overdue" || h === "over" ? "red" : st === "atrisk" ? "yellow" : st === "ontrack" || st === "completed" ? "green" : ""; };
+  A.pctText = function (p) { return p === null || p === undefined ? "–" : p + "%"; };
+  A.hoursText = function (min) { return min === null || min === undefined ? "not tracked" : (Math.round(min / 6) / 10) + " h"; };
+
+  // A collapsible section. The heading is a button (so it works from the keyboard); what you fold is remembered on this device.
+  // o: { open: default (true), summary: short text shown while folded or beside the title, actions: html shown beside the title }
+  A.isOpen = function (id, dflt) { return ui.collapsed[id] === undefined ? dflt !== false : !ui.collapsed[id]; };
+  A.section = function (id, title, body, o) {
+    o = o || {};
+    const open = A.isOpen(id, o.open);
+    return '<section class="sp-sec' + (open ? " is-open" : "") + '" data-sec="' + esc(id) + '"><h3 class="sp-sec-h"><button type="button" class="sp-sec-btn" data-act="sec-toggle" data-id="' + esc(id) + '" aria-expanded="' + open + '" aria-controls="spsec_' + esc(id) + '">' +
+      '<span class="sp-sec-title">' + esc(title) + '</span>' + (o.summary ? '<span class="sp-sec-sum">' + o.summary + '</span>' : "") + '<span class="sp-chev" aria-hidden="true"></span></button>' + (o.actions ? '<span class="sp-sec-actions">' + o.actions + '</span>' : "") + '</h3>' +
+      '<div class="sp-sec-body" id="spsec_' + esc(id) + '"' + (open ? "" : " hidden") + '>' + body + '</div></section>';
+  };
+
   /* ---------------- messages ---------------- */
 
   A.say = function (text) { const e = $("spLive"); if (e) { e.textContent = ""; window.setTimeout(function () { e.textContent = text || ""; }, 30); } };
@@ -74,7 +117,18 @@
     A.say(text);
     undoTimer = window.setTimeout(function () { bar.classList.add("hidden"); bar._fn = null; }, 9000);
   };
-  A.saveFailed = function () { A.notice(store.error() || "That couldn't be saved.", ""); };
+  A.saveFailed = function () { A.notice(store.error() || "That couldn't be saved.", ""); A.savedNow(true); };
+  // "Saved" shows briefly after every change (changes are written the moment you make them); a failed save says so.
+  let savedTimer = null;
+  A.savedNow = function (failed) {
+    const el = $("spSaved");
+    if (!el) return;
+    window.clearTimeout(savedTimer);
+    el.classList.toggle("is-error", !!failed);
+    el.textContent = failed ? "Not saved" : "Saved";
+    el.classList.add("is-on");
+    if (!failed) savedTimer = window.setTimeout(function () { el.classList.remove("is-on"); el.textContent = "All changes saved"; }, 2200);
+  };
 
   /* ---------------- form fields ---------------- */
 
@@ -232,6 +286,7 @@
     if (!view) { host.innerHTML = '<p class="sp-empty">This view is not available.</p>'; return; }
     host.innerHTML = (blocked ? '<p class="sp-warn" role="alert">' + esc(blocked) + '</p>' : "") + view.html();
     if (view.after) view.after(host);
+    if (A.renderDash) A.renderDash();
     if (sig) { const back = host.querySelector(sig); if (back) back.focus(); }
   };
 
@@ -536,6 +591,13 @@
 
   /* ---------------- clicks ---------------- */
 
+  A.acts["sec-toggle"] = function (el) {
+    const id = el.getAttribute("data-id"), open = el.getAttribute("aria-expanded") === "true";
+    ui.collapsed[id] = open;            // it was open, so it is folded now (and the other way round)
+    saveUi();
+    const sec = el.closest(".sp-sec"), body = sec && sec.querySelector(".sp-sec-body");
+    if (sec && body) { sec.classList.toggle("is-open", !open); body.hidden = open; el.setAttribute("aria-expanded", String(!open)); }
+  };
   A.acts["toggle-card"] = function (el) { const id = el.getAttribute("data-id"); state.open[id] = !state.open[id]; A.render(); };
   A.acts["open-node"] = function (el) {
     const n = A.model().node(el.getAttribute("data-id"));
@@ -609,7 +671,10 @@
     $("spView").addEventListener("click", onClick);
     $("spView").addEventListener("change", onChange);
     $("spUndo").addEventListener("click", onClick);
-    store.subscribe(function () { A.bump(); });
+    // the tab row sticks just under the app header, wherever that ends up (it changes with the screen width)
+    const setHdr = function () { const h = document.querySelector(".app-header"); if (h) panel.style.setProperty("--sp-hdr", h.offsetHeight + "px"); };
+    setHdr(); window.addEventListener("resize", setHdr);
+    store.subscribe(function () { A.bump(); A.savedNow(); });
     // A task was ticked, added or moved anywhere (Habits, Calendar, here): the progress shown follows it.
     document.addEventListener("jarvis-tasks-changed", function () {
       A.bump();
