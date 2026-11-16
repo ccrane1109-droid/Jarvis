@@ -516,3 +516,53 @@ test("time allocation groups categories by kind; unlogged is null, never zero; w
   assert.deepEqual(series.map((x) => x.plannedMin), [0, 0, 120]);
   assert.deepEqual(series.map((x) => x.loggedMin), [null, null, null]);
 });
+
+/* ---------------- suggestions that need approval ---------------- */
+
+const deepFreeze = (x) => { if (x && typeof x === "object" && !Object.isFrozen(x)) { Object.freeze(x); Object.values(x).forEach(deepFreeze); } return x; };
+
+test("proposals: an overdue milestone and overdue tasks are proposed, and nothing changes until approved", () => {
+  const pl = plan({ msDue: "2026-11-01" });
+  const tasks = [task("a", { date: "2026-11-02" }), task("b", { date: "2026-11-03" }), task("c", { date: TODAY })];
+  const lk = links([["a", pl.ms.id], ["b", pl.ms.id], ["c", pl.ms.id]], pl.get());
+  const ctx = context({ nodes: pl.get(), tasks, links: lk });
+  const props = I.proposals(Object.assign({}, ctx, { weekStart: MON, weeks: [] }));
+  const kinds = props.map((p) => p.kind);
+  assert.ok(kinds.includes("move-deadline") && kinds.includes("move-tasks"), JSON.stringify(kinds));
+  const dl = props.find((p) => p.kind === "move-deadline");
+  assert.equal(dl.apply.op, "set-due");
+  assert.equal(dl.apply.due, "2026-11-18", "14 days from today");
+  assert.equal(pl.get().find((n) => n.id === pl.ms.id).due, "2026-11-01", "proposing changed nothing");
+});
+
+test("applying a new deadline changes that one field, on a copy, and says how to undo it", () => {
+  const pl = plan({ msDue: "2026-11-01" }), nodes = deepFreeze(pl.get());
+  const r = I.applyProposal({ apply: { op: "set-due", id: pl.ms.id, due: "2026-11-18" } }, { nodes, now: NOW, today: TODAY });
+  assert.equal(r.ok, true, r.text);
+  assert.equal(r.nodes.find((n) => n.id === pl.ms.id).due, "2026-11-18");
+  assert.equal(r.nodes.find((n) => n.id === pl.ms.id).title, "Samples approved", "nothing else changed");
+  assert.equal(nodes.find((n) => n.id === pl.ms.id).due, "2026-11-01", "the original is untouched");
+  assert.deepEqual(r.undo, { nodeId: pl.ms.id, due: "2026-11-01" }, "undo names the item and the date it had");
+  assert.equal(I.applyProposal({ apply: { op: "set-due", id: "gone", due: "2026-11-18" } }, { nodes }).ok, false, "a deleted item is refused");
+  assert.equal(I.applyProposal({ apply: { op: "set-due", id: pl.ms.id, due: "soon" } }, { nodes }).ok, false, "a bad date is refused");
+});
+
+test("applying 'move tasks to today' moves only the open listed ones and remembers where they were", () => {
+  const tasks = deepFreeze([task("a", { date: "2026-11-02" }), task("b", { date: "2026-11-03", completed: true }), task("c", { date: "2026-11-01" })]);
+  const r = I.applyProposal({ apply: { op: "move-tasks", ids: ["a", "b"], date: TODAY } }, { tasks });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.tasks.map((t) => [t.id, t.date]), [["a", TODAY], ["b", "2026-11-03"], ["c", "2026-11-01"]], "a moved; b is done so it stays; c was not listed");
+  assert.deepEqual(r.undo.dates, { a: "2026-11-02" });
+  assert.equal(I.applyProposal({ apply: { op: "move-tasks", ids: ["zzz"], date: TODAY } }, { tasks }).ok, false);
+  assert.equal(I.applyProposal({ apply: { op: "add-task", id: "x" } }, {}).ok, false, "kinds that need you are not applied by themselves");
+  assert.equal(I.applyProposal(null, {}).ok, false);
+});
+
+test("proposals: last week's review is offered only if last week had something in it, and not once it has been written", () => {
+  const empty = I.proposals(Object.assign({}, context({}), { weekStart: MON, weeks: [] }));
+  assert.ok(!empty.some((p) => p.kind === "review"), "an empty week has nothing to review");
+  const withTask = Object.assign({}, context({ tasks: [task("a", { date: "2026-10-28" })] }), { weekStart: MON, weeks: [] });
+  assert.ok(I.proposals(withTask).some((p) => p.kind === "review" && p.apply.weekStart === "2026-10-26"));
+  const done = Object.assign({}, withTask, { weeks: [{ id: "wk_2026-10-26", weekStart: "2026-10-26", reviewedAt: 5, createdAt: 1, updatedAt: 1 }] });
+  assert.ok(!I.proposals(done).some((p) => p.kind === "review"), "once reviewed it is not offered again");
+});

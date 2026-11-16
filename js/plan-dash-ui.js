@@ -123,6 +123,45 @@
     return h;
   }
 
+  /* ---------------- suggestions that need your approval ---------------- */
+  // Jarvis never changes a deadline, a task date or a priority by itself. It proposes (fixed rules over your own records) and you press Approve
+  // or Not now. "Not now" hides it for two weeks.
+  const SUG_BTN = { "move-deadline": "Approve", "move-tasks": "Approve", "add-task": "Choose a task", review: "Open the review" };
+  function suggestionsHtml(c) {
+    const list = I.proposals(c);
+    if (!list.length) return "";
+    const shown = list.slice(0, 4);
+    const body = '<p class="sp-dim">Jarvis only suggests. Nothing changes until you press the button, and a change can be undone.</p><ul class="sp-sugs">' + shown.map(function (p) {
+      return '<li class="sp-sug"><div class="sp-sug-t">' + esc(p.title) + '</div><p class="sp-dim">' + esc(p.detail) + '</p><div class="sp-sug-btns"><button type="button" class="btn btn-primary" data-act="sug-apply" data-key="' + esc(p.key) + '">' + esc(SUG_BTN[p.kind] || "Approve") + '</button><button type="button" class="btn btn-secondary" data-act="sug-dismiss" data-key="' + esc(p.key) + '">Not now</button></div></li>';
+    }).join("") + '</ul>' + (list.length > shown.length ? '<p class="sp-dim">and ' + (list.length - shown.length) + ' more after these.</p>' : "");
+    return '<div class="sp-sugwrap">' + A.section("dash-sug", "Suggestions for you", body, { open: true, summary: A.plural(list.length, "suggestion") }) + '</div>';
+  }
+  function proposalByKey(key) { return I.proposals(A.ictx()).filter(function (p) { return p.key === key; })[0] || null; }
+  A.acts["sug-apply"] = function (el) {
+    const p = proposalByKey(el.getAttribute("data-key"));
+    if (!p) { A.render(); return; }
+    if (p.kind === "add-task") { A.openNewTaskSheet({ nodeId: p.id }); return; }
+    if (p.kind === "review") { A.ui.collapsed["wk-review"] = false; A.saveUi(); A.go("weekly", { week: p.apply.weekStart }); return; }
+    const H = window.JarvisHabits, r = I.applyProposal(p, { nodes: store.all("nodes"), tasks: A.tasks(), now: Date.now(), today: store.today() });
+    if (!r.ok) { A.notice(r.text, ""); A.render(); return; }
+    if (r.nodes && !store.replace("nodes", r.nodes)) { A.saveFailed(); return; }
+    if (r.tasks) { if (!H || !H.commitTasks) { A.notice("Tasks aren't available right now.", ""); return; } H.commitTasks(r.tasks); }
+    A.notice(r.text, "Undo", function () {
+      if (r.undo.nodeId) { const e = PL.editNode(store.all("nodes"), r.undo.nodeId, { due: r.undo.due }, { now: Date.now(), today: store.today() }); if (e.ok) store.replace("nodes", e.nodes); }
+      if (r.undo.dates && H) H.commitTasks(A.tasks().map(function (t) { return r.undo.dates[t.id] ? Object.assign({}, t, { date: r.undo.dates[t.id] }) : t; }));
+      A.render();
+    });
+    A.render();
+  };
+  A.acts["sug-dismiss"] = function (el) {
+    const key = el.getAttribute("data-key"), now = Date.now(), cur = store.settings().dismissed || {}, keep = {};
+    Object.keys(cur).forEach(function (k) { if (now - cur[k] < 30 * 86400000) keep[k] = cur[k]; });         // old ones are forgotten
+    keep[key] = now;
+    if (!store.setSettings({ dismissed: keep })) { A.saveFailed(); return; }
+    A.say("Hidden for two weeks");
+    A.render();
+  };
+
   A.renderDash = function () {
     const host = A.$("spDash");
     if (!host) return;
@@ -130,7 +169,7 @@
     const d = I.dashboard(c), open = A.ui.dash;
     const m = A.model();
     const sum = (d.overall.year === null ? "No goal data yet" : "This year " + d.overall.year + "%") + " · " + (d.week.tasksTotal ? d.week.tasksDone + " of " + d.week.tasksTotal + " tasks this week" : "no tasks this week") + (d.deadlines.length ? " · next: " + dayWord(d.deadlines[0].daysLeft) : "");
-    let h = onboardingHtml(d);
+    let h = onboardingHtml(d) + suggestionsHtml(c);
     h += '<section class="sp-dash' + (open ? " is-open" : "") + '" aria-label="Overview"><h2 class="sp-dash-h"><button type="button" class="sp-dash-btn" data-act="dash-toggle" aria-expanded="' + open + '" aria-controls="spDashBody"><span class="sp-dash-title">Overview</span><span class="sp-dash-sum">' + (open ? "" : esc(sum)) + '</span><span class="sp-chev" aria-hidden="true"></span></button></h2>' +
       '<div class="sp-dash-body" id="spDashBody"' + (open ? "" : " hidden") + '>' + dashBody(d, c) + '</div></section>';
     host.innerHTML = h;

@@ -4755,3 +4755,10 @@ span.sp-trow-t { cursor: default; }
 .bz-facts > div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
 .bz-facts dt { color: var(--text-dim); } .bz-facts dd { margin: 0; font-weight: 600; text-align: right; }
 .hm-plan-open { min-height: 44px; }
+
+/* suggestions that need approval */
+.sp-sugwrap { margin: 0 0 12px; } .sp-sugwrap .sp-sec { border-color: var(--yellow); }
+.sp-sugs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sp-sug { padding: 8px 10px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+.sp-sug-t { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; } .sp-sug p { margin: 2px 0 6px; font-size: 14px; }
+.sp-sug-btns { display: flex; flex-wrap: wrap; gap: 8px; } .sp-sug-btns .btn { min-height: 44px; }

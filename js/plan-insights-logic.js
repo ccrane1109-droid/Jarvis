@@ -528,13 +528,38 @@
     });
     const lastWs = PL.addDays(W.mondayOf(today), -7);
     const lw = W.weekOf(ctx.weeks, lastWs);
-    if (today > PL.addDays(lastWs, 6) && (!lw || !lw.reviewedAt)) push({ key: "review:" + lastWs, kind: "review", title: "Last week's review is ready", detail: "A summary of " + lastWs + " – " + PL.addDays(lastWs, 6) + " is ready to read and add to.", apply: { op: "open-review", weekStart: lastWs } });
+    const lastEnd = PL.addDays(lastWs, 6), hadWeek = arr(ctx.tasks).some(function (t) { return t && PL.isDate(t.date) && t.date >= lastWs && t.date <= lastEnd; }) || W.occurrences(ctx.blocks, lastWs, lastEnd).length > 0;   // nothing to review in an empty week
+    if (hadWeek && today > lastEnd && (!lw || !lw.reviewedAt)) push({ key: "review:" + lastWs, kind: "review", title: "Last week's review is ready", detail: "A summary of " + lastWs + " – " + PL.addDays(lastWs, 6) + " is ready to read and add to.", apply: { op: "open-review", weekStart: lastWs } });
     return out;
+  }
+
+  // Applies a proposal the person approved, to copies of the data. -> { ok, nodes?, tasks?, text, undo } where undo says what to change back (as a new edit, so it also wins over a copy synced from another device).
+  // Only two kinds change anything by themselves (a new deadline, tasks moved to today); the others open a screen and the person does the work.
+  function applyProposal(p, data) {
+    const ap = p && p.apply, d = data || {};
+    if (!ap) return { ok: false, text: "That suggestion can't be applied." };
+    if (ap.op === "set-due") {
+      const cur = arr(d.nodes).filter(function (n) { return n && n.id === ap.id && !n.deletedAt; })[0];
+      if (!cur) return { ok: false, text: "That isn't there any more." };
+      const r = PL.editNode(d.nodes, ap.id, { due: ap.due }, { now: d.now, today: d.today });
+      return r.ok ? { ok: true, nodes: r.nodes, text: "Moved the deadline of “" + cur.title + "” to " + ap.due + ".", undo: { nodeId: ap.id, due: cur.due || "" } } : { ok: false, text: "That date can't be used." };
+    }
+    if (ap.op === "move-tasks") {
+      const ids = {}; arr(ap.ids).forEach(function (id) { ids[id] = true; });
+      const before = {}, tasks = arr(d.tasks).map(function (t) {
+        if (!t || !ids[t.id] || t.completed) return t;
+        before[t.id] = t.date;
+        return Object.assign({}, t, { date: ap.date });
+      });
+      const n = Object.keys(before).length;
+      return n ? { ok: true, tasks: tasks, text: "Moved " + n + (n === 1 ? " task" : " tasks") + " to " + ap.date + ".", undo: { dates: before } } : { ok: false, text: "Those tasks are already done or gone." };
+    }
+    return { ok: false, text: "This one needs you: open it and choose." };
   }
 
   return {
     categoryKind: categoryKind, workoutMinutesByDate: workoutMinutesByDate, timeByCategory: timeByCategory, gratielMinutes: gratielMinutes, freeMinutes: freeMinutes,
     rankTasks: rankTasks, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
-    financeSeries: financeSeries, lastMonths: lastMonths, timeAllocation: timeAllocation, allocationSeries: allocationSeries, KIND_GROUPS: KIND_GROUPS, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, monthOverview: monthOverview, monthOutcomes: monthOutcomes, monthTaskLists: monthTaskLists, proposals: proposals, hours: hours
+    financeSeries: financeSeries, lastMonths: lastMonths, timeAllocation: timeAllocation, allocationSeries: allocationSeries, KIND_GROUPS: KIND_GROUPS, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, monthOverview: monthOverview, monthOutcomes: monthOutcomes, monthTaskLists: monthTaskLists, applyProposal: applyProposal, proposals: proposals, hours: hours
   };
 });
