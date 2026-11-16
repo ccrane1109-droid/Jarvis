@@ -125,7 +125,7 @@
   /* ---- the tabs, so a refresh puts you back where you were ---- */
 
   // The main tab first, then the sub-tabs inside it, then the Learning hub's own: they can only be opened in that order.
-  const TAB_ATTRS = ["data-target", "data-subtarget", "data-ln"];
+  const TAB_ATTRS = ["data-target", "data-subtarget", "data-ln", "data-sp"];
   function captureTabs() {
     const out = [];
     TAB_ATTRS.forEach(function (attr) {

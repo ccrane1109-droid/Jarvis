@@ -389,6 +389,10 @@
       if (targetId === "panel-calendar" && window.JarvisCalendar && typeof window.JarvisCalendar.onShow === "function") window.JarvisCalendar.onShow();
       if (targetId === "panel-home" && window.JarvisHome && typeof window.JarvisHome.onShow === "function") window.JarvisHome.onShow();
       if (targetId === "panel-business" && window.JarvisShopify && typeof window.JarvisShopify.onShow === "function") window.JarvisShopify.onShow();
+      if (window.JarvisPlan) {
+        if (targetId === "panel-strategy" && typeof window.JarvisPlan.onShow === "function") window.JarvisPlan.onShow();
+        else if (typeof window.JarvisPlan.onHide === "function") window.JarvisPlan.onHide();
+      }
       if (window.JarvisLearning) {
         if (targetId === "panel-learning" && typeof window.JarvisLearning.onShow === "function") window.JarvisLearning.onShow();
         else if (typeof window.JarvisLearning.onHide === "function") window.JarvisLearning.onHide();

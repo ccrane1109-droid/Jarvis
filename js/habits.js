@@ -140,7 +140,11 @@
     selectedDate = window.JarvisCore.todayISODate();
   }
 
-  function saveTasks() { Storage.saveTasks(tasks); }
+  // Anything that saves the task list also tells the page (the Strategy tab keeps its progress in step with the tasks you tick off here).
+  function saveTasks() {
+    Storage.saveTasks(tasks);
+    try { document.dispatchEvent(new CustomEvent("jarvis-tasks-changed")); } catch (e) { /* an old browser without CustomEvent: nothing listens anyway */ }
+  }
   function saveHabits() { Storage.saveHabits(habits); }
   function saveGoalsData() { Storage.saveGoals(goals); }
 
@@ -155,6 +159,31 @@
     return list.length ? Math.max.apply(null, list.map(function (t) { return t.order || 0; })) + 1 : 0;
   }
 
+  // The "counts toward the plan" choice in the task form. It only appears once the Strategy tab has something to link to.
+  function planApi() { return window.JarvisPlan && typeof window.JarvisPlan.choices === "function" ? window.JarvisPlan : null; }
+  function renderTaskPlanSelect(currentId) {
+    const api = planApi(), row = $("taskPlanRow"), sel = $("taskPlanSelect");
+    if (!row || !sel) return;
+    const choices = api ? api.choices(currentId || "") : [];
+    row.classList.toggle("hidden", !choices.length);
+    sel.setAttribute("data-ready", choices.length ? "1" : "");
+    const core = window.JarvisCore;
+    let html = '<option value="">Not linked</option>', group = null;
+    choices.forEach(function (c) {
+      if (c.group !== group) { if (group !== null) html += "</optgroup>"; html += '<optgroup label="' + core.escapeHtml(c.group) + '">'; group = c.group; }
+      html += '<option value="' + core.escapeHtml(c.id) + '">' + core.escapeHtml(c.label) + '</option>';
+    });
+    if (group !== null) html += "</optgroup>";
+    sel.innerHTML = html;
+    sel.value = currentId || "";
+  }
+  // Applies the form's choice to a task. Does nothing when the choice was never shown (so an edit can't unlink by accident).
+  function applyTaskPlanLink(taskId) {
+    const api = planApi(), sel = $("taskPlanSelect");
+    if (!api || !sel || sel.getAttribute("data-ready") !== "1") return;
+    api.setTaskLink(taskId, sel.value || "");
+  }
+
   function resetTaskForm() {
     taskFormEditId = null;
     $("taskForm").classList.add("hidden");
@@ -163,6 +192,7 @@
     $("taskTime").value = "";
     $("taskCategory").value = "";
     $("taskGoalSelect").value = "";
+    renderTaskPlanSelect("");
     $("taskFormTitle").textContent = "Add Task";
     $("taskFormSubmitBtn").textContent = "Add Task";
     $("taskFormCancelBtn").classList.add("hidden");
@@ -211,18 +241,22 @@
       category: $("taskCategory").value.trim(),
       goalId: $("taskGoalSelect").value || null
     };
+    const madeIds = [];
     if (taskFormEditId) {
       const t = tasks.find(function (tt) { return tt.id === taskFormEditId; });
-      if (t) Object.assign(t, raw);
+      if (t) { Object.assign(t, raw); madeIds.push(t.id); }
     } else {
       const repeatDates = Array.prototype.slice.call($("taskRepeatDaysRow").querySelectorAll(".day-picker-btn.selected"))
         .map(function (b) { return b.getAttribute("data-date"); });
       const datesToCreate = [selectedDate].concat(repeatDates.filter(function (d) { return d !== selectedDate; }));
       datesToCreate.forEach(function (d) {
-        tasks.push(Object.assign({}, raw, { id: core.uid("task"), date: d, completed: false, order: nextOrderForDate(d), createdAt: Date.now() }));
+        const made = Object.assign({}, raw, { id: core.uid("task"), date: d, completed: false, order: nextOrderForDate(d), createdAt: Date.now() });
+        tasks.push(made);
+        madeIds.push(made.id);
       });
     }
     saveTasks();
+    madeIds.forEach(applyTaskPlanLink);
     resetTaskForm();
     renderTaskList();
     renderDaySelectorPills();
@@ -266,6 +300,8 @@
       const g = goals.find(function (gg) { return gg.id === t.goalId; });
       if (g) metaParts.push("Goal: " + core.escapeHtml(g.name));
     }
+    const planTitle = planApi() ? planApi().nodeTitleOfTask(t.id) : "";
+    if (planTitle) metaParts.push("Plan: " + core.escapeHtml(planTitle));
     const menuOpen = taskMenuOpenId === t.id;
     // Reuses Nutrition's .food-item-* card/menu styles and the existing
     // .habit-check-btn circular-check style — see the CSS note in
@@ -313,6 +349,7 @@
     $("taskCategory").value = t.category || "";
     renderTaskGoalSelectOptions();
     $("taskGoalSelect").value = t.goalId || "";
+    renderTaskPlanSelect(planApi() ? planApi().nodeIdOfTask(t.id) : "");
     $("taskFormTitle").textContent = "Edit Task";
     $("taskFormSubmitBtn").textContent = "Save Changes";
     $("taskFormCancelBtn").classList.remove("hidden");
@@ -1073,6 +1110,21 @@
     renderTodayOverview();
   }
   function getSelectedDate() { return selectedDate; }
+  // A new task made by another part of the app (the Strategy tab). It is the same record the To-Do form makes, in the same list.
+  function addTask(fields) {
+    const f = fields || {}, text = String(f.text || "").trim();
+    if (!text) return null;
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(f.date || "") ? f.date : selectedDate;
+    const t = {
+      text: text, priority: ["low", "medium", "high"].indexOf(f.priority) !== -1 ? f.priority : "medium",
+      time: /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || "") ? f.time : "", category: String(f.category || "").trim(), goalId: f.goalId || null,
+      id: window.JarvisCore.uid("task"), date: date, completed: false, order: nextOrderForDate(date), createdAt: Date.now()
+    };
+    tasks.push(t);
+    saveTasks();
+    renderTaskList(); renderDaySelectorPills(); renderTodayOverview();
+    return t;
+  }
 
   function onSubTabChange(targetId) {
     if (targetId === "habits-plan" && window.JarvisDayPlan && typeof window.JarvisDayPlan.onShow === "function") window.JarvisDayPlan.onShow();
@@ -1127,5 +1179,5 @@
     renderAll();
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, selectDate: selectDate, getGoals: function () { return goals; } };
+  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; } };
 })();

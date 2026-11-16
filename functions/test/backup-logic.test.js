@@ -313,6 +313,23 @@ test("learning hub: books, research, notes, actions and reviews are backed up an
 });
 
 
+test("strategic planning: nodes, money, links, ingredients, blocks and weeks merge by record; the settings by newest", () => {
+  const keys = ["jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks"];
+  ["jarvisPlanSettings"].concat(keys).forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k + " is in the backup list"));
+  const rec = (o) => Object.assign({ id: "r1", title: "Launch", createdAt: 100, updatedAt: 100 }, o);
+  keys.forEach((k) => {
+    const merge = (a, b) => JSON.parse(B.mergeText(k, JSON.stringify(a), JSON.stringify(b)).text);
+    assert.equal(merge([rec({ id: "a" })], [rec({ id: "b" })]).length, 2, k + ": records from both devices are kept");
+    assert.equal(merge([rec({ title: "old", updatedAt: 200 })], [rec({ title: "new", updatedAt: 300 })])[0].title, "new", k + ": the newer edit wins");
+    const gone = merge([rec({ deletedAt: 500, updatedAt: 500 })], [rec()]);
+    assert.deepEqual([gone.length, gone[0].deletedAt], [1, 500], k + ": a deletion reaches the other device");
+    assert.equal(merge([rec({ updatedAt: 900 })], [rec({ deletedAt: 500, updatedAt: 500 })])[0].deletedAt, undefined, k + ": an undo made after the deletion wins");
+  });
+  const set = (a, b) => JSON.parse(B.mergeText("jarvisPlanSettings", JSON.stringify(a), JSON.stringify(b)).text);
+  assert.equal(set({ revenueMetric: "sales", updatedAt: 10 }, { revenueMetric: "mrr", updatedAt: 20 }).revenueMetric, "mrr", "the newer settings win");
+  assert.equal(set({ revenueMetric: "sales", updatedAt: 30 }, { revenueMetric: "mrr", updatedAt: 20 }).revenueMetric, "sales", "and this device's when it is newer");
+});
+
 test("the cloud copy is news only when another device wrote something this one does not hold", () => {
   const m = (o) => Object.assign({ updatedAt: 200, hash: "h-new", device: "d_phone" }, o);
   const base = { meta: { rev: 100, hash: "h-old", pending: [] }, localText: "[1]", deviceId: "d_computer" };

@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=79">
+<link rel="stylesheet" href="style.css?v=80">
 </head>
 <body>
 
@@ -123,6 +123,7 @@
       <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-learning" role="tab" aria-selected="false" aria-controls="panel-learning" id="navBtnLearning">Learning</button>
+      <button type="button" class="main-nav-btn" data-target="panel-strategy" role="tab" aria-selected="false" aria-controls="panel-strategy" id="navBtnStrategy">Strategy</button>
     </nav>
     <div class="profile-menu-wrap">
       <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -1814,6 +1815,11 @@ npx firebase-tools deploy --only firestore:rules</pre>
               <select id="taskGoalSelect"><option value="">None</option></select>
             </div>
           </div>
+          <div class="form-row hidden" id="taskPlanRow">
+            <label for="taskPlanSelect">Counts toward the plan (optional)</label>
+            <select id="taskPlanSelect"><option value="">Not linked</option></select>
+            <p class="field-hint">Link it to a yearly objective, quarterly priority or monthly milestone in Strategy. Finishing it moves their progress.</p>
+          </div>
           <details class="collapsible-section" id="taskRepeatDetails">
             <summary>Also add this task to other days this week</summary>
             <div class="collapsible-body">
@@ -1916,6 +1922,10 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Goals ---------- -->
     <div id="habits-goals" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavGoals">
+      <div class="card strategy-hint">
+        <p>Planning bigger than personal goals? The Strategy tab links a three-year vision to yearly objectives, quarterly priorities, monthly milestones and your tasks. These goals stay exactly as they are, and you can follow any of them from there.</p>
+        <button type="button" class="btn btn-secondary" data-open-strategy>Open Strategy</button>
+      </div>
       <div class="card">
         <h2 class="card-title" id="habitsGoalFormTitle">Create a Goal</h2>
         <form id="habitsGoalForm" class="stacked-form" novalidate>
@@ -2664,6 +2674,23 @@ npx firebase-tools deploy --only firestore:rules</pre>
     <button type="button" id="lnFab" class="ln-fab" aria-haspopup="dialog">+ Capture</button>
   </section>
 
+  <!-- ===================== STRATEGIC PLANNING CENTER ===================== -->
+  <section id="panel-strategy" class="tab-panel sp-scope" role="tabpanel" aria-labelledby="navBtnStrategy">
+    <div class="panel-header">
+      <h1>Strategic Planning</h1>
+      <p class="panel-subtitle">Three-year vision, yearly objectives, quarterly priorities, monthly milestones, then your tasks and time blocks. Progress comes from the tasks you finish and the money you enter.</p>
+    </div>
+    <p id="spLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <nav class="sub-nav sp-sub-nav" aria-label="Planning horizon">
+      <button type="button" class="sub-nav-btn active" data-sp="yearly" aria-current="page">Yearly</button>
+      <button type="button" class="sub-nav-btn" data-sp="quarterly">Quarterly</button>
+      <button type="button" class="sub-nav-btn" data-sp="monthly">Monthly</button>
+      <button type="button" class="sub-nav-btn" data-sp="weekly">Weekly</button>
+    </nav>
+    <div id="spView"></div>
+    <div id="spUndo" class="sp-undo hidden"></div>
+  </section>
+
 </main>
 
 <!-- ===================== MODALS ===================== -->
@@ -3067,6 +3094,9 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <button type="button" class="more-item" data-nav="navBtnLearning">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15.5H6.5A2.5 2.5 0 004 21z"/><path d="M4 21a2.5 2.5 0 012.5-2.5H20"/><path d="M9 7.5h6"/></svg><span>Learning</span>
       </button>
+      <button type="button" class="more-item" data-nav="navBtnStrategy">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="M4 7l6-3 6 5 5-4"/></svg><span>Strategy</span>
+      </button>
     </div>
   </div>
 </div>
@@ -3122,82 +3152,89 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=79"></script>
-<script src="js/backup-logic.js?v=79"></script>
-<script src="js/live-refresh.js?v=79"></script>
-<script src="js/cloud-backup.js?v=79"></script>
-<script type="module" src="js/auth.js?v=79"></script>
-<script src="js/app.js?v=79"></script>
-<script src="js/exercises.js?v=79"></script>
-<script src="js/workout-logic.js?v=79"></script>
-<script src="js/exercise-logic.js?v=79"></script>
-<script src="js/exercise-guides.js?v=79"></script>
-<script src="js/routine-logic.js?v=79"></script>
-<script src="js/workout.js?v=79"></script>
-<script src="js/workout-ui.js?v=79"></script>
-<script src="js/routines-ui.js?v=79"></script>
-<script src="js/progress-logic.js?v=79"></script>
-<script src="js/insights-logic.js?v=79"></script>
-<script src="js/charts.js?v=79"></script>
-<script src="js/history-ui.js?v=79"></script>
-<script src="js/insights-ui.js?v=79"></script>
-<script src="js/library-ui.js?v=79"></script>
-<script src="js/progress-ui.js?v=79"></script>
-<script src="js/nutrition.js?v=79"></script>
-<script src="js/nutrition-label-parse.js?v=79"></script>
-<script src="js/nutrition-label-scan.js?v=79"></script>
-<script src="js/groceries.js?v=79"></script>
-<script src="js/habit-logic.js?v=79"></script>
-<script src="js/dayplan-logic.js?v=79"></script>
-<script src="js/habits.js?v=79"></script>
-<script src="js/dayplan-ui.js?v=79"></script>
-<script src="js/calendar-logic.js?v=79"></script>
-<script src="js/schedule-logic.js?v=79"></script>
-<script src="js/ics-logic.js?v=79"></script>
-<script src="js/assistant-logic.js?v=79"></script>
-<script src="js/calendar-ui.js?v=79"></script>
-<script src="js/assistant-ui.js?v=79"></script>
-<script src="js/calendar-reminders-logic.js?v=79"></script>
-<script src="js/calendar-reminders-ui.js?v=79"></script>
-<script src="js/ics-ui.js?v=79"></script>
-<script src="js/home-ui.js?v=79"></script>
-<script src="js/discipline-logic.js?v=79"></script>
-<script src="js/discipline-program.js?v=79"></script>
-<script src="js/discipline-habits.js?v=79"></script>
-<script src="js/discipline-insights.js?v=79"></script>
-<script src="js/discipline-charts.js?v=79"></script>
-<script src="js/discipline-delivery.js?v=79"></script>
-<script src="js/discipline.js?v=79"></script>
-<script src="js/wakecheck-logic.js?v=79"></script>
-<script src="js/wakecheck.js?v=79"></script>
-<script src="functions/lib/reminder-spec.js?v=79"></script>
-<script src="functions/lib/reminder-events.js?v=79"></script>
-<script src="js/reminders.js?v=79"></script>
-<script src="js/video-api-client.js?v=79"></script>
-<script src="js/video-connections.js?v=79"></script>
-<script src="js/formcheck-logic.js?v=79"></script>
-<script src="js/form-check.js?v=79"></script>
-<script src="js/retired-data.js?v=79"></script>
-<script src="js/retired-ui.js?v=79"></script>
-<script src="js/shopify-ui.js?v=79"></script>
-<script src="js/learning-srs.js?v=79"></script>
-<script src="js/learning-logic.js?v=79"></script>
-<script src="js/learning-cards-logic.js?v=79"></script>
-<script src="js/learning-goals-logic.js?v=79"></script>
-<script src="js/learning-links-logic.js?v=79"></script>
-<script src="js/learning-reading-logic.js?v=79"></script>
-<script src="js/learning-weekly-logic.js?v=79"></script>
-<script src="js/learning-store.js?v=79"></script>
-<script src="js/learning-ui.js?v=79"></script>
-<script src="js/learning-books-ui.js?v=79"></script>
-<script src="js/learning-research-ui.js?v=79"></script>
-<script src="js/learning-library-ui.js?v=79"></script>
-<script src="js/learning-actions-ui.js?v=79"></script>
-<script src="js/learning-review-ui.js?v=79"></script>
-<script src="js/learning-study-ui.js?v=79"></script>
-<script src="js/learning-topics-ui.js?v=79"></script>
-<script src="js/learning-goals-ui.js?v=79"></script>
-<script src="js/learning-reading-ui.js?v=79"></script>
-<script src="js/learning-capture-ui.js?v=79"></script>
+<script src="js/firebase-config.js?v=80"></script>
+<script src="js/backup-logic.js?v=80"></script>
+<script src="js/live-refresh.js?v=80"></script>
+<script src="js/cloud-backup.js?v=80"></script>
+<script type="module" src="js/auth.js?v=80"></script>
+<script src="js/app.js?v=80"></script>
+<script src="js/exercises.js?v=80"></script>
+<script src="js/workout-logic.js?v=80"></script>
+<script src="js/exercise-logic.js?v=80"></script>
+<script src="js/exercise-guides.js?v=80"></script>
+<script src="js/routine-logic.js?v=80"></script>
+<script src="js/workout.js?v=80"></script>
+<script src="js/workout-ui.js?v=80"></script>
+<script src="js/routines-ui.js?v=80"></script>
+<script src="js/progress-logic.js?v=80"></script>
+<script src="js/insights-logic.js?v=80"></script>
+<script src="js/charts.js?v=80"></script>
+<script src="js/history-ui.js?v=80"></script>
+<script src="js/insights-ui.js?v=80"></script>
+<script src="js/library-ui.js?v=80"></script>
+<script src="js/progress-ui.js?v=80"></script>
+<script src="js/nutrition.js?v=80"></script>
+<script src="js/nutrition-label-parse.js?v=80"></script>
+<script src="js/nutrition-label-scan.js?v=80"></script>
+<script src="js/groceries.js?v=80"></script>
+<script src="js/habit-logic.js?v=80"></script>
+<script src="js/dayplan-logic.js?v=80"></script>
+<script src="js/habits.js?v=80"></script>
+<script src="js/dayplan-ui.js?v=80"></script>
+<script src="js/calendar-logic.js?v=80"></script>
+<script src="js/schedule-logic.js?v=80"></script>
+<script src="js/ics-logic.js?v=80"></script>
+<script src="js/assistant-logic.js?v=80"></script>
+<script src="js/calendar-ui.js?v=80"></script>
+<script src="js/assistant-ui.js?v=80"></script>
+<script src="js/calendar-reminders-logic.js?v=80"></script>
+<script src="js/calendar-reminders-ui.js?v=80"></script>
+<script src="js/ics-ui.js?v=80"></script>
+<script src="js/home-ui.js?v=80"></script>
+<script src="js/discipline-logic.js?v=80"></script>
+<script src="js/discipline-program.js?v=80"></script>
+<script src="js/discipline-habits.js?v=80"></script>
+<script src="js/discipline-insights.js?v=80"></script>
+<script src="js/discipline-charts.js?v=80"></script>
+<script src="js/discipline-delivery.js?v=80"></script>
+<script src="js/discipline.js?v=80"></script>
+<script src="js/wakecheck-logic.js?v=80"></script>
+<script src="js/wakecheck.js?v=80"></script>
+<script src="functions/lib/reminder-spec.js?v=80"></script>
+<script src="functions/lib/reminder-events.js?v=80"></script>
+<script src="js/reminders.js?v=80"></script>
+<script src="js/video-api-client.js?v=80"></script>
+<script src="js/video-connections.js?v=80"></script>
+<script src="js/formcheck-logic.js?v=80"></script>
+<script src="js/form-check.js?v=80"></script>
+<script src="js/retired-data.js?v=80"></script>
+<script src="js/retired-ui.js?v=80"></script>
+<script src="js/shopify-ui.js?v=80"></script>
+<script src="js/learning-srs.js?v=80"></script>
+<script src="js/learning-logic.js?v=80"></script>
+<script src="js/learning-cards-logic.js?v=80"></script>
+<script src="js/learning-goals-logic.js?v=80"></script>
+<script src="js/learning-links-logic.js?v=80"></script>
+<script src="js/learning-reading-logic.js?v=80"></script>
+<script src="js/learning-weekly-logic.js?v=80"></script>
+<script src="js/learning-store.js?v=80"></script>
+<script src="js/learning-ui.js?v=80"></script>
+<script src="js/learning-books-ui.js?v=80"></script>
+<script src="js/learning-research-ui.js?v=80"></script>
+<script src="js/learning-library-ui.js?v=80"></script>
+<script src="js/learning-actions-ui.js?v=80"></script>
+<script src="js/learning-review-ui.js?v=80"></script>
+<script src="js/learning-study-ui.js?v=80"></script>
+<script src="js/learning-topics-ui.js?v=80"></script>
+<script src="js/learning-goals-ui.js?v=80"></script>
+<script src="js/learning-reading-ui.js?v=80"></script>
+<script src="js/learning-capture-ui.js?v=80"></script>
+<script src="js/plan-logic.js?v=80"></script>
+<script src="js/plan-store.js?v=80"></script>
+<script src="js/plan-ui.js?v=80"></script>
+<script src="js/plan-yearly-ui.js?v=80"></script>
+<script src="js/plan-quarterly-ui.js?v=80"></script>
+<script src="js/plan-week-logic.js?v=80"></script>
+<script src="js/plan-week-ui.js?v=80"></script>
 </body>
 </html>
