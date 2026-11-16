@@ -628,6 +628,46 @@ test("days left, the chain above a task, and counting a branch's tasks once", ()
   assert.deepEqual(md.subtreeMilestones(o.node.id).map((n) => n.id), [m.node.id]);
 });
 
+test("your own templates: add, refuse duplicates, remove, restore", () => {
+  const o = add([], obj({ title: "Year goal" })), p = add(o.nodes, pri({ title: "Q goal", parentId: o.node.id }));
+  const m = add(p.nodes, mil({ title: "Checkpoint", parentId: p.node.id }));
+  const md = model({ nodes: m.nodes, today: "2026-11-04" });
+  const tpl = P.templateFromObjective(md, o.node.id, "My year", ctx());
+  assert.equal(tpl.tree.priorities.length, 1);
+  assert.equal(tpl.tree.priorities[0].milestones.length, 1);
+  assert.ok(!JSON.stringify(tpl).includes("taskId"), "no tasks in a template");
+  const a = P.addTemplate([], tpl, ctx());
+  assert.equal(a.ok, true);
+  assert.equal(P.addTemplate(a.templates, Object.assign({}, tpl, { id: "x" , name: "my YEAR" }), ctx()).ok, false, "the same name again is refused, ignoring case");
+  assert.equal(P.addTemplate([], { name: "", tree: {} }, ctx()).ok, false, "a name is required");
+  const r = P.removeTemplate(a.templates, a.template.id, ctx());
+  assert.equal(r.ok, true);
+  assert.equal(r.templates.filter((t) => !t.deletedAt).length, 0, "removed (kept as a marker for sync)");
+  assert.equal(r.templates.length, 1);
+  const back = P.restoreTemplate(r.templates, a.template.id, ctx());
+  assert.equal(back.templates.filter((t) => !t.deletedAt).length, 1, "and Undo brings it back");
+  assert.equal(P.removeTemplate(a.templates, "nope", ctx()).ok, false);
+  // a saved template builds again in another year
+  const again = P.applyTemplate(m.nodes, a.template, { year: 2027, quarter: 2 }, Object.assign(ctx(), { nodes: m.nodes }));
+  assert.equal(again.ok, true);
+  assert.equal(again.created.length, 3);
+});
+
+test("planned against actual: how much time has passed next to how much is done", () => {
+  const p = add([], pri({ due: "2026-10-31" })), id = p.node.id;           // Q4 starts 2026-10-01: a 30-day window
+  let links = [], tasks = [];
+  for (let i = 1; i <= 4; i++) { links = link(links, "t" + i, id); tasks.push(task("t" + i, i <= 1)); }
+  const at = (today) => P.model({ nodes: p.nodes, links, tasks, today }).pace(id);
+  const mid = at("2026-10-16");
+  assert.deepEqual([mid.expected, mid.actual, mid.gap, mid.state], [50, 25, -25, "during"], "halfway through, a quarter done: 25 points behind the pace");
+  assert.deepEqual([at("2026-09-20").expected, at("2026-09-20").state], [0, "before"], "before it starts nothing is expected");
+  assert.deepEqual([at("2026-11-20").expected, at("2026-11-20").state], [100, "after"], "after the deadline everything is expected");
+  const none = P.model({ nodes: p.nodes, links: [], tasks: [], today: "2026-10-16" }).pace(id);
+  assert.deepEqual([none.actual, none.gap], [null, null], "no tasks yet: no figure, never 0");
+  assert.equal(P.model({ nodes: p.nodes, links, tasks }).pace(id), null, "no date known: nothing to compare");
+  assert.equal(P.model({ nodes: P.setStatus(p.nodes, id, "paused", ctx()).nodes, links, tasks, today: "2026-10-16" }).pace(id), null, "paused: nothing to compare");
+});
+
 test("the new fields: description, success metric, completion criteria, supporting habits", () => {
   const r = P.checkNode(pri({ description: "  Get the first drop out  ", successMetric: "Sell 50 units", criteria: "Samples approved and pre-orders open", habitIds: ["h1", "h1", "h2", 5, ""] }), ctx());
   assert.equal(r.ok, true);

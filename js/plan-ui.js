@@ -38,6 +38,22 @@
   function habits() { return window.JarvisHabits || null; }
   A.tasks = function () { const h = habits(); return h && h.getTasks ? (h.getTasks() || []) : []; };
   A.goals = function () { const h = habits(); return h && h.getGoals ? (h.getGoals() || []) : []; };
+  // The habits you already track (Habits tab). The plan only reads them: it never changes a habit.
+  A.allHabits = function () {
+    try { const h = window.JarvisCore.loadJSON("jarvisHabits", []); return Array.isArray(h) ? h.filter(function (x) { return x && typeof x.id === "string" && x.name; }) : []; } catch (e) { return []; }
+  };
+  // The habits linked to a goal, each with how often it was done over the last 7 days (counted from its own check-offs).
+  A.habitsOf = function (n) {
+    const all = A.allHabits(), t = store.today(), out = [];
+    (n.habitIds || []).forEach(function (id) {
+      const hb = all.filter(function (x) { return x.id === id; })[0];
+      if (!hb) return;
+      const target = Math.max(1, Number(hb.dailyTarget) || 1); let done = 0;
+      for (let i = 0; i < 7; i++) { if ((Number(hb.completions && hb.completions[PL.addDays(t, -i)]) || 0) >= target) done++; }
+      out.push({ id: id, name: hb.name, line: done + " of the last 7 days" });
+    });
+    return out;
+  };
   A.data = function () {
     return { nodes: store.all("nodes"), links: store.all("links"), tasks: A.tasks(), periods: store.all("periods"), settings: store.settings(), goals: A.goals(), today: store.today() };
   };
@@ -317,6 +333,23 @@
       '<span class="sp-task-meta">' + (t.date ? esc(A.fmtShort(t.date)) : "") + (t.time ? " " + esc(t.time) : "") + (est ? " · " + est + " min" : "") + (t.priority === "high" ? " · high" : "") + '</span>' +
       '<button type="button" class="btn btn-secondary sp-task-unlink" data-act="task-unlink" data-id="' + esc(t.id) + '" aria-label="Unlink ' + esc(t.text) + ' (the task is kept)">Unlink</button></li>';
   }
+  // Planned against actual, as two bars and one sentence: the share of the time that has passed (the pace the plan asks for) and the share done.
+  A.paceBars = function (pc, health) {
+    if (!pc) return "";
+    let say;
+    if (pc.state === "before") say = "Starts " + A.fmtDate(pc.start) + ".";
+    else if (pc.actual === null) say = "Nothing to measure yet, so no comparison.";
+    else if (pc.gap >= 0) say = pc.gap === 0 ? "Right on the pace." : pc.gap + " points ahead of the pace.";
+    else say = (-pc.gap) + " points behind the pace." + (pc.state === "after" ? " It is past its deadline." : "");
+    return '<div class="sp-pace" role="group" aria-label="Planned against actual">' +
+      '<div class="sp-pace-row"><span class="sp-pace-l">Planned by now</span>' + A.bar(pc.expected, "Planned by now", "") + '<span class="sp-pace-v">' + pc.expected + '%</span></div>' +
+      '<div class="sp-pace-row"><span class="sp-pace-l">Actual</span>' + (pc.actual === null ? '<span class="sp-pace-none">no data yet</span>' : A.bar(pc.actual, "Actual progress", health)) + '<span class="sp-pace-v">' + (pc.actual === null ? "–" : pc.actual + "%") + '</span></div>' +
+      '<p class="sp-pace-say' + (pc.gap !== null && pc.gap < -10 ? " is-behind" : "") + '">' + esc(say) + '</p></div>';
+  };
+  A.paceHtml = function (id) {
+    const m = A.model(), n = m.node(id), pc = m.pace(id);
+    return !n || !pc || n.measure === "budget" ? "" : A.paceBars(pc, m.health(id));
+  };
   // The expandable card for an objective, a priority or a milestone. o: { children: html to show under it }
   A.nodeCard = function (n, o) {
     o = o || {};
@@ -333,15 +366,21 @@
     if (open) {
       h5 += '<div class="sp-card-body">';
       if (parent && o.showParent !== false) h5 += '<p class="sp-parent">Part of: <button type="button" class="sp-link" data-act="open-node" data-id="' + esc(parent.id) + '">' + esc(parent.title) + '</button></p>';
+      if (n.description) h5 += '<p class="sp-notes">' + esc(n.description) + '</p>';
       if (n.notes) h5 += '<p class="sp-notes">' + esc(n.notes) + '</p>';
-      h5 += '<dl class="sp-facts">' + (n.measure !== "tasks" ? '<div><dt>Measured by</dt><dd>' + esc((PL.MEASURES.filter(function (x) { return x.key === n.measure; })[0] || {}).label || "") + '</dd></div>' : "") +
+      if (o.pace !== false) h5 += A.paceHtml(n.id);
+      h5 += '<dl class="sp-facts">' + (n.successMetric ? '<div><dt>Success metric</dt><dd>' + esc(n.successMetric) + '</dd></div>' : "") + (n.criteria ? '<div><dt>Done when</dt><dd>' + esc(n.criteria) + '</dd></div>' : "") + (n.weight > 1 ? '<div><dt>Weight</dt><dd>' + n.weight + ' of 5</dd></div>' : "") + (n.measure !== "tasks" ? '<div><dt>Measured by</dt><dd>' + esc((PL.MEASURES.filter(function (x) { return x.key === n.measure; })[0] || {}).label || "") + '</dd></div>' : "") +
         '<div><dt>Deadline</dt><dd>' + esc(A.fmtDate(dl)) + (n.due ? "" : " (end of its " + (n.type === "objective" ? "year" : n.type === "priority" ? "quarter" : "month") + ")") + '</dd></div></dl>';
       if (o.children) h5 += o.children;
       if (n.measure === "number") h5 += '<div class="sp-inline"><label for="spnum_' + esc(n.id) + '">Current' + (n.unit ? " (" + esc(n.unit) + ")" : "") + '</label><input type="number" inputmode="decimal" min="0" id="spnum_' + esc(n.id) + '" data-num-for="' + esc(n.id) + '" value="' + esc(n.current === null ? 0 : n.current) + '"><button type="button" class="btn btn-secondary" data-act="save-number" data-id="' + esc(n.id) + '">Update</button></div>';
       // tasks: the ones linked straight to this item; the ones under items below it show on those items
       h5 += '<h4 class="sp-h4">Tasks linked here</h4>';
       h5 += direct.length ? '<ul class="sp-tasks">' + direct.map(function (t) { return taskRow(t, m); }).join("") + '</ul>' : '<p class="sp-dim">No tasks linked straight to this yet.</p>';
-      h5 += '<div class="sp-card-actions"><button type="button" class="btn btn-secondary" data-act="link-tasks" data-id="' + esc(n.id) + '">Link or add tasks</button>';
+      const hb = A.habitsOf(n);
+      if (hb.length) h5 += '<h4 class="sp-h4">Habits that support it</h4><ul class="sp-sublist">' + hb.map(function (x) { return '<li>' + esc(x.name) + ' <span class="sp-dim">' + esc(x.line) + '</span></li>'; }).join("") + '</ul>';
+      h5 += '<div class="sp-card-actions"><button type="button" class="btn btn-secondary" data-act="detail" data-id="' + esc(n.id) + '">Details</button><button type="button" class="btn btn-secondary" data-act="link-tasks" data-id="' + esc(n.id) + '">Link or add tasks</button>';
+      if (n.type !== "milestone") h5 += '<button type="button" class="btn btn-secondary" data-act="breakdown-from" data-id="' + esc(n.id) + '">Break it down</button>';
+      if (n.type === "objective") h5 += '<button type="button" class="btn btn-secondary" data-act="save-template" data-id="' + esc(n.id) + '">Save as template</button>';
       if (m.canMarkDone(n.id)) h5 += '<button type="button" class="btn btn-secondary" data-act="mark-done" data-id="' + esc(n.id) + '">' + (n.doneAt ? "Mark not done" : "Mark done") + '</button>';
       h5 += '<button type="button" class="btn btn-secondary" data-act="edit-node" data-id="' + esc(n.id) + '">Edit</button>';
       if (o.add) h5 += o.add;
@@ -393,6 +432,13 @@
     body += '<div data-for="number" class="form-row two-col"><div><label for="spf_current">Current number</label><input id="spf_current" name="current" inputmode="decimal" value="' + esc(n.current === null || n.current === undefined ? "" : n.current) + '" autocomplete="off"><p class="sp-err hidden" data-err="current" role="alert"></p></div><div><label for="spf_unit">Unit</label><input id="spf_unit" name="unit" maxlength="16" value="' + esc(n.unit) + '" placeholder="e.g. hires" autocomplete="off"></div></div>';
     body += '<div data-for="goal">' + A.fSelect("goalId", "Your goal", goalOpts, n.goalId, { hint: "Follows that goal's own progress from Habits → Goals." }) + '</div>';
     body += A.fText("due", "Deadline (optional)", n.due, { type: "date", hint: "Leave empty to use the end of the " + (type === "objective" ? "year" : type === "priority" ? "quarter" : "month") + "." });
+    const hbAll = A.allHabits(), filled = !!(n.description || n.successMetric || n.criteria || (n.weight && n.weight > 1) || (n.habitIds && n.habitIds.length));
+    body += '<details class="sp-more"' + (filled ? " open" : "") + '><summary>More about it (description, success metric, completion criteria, weight' + (hbAll.length ? ", habits" : "") + ')</summary>' +
+      A.fArea("description", "What it is", n.description || "", { rows: 2, max: 500, placeholder: "A sentence or two so future-you remembers what this means" }) +
+      A.fText("successMetric", "Success metric", n.successMetric || "", { max: 140, placeholder: type === "objective" ? "e.g. $100k in sales" : type === "priority" ? "e.g. first 25 orders" : "e.g. three quotes compared" }) +
+      A.fArea("criteria", "Completion criteria", n.criteria || "", { rows: 2, max: 500, hint: "What has to be true before you can call it done. Jarvis shows this when you mark it complete.", placeholder: "e.g. samples approved and the pre-order page is live" }) +
+      A.fSelect("weight", "How much it counts toward what it belongs to", [["1", "1 · normal"], ["2", "2"], ["3", "3 · matters more"], ["4", "4"], ["5", "5 · counts most"]], String(n.weight || 1), { hint: "Its parent averages its parts; a part with a higher weight pulls the average harder." }) +
+      (hbAll.length ? '<fieldset class="sp-habit-pick"><legend>Habits that support it</legend>' + hbAll.map(function (hb) { return '<label class="pw-check"><input type="checkbox" name="habitIds" data-multi value="' + esc(hb.id) + '"' + ((n.habitIds || []).indexOf(hb.id) !== -1 ? " checked" : "") + '> ' + esc(hb.name) + '</label>'; }).join("") + '<p class="field-hint">Your habits stay exactly as they are. This only shows how they are going next to the goal.</p></fieldset>' : "") + '</details>';
     body += A.fArea("notes", "Notes", n.notes, { max: PL.NOTES_MAX });
     if (editing) body += A.fSelect("status", "Status", PL.STATUSES.map(function (x) { return [x.key, x.label]; }), n.status, { hint: "Paused keeps it but stops warnings. Dropped takes it out of your parents' progress." });
     function sync(root) {

@@ -498,6 +498,25 @@
           milestones: m.milestonesOf(p.id).filter(function (k) { return k.status !== "dropped"; }).map(function (k) { return { title: k.title, criteria: k.criteria, weight: k.weight || 1, monthOffset: Math.max(0, Math.min(2, Number(k.month.slice(5)) - first)) }; }) };
       }) } };
   }
+  // Your own saved templates (jarvisPlanTemplates): add one, or take one away (kept as a marker for 30 days so Undo and sync work).
+  const MAX_TEMPLATES = 30;
+  function addTemplate(templates, tpl, ctx) {
+    const c = ctxOf(ctx), list = templates || [];
+    if (!tpl || !isObj(tpl.tree) || !oneLine(tpl.name)) return { ok: false, templates: list, error: "Give the template a name." };
+    if (live(list).length >= MAX_TEMPLATES) return { ok: false, templates: list, error: "You can keep " + MAX_TEMPLATES + " templates. Delete one first." };
+    if (live(list).some(function (t) { return oneLine(t.name).toLowerCase() === oneLine(tpl.name).toLowerCase(); })) return { ok: false, templates: list, error: "A template with that name already exists." };
+    const rec = Object.assign({}, tpl, { id: tpl.id || c.makeId("tpl"), name: oneLine(tpl.name).slice(0, 60), createdAt: tpl.createdAt || c.now, updatedAt: c.now });
+    return { ok: true, templates: list.concat([rec]), template: rec };
+  }
+  function removeTemplate(templates, id, ctx) {
+    const c = ctxOf(ctx), cur = live(templates).filter(function (t) { return t.id === id; })[0] || null;
+    if (!cur) return { ok: false, templates: templates };
+    return { ok: true, templates: templates.map(function (t) { return t.id === id ? tombstone(t, c.now) : t; }), template: cur };
+  }
+  function restoreTemplate(templates, id, ctx) {
+    const c = ctxOf(ctx);
+    return { ok: true, templates: templates.map(function (t) { return t.id === id && t.deletedAt ? restoreRec(t, c.now) : t; }) };
+  }
   // Builds the nodes of a template into the plan: one objective in `year`, its priorities in `quarter`, and each milestone in its month.
   // -> { ok, nodes, created: [ids], errors } ; nothing is added if anything would be refused.
   function applyTemplate(nodes, tpl, opts, ctx) {
@@ -698,6 +717,18 @@
       const n = nodeById[id];
       return n && today ? diffDays(today, deadline(n)) : null;
     }
+    // Planned against actual: how much of the time has passed (the pace the plan asks for) next to how much is done.
+    // -> { expected, actual, gap, start, end, state } or null when there is nothing to compare (no date, paused, dropped).
+    //    gap = actual - expected, in points (negative = behind). state: before | during | after. actual is null when nothing is measurable yet.
+    function pace(id) {
+      const n = nodeById[id];
+      if (!n || !today || n.status !== "active") return null;
+      const p = progress(id), start = startOf(n), end = deadline(n), span = Math.max(1, diffDays(start, end));
+      const state = today < start ? "before" : today > end ? "after" : "during";
+      const expected = state === "before" ? 0 : state === "after" ? 100 : Math.round(Math.max(0, Math.min(1, diffDays(start, today) / span)) * 100);
+      const actual = p.pct === null ? null : Math.min(100, p.pct);
+      return { expected: expected, actual: actual, gap: actual === null ? null : actual - expected, start: start, end: end, state: state };
+    }
     // The chain above a task, top first: [objective, priority, milestone] as far as they are linked.
     function chainOfTask(taskId) {
       const n = nodeOfTask(taskId);
@@ -720,7 +751,7 @@
     return {
       settings: s, today: today, node: function (id) { return nodeById[id] || null; }, all: all, children: children, parentOf: parentOf,
       objectivesOf: objectivesOf, prioritiesOf: prioritiesOf, milestonesOf: milestonesOf, milestonesIn: milestonesIn, ancestors: ancestors,
-      nodeOfTask: nodeOfTask, tasksDirect: tasksDirect, subtreeTasks: subtreeTasks, subtreeMilestones: subtreeMilestones, statusOf: statusOf, daysLeft: daysLeft, chainOfTask: chainOfTask, progress: progress, health: health, overdue: overdue, deadline: deadline,
+      nodeOfTask: nodeOfTask, tasksDirect: tasksDirect, subtreeTasks: subtreeTasks, subtreeMilestones: subtreeMilestones, statusOf: statusOf, daysLeft: daysLeft, pace: pace, chainOfTask: chainOfTask, progress: progress, health: health, overdue: overdue, deadline: deadline,
       canMarkDone: canMarkDone, overdueMilestones: overdueMilestones, periods: periods, window: window, goalFor: goalFor, goalPct: goalPct,
       // the path from the top, e.g. "2026 objective > Q2 priority > Jun milestone"
       path: function (id) { return ancestors(id).reverse().map(function (n) { return n.title; }); }
@@ -742,6 +773,6 @@
     checkNode: checkNode, addNode: addNode, editNode: editNode, removeNode: removeNode, restoreNode: restoreNode, setDoneAt: setDoneAt, setCurrent: setCurrent, setStatus: setStatus, move: move,
     periodId: periodId, periodOf: periodOf, setPeriod: setPeriod, periodMonths: periodMonths, monthTotals: monthTotals, periodSummary: periodSummary, purgePeriods: purgePeriods,
     linkOf: linkOf, setLink: setLink, setEstimate: setEstimate, setArchived: setArchived, isArchived: isArchived, purgeLinks: purgeLinks, STATUS_LABEL: STATUS_LABEL,
-    model: model, BUILTIN_TEMPLATES: BUILTIN_TEMPLATES, templateFromObjective: templateFromObjective, applyTemplate: applyTemplate
+    model: model, BUILTIN_TEMPLATES: BUILTIN_TEMPLATES, templateFromObjective: templateFromObjective, applyTemplate: applyTemplate, addTemplate: addTemplate, removeTemplate: removeTemplate, restoreTemplate: restoreTemplate
   };
 });

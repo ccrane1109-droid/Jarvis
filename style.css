@@ -4258,30 +4258,42 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .sp-vision, .sp-panel { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
 .sp-vision .sp-h3 { margin-top: 0; }
 .sp-vision-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.5; margin-bottom: 10px; }
-.sp-rail { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; counter-reset: none; }
-.sp-rail-item { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--card); border: 1px solid var(--card-border); border-left-width: 0; min-width: 0; }
-.sp-rail-item:first-child { border-left-width: 1px; border-radius: var(--radius) 0 0 var(--radius); }
-.sp-rail-item:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-.sp-rail-item:not(:last-child)::after { content: ""; position: absolute; right: -9px; top: 50%; width: 16px; height: 16px; margin-top: -8px; background: var(--card); border-top: 1px solid var(--card-border); border-right: 1px solid var(--card-border); transform: rotate(45deg); z-index: 1; }
-.sp-rail-label { font-size: 13px; color: var(--text-dim); font-weight: 600; }
-.sp-rail-pct { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.sp-rail-sub { font-size: 13px; color: var(--text-dim); }
-@media (max-width: 480px) { .sp-rail-item { padding: 10px 10px; } .sp-rail-pct { font-size: 18px; } }
+/* the timeline: Year 1 -> Year 3 across the top, a dot on a line for each year */
+.sp-rail { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; position: relative; }
+.sp-rail::before { content: ""; position: absolute; left: 16%; right: 16%; top: 20px; height: 2px; background: var(--accent-dim); z-index: 0; }
+.sp-rail-item { position: relative; min-width: 0; z-index: 1; }
+.sp-rail-btn { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; min-height: 48px; padding: 10px 8px 10px; background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-sm); color: var(--text); text-align: left; cursor: pointer; }
+.sp-rail-btn:hover { background: var(--card-hover); }
+.sp-rail-item.is-now .sp-rail-btn { border-color: var(--accent); }
+.sp-rail-dot { align-self: center; width: 12px; height: 12px; margin: -4px 0 2px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.sp-rail-item.is-now .sp-rail-dot { background: var(--accent); }
+.sp-rail-label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+.sp-rail-pct { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.sp-rail-pct.is-none { font-size: 14px; font-weight: 500; color: var(--text-dim); line-height: 1.6; }
+.sp-rail-theme { font-size: 12px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sp-rail-theme.is-empty { font-weight: 400; color: var(--text-dim); }
+.sp-rail-sub { font-size: 12px; color: var(--text-dim); }
+@media (min-width: 701px) { .sp-rail-btn { padding: 12px 14px; } .sp-rail-pct { font-size: 24px; } .sp-rail-label, .sp-rail-theme, .sp-rail-sub { font-size: 13px; } }
 
-/* three years side by side; on a phone, swipe across */
-.sp-roadmap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; margin-bottom: 18px; }
-.sp-year { position: relative; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 14px; min-width: 0; }
-.sp-year.is-now { border-color: var(--accent-dim); }
-.sp-year-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.sp-year-title { font-size: 18px; margin: 0; }
-.sp-year-num { color: var(--text-dim); font-weight: 500; }
-.sp-year-pct { font-size: 14px; color: var(--text-dim); margin: 6px 0 0; }
-.sp-year > .btn { margin-top: 8px; }
-@media (min-width: 901px) { .sp-year:not(:last-child)::after { content: "→"; position: absolute; right: -16px; top: 18px; color: var(--text-faint); font-size: 18px; } }
-@media (max-width: 900px) {
-  .sp-roadmap { display: grid; grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 88%; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; padding-bottom: 8px; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
-  .sp-year { scroll-snap-align: start; }
-}
+/* one collapsible section per year */
+.sp-roadmap { display: flex; flex-direction: column; gap: 0; margin-bottom: 10px; }
+.sp-year { min-width: 0; scroll-margin-top: calc(var(--sp-hdr, 64px) + 60px); }
+.sp-year.is-now > .sp-sec { border-color: var(--accent-dim); }
+.sp-theme { margin: 0 0 8px; font-size: 14px; }
+.sp-theme-l { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); margin-right: 4px; }
+.sp-year .sp-stack { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; align-items: start; }
+.sp-year .sp-slot { margin-bottom: 8px; }
+.sp-contrib li { padding: 4px 0; }
+.sp-pace { margin: 8px 0; padding: 8px 10px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+.sp-pace-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 42px; align-items: center; gap: 8px; margin-bottom: 4px; }
+.sp-pace-l { font-size: 12px; color: var(--text-dim); }
+.sp-pace-v { font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.sp-pace-none { font-size: 12px; color: var(--text-dim); }
+.sp-pace-say { margin: 4px 0 0; font-size: 13px; color: var(--text-dim); }
+.sp-pace-say.is-behind { color: var(--yellow); }
+.sp-more { margin: 8px 0 12px; padding: 4px 0; border-top: 1px solid var(--card-border); border-bottom: 1px solid var(--card-border); }
+.sp-more > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 14px; color: var(--accent); }
+.sp-habit-pick { border: 0; padding: 0; margin: 0 0 8px; } .sp-habit-pick legend { font-size: 14px; padding: 0 0 4px; }
 
 /* cards: an objective, a priority or a milestone */
 .sp-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
