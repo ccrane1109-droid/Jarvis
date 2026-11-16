@@ -132,7 +132,8 @@
     if (!list.length) return "";
     const shown = list.slice(0, 4);
     const body = '<p class="sp-dim">Jarvis only suggests. Nothing changes until you press the button, and a change can be undone.</p><ul class="sp-sugs">' + shown.map(function (p) {
-      return '<li class="sp-sug"><div class="sp-sug-t">' + esc(p.title) + '</div><p class="sp-dim">' + esc(p.detail) + '</p><div class="sp-sug-btns"><button type="button" class="btn btn-primary" data-act="sug-apply" data-key="' + esc(p.key) + '">' + esc(SUG_BTN[p.kind] || "Approve") + '</button><button type="button" class="btn btn-secondary" data-act="sug-dismiss" data-key="' + esc(p.key) + '">Not now</button></div></li>';
+      const nice = function (t) { return String(t).replace(/\d{4}-\d{2}-\d{2}/g, function (d) { return A.fmtDate(d); }); };      // dates read as "Nov 18, 2026", not 2026-11-18
+      return '<li class="sp-sug"><div class="sp-sug-t">' + esc(nice(p.title)) + '</div><p class="sp-dim">' + esc(nice(p.detail)) + '</p><div class="sp-sug-btns"><button type="button" class="btn btn-primary" data-act="sug-apply" data-key="' + esc(p.key) + '">' + esc(SUG_BTN[p.kind] || "Approve") + '</button><button type="button" class="btn btn-secondary" data-act="sug-dismiss" data-key="' + esc(p.key) + '">Not now</button></div></li>';
     }).join("") + '</ul>' + (list.length > shown.length ? '<p class="sp-dim">and ' + (list.length - shown.length) + ' more after these.</p>' : "");
     return '<div class="sp-sugwrap">' + A.section("dash-sug", "Suggestions for you", body, { open: true, summary: A.plural(list.length, "suggestion") }) + '</div>';
   }

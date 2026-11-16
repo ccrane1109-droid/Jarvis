@@ -759,3 +759,53 @@ test("saving an objective as a template keeps its shape (priorities and mileston
   assert.equal(again.ok, true);
   assert.deepEqual(P.model({ nodes: again.nodes, today: TODAY }).all("milestone").map((n) => n.month), ["2028-02", "2028-03"]);
 });
+
+/* ---------------- progress checked against a plain re-implementation, on random plans ---------------- */
+// The rule, written out again here from the plain data (nodes, links, tasks) without using any of the model's helpers:
+//   a node done by hand is 100; otherwise it is the weighted average of its live children's figures (each child counts as heavy as its weight)
+//   and of ONE more part for the tasks linked straight to it (done / all); a part with nothing to measure is left out; a milestone with no
+//   parts is 0; anything else with no parts has no figure. Each task is counted once, at the node it is linked to.
+function reference(nodes, links, tasks, id, seen) {
+  seen = seen || {};
+  const n = nodes.find((x) => x.id === id);
+  if (seen[id]) return null;
+  seen = Object.assign({}, seen, { [id]: true });
+  if (n.doneAt) return 100;
+  const parts = [];
+  if (n.type !== "milestone") {
+    nodes.filter((k) => !k.deletedAt && k.parentId === id && k.status !== "dropped" && k.measure === "tasks").forEach((k) => {
+      const p = reference(nodes, links, tasks, k.id, seen);
+      if (p !== null) parts.push([k.weight || 1, Math.min(100, p)]);
+    });
+  }
+  const mine = links.filter((l) => !l.deletedAt && l.nodeId === id).map((l) => tasks.find((t) => t.id === l.id)).filter(Boolean);
+  if (mine.length) parts.push([1, Math.round(100 * mine.filter((t) => t.completed).length / mine.length)]);
+  if (!parts.length) return n.type === "milestone" ? 0 : null;
+  const w = parts.reduce((s, p) => s + p[0], 0);
+  return Math.round(parts.reduce((s, p) => s + p[0] * p[1], 0) / w);
+}
+
+test("progress equals an independent calculation on 300 random plans (weights, drops, hand-ticked items, shared and unlinked tasks)", () => {
+  let seed = 12345;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  let checked = 0, withFigure = 0;
+  for (let round = 0; round < 300; round++) {
+    let nodes = [], ids = { objective: [], priority: [], milestone: [] };
+    const addN = (input) => { const r = P.addNode(nodes, input, ctx()); if (r.ok) { nodes = r.nodes; ids[r.node.type].push(r.node.id); } return r.ok ? r.node : null; };
+    for (let i = 0, n = 1 + rnd(3); i < n; i++) addN(obj({ title: "O" + i, weight: 1 + rnd(5) }));
+    ids.objective.slice().forEach((o) => { for (let q = 1; q <= 4; q++) for (let i = 0, n = rnd(3); i < n; i++) addN(pri({ title: "P", quarter: q, parentId: rnd(4) ? o : "", weight: 1 + rnd(5) })); });
+    const pris = ids.priority.slice();
+    pris.forEach((p) => { const node = nodes.find((x) => x.id === p); for (let i = 0, n = rnd(4); i < n; i++) addN(mil({ title: "M", month: P.quarterMonths(2026, node.quarter)[rnd(3)], parentId: p, weight: 1 + rnd(5) })); });
+    ids.objective.forEach((o) => { if (!rnd(3)) addN(mil({ title: "M direct", month: "2026-" + String(1 + rnd(12)).padStart(2, "0"), parentId: o })); });
+    nodes = nodes.map((n) => rnd(9) === 0 ? Object.assign({}, n, { status: "dropped" }) : rnd(9) === 0 ? Object.assign({}, n, { doneAt: TODAY }) : n);
+    const tasks = [], lk = [];
+    for (let i = 0, n = rnd(25); i < n; i++) { tasks.push(task("t" + i, rnd(2))); const target = nodes[rnd(nodes.length + 1)]; if (target && rnd(5)) { const r = P.setLink(lk, "t" + i, target.id, { nodes, now: NOW }); lk.splice(0, lk.length, ...r.links); } }
+    const md = P.model({ nodes, links: lk, tasks, periods: [], settings: {}, goals: [], today: TODAY });
+    nodes.forEach((n) => {
+      const want = reference(nodes, lk, tasks, n.id), got = md.progress(n.id).pct;
+      assert.equal(got, want, "round " + round + ", " + n.type + " " + n.id + " (weight " + n.weight + ", " + n.status + (n.doneAt ? ", ticked" : "") + "): model " + got + ", reference " + want);
+      checked++; if (want !== null) withFigure++;
+    });
+  }
+  assert.ok(checked > 1500 && withFigure > 800, "the sample is big enough to mean something: " + checked + " nodes, " + withFigure + " with a figure");
+});
