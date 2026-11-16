@@ -361,9 +361,9 @@
   function weekOf(weeks, weekStart) { return live(weeks).filter(function (w) { return w.id === weekId(weekStart); })[0] || null; }
   function readWeek(w) {
     const top = (Array.isArray(w && w.top) ? w.top : []).filter(isObj).slice(0, 3).map(function (x) { return { taskId: typeof x.taskId === "string" ? x.taskId : "", text: oneLine(x.text).slice(0, TITLE_MAX) }; }).filter(function (x) { return x.taskId || x.text; });
-    return { weekStart: w && w.weekStart, top: top, wins: text(w && w.wins, 2000), lessons: text(w && w.lessons, 2000), nextFocus: text(w && w.nextFocus, 2000), reviewedAt: Number(w && w.reviewedAt) || 0 };
+    return { weekStart: w && w.weekStart, top: top, wins: text(w && w.wins, 2000), lessons: text(w && w.lessons, 2000), nextFocus: text(w && w.nextFocus, 2000), unfinished: text(w && w.unfinished, 2000), onPriorities: text(w && w.onPriorities, 2000), reviewedAt: Number(w && w.reviewedAt) || 0 };
   }
-  // patch holds only what changes: top (a list), wins, lessons, nextFocus, reviewedAt.
+  // patch holds only what changes: top (a list), wins (what I accomplished), lessons (obstacles), unfinished, onPriorities, nextFocus (what to change), reviewedAt.
   function setWeek(weeks, weekStart, patch, ctx) {
     const c = ctxOf(ctx), p = patch || {};
     if (!isDate(weekStart) || weekday(weekStart) !== 1) return { ok: false, weeks: weeks, error: "A week starts on a Monday." };
@@ -372,6 +372,22 @@
     delete next.deletedAt;
     const had = (weeks || []).some(function (w) { return w && w.id === next.id; });
     return { ok: true, weeks: had ? weeks.map(function (w) { return w && w.id === next.id ? next : w; }) : (weeks || []).concat([next]), week: next };
+  }
+
+  /* ---------------- the monthly review record (jarvisPlanReviews) ---------------- */
+  function reviewId(month) { return "mo_" + month; }
+  function reviewOf(reviews, month) { return live(reviews).filter(function (r) { return r.id === reviewId(month); })[0] || null; }
+  function readReview(r) {
+    return { month: r && r.month, wins: text(r && r.wins, 2000), fellBehind: text(r && r.fellBehind, 2000), progress: text(r && r.progress, 2000), nextFocus: text(r && r.nextFocus, 2000), reviewedAt: Number(r && r.reviewedAt) || 0 };
+  }
+  function setReview(reviews, month, patch, ctx) {
+    const c = ctxOf(ctx), p = patch || {};
+    if (!PL.isMonth(month)) return { ok: false, reviews: reviews, error: "That isn't a month." };
+    const cur = reviewOf(reviews, month), base = readReview(cur || { month: month });
+    const next = Object.assign({}, cur || { id: reviewId(month), month: month, createdAt: c.now }, readReview(Object.assign({}, base, p, { month: month })), { id: reviewId(month), month: month, updatedAt: c.now });
+    delete next.deletedAt;
+    const had = (reviews || []).some(function (r) { return r && r.id === next.id; });
+    return { ok: true, reviews: had ? reviews.map(function (r) { return r && r.id === next.id ? next : r; }) : (reviews || []).concat([next]), review: next };
   }
 
   /* ---------------- what the week looks like ---------------- */
@@ -583,7 +599,7 @@
     liveBlocks: liveBlocks, blockById: blockById, blockOfTask: blockOfTask, checkBlock: checkBlock, addBlock: addBlock, editBlock: editBlock, removeBlock: removeBlock, restoreBlock: restoreBlock,
     removeOccurrence: removeOccurrence, restoreOccurrence: restoreOccurrence, occurrences: occurrences, occurrence: occurrence, moveOccurrence: moveOccurrence, resizeOccurrence: resizeOccurrence, editOccurrence: editOccurrence,
     logWork: logWork, setBlockDone: setBlockDone, placeTask: placeTask, unplaceTask: unplaceTask, detachTasks: detachTasks, releaseTask: releaseTask, assignTask: assignTask, followTasks: followTasks, scheduledBlock: scheduledBlock, displayTitle: displayTitle,
-    weekId: weekId, weekOf: weekOf, readWeek: readWeek, setWeek: setWeek, purge: purge,
+    weekId: weekId, weekOf: weekOf, readWeek: readWeek, setWeek: setWeek, reviewId: reviewId, reviewOf: reviewOf, readReview: readReview, setReview: setReview, purge: purge,
     winOf: winOf, busyOn: busyOn, freeSlots: freeSlots, weekStats: weekStats, unscheduledHigh: unscheduledHigh, topThree: topThree, capacity: capacity, suggest: suggest,
     carryForward: carryForward, carryTasks: carryTasks, carryTarget: carryTarget,
     readers: {
@@ -596,6 +612,7 @@
         });
         return { items: items, kept: kept };
       },
+      reviews: function (raw) { const items = [], kept = []; (Array.isArray(raw) ? raw : []).forEach(function (r) { if (isObj(r) && typeof r.id === "string" && PL.isMonth(r.month)) items.push(Object.assign({}, r, readReview(r), { month: r.month })); else kept.push(r); }); return { items: items, kept: kept }; },
       weeks: function (raw) { const items = [], kept = []; (Array.isArray(raw) ? raw : []).forEach(function (r) { if (isObj(r) && typeof r.id === "string" && isDate(r.weekStart)) items.push(Object.assign({}, r, readWeek(r), { weekStart: r.weekStart })); else kept.push(r); }); return { items: items, kept: kept }; }
     }
   };

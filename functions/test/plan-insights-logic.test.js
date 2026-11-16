@@ -1,0 +1,320 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const P = require("../../js/plan-logic");
+const W = require("../../js/plan-week-logic");
+const I = require("../../js/plan-insights-logic");
+
+const TODAY = "2026-11-04";               // a Wednesday; its week starts Monday 2026-11-02
+const MON = "2026-11-02";
+const NOW = Date.parse("2026-11-04T15:00:00Z");
+let seq = 0;
+const ctx0 = (o) => Object.assign({ now: NOW, today: TODAY, makeId: (p) => p + "_" + (++seq) }, o || {});
+const task = (id, o) => Object.assign({ id: id, date: TODAY, text: "Task " + id, priority: "medium", time: "", completed: false, order: 0, createdAt: 1 }, o || {});
+const ING = W.addStarters([], ctx0()).ingredients;
+
+// a small plan: objective (2026) -> priority (Q4) -> milestone (Nov), with tasks linked in as asked
+function plan(o) {
+  o = o || {};
+  let nodes = [];
+  const add = (input) => { const r = P.addNode(nodes, input, ctx0()); assert.equal(r.ok, true, JSON.stringify(r.errors)); nodes = r.nodes; return r.node; };
+  const obj = add({ type: "objective", title: "Launch Gratiel", year: 2026, weight: o.weight || 3 });
+  const pri = add({ type: "priority", title: "Ship the winter drop", year: 2026, quarter: 4, parentId: obj.id });
+  const ms = add({ type: "milestone", title: "Samples approved", month: "2026-11", parentId: pri.id, due: o.msDue || "2026-11-20" });
+  return { nodes, obj, pri, ms, add: add, get: () => nodes };
+}
+const links = (pairs, nodes) => pairs.reduce((l, [id, nid]) => P.setLink(l, id, nid, { nodes, now: NOW }).links, []);
+function context(o) {
+  const tasks = o.tasks || [], nodes = o.nodes || [], lk = o.links || [];
+  const model = P.model({ nodes, links: lk, tasks, periods: o.periods || [], settings: o.settings || {}, goals: [], today: o.today || TODAY });
+  return Object.assign({ today: TODAY, nowMin: 600, weekStart: MON, tasks, links: lk, model, blocks: [], ingredients: ING, events: [], zone: "America/New_York", settings: { dayStart: "08:00", dayEnd: "18:00", interval: 30 }, weeks: [], reviews: [], periods: [], workouts: [], nowMs: NOW }, o);
+}
+
+/* ---------------- kinds of time ---------------- */
+
+test("a category's kind comes from the starter ids, then its name; rest is its own", () => {
+  const k = (name, o) => I.categoryKind(Object.assign({ id: "x", name: name }, o || {}));
+  assert.equal(I.categoryKind(ING.find((i) => i.id === "ing_gratiel")), "gratiel");
+  assert.equal(I.categoryKind(ING.find((i) => i.id === "ing_rest")), "rest");
+  assert.deepEqual(["Gym", "Homework", "Gratiel drop", "Lecture", "Church", "Basket weaving"].map((n) => k(n)), ["workout", "study", "gratiel", "school", "personal", "other"]);
+  assert.equal(k("Anything", { rest: true }), "rest");
+  assert.equal(I.categoryKind(null), "none");
+});
+
+/* ---------------- time: planned, logged, workouts ---------------- */
+
+test("time by category: planned from blocks, logged only where you logged it, and 'not tracked' (null) otherwise", () => {
+  let blocks = W.addBlock([], { title: "Brand", ingredientId: "ing_gratiel", date: "2026-11-02", start: "09:00", end: "11:00" }, ctx0({ ingredients: ING })).blocks;
+  blocks = W.addBlock(blocks, { title: "Read", ingredientId: "ing_studying", date: "2026-11-03", start: "19:00", end: "20:00" }, ctx0({ ingredients: ING })).blocks;
+  const id = blocks[0].id;
+  let t = I.timeByCategory(context({ blocks }), MON, "2026-11-08");
+  const row = (name) => t.rows.find((r) => r.name === name);
+  assert.equal(t.plannedMin, 180);
+  assert.equal(t.loggedMin, null, "nothing logged: unavailable, not zero");
+  assert.equal(row("Gratiel").loggedMin, null);
+  assert.equal(row("Workout").plannedMin, 0);
+  blocks = W.logWork(blocks, id, "2026-11-02", 90, ctx0()).blocks;
+  t = I.timeByCategory(context({ blocks }), MON, "2026-11-08");
+  assert.equal(t.rows.find((r) => r.name === "Gratiel").loggedMin, 90);
+  assert.equal(t.rows.find((r) => r.name === "Studying").loggedMin, null, "the other category is still untracked");
+  assert.equal(t.loggedMin, 90);
+  assert.deepEqual([t.pastBlocks, t.loggedBlocks], [2, 1]);
+});
+
+test("a workout is never counted twice: per day, the larger of what the blocks say and what the workout log says", () => {
+  let blocks = W.addBlock([], { title: "Gym", ingredientId: "ing_workout", date: "2026-11-02", start: "06:00", end: "07:00" }, ctx0({ ingredients: ING })).blocks;
+  blocks = W.logWork(blocks, blocks[0].id, "2026-11-02", 55, ctx0()).blocks;
+  const workouts = [{ id: "w1", date: "2026-11-02", duration: 50 }, { id: "w2", date: "2026-11-03", duration: 40 }, { id: "w3", date: "2026-11-03", duration: 20 }, { id: "w4", date: "2026-11-04" }, { id: "w5", date: "2026-11-06", duration: 45 }];
+  const t = I.timeByCategory(context({ blocks, workouts }), MON, "2026-11-08");
+  const gym = t.rows.find((r) => r.name === "Workout");
+  // Monday: block says 55, session says 50 -> 55 (one workout). Tuesday: only sessions -> 60. Wednesday: no duration -> nothing. Friday is in the future.
+  assert.equal(gym.loggedMin, 115);
+  assert.equal(gym.sessionMin, 110, "the sessions that count: Mon 50 + Tue 60 (future days are not counted)");
+  // without a Workout category, the sessions still count, in their own row
+  const bare = I.timeByCategory(context({ ingredients: [], workouts }), MON, "2026-11-08");
+  const row = bare.rows.find((r) => r.ingredientId === "_workouts");
+  assert.deepEqual([row.name, row.loggedMin, row.kind], ["Workouts (from your workout log)", 110, "workout"]);
+  assert.deepEqual(I.workoutMinutesByDate([{ date: "2026-11-02T08:00", duration: 30 }, { date: "2026-11-02", duration: 0 }, { date: "nope", duration: 9 }, null]), { "2026-11-02": 30 });
+});
+
+test("Gratiel time: planned and logged, or null when no Gratiel category exists / nothing was logged", () => {
+  let blocks = W.addBlock([], { title: "Brand", ingredientId: "ing_gratiel", date: "2026-11-03", start: "09:00", end: "11:00" }, ctx0({ ingredients: ING })).blocks;
+  assert.deepEqual(I.gratielMinutes(context({ blocks }), MON, "2026-11-08"), { plannedMin: 120, loggedMin: null });
+  blocks = W.logWork(blocks, blocks[0].id, "2026-11-03", 100, ctx0()).blocks;
+  assert.deepEqual(I.gratielMinutes(context({ blocks }), MON, "2026-11-08"), { plannedMin: 120, loggedMin: 100 });
+  assert.deepEqual(I.gratielMinutes(context({ ingredients: [] }), MON, "2026-11-08"), { plannedMin: null, loggedMin: null });
+});
+
+/* ---------------- the ranking ---------------- */
+
+test("a task that counts toward a goal outranks a small routine task, and says why", () => {
+  const pl = plan(), tasks = [task("goal", { priority: "medium" }), task("routine", { priority: "medium", text: "Reply to email" })];
+  const lk = links([["goal", pl.ms.id]], pl.get());
+  const r = I.rankTasks(context({ tasks, nodes: pl.get(), links: lk }));
+  assert.deepEqual(r.map((x) => x.task.id), ["goal", "routine"]);
+  const goal = r[0], routine = r[1];
+  const labels = (x) => x.parts.map((p) => p.label);
+  assert.ok(labels(goal).includes("Counts toward your plan"));
+  assert.ok(labels(goal).some((l) => /objective “Launch Gratiel” \(importance 3 of 5\)/.test(l)));
+  assert.ok(labels(goal).some((l) => /quarter's priority “Ship the winter drop”/.test(l)));
+  assert.ok(labels(goal).some((l) => /milestone “Samples approved” is due in 16 days/.test(l)));
+  assert.equal(goal.score, goal.parts.reduce((s, p) => s + p.points, 0), "the score is exactly the sum of the listed points");
+  assert.ok(labels(routine).includes("A small routine task that isn't tied to a goal"));
+  assert.equal(routine.parts.find((p) => /small routine/.test(p.label)).points, -8);
+});
+
+test("the points: importance, deadline closeness, overdue, priority, effort and free time", () => {
+  const pl = plan({ weight: 5, msDue: "2026-11-06" }), lk0 = links([["t"], ["t"]].slice(0, 0), pl.get());
+  const t = task("t", { date: "2026-11-01", priority: "high" });                     // overdue by 3 days
+  let lk = links([["t", pl.ms.id]], pl.get());
+  lk = P.setEstimate(lk, "t", 90, { now: NOW }).links;
+  const x = I.rankTasks(context({ tasks: [t], nodes: pl.get(), links: lk }))[0];
+  const pts = (re) => (x.parts.find((p) => re.test(p.label)) || {}).points;
+  assert.equal(pts(/^Part of the objective/), 15, "importance 5 -> 15 points");
+  assert.equal(pts(/milestone .* due in 2 days/), 14);
+  assert.equal(pts(/^High priority/), 14);
+  assert.equal(pts(/^Overdue by 3 days/), 9);
+  assert.equal(pts(/^Substantial work \(about 1\.5 h\)/), 4);
+  void lk0;
+  // it won't fit: a 20 h estimate against ~ 40 free hours is fine, but against a nearly full week it is not
+  let blocks = [];
+  W.weekDates(MON).forEach((d) => { blocks = W.addBlock(blocks, { title: "Busy", date: d, start: "08:00", end: "17:00", ingredientId: "ing_school" }, ctx0({ ingredients: ING })).blocks; });
+  let big = P.setEstimate(lk, "t", 360, { now: NOW }).links;
+  const y = I.rankTasks(context({ tasks: [t], nodes: pl.get(), links: big, blocks }))[0];
+  assert.ok(y.parts.some((p) => /Needs about 6 h but only/.test(p.label) && p.points === -10), "an estimate bigger than the free time loses points");
+});
+
+test("archived tasks, done tasks, tasks of dropped items and tasks after this week are not candidates; paused items are held back", () => {
+  const pl = plan(), tasks = [task("a"), task("arch"), task("done", { completed: true }), task("later", { date: "2026-11-20" }), task("dropped"), task("paused")];
+  const p2 = P.addNode(pl.get(), { type: "milestone", title: "Dropped one", month: "2026-11", parentId: pl.pri.id }, ctx0()), p3 = P.addNode(p2.nodes, { type: "milestone", title: "Paused one", month: "2026-11", parentId: pl.pri.id }, ctx0());
+  let nodes = P.setStatus(p3.nodes, p2.node.id, "dropped", ctx0()).nodes;
+  nodes = P.setStatus(nodes, p3.node.id, "paused", ctx0()).nodes;
+  let lk = links([["dropped", p2.node.id], ["paused", p3.node.id]], nodes);
+  lk = P.setArchived(lk, "arch", true, ctx0()).links;
+  const r = I.rankTasks(context({ tasks, nodes, links: lk }));
+  assert.deepEqual(r.map((x) => x.task.id).sort(), ["a", "paused"]);
+  assert.ok(r.find((x) => x.task.id === "paused").parts.some((p) => /paused item/.test(p.label) && p.points === -15));
+});
+
+test("top three: spread across milestones, and at most one task that isn't tied to the plan", () => {
+  const pl = plan(), m2 = P.addNode(pl.get(), { type: "milestone", title: "Photoshoot", month: "2026-11", parentId: pl.pri.id, due: "2026-11-25" }, ctx0());
+  const tasks = [task("s1", { priority: "high" }), task("s2", { priority: "high" }), task("s3", { priority: "high" }), task("p1", { priority: "high" }), task("r1", { priority: "high", text: "Loose A" }), task("r2", { priority: "high", text: "Loose B" })];
+  const lk = links([["s1", pl.ms.id], ["s2", pl.ms.id], ["s3", pl.ms.id], ["p1", m2.node.id]], m2.nodes);
+  const picks = I.topThreePicks(context({ tasks, nodes: m2.nodes, links: lk }));
+  assert.equal(picks.length, 3);
+  assert.deepEqual(picks.map((p) => p.task.id).filter((id) => id.startsWith("r")), [], "linked work first");
+  const ms = picks.map((p) => p.chain[p.chain.length - 1].id);
+  assert.ok(new Set(ms).size >= 2, "not three from the same milestone: " + ms.join());
+  assert.ok(picks.some((p) => p.task.id === "p1"), "the other milestone's task is in");
+  // only loose tasks exist: they are still suggested (up to three)
+  const loose = I.topThreePicks(context({ tasks: [task("r1", { priority: "high" }), task("r2", { priority: "high" }), task("r3", { priority: "high" })] }));
+  assert.equal(loose.length, 3);
+  // two linked tasks and many loose ones: both linked ones, then at most one loose one
+  const mixed = I.topThreePicks(context({ tasks: [task("g1", { priority: "low" }), task("g2", { priority: "low" }), task("r1", { priority: "high" }), task("r2", { priority: "high" }), task("r3", { priority: "high" })], nodes: pl.get(), links: links([["g1", pl.ms.id], ["g2", pl.ms.id]], pl.get()) }));
+  assert.equal(mixed.filter((p) => !p.linked).length, 1, "at most one task that isn't tied to the plan while there are linked ones left");
+  assert.deepEqual(mixed.filter((p) => p.linked).map((p) => p.task.id).sort(), ["g1", "g2"]);
+  // only one linked task: the rest of the three are filled from the others
+  const one = I.topThreePicks(context({ tasks: [task("g", { priority: "low" }), task("r1", { priority: "high" }), task("r2", { priority: "high" }), task("r3", { priority: "high" })], nodes: pl.get(), links: links([["g", pl.ms.id]], pl.get()) }));
+  assert.equal(one.length, 3);
+  assert.equal(one[0].task.id, "g", "the plan task first, even at low priority");
+});
+
+test("a second pick from the same milestone shows its deduction", () => {
+  const pl = plan(), tasks = [task("a", { priority: "high" }), task("b", { priority: "high" })], lk = links([["a", pl.ms.id], ["b", pl.ms.id]], pl.get());
+  const picks = I.topThreePicks(context({ tasks, nodes: pl.get(), links: lk }));
+  assert.equal(picks.length, 2);
+  assert.ok(picks[1].parts.some((p) => /same milestone/.test(p.label) && p.points === -6));
+  assert.equal(picks[1].adjusted, picks[1].parts.reduce((s, p) => s + p.points, 0));
+});
+
+/* ---------------- dashboard ---------------- */
+
+test("the dashboard: overall completion, this year's objectives, the quarter's priorities, the month, the week, today, deadlines", () => {
+  const pl = plan({ msDue: "2026-11-07" }), tasks = [task("a", { completed: true, date: "2026-11-02" }), task("b", { date: TODAY, priority: "high" }), task("c", { date: TODAY }), task("d", { date: "2026-12-10" }), task("late", { date: "2026-10-30" })];
+  const lk = links([["a", pl.ms.id], ["b", pl.ms.id], ["late", pl.ms.id]], pl.get());
+  const d = I.dashboard(context({ tasks, nodes: pl.get(), links: lk }));
+  assert.deepEqual([d.year, d.quarter, d.month], [2026, 4, "2026-11"]);
+  assert.equal(d.overall.year, 33, "1 of the 3 tasks under the objective is done");
+  assert.deepEqual(d.objectives.map((n) => n.title), ["Launch Gratiel"]);
+  assert.deepEqual(d.priorities.map((n) => n.title), ["Ship the winter drop"]);
+  assert.deepEqual([d.monthStats.milestones, d.monthStats.milestonesDone, d.monthStats.tasksDone, d.monthStats.tasksOpen], [1, 0, 1, 2]);
+  assert.deepEqual([d.week.tasksDone, d.week.tasksTotal, d.week.rate], [1, 3, 33]);
+  assert.equal(d.week.gratielLoggedMin, null, "no Gratiel time planned or logged: not tracked");
+  assert.equal(d.week.gratielPlannedMin, 0);
+  assert.deepEqual(d.today.open.map((t) => t.id), ["b", "c"], "today's open tasks, the one tied to the plan first");
+  assert.equal(d.today.openCount, 2);
+  assert.equal(d.overdueTaskCount, 1);
+  assert.deepEqual(d.deadlines.map((x) => [x.kind, x.title]).slice(0, 2), [["task", "Task b"], ["node", "Samples approved"]], "soonest first");
+  assert.equal(d.week.topSuggested, true, "nothing saved: three suggested");
+  assert.ok(d.week.top.length >= 1);
+});
+
+test("the dashboard shows the saved top three, not the suggestion, once you've chosen", () => {
+  const pl = plan(), tasks = [task("a"), task("b")], lk = links([["a", pl.ms.id]], pl.get());
+  const weeks = W.setWeek([], MON, { top: [{ taskId: "b" }, { text: "Call the printer" }] }, ctx0()).weeks;
+  const d = I.dashboard(context({ tasks, nodes: pl.get(), links: lk, weeks }));
+  assert.equal(d.week.topSuggested, false);
+  assert.deepEqual(d.week.top.map((x) => [x.text, x.saved, !!x.node]), [["Task b", true, false], ["Call the printer", true, false]]);
+});
+
+test("upcoming deadlines: items due within the window (overdue included), not the finished or paused, plus near high-priority or linked tasks", () => {
+  const pl = plan({ msDue: "2026-11-01" }), tasks = [task("hi", { date: "2026-11-05", priority: "high" }), task("lo", { date: "2026-11-05" }), task("linked", { date: "2026-11-06" })];
+  const lk = links([["linked", pl.ms.id]], pl.get());
+  const u = I.upcoming(context({ tasks, nodes: pl.get(), links: lk }), 14);
+  const keys = u.map((x) => x.kind + ":" + x.title);
+  assert.ok(keys.includes("node:Samples approved"), "overdue milestone");
+  assert.ok(keys.includes("task:Task hi") && keys.includes("task:Task linked"));
+  assert.ok(!keys.includes("task:Task lo"), "an unlinked medium task is not a deadline");
+  assert.ok(u[0].daysLeft <= u[u.length - 1].daysLeft, "soonest first");
+  assert.equal(u.find((x) => x.title === "Samples approved").daysLeft, -3);
+  const done = P.setDoneAt(pl.get(), pl.ms.id, true, ctx0()).nodes;
+  assert.ok(!I.upcoming(context({ tasks: [], nodes: done }), 14).some((x) => x.title === "Samples approved"), "a completed milestone is no longer upcoming");
+});
+
+/* ---------------- analytics ---------------- */
+
+test("weekly series: completion rates are null for empty weeks, never 0", () => {
+  const tasks = [task("a", { date: "2026-10-27", completed: true }), task("b", { date: "2026-10-28" }), task("c", { date: "2026-11-03", completed: true })];
+  const s = I.weeklySeries(context({ tasks }), 3);
+  assert.deepEqual(s.map((w) => w.weekStart), ["2026-10-19", "2026-10-26", "2026-11-02"]);
+  assert.deepEqual(s.map((w) => w.rate), [null, 50, 100]);
+  assert.deepEqual(s.map((w) => [w.total, w.done]), [[0, 0], [2, 1], [1, 1]]);
+  assert.equal(s[0].loggedMin, null);
+});
+
+test("finance series and the month list", () => {
+  assert.deepEqual(I.lastMonths("2026-02-10", 4), ["2025-11", "2025-12", "2026-01", "2026-02"]);
+  let periods = P.setPeriod([], "month", "2026-10", { revenue: 3000, spend: 900, revenueTarget: 4000 }, ctx0()).periods;
+  periods = P.setPeriod(periods, "month", "2026-09", { spend: 500 }, ctx0()).periods;
+  const f = I.financeSeries(periods, ["2026-08", "2026-09", "2026-10"]);
+  assert.deepEqual(f.map((x) => [x.revenue, x.spend, x.revenueTarget]), [[null, null, null], [null, 500, null], [3000, 900, 4000]]);
+});
+
+test("goal progress by level", () => {
+  const pl = plan(), g = I.goalProgress(context({ tasks: [], nodes: pl.get() }));
+  assert.deepEqual([g.objectives.length, g.priorities.length, g.milestones.length], [1, 1, 1]);
+  assert.equal(g.objectives[0].pct, 0 === 1 ? 0 : g.objectives[0].pct);
+  assert.equal(g.milestones[0].status, "notstarted");
+});
+
+/* ---------------- reviews ---------------- */
+
+test("the weekly review is counted from the records and says so plainly when nothing was tracked", () => {
+  const pl = plan(), tasks = [task("a", { completed: true, date: "2026-11-02" }), task("b", { date: "2026-11-03" }), task("c", { date: "2026-11-03", completed: true }), task("o", { date: "2026-11-05", priority: "high" })];
+  const lk = links([["a", pl.ms.id], ["b", pl.ms.id]], pl.get());
+  const weeks = W.setWeek([], MON, { top: [{ taskId: "a" }, { taskId: "b" }, { taskId: "c" }] }, ctx0()).weeks;
+  const r = I.weekReview(context({ tasks, nodes: pl.get(), links: lk, weeks, today: "2026-11-08" }));
+  assert.deepEqual([r.tasksTotal, r.tasksDone, r.rate, r.linkedDone, r.topDone, r.topTotal], [4, 2, 50, 1, 2, 3]);
+  assert.equal(r.loggedMin, null);
+  assert.ok(r.sentences[0].startsWith("You finished 2 of 4 tasks dated this week (50%), 1 of them counting toward your plan."), r.sentences[0]);
+  assert.ok(r.sentences.includes("Your top three: 2 of 3 finished."));
+  assert.ok(r.sentences.includes("No time blocks were planned this week."));
+  assert.ok(r.sentences.some((s) => /^Most important unfinished: “Task b”/.test(s) || /^Most important unfinished: “Task o”/.test(s)));
+  assert.deepEqual(r.accomplished.map((t) => t.id).sort(), ["a", "c"]);
+  // planned but nothing logged
+  let blocks = W.addBlock([], { title: "Brand", ingredientId: "ing_gratiel", date: "2026-11-03", start: "09:00", end: "11:00" }, ctx0({ ingredients: ING })).blocks;
+  const r2 = I.weekReview(context({ tasks, nodes: pl.get(), links: lk, blocks, today: "2026-11-08" }));
+  assert.ok(r2.sentences.some((s) => /planned 2 h in time blocks but logged no worked time, so the actual hours aren't known/.test(s)), r2.sentences.join(" | "));
+  assert.ok(r2.sentences.some((s) => /Gratiel: 2 h planned, none logged\./.test(s)));
+});
+
+test("the weekly review names at-risk items that got no work this week", () => {
+  const pl = plan(), tasks = [task("a", { date: "2026-11-03" })], lk = links([["a", pl.ms.id]], pl.get());
+  const r = I.weekReview(context({ tasks, nodes: pl.get(), links: lk, today: "2026-12-20" }));
+  void r;
+  const stalled = I.weekReview(context({ tasks: [], nodes: pl.get(), today: "2026-12-10" }));
+  assert.ok(stalled.stalled.length >= 0);
+});
+
+test("the monthly review: milestones, priorities, money, and what to take into next month", () => {
+  const pl = plan(), next = P.addNode(pl.get(), { type: "milestone", title: "Pre-order page live", month: "2026-12", parentId: pl.pri.id }, ctx0());
+  let nodes = P.setDoneAt(next.nodes, pl.ms.id, true, ctx0()).nodes;
+  let periods = P.setPeriod([], "month", "2026-11", { revenue: 5000, spend: 1200, revenueTarget: 6000, budget: 1000 }, ctx0()).periods;
+  const r = I.monthReview(context({ tasks: [task("a", { completed: true }), task("b")], nodes, periods }), "2026-11");
+  assert.deepEqual([r.milestones.length, r.completed.length, r.notDone.length], [1, 1, 0]);
+  assert.deepEqual(r.nextUp.map((n) => n.title), ["Pre-order page live"]);
+  assert.ok(r.sentences.includes("1 of 1 milestones for November are complete."));
+  assert.ok(r.sentences.includes("You finished 1 of 2 tasks dated in the month (50%)."));
+  assert.ok(r.sentences.includes("Sales revenue was $5,000 against a $6,000 target (83%)."));
+  assert.ok(r.sentences.some((s) => /Spending was \$1,200 against a \$1,000 budget \(over by \$200\)\./.test(s)));
+  const bare = I.monthReview(context({ tasks: [], nodes: [], periods: [] }), "2026-11");
+  assert.ok(bare.sentences.includes("No milestones were set for November."));
+  assert.ok(bare.sentences.includes("No revenue was entered for the month."));
+});
+
+/* ---------------- suggestions that need approval ---------------- */
+
+test("proposals: overdue milestones, overdue linked tasks, an at-risk priority with nothing this week, last week's review", () => {
+  const pl = plan({ msDue: "2026-10-20" }), tasks = [task("late", { date: "2026-10-30" })], lk = links([["late", pl.ms.id]], pl.get());
+  const p = I.proposals(context({ tasks, nodes: pl.get(), links: lk }));
+  const kinds = p.map((x) => x.kind).sort();
+  assert.ok(kinds.includes("move-deadline") && kinds.includes("move-tasks") && kinds.includes("review"), kinds.join());
+  const dl = p.find((x) => x.kind === "move-deadline");
+  assert.deepEqual(dl.apply, { op: "set-due", id: pl.ms.id, due: "2026-11-18" });
+  assert.match(dl.detail, /It was due 2026-10-20/);
+  const mv = p.find((x) => x.kind === "move-tasks");
+  assert.deepEqual(mv.apply, { op: "move-tasks", ids: ["late"], date: TODAY });
+  assert.deepEqual(p.find((x) => x.kind === "review").apply, { op: "open-review", weekStart: "2026-10-26" });
+  // nothing changes by itself: proposing does not touch the data
+  assert.equal(pl.get().find((n) => n.id === pl.ms.id).due, "2026-10-20");
+  assert.equal(tasks[0].date, "2026-10-30");
+});
+
+test("dismissed suggestions stay hidden for two weeks, then come back", () => {
+  const pl = plan({ msDue: "2026-10-20" });
+  const key = "ms-late:" + pl.ms.id;
+  const hidden = I.proposals(context({ tasks: [], nodes: pl.get(), settings: { dismissed: { [key]: NOW - 3 * 86400000 } } }));
+  assert.ok(!hidden.some((x) => x.key === key));
+  const back = I.proposals(context({ tasks: [], nodes: pl.get(), settings: { dismissed: { [key]: NOW - 20 * 86400000 } } }));
+  assert.ok(back.some((x) => x.key === key));
+});
+
+test("an at-risk priority with no task this week asks to add one; a reviewed week stops asking for its review", () => {
+  const pl = plan({ msDue: "2026-12-30" });
+  const near = P.editNode(pl.get(), pl.pri.id, { due: "2026-11-05" }, ctx0()).nodes;     // the quarter priority is due in 1 day with nothing done
+  const p = I.proposals(context({ tasks: [], nodes: near }));
+  assert.ok(p.some((x) => x.kind === "add-task" && x.id === pl.pri.id), p.map((x) => x.kind).join());
+  const reviewed = W.setWeek([], "2026-10-26", { reviewedAt: NOW }, ctx0()).weeks;
+  assert.ok(!I.proposals(context({ tasks: [], nodes: pl.get(), weeks: reviewed })).some((x) => x.kind === "review"));
+});

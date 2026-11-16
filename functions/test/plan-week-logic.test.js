@@ -465,3 +465,20 @@ test("putting a task into an existing block; a task that was in another block le
   const rep = W.addBlock([], { title: "Workout", date: TODAY, start: "06:00", end: "07:00", repeatFreq: "weekly" }, ctx()).blocks;
   assert.match(W.assignTask(rep, rep[0].id, "t1", tasks, ctx()).error, /repeats/);
 });
+
+test("the weekly record keeps the two extra review questions; the monthly review has its own record", () => {
+  let r = W.setWeek([], MON, { wins: "Shipped", unfinished: "Photos", onPriorities: "Mostly", lessons: "Meetings", nextFocus: "Fewer meetings" }, ctx());
+  assert.deepEqual([r.week.unfinished, r.week.onPriorities], ["Photos", "Mostly"]);
+  r = W.setWeek(r.weeks, MON, { reviewedAt: NOW }, ctx());
+  assert.deepEqual([r.week.unfinished, r.week.wins], ["Photos", "Shipped"], "saving the time stamp keeps the text");
+  let m = W.setReview([], "2026-11", { wins: "Launched", fellBehind: "Photos", progress: "On track", nextFocus: "Sales" }, ctx());
+  assert.equal(m.ok, true);
+  assert.equal(m.review.id, "mo_2026-11");
+  m = W.setReview(m.reviews, "2026-11", { reviewedAt: NOW + 5 }, ctx({ now: NOW + 5 }));
+  assert.equal(m.reviews.length, 1);
+  assert.deepEqual([m.review.wins, m.review.reviewedAt], ["Launched", NOW + 5]);
+  assert.equal(W.reviewOf(m.reviews, "2026-11").fellBehind, "Photos");
+  assert.equal(W.reviewOf(m.reviews, "2026-12"), null);
+  assert.equal(W.setReview([], "2026-13", {}, ctx()).ok, false);
+  assert.equal(W.readers.reviews([{ id: "mo_2026-11", month: "2026-11" }, { id: "x" }, "junk"]).kept.length, 2);
+});

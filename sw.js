@@ -110,6 +110,7 @@ const APP_SHELL = [
   "./js/plan-yearly-ui.js?v=80",
   "./js/plan-quarterly-ui.js?v=80",
   "./js/plan-week-logic.js?v=80",
+  "./js/plan-insights-logic.js?v=80",
   "./js/plan-week-ui.js?v=80"
 ];
 

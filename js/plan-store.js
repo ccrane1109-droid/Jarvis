@@ -20,7 +20,7 @@
   "use strict";
 
   const PL = window.JarvisPlanLogic;
-  const KINDS = ["nodes", "periods", "links", "ingredients", "blocks", "weeks"];
+  const KINDS = ["nodes", "periods", "links", "ingredients", "blocks", "weeks", "templates", "reviews"];
   const data = {}, kept = {}, loadError = {};
   let settingsRaw = null, settingsErr = "", saveError = "", started = false;
   const listeners = [];

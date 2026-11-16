@@ -1,0 +1,364 @@
+/* ==========================================================================
+   JARVIS — Strategic Planning Center: the rules behind the dashboard, "Top three" recommendations, analytics, reviews and the
+   suggestions that need your approval (pure functions; no page, storage or network, so they can be tested outside the browser).
+
+   Principles
+     - Every figure is counted from your own records (tasks, links, blocks, money you entered, workouts you logged). If something
+       hasn't been tracked, the figure is null ("not tracked"), never 0.
+     - Recommendations are RULES with visible points: each pick lists why it was chosen, as a list of reasons that add up to its score.
+     - Nothing here changes anything. proposals() only describes a change; the screen applies it after you approve.
+     - Time is never double counted: for workouts, a day's "actual" is the larger of the time you logged on Workout blocks and the
+       sessions you logged in Workouts (one workout recorded in both places is still one workout).
+
+   Context object (ctx), assembled by the screens:
+     { today, nowMin, weekStart, tasks, links, model (PlanLogic.model), blocks, ingredients, events, zone, settings,
+       weeks, reviews, periods, workouts, habits }
+   ========================================================================== */
+
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./plan-logic"), require("./plan-week-logic"));
+  else root.JarvisPlanInsights = factory(root.JarvisPlanLogic, root.JarvisPlanWeekLogic);
+})(typeof self !== "undefined" ? self : this, function (PL, W) {
+  "use strict";
+
+  /* ---------------- small helpers ---------------- */
+  function isObj(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
+  function isNum(v) { return typeof v === "number" && isFinite(v); }
+  function pct(n, d) { return d > 0 ? Math.round(100 * n / d) : null; }
+  function hours(min) { return min === null || min === undefined ? null : Math.round(min / 6) / 10; }
+  function arr(v) { return Array.isArray(v) ? v : []; }
+  function dateOf(ms) { return new Date(ms).toISOString().slice(0, 10); }
+  const PRIO = { high: 3, medium: 2, low: 1 };
+
+  /* ---------------- what kind of time a category is ---------------- */
+  const KIND_RES = [["workout", /workout|exercise|gym|training|fitness|lift/i], ["study", /stud(y|ying)|homework|revis|learn/i], ["gratiel", /gratiel|business|brand|clothing/i], ["school", /school|class|lecture|college|univers/i], ["personal", /personal|family|friend|social|church/i]];
+  function categoryKind(ing) {
+    if (!ing) return "none";
+    if (ing.rest) return "rest";
+    if (ing.id === "ing_gratiel") return "gratiel";
+    if (ing.id === "ing_workout") return "workout";
+    if (ing.id === "ing_studying") return "study";
+    if (ing.id === "ing_school") return "school";
+    if (ing.id === "ing_personal") return "personal";
+    for (let i = 0; i < KIND_RES.length; i++) if (KIND_RES[i][1].test(ing.name || "")) return KIND_RES[i][0];
+    return "other";
+  }
+
+  /* ---------------- time: planned, logged, workouts ---------------- */
+  function workoutMinutesByDate(workouts) {
+    const out = {};
+    arr(workouts).forEach(function (w) {
+      if (!isObj(w)) return;
+      const d = typeof w.date === "string" ? w.date.slice(0, 10) : "";
+      if (PL.isDate(d) && isNum(w.duration) && w.duration > 0) out[d] = (out[d] || 0) + Math.round(w.duration);
+    });
+    return out;
+  }
+
+  // Planned and logged time per category between two dates. actualMin is null when nothing was tracked for that category.
+  // Returns { rows, plannedMin, loggedMin, pastBlocks, loggedBlocks, doneBlockMin }
+  function timeByCategory(ctx, from, to) {
+    const ings = W.liveIngredients(ctx.ingredients), occ = W.occurrences(ctx.blocks, from, to), today = ctx.today || "";
+    const wk = workoutMinutesByDate(ctx.workouts);
+    const rows = {}, order = [];
+    const row = function (id) {
+      if (rows[id] !== undefined) return rows[id];
+      const ing = id ? W.ingredientById(ctx.ingredients, id) : null;
+      rows[id] = { ingredientId: id, name: ing ? ing.name : "No category", color: ing ? ing.color : "#94a3b8", kind: categoryKind(ing), plannedMin: 0, loggedMin: null, blocks: 0, loggedBlocks: 0, sessionMin: null };
+      order.push(id);
+      return rows[id];
+    };
+    ings.forEach(function (i) { row(i.id); });
+    const dayWorkoutBlocks = {};          // day -> minutes logged on workout-kind blocks
+    let plannedMin = 0, pastBlocks = 0, loggedBlocks = 0, doneBlockMin = 0;
+    occ.forEach(function (o) {
+      const ing = W.ingredientById(ctx.ingredients, o.ingredientId), r = row(ing ? o.ingredientId : ""), len = o.endMin - o.startMin;
+      r.plannedMin += len; r.blocks++; plannedMin += len;
+      const past = o.date < today || (o.date === today && typeof ctx.nowMin === "number" && o.endMin <= ctx.nowMin);
+      if (past) pastBlocks++;
+      if (o.workedMin !== null) {
+        r.loggedMin = (r.loggedMin || 0) + o.workedMin; r.loggedBlocks++; if (past) loggedBlocks++;
+        if (r.kind === "workout") dayWorkoutBlocks[o.date] = (dayWorkoutBlocks[o.date] || 0) + o.workedMin;
+      }
+      const t = o.taskId ? arr(ctx.tasks).filter(function (x) { return x && x.id === o.taskId; })[0] : null;
+      if (past && (t ? t.completed : o.done)) doneBlockMin += len;
+    });
+    // workouts you logged in Workouts count too, but never twice: per day, the larger of what Workout blocks say and what sessions say
+    const wkRow = ings.filter(function (i) { return categoryKind(i) === "workout"; })[0] || null;
+    const days = Object.keys(wk).filter(function (d) { return d >= from && d <= to && d <= (today || to); });
+    if (days.length) {
+      const extra = days.reduce(function (s, d) { return s + Math.max(0, wk[d] - (dayWorkoutBlocks[d] || 0)); }, 0);
+      const home = wkRow ? row(wkRow.id) : row("_workouts");
+      if (!wkRow) { home.name = "Workouts (from your workout log)"; home.kind = "workout"; home.color = "#33d17a"; }
+      home.sessionMin = days.reduce(function (s, d) { return s + wk[d]; }, 0);
+      if (extra > 0) home.loggedMin = (home.loggedMin || 0) + extra;
+    }
+    const list = order.map(function (id) { return rows[id]; });
+    const logged = list.filter(function (r) { return r.loggedMin !== null; });
+    return {
+      rows: list, plannedMin: plannedMin, loggedMin: logged.length ? logged.reduce(function (s, r) { return s + r.loggedMin; }, 0) : null,
+      pastBlocks: pastBlocks, loggedBlocks: loggedBlocks, doneBlockMin: doneBlockMin
+    };
+  }
+
+  function gratielMinutes(ctx, from, to) {
+    const t = timeByCategory(ctx, from, to), rows = t.rows.filter(function (r) { return r.kind === "gratiel"; });
+    if (!rows.length) return { plannedMin: null, loggedMin: null };
+    return { plannedMin: rows.reduce(function (s, r) { return s + r.plannedMin; }, 0), loggedMin: rows.some(function (r) { return r.loggedMin !== null; }) ? rows.reduce(function (s, r) { return s + (r.loggedMin || 0); }, 0) : null };
+  }
+
+  /* ---------------- how much of the week is free (for "will it fit?") ---------------- */
+  function freeMinutes(ctx) {
+    const dates = W.weekDates(ctx.weekStart), today = ctx.today || "";
+    return dates.filter(function (d) { return d >= today; }).reduce(function (sum, d) { return sum + W.freeSlots(d, ctx, 15, []).reduce(function (s, x) { return s + x.end - x.start; }, 0); }, 0);
+  }
+
+  /* ---------------- "Top three": a transparent, rule-based ranking ---------------- */
+  // Points (all visible in the reasons):
+  //   linked to the plan 15 · importance of its objective 3 per weight point (up to 15) · that objective at risk 10 / on track 4
+  //   supports THIS quarter's priority 10 (+5 if at risk) · milestone deadline: overdue 16, within a week 14, two weeks 9, a month 4
+  //   task priority high 14 / medium 6 · overdue task 3 + 2 per day (up to 12) · substantial work (60+ min estimate) 4
+  //   minus: a small routine task not tied to a goal 8 · will not fit in the time left this week 10 · under a finished milestone 12 · paused item 15
+  function explain(task, ctx, free) {
+    const m = ctx.model, today = ctx.today || "", parts = [];
+    const add = function (label, points) { if (points) parts.push({ label: label, points: points }); };
+    const chain = m ? m.chainOfTask(task.id) : [];
+    const obj = chain.filter(function (n) { return n.type === "objective"; })[0] || null, pri = chain.filter(function (n) { return n.type === "priority"; })[0] || null, ms = chain.filter(function (n) { return n.type === "milestone"; })[0] || null;
+    const link = PL.linkOf(ctx.links, task.id), est = link && link.estMin ? link.estMin : 0;
+    const curY = Number(today.slice(0, 4)), curQ = today ? PL.quarterOfDate(today) : 0;
+    const linked = chain.length > 0;
+    if (linked) add("Counts toward your plan", 15);
+    if (obj) {
+      add("Part of the objective “" + obj.title + "” (importance " + (obj.weight || 1) + " of 5)", Math.min(15, 3 * (obj.weight || 1)));
+      const st = m.statusOf(obj.id);
+      if (st === "atrisk") add("…which is at risk", 10); else if (st === "ontrack") add("…which is on track", 4);
+    }
+    if (pri && pri.year === curY && pri.quarter === curQ) {
+      add("Supports this quarter's priority “" + pri.title + "”", 10);
+      if (m.statusOf(pri.id) === "atrisk") add("…which is at risk", 5);
+    }
+    if (ms) {
+      const left = m.daysLeft(ms.id);
+      if (left !== null && m.statusOf(ms.id) !== "completed") {
+        if (left < 0) add("Its milestone “" + ms.title + "” is " + (-left) + " day" + (left === -1 ? "" : "s") + " overdue", 16);
+        else if (left <= 7) add("Its milestone “" + ms.title + "” is due in " + left + " day" + (left === 1 ? "" : "s"), 14);
+        else if (left <= 14) add("Its milestone “" + ms.title + "” is due in " + left + " days", 9);
+        else if (left <= 30) add("Its milestone “" + ms.title + "” is due in " + left + " days", 4);
+      }
+      if (m.statusOf(ms.id) === "completed") add("Its milestone is already complete", -12);
+      if (ms.status === "paused" || (pri && pri.status === "paused") || (obj && obj.status === "paused")) add("It belongs to a paused item", -15);
+    }
+    if (task.priority === "high") add("High priority", 14); else if (task.priority !== "low") add("Medium priority", 6);
+    if (PL.isDate(task.date) && task.date < today) {
+      const late = PL.diffDays(task.date, today);
+      add("Overdue by " + late + " day" + (late === 1 ? "" : "s"), Math.min(12, 3 + 2 * late));
+    }
+    if (est >= 60) add("Substantial work (about " + (Math.round(est / 6) / 10) + " h)", 4);
+    if (!linked && task.priority !== "high" && (!est || est <= 30)) add("A small routine task that isn't tied to a goal", -8);
+    if (est && free !== null && est > free) add("Needs about " + (Math.round(est / 6) / 10) + " h but only " + (Math.round(free / 6) / 10) + " h is free this week", -10);
+    return { parts: parts, score: parts.reduce(function (s, p) { return s + p.points; }, 0), linked: linked, chain: chain, estMin: est };
+  }
+
+  function candidates(ctx) {
+    const dates = W.weekDates(ctx.weekStart), end = dates[6];
+    return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date <= end && t.text && !PL.isArchived(ctx.links, t.id) && !(ctx.model && ctx.model.nodeOfTask(t.id) && ctx.model.nodeOfTask(t.id).status === "dropped"); });
+  }
+  // Every candidate, best first, each with its reasons.
+  function rankTasks(ctx) {
+    const free = ctx.freeMin !== undefined ? ctx.freeMin : freeMinutes(ctx);
+    return candidates(ctx).map(function (t) { const e = explain(t, ctx, free); return { task: t, score: e.score, parts: e.parts, linked: e.linked, chain: e.chain, estMin: e.estMin }; })
+      .sort(function (a, b) { return b.score - a.score || (a.task.date < b.task.date ? -1 : a.task.date > b.task.date ? 1 : 0) || (a.task.createdAt || 0) - (b.task.createdAt || 0); });
+  }
+  // Three picks. They are spread out (a second pick from the same milestone loses 6 points), and at most one is a task that isn't tied to
+  // the plan unless there aren't enough that are.
+  function topThreePicks(ctx) {
+    const ranked = rankTasks(ctx), picks = [], taken = {};
+    const msOf = function (r) { const m = r.chain[r.chain.length - 1]; return m ? m.id : ""; };
+    for (let n = 0; n < 3; n++) {
+      let best = null, bestScore = -Infinity;
+      const linkedLeft = ranked.some(function (r) { return !taken[r.task.id] && r.linked; });
+      ranked.forEach(function (r) {
+        if (taken[r.task.id]) return;
+        if (!r.linked && linkedLeft && picks.some(function (p) { return !p.linked; })) return;
+        let sc = r.score;
+        if (picks.some(function (p) { return msOf(p) && msOf(p) === msOf(r); })) sc -= 6;
+        if (sc > bestScore) { best = r; bestScore = sc; }
+      });
+      if (!best) break;
+      taken[best.task.id] = true;
+      const pick = Object.assign({}, best, { adjusted: bestScore });
+      if (bestScore !== best.score) pick.parts = best.parts.concat([{ label: "Another pick comes from the same milestone", points: bestScore - best.score }]);
+      picks.push(pick);
+    }
+    return picks;
+  }
+
+  /* ---------------- deadlines and the dashboard ---------------- */
+  function upcoming(ctx, days) {
+    const m = ctx.model, today = ctx.today || "", span = days || 14, out = [];
+    ["milestone", "priority", "objective"].forEach(function (type) {
+      m.all(type).forEach(function (n) {
+        const st = m.statusOf(n.id);
+        if (st === "completed" || st === "paused" || st === "dropped") return;
+        const left = m.daysLeft(n.id);
+        if (left === null || left > span) return;
+        out.push({ kind: "node", id: n.id, type: n.type, title: n.title, date: m.deadline(n), daysLeft: left, status: st, pct: m.progress(n.id).pct });
+      });
+    });
+    arr(ctx.tasks).forEach(function (t) {
+      if (!t || t.completed || !PL.isDate(t.date) || PL.isArchived(ctx.links, t.id)) return;
+      const left = PL.diffDays(today, t.date), n = m.nodeOfTask(t.id);
+      if (left >= 0 && left <= 3 && (n || t.priority === "high")) out.push({ kind: "task", id: t.id, type: "task", title: t.text, date: t.date, daysLeft: left, status: t.priority === "high" ? "high" : "", pct: null, node: n ? n.title : "" });
+    });
+    return out.sort(function (a, b) { return a.daysLeft - b.daysLeft || (a.title < b.title ? -1 : 1); });
+  }
+
+  function avgPct(m, nodes) {
+    const known = nodes.filter(function (n) { return n.status !== "dropped"; }).map(function (n) { return m.progress(n.id).pct; }).filter(function (p) { return p !== null; });
+    return known.length ? Math.round(known.reduce(function (s, p) { return s + Math.min(100, p); }, 0) / known.length) : null;
+  }
+
+  // Everything the dashboard shows, from the top of the chain to today.
+  function dashboard(ctx) {
+    const m = ctx.model, today = ctx.today, y = Number(today.slice(0, 4)), q = PL.quarterOfDate(today), mk = PL.monthOfDate(today), ws = ctx.weekStart;
+    const live = function (list) { return list.filter(function (n) { return n.status !== "dropped"; }); };
+    const years = PL.planYears(m.settings), yearNodes = years.map(function (yr) { return m.objectivesOf(yr); });
+    const objectives = live(m.objectivesOf(y)), priorities = live(m.prioritiesOf(y, q)), milestones = live(m.milestonesIn(mk));
+    const msDone = milestones.filter(function (n) { return m.statusOf(n.id) === "completed"; }).length;
+    const dates = W.weekDates(ws), tasks = arr(ctx.tasks);
+    const weekTasks = tasks.filter(function (t) { return t && dates.indexOf(t.date) !== -1 && !PL.isArchived(ctx.links, t.id); });
+    const monthTasks = tasks.filter(function (t) { return t && typeof t.date === "string" && t.date.slice(0, 7) === mk && !PL.isArchived(ctx.links, t.id); });
+    const wk = W.weekOf(ctx.weeks, ws), saved = wk ? W.readWeek(wk).top : [];
+    let top = saved.map(function (x) {
+      const t = x.taskId ? tasks.filter(function (k) { return k.id === x.taskId; })[0] : null;
+      return { task: t, text: t ? t.text : x.text, done: !!(t && t.completed), node: t ? m.nodeOfTask(t.id) : null, saved: true };
+    }).filter(function (x) { return x.text; });
+    let suggested = false;
+    if (!top.length) { top = topThreePicks(ctx).map(function (p) { return { task: p.task, text: p.task.text, done: false, node: p.chain[p.chain.length - 1] || null, saved: false, score: p.score }; }); suggested = top.length > 0; }
+    const gr = gratielMinutes(ctx, ws, dates[6]), rank = rankTasks(ctx);
+    const todayOpen = tasks.filter(function (t) { return t && !t.completed && t.date === today && !PL.isArchived(ctx.links, t.id); });
+    const order = {}; rank.forEach(function (r, i) { order[r.task.id] = i; });
+    todayOpen.sort(function (a, b) { return (order[a.id] === undefined ? 1e6 : order[a.id]) - (order[b.id] === undefined ? 1e6 : order[b.id]) || (a.order || 0) - (b.order || 0); });
+    const overdueTasks = tasks.filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date < today && !PL.isArchived(ctx.links, t.id); });
+    return {
+      year: y, quarter: q, month: mk, weekStart: ws,
+      overall: { year: avgPct(m, objectives), threeYear: avgPct(m, [].concat.apply([], yearNodes)) },
+      objectives: objectives, priorities: priorities, milestones: milestones,
+      monthStats: { milestones: milestones.length, milestonesDone: msDone, milestonePct: milestones.length ? avgPct(m, milestones) : null, tasksDone: monthTasks.filter(function (t) { return t.completed; }).length, tasksOpen: monthTasks.filter(function (t) { return !t.completed; }).length },
+      week: { tasksDone: weekTasks.filter(function (t) { return t.completed; }).length, tasksTotal: weekTasks.length, rate: pct(weekTasks.filter(function (t) { return t.completed; }).length, weekTasks.length), top: top, topSuggested: suggested, gratielLoggedMin: gr.loggedMin, gratielPlannedMin: gr.plannedMin },
+      today: { open: todayOpen.slice(0, 5), openCount: todayOpen.length, done: tasks.filter(function (t) { return t && t.completed && t.date === today; }).length },
+      deadlines: upcoming(ctx, 14).slice(0, 6), overdueTaskCount: overdueTasks.length
+    };
+  }
+
+  /* ---------------- analytics ---------------- */
+  function weekTotals(ctx, ws) {
+    const dates = W.weekDates(ws), tasks = arr(ctx.tasks).filter(function (t) { return t && dates.indexOf(t.date) !== -1 && !PL.isArchived(ctx.links, t.id); });
+    const done = tasks.filter(function (t) { return t.completed; }).length, tm = timeByCategory(ctx, ws, dates[6]);
+    return { weekStart: ws, total: tasks.length, done: done, rate: pct(done, tasks.length), plannedMin: tm.plannedMin, loggedMin: tm.loggedMin, future: ws > (ctx.today || "") };
+  }
+  // The last n weeks (oldest first, ending with the week of today).
+  function weeklySeries(ctx, n) {
+    const out = [], cur = W.mondayOf(ctx.today);
+    for (let i = (n || 8) - 1; i >= 0; i--) out.push(weekTotals(ctx, PL.addDays(cur, -7 * i)));
+    return out;
+  }
+  // Money by month for the given month keys: null where you entered nothing.
+  function financeSeries(periods, months) {
+    return months.map(function (mk) {
+      const p = PL.periodOf(periods, "month", mk) || {};
+      const g = function (k) { return p[k] === undefined || p[k] === null ? null : p[k]; };
+      return { month: mk, revenue: g("revenue"), spend: g("spend"), revenueTarget: g("revenueTarget"), budget: g("budget") };
+    });
+  }
+  function lastMonths(today, n) {
+    const out = []; let y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
+    for (let i = 0; i < n; i++) { out.unshift(PL.monthKey(y, m)); m--; if (m < 1) { m = 12; y--; } }
+    return out;
+  }
+  function goalProgress(ctx) {
+    const m = ctx.model, today = ctx.today, y = Number(today.slice(0, 4)), q = PL.quarterOfDate(today), mk = PL.monthOfDate(today);
+    const row = function (n) { return { id: n.id, title: n.title, pct: m.progress(n.id).pct, status: m.statusOf(n.id), note: m.progress(n.id).note }; };
+    const live = function (l) { return l.filter(function (n) { return n.status !== "dropped"; }); };
+    return { objectives: live(m.objectivesOf(y)).map(row), priorities: live(m.prioritiesOf(y, q)).map(row), milestones: live(m.milestonesIn(mk)).map(row) };
+  }
+  function overdueCount(ctx) { return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date < ctx.today && !PL.isArchived(ctx.links, t.id); }).length; }
+
+  /* ---------------- reviews ---------------- */
+  function hrs(min) { return (Math.round(min / 6) / 10) + " h"; }
+  function weekReview(ctx) {
+    const ws = ctx.weekStart, dates = W.weekDates(ws), tasks = arr(ctx.tasks), m = ctx.model;
+    const inWeek = tasks.filter(function (t) { return t && dates.indexOf(t.date) !== -1 && !PL.isArchived(ctx.links, t.id); });
+    const done = inWeek.filter(function (t) { return t.completed; }), open = inWeek.filter(function (t) { return !t.completed; });
+    const linkedDone = done.filter(function (t) { return m.nodeOfTask(t.id); });
+    const tm = timeByCategory(ctx, ws, dates[6]), gr = gratielMinutes(ctx, ws, dates[6]);
+    const wk = W.weekOf(ctx.weeks, ws), top = wk ? W.readWeek(wk).top : [];
+    const topDone = top.filter(function (x) { const t = x.taskId ? tasks.filter(function (k) { return k.id === x.taskId; })[0] : null; return t && t.completed; }).length;
+    const unfinished = rankTasks(Object.assign({}, ctx, { weekStart: ws })).filter(function (r) { return !r.task.completed; }).slice(0, 5);
+    const sentences = [];
+    if (inWeek.length) sentences.push("You finished " + done.length + " of " + inWeek.length + " tasks dated this week (" + pct(done.length, inWeek.length) + "%)" + (done.length ? ", " + linkedDone.length + " of them counting toward your plan." : "."));
+    else sentences.push("No tasks were dated this week.");
+    if (top.length) sentences.push("Your top three: " + topDone + " of " + top.length + " finished.");
+    if (tm.plannedMin) sentences.push("You planned " + hrs(tm.plannedMin) + " in time blocks" + (tm.loggedMin !== null ? " and logged " + hrs(tm.loggedMin) + " of work (on " + tm.loggedBlocks + " of " + tm.pastBlocks + " finished blocks)." : " but logged no worked time, so the actual hours aren't known."));
+    else sentences.push("No time blocks were planned this week.");
+    if (gr.plannedMin !== null && gr.plannedMin > 0) sentences.push("Gratiel: " + hrs(gr.plannedMin) + " planned" + (gr.loggedMin !== null ? ", " + hrs(gr.loggedMin) + " logged." : ", none logged."));
+    else if (gr.plannedMin !== null) sentences.push("No Gratiel time was planned this week.");
+    if (unfinished.length) sentences.push("Most important unfinished: " + unfinished.slice(0, 3).map(function (r) { return "“" + r.task.text + "”"; }).join(", ") + ".");
+    const behind = m.all("priority").concat(m.all("objective")).filter(function (n) { return m.statusOf(n.id) === "atrisk" && n.status === "active"; });
+    const moved = {}; done.forEach(function (t) { const n = m.nodeOfTask(t.id); if (n) m.chainOfTask(t.id).forEach(function (x) { moved[x.id] = true; }); });
+    const stalled = behind.filter(function (n) { return !moved[n.id]; });
+    if (stalled.length) sentences.push("At risk with no progress this week: " + stalled.slice(0, 3).map(function (n) { return "“" + n.title + "”"; }).join(", ") + ".");
+    return { weekStart: ws, tasksTotal: inWeek.length, tasksDone: done.length, rate: pct(done.length, inWeek.length), linkedDone: linkedDone.length, accomplished: done, unfinished: unfinished, open: open, overdueCount: overdueCount(ctx), topTotal: top.length, topDone: topDone, plannedMin: tm.plannedMin, loggedMin: tm.loggedMin, gratielPlannedMin: gr.plannedMin, gratielLoggedMin: gr.loggedMin, stalled: stalled, sentences: sentences, allocation: tm.rows };
+  }
+  function monthReview(ctx, mk) {
+    const m = ctx.model, y = Number(mk.slice(0, 4)), q = PL.quarterOfMonth(Number(mk.slice(5))), sentences = [];
+    const ms = m.milestonesIn(mk).filter(function (n) { return n.status !== "dropped"; });
+    const completed = ms.filter(function (n) { return m.statusOf(n.id) === "completed"; }), notDone = ms.filter(function (n) { return m.statusOf(n.id) !== "completed" && m.statusOf(n.id) !== "paused"; });
+    const priorities = m.prioritiesOf(y, q).filter(function (n) { return n.status !== "dropped"; });
+    const behind = priorities.concat(m.objectivesOf(y)).filter(function (n) { return n.status === "active" && m.statusOf(n.id) === "atrisk"; });
+    const fin = PL.periodSummary(ctx.periods, "month", mk, m.settings.revenueMetric);
+    const tasks = arr(ctx.tasks).filter(function (t) { return t && typeof t.date === "string" && t.date.slice(0, 7) === mk && !PL.isArchived(ctx.links, t.id); });
+    const tdone = tasks.filter(function (t) { return t.completed; }).length;
+    if (ms.length) sentences.push(completed.length + " of " + ms.length + " milestones for " + PL.monthName(mk, true) + " are complete.");
+    else sentences.push("No milestones were set for " + PL.monthName(mk, true) + ".");
+    if (tasks.length) sentences.push("You finished " + tdone + " of " + tasks.length + " tasks dated in the month (" + pct(tdone, tasks.length) + "%).");
+    priorities.forEach(function (p) { const pr = m.progress(p.id); sentences.push("“" + p.title + "”: " + (pr.pct === null ? "no progress to show yet" : pr.pct + "% (" + PL.STATUS_LABEL[m.statusOf(p.id)].toLowerCase() + ")") + "."); });
+    if (fin.revenueActual !== null) sentences.push((m.settings.revenueMetric === "mrr" ? "MRR was $" : "Sales revenue was $") + PL.fmt(fin.revenueActual) + (fin.revenueTarget ? " against a $" + PL.fmt(fin.revenueTarget) + " target (" + Math.round(100 * fin.revenueActual / fin.revenueTarget) + "%)." : "."));
+    else sentences.push("No revenue was entered for the month.");
+    if (fin.spendActual !== null) sentences.push("Spending was $" + PL.fmt(fin.spendActual) + (fin.budget ? " against a $" + PL.fmt(fin.budget) + " budget" + (fin.spendActual > fin.budget ? " (over by $" + PL.fmt(fin.spendActual - fin.budget) + ")." : " ($" + PL.fmt(fin.budget - fin.spendActual) + " left).") : "."));
+    const next = PL.monthKey(mk.slice(5) === "12" ? y + 1 : y, mk.slice(5) === "12" ? 1 : Number(mk.slice(5)) + 1);
+    const nextUp = notDone.concat(m.milestonesIn(next).filter(function (n) { return n.status === "active"; }));
+    return { month: mk, milestones: ms, completed: completed, notDone: notDone, priorities: priorities.map(function (p) { return { id: p.id, title: p.title, pct: m.progress(p.id).pct, status: m.statusOf(p.id) }; }), behind: behind, finance: fin, tasksTotal: tasks.length, tasksDone: tdone, nextUp: nextUp.slice(0, 5), sentences: sentences };
+  }
+
+  /* ---------------- suggestions that need your approval ---------------- */
+  // Each proposal describes a change and what applying it would do. Dismissed ones (settings.dismissed[key], within 14 days) stay hidden.
+  function proposals(ctx) {
+    const m = ctx.model, today = ctx.today, out = [], dismissed = (m.settings && m.settings.dismissed) || {}, nowMs = ctx.nowMs || Date.now();
+    const hidden = function (key) { return dismissed[key] && nowMs - dismissed[key] < 14 * 86400000; };
+    const push = function (p) { if (!hidden(p.key)) out.push(p); };
+    m.overdueMilestones().forEach(function (n) {
+      if (n.status !== "active") return;
+      const nextEnd = PL.addDays(today, 14);
+      push({ key: "ms-late:" + n.id, kind: "move-deadline", id: n.id, title: "“" + n.title + "” is overdue", detail: "It was due " + m.deadline(n) + ". Move its deadline to " + nextEnd + "?", apply: { op: "set-due", id: n.id, due: nextEnd } });
+    });
+    const late = arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date < today && m.nodeOfTask(t.id) && !PL.isArchived(ctx.links, t.id); });
+    if (late.length) push({ key: "tasks-late:" + today.slice(0, 7) + ":" + late.length, kind: "move-tasks", title: late.length + " overdue task" + (late.length === 1 ? "" : "s") + " linked to your plan", detail: "Move " + (late.length === 1 ? "it" : "them") + " to today so " + (late.length === 1 ? "it" : "they") + " show on your list again?", apply: { op: "move-tasks", ids: late.map(function (t) { return t.id; }), date: today } });
+    const ws = ctx.weekStart, dates = W.weekDates(ws);
+    m.prioritiesOf(Number(today.slice(0, 4)), PL.quarterOfDate(today)).forEach(function (p) {
+      if (p.status !== "active" || m.statusOf(p.id) !== "atrisk") return;
+      const open = m.subtreeTasks(p.id).filter(function (t) { return !t.completed && dates.indexOf(t.date) !== -1; });
+      if (!open.length) push({ key: "pri-idle:" + p.id + ":" + ws, kind: "add-task", id: p.id, title: "“" + p.title + "” is at risk and has nothing planned this week", detail: "Add a task for it this week?", apply: { op: "add-task", id: p.id } });
+    });
+    const lastWs = PL.addDays(W.mondayOf(today), -7);
+    const lw = W.weekOf(ctx.weeks, lastWs);
+    if (today > PL.addDays(lastWs, 6) && (!lw || !lw.reviewedAt)) push({ key: "review:" + lastWs, kind: "review", title: "Last week's review is ready", detail: "A summary of " + lastWs + " – " + PL.addDays(lastWs, 6) + " is ready to read and add to.", apply: { op: "open-review", weekStart: lastWs } });
+    return out;
+  }
+
+  return {
+    categoryKind: categoryKind, workoutMinutesByDate: workoutMinutesByDate, timeByCategory: timeByCategory, gratielMinutes: gratielMinutes, freeMinutes: freeMinutes,
+    rankTasks: rankTasks, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
+    financeSeries: financeSeries, lastMonths: lastMonths, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, proposals: proposals, hours: hours
+  };
+});
