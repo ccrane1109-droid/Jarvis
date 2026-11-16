@@ -23,7 +23,7 @@
   function cal() { return window.JarvisCalendar && window.JarvisCalendar.itemsBetween ? window.JarvisCalendar : null; }
   function panelActive() { const p = $("panel-home"); return !!(p && p.classList.contains("active") && p.offsetParent !== null); }
   function announce(text) { const el = $("hmLive"); if (el) { el.textContent = ""; window.setTimeout(function () { el.textContent = text; }, 30); } }
-  function colorOf(it) { return it.source === "task" ? "#7d8fb3" : (COLORS[it.category] || "#9aa3b8"); }
+  function colorOf(it) { return it.source === "task" ? "#7d8fb3" : (it.color || COLORS[it.category] || "#9aa3b8"); }
 
   function clock() {
     const z = cal().zone(), w = C.instantToWall(Date.now(), z);
@@ -45,6 +45,7 @@
     if (o.timeInSub && !it.allDay) sub.push(C.timeLabel(it.time) + (it.point || !it.endTime ? "" : " \u2013 " + C.timeLabel(it.endTime)));
     if (it.source === "task") sub.push("Task");
     else if (it.source === "goal") sub.push("Goal");
+    else if (it.source === "plan") sub.push("Time block" + (it.categoryName ? " \u00b7 " + it.categoryName : ""));
     else { const cat = C.categoryInfo(it.category).label; if (it.kind !== "event" && C.kindInfo(it.kind).label !== cat) sub.push(C.kindInfo(it.kind).label); sub.push(cat); }
     const tickable = it.source === "task" || (it.source === "event" && it.point);
     const state = o.state === "now" ? '<span class="hm-badge">On now</span>' : "";

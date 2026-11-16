@@ -4734,3 +4734,24 @@ span.sp-trow-t { cursor: default; }
 .sp-alloc li { display: grid; gap: 2px; }
 .sp-alloc-name { font-weight: 600; font-size: 14px; }
 .sp-alloc-n { font-size: 13px; color: var(--text-dim); }
+
+/* Home and Business cards from the plan */
+.hm-plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hm-plan-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; border-bottom: 1px solid var(--card-border); min-height: 48px; }
+.hm-plan-check { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; cursor: pointer; }
+.hm-plan-check input { width: 22px; height: 22px; cursor: pointer; }
+.hm-plan-main { display: flex; flex-direction: column; min-width: 0; padding: 4px 0; }
+.hm-plan-t { font-size: 15px; overflow-wrap: anywhere; }
+.hm-plan-s { font-size: 12px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .hm-plan-s.is-late { color: var(--red); }
+.hm-plan-none { margin: 0 0 6px; font-size: 14px; color: var(--text-dim); }
+.hm-plan-prog { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.hm-plan-l { display: block; font-size: 12px; color: var(--text-dim); } .hm-plan-v { font-size: 18px; font-weight: 700; }
+.bz-goal-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bz-goal-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
+.bz-goal-list .sp-bar { grid-column: 1 / -1; }
+.bz-goal-t { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; } .bz-goal-p { font-weight: 700; color: var(--text-dim); }
+.bz-goal-n { grid-column: 1 / -1; font-size: 12px; color: var(--text-dim); }
+.bz-facts { margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.bz-facts > div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.bz-facts dt { color: var(--text-dim); } .bz-facts dd { margin: 0; font-weight: 600; text-align: right; }
+.hm-plan-open { min-height: 44px; }

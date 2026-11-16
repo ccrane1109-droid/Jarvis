@@ -505,6 +505,23 @@
   }
 
   // Warnings about too much in too little time. Every one comes with the figures behind it.
+  /* ---------------- what the Calendar shows from the plan ---------------- */
+  // Time blocks as read-only calendar items. A block that holds a task is left out on purpose: that task is already in the Calendar as itself
+  // (at the day and time the block gave it), so showing the block too would list it twice. ctx: { blocks, ingredients }.
+  function calendarItems(ctx, from, to) {
+    const out = [];
+    occurrences(ctx.blocks, from, to).forEach(function (o) {
+      if (o.taskId) return;
+      const ing = o.ingredientId ? ingredientById(ctx.ingredients, o.ingredientId) : null;
+      out.push({
+        key: "block:" + o.blockId + "@" + o.date, id: o.blockId, occDate: o.date, source: "plan", title: o.title, description: o.notes || "", kind: "event", category: "other", priority: "medium",
+        recurring: !!o.recurring, linked: null, status: "", reminders: [], completed: !!o.done, point: false, tz: "", allDay: false, date: o.date, endDate: o.date, time: o.start, endTime: o.end,
+        startMin: o.startMin, endMin: o.endMin, startMs: null, endMs: null, readOnly: true, conflict: false, color: ing ? ing.color : "#94a3b8", categoryName: ing ? ing.name : ""
+      });
+    });
+    return out;
+  }
+
   /* ---------------- one day at a glance, and which blocks overlap ---------------- */
   // Blocks that overlap another block, or a calendar event, on the same day. -> { "blockId|date": "block" | "event" } ("block" wins if both)
   function clashKeys(ctx, from, to) {
@@ -636,7 +653,7 @@
     logWork: logWork, setBlockDone: setBlockDone, placeTask: placeTask, unplaceTask: unplaceTask, detachTasks: detachTasks, releaseTask: releaseTask, assignTask: assignTask, followTasks: followTasks, scheduledBlock: scheduledBlock, displayTitle: displayTitle,
     weekId: weekId, weekOf: weekOf, readWeek: readWeek, setWeek: setWeek, reviewId: reviewId, reviewOf: reviewOf, readReview: readReview, setReview: setReview, purge: purge,
     winOf: winOf, busyOn: busyOn, freeSlots: freeSlots, weekStats: weekStats, unscheduledHigh: unscheduledHigh, topThree: topThree, capacity: capacity, suggest: suggest,
-    carryForward: carryForward, carryTasks: carryTasks, carryTarget: carryTarget, clashKeys: clashKeys, daySummary: daySummary,
+    carryForward: carryForward, carryTasks: carryTasks, carryTarget: carryTarget, clashKeys: clashKeys, daySummary: daySummary, calendarItems: calendarItems,
     readers: {
       ingredients: function (raw) { const items = [], kept = []; (Array.isArray(raw) ? raw : []).forEach(function (r) { if (isObj(r) && typeof r.id === "string" && r.id && typeof r.name === "string") items.push(Object.assign({}, r, { color: hexOk(r.color) ? r.color : "#94a3b8", rest: !!r.rest, order: Number(r.order) || 0 })); else kept.push(r); }); return { items: items, kept: kept }; },
       blocks: function (raw) {

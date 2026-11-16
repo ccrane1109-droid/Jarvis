@@ -50,7 +50,7 @@
     }, 0);
   }
   function ctx() { return { now: Date.now(), zone: zone(), defaultDuration: settings.defaultDuration, makeId: function () { return core().uid("ev"); } }; }
-  function colorOf(it) { return it.source === "task" ? TASK_COLOR : C.categoryInfo(it.category).color; }
+  function colorOf(it) { return it.source === "task" ? TASK_COLOR : it.color || C.categoryInfo(it.category).color; }
   function shortTime(t) { const h = Number(t.slice(0, 2)), m = t.slice(3); return ((h + 11) % 12 + 1) + (m === "00" ? "" : ":" + m) + (h < 12 ? "a" : "p"); }
   function dayName(date, opts) { return C.fmtDate(date, opts || { weekday: "long", month: "long", day: "numeric" }); }
 
@@ -97,9 +97,15 @@
   /* ---------------- what is on screen ---------------- */
 
   function sortItems(a, b) { return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || (a.startMin || 0) - (b.startMin || 0) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); }
+  // Time blocks from Strategy > Weekly, read-only. A block that holds a task is not listed (the task already is).
+  function planItems(from, to) {
+    const P = window.JarvisPlanStore, PW = window.JarvisPlanWeekLogic;
+    if (!P || !PW || !PW.calendarItems) return [];
+    try { P.init(); return PW.calendarItems({ blocks: P.all("blocks"), ingredients: P.all("ingredients") }, from, to); } catch (e) { return []; }
+  }
   function allItems(from, to) {
     const h = habits();
-    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : []);
+    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : [], planItems(from, to));
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
@@ -175,6 +181,7 @@
   function rowHtml(it) {
     const sub = [];
     if (it.source === "task") sub.push("Task");
+    else if (it.source === "plan") sub.push("Time block" + (it.categoryName ? " \u00b7 " + it.categoryName : ""));
     else {
       const kind = C.kindInfo(it.kind).label, cat = C.categoryInfo(it.category).label;
       if (it.kind !== "event" && kind !== cat) sub.push(kind);
@@ -374,12 +381,13 @@
   }
 
   const EXT = {
+    plan: { title: "Time block", where: "Strategy \u203a Weekly", nav: "navBtnStrategy", after: function () { const b = document.querySelector('#panel-strategy .sp-sub-nav [data-sp="weekly"]'); if (b) b.click(); }, note: "This is a time block from your weekly plan. Change or move it in Strategy, on the Weekly tab." },
     goal: { title: "Goal", where: "Habits \u203a Goals", nav: "navBtnHabits", sub: "habitsSubNavGoals", note: "This date comes from one of your personal goals. Change it in Habits." }
   };
   function externalTitle(it) { return (EXT[it.source] || EXT.goal).title; }
   function externalSheetHtml(m) {
     const it = m.item, x = EXT[it.source] || EXT.goal, canTick = false;
-    return '<div class="cal-field"><span class="cal-lab">' + esc(x.title) + '</span><p><strong>' + esc(it.title) + '</strong></p><p class="field-hint">' + esc(dayName(it.date)) + (it.completed ? " \u00b7 done" : "") + '</p></div>' +
+    return '<div class="cal-field"><span class="cal-lab">' + esc(x.title) + '</span><p><strong>' + esc(it.title) + '</strong></p><p class="field-hint">' + esc(dayName(it.date)) + (it.source === "plan" ? " \u00b7 " + esc(C.timeLabel(it.time) + " \u2013 " + C.timeLabel(it.endTime)) + (it.categoryName ? " \u00b7 " + esc(it.categoryName) : "") : "") + (it.completed ? " \u00b7 done" : "") + '</p></div>' +
       '<p class="field-hint">' + esc(x.note) + '</p>' +
       '<div class="cal-actions">' + (canTick ? '<button type="button" class="btn btn-primary" data-cal="ext-toggle">' + (it.completed ? "Mark not done" : "Mark done") + '</button>' : "") +
       '<button type="button" class="btn ' + (canTick ? "btn-secondary" : "btn-primary") + '" data-cal="ext-open">Open in ' + esc(x.where.split(" \u203a ")[0]) + '</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
@@ -389,7 +397,8 @@
     const x = EXT[it.source];
     if (!x) return;
     const b = $(x.nav); if (b) b.click();
-    const sub = $(x.sub); if (sub) sub.click();
+    const sub = x.sub ? $(x.sub) : null; if (sub) sub.click();
+    if (x.after) x.after();
   }
 
   function settingsFormHtml() {
@@ -700,7 +709,7 @@
     }
   }
   function openItem(it) {
-    if (it.source === "goal") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
+    if (it.source === "goal" || it.source === "plan") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
     if (it.source === "task") { modal = { kind: "task", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="task-toggle"]'); return; }
     openEdit(it); focusSoon("#calF_title");
   }

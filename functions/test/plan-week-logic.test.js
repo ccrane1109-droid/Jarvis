@@ -505,3 +505,21 @@ test("overlapping blocks are marked, whichever two overlap, and a block that onl
   const ids = blocks.map((b) => b.id + "|" + TODAY);
   assert.deepEqual([k[ids[0]], k[ids[1]], k[ids[2]]], ["block", "block", undefined]);
 });
+
+test("calendar items: plain blocks appear once, a block that holds a task is left out (the task is already there), repeats expand", () => {
+  let blocks = block([], { title: "Brand", ingredientId: "ing_gratiel", date: TODAY, start: "09:00", end: "10:30" }).blocks;
+  blocks = W.addBlock(blocks, { title: "Gym", ingredientId: "ing_workout", date: "2026-11-02", start: "06:00", end: "07:00", repeatFreq: "weekly", repeatDays: [1, 3] }, ctx({ ingredients: ING })).blocks;
+  const t = task("t1");
+  blocks = W.placeTask(blocks, "t1", { date: "2026-11-05", start: "13:00", end: "14:00", ingredientId: "ing_gratiel" }, [t], ctx({ ingredients: ING })).blocks;
+  const items = W.calendarItems({ blocks, ingredients: ING }, MON, "2026-11-08");
+  assert.deepEqual(items.map((i) => [i.title, i.date, i.time, i.endTime]).sort(), [["Brand", TODAY, "09:00", "10:30"], ["Gym", "2026-11-02", "06:00", "07:00"], ["Gym", TODAY, "06:00", "07:00"]].sort(), "the Brand block, and the Gym block on Monday and Wednesday: 3 items");
+  assert.ok(!items.some((i) => i.date === "2026-11-05"), "the block that holds task t1 is not listed: the task is");
+  const it = items[0];
+  assert.equal(it.source, "plan");
+  assert.equal(it.readOnly, true);
+  assert.equal(it.allDay, false);
+  assert.ok(it.key.startsWith("block:") && it.key.includes("@" + it.date), "a distinct key per day, so a repeating block is not one item");
+  assert.equal(new Set(items.map((i) => i.key)).size, items.length, "no two items share a key");
+  assert.equal(items.find((i) => i.title === "Gym").color, ING.find((i) => i.id === "ing_workout").color, "drawn in its category colour");
+  assert.deepEqual(W.calendarItems({ blocks, ingredients: ING }, "2026-12-01", "2026-12-07").filter((i) => i.title === "Brand"), [], "outside the range: nothing");
+});

@@ -415,3 +415,16 @@ test("nothing here changes what it is given", () => {
 });
 
 function mins(t) { return C.minutesOf(t); }
+
+test("free time: a time block from the weekly plan is time already spoken for, so no suggestion lands on it", () => {
+  const W = require("../../js/plan-week-logic.js");
+  const ING = W.addStarters([], ctx()).ingredients;
+  const blocks = W.addBlock([], { title: "Brand work", ingredientId: "ing_gratiel", date: TODAY, start: "12:00", end: "14:00" }, Object.assign(ctx(), { ingredients: ING })).blocks;
+  const planItems = W.calendarItems({ blocks, ingredients: ING }, TODAY, TODAY);
+  assert.equal(planItems.length, 1);
+  const events = build([ev("Meeting", TODAY, "11:00", "12:00")]);
+  const withBlock = A.board(itemsOf(events).concat(planItems), plan(), NOW).free(TODAY, 30).map((g) => [g.start, g.end]);
+  assert.deepEqual(withBlock, [[10 * 60 + 30, 11 * 60], [14 * 60, 17 * 60]], "12:00-14:00 is taken by the block, 11:00-12:00 by the meeting");
+  const without = A.board(itemsOf(events), plan(), NOW).free(TODAY, 30).map((g) => [g.start, g.end]);
+  assert.deepEqual(without, [[10 * 60 + 30, 11 * 60], [12 * 60, 17 * 60]], "without the block the afternoon is open");
+});

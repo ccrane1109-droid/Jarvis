@@ -161,6 +161,10 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <h1 class="hm-title" id="hmGreeting">Welcome back</h1>
       <p class="hm-date" id="hmDate"></p>
     </div>
+    <div class="card hm-card hidden" id="hmPlanCard" aria-labelledby="hmPlanTitle">
+      <div class="card-title-row"><h2 class="card-title" id="hmPlanTitle">Today's focus</h2><button type="button" class="btn btn-secondary hm-plan-open" data-open-strategy>Open Strategy</button></div>
+      <div id="hmPlanBody" class="hm-body"></div>
+    </div>
     <div class="card hm-card" aria-labelledby="hmScheduleTitle">
       <div class="card-title-row"><h2 class="card-title" id="hmScheduleTitle">Upcoming Schedule</h2><span class="hm-counts" id="hmCounts"></span></div>
       <div id="hmScheduleBody" class="hm-body"></div>
@@ -2649,6 +2653,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <p class="panel-subtitle">Connect your Shopify store and see how it's selling. Nothing here is made up: it only shows what Shopify tells your JARVIS server.</p>
     </div>
     <p id="bzLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <div id="bzGoals" class="card bz-goals hidden" aria-labelledby="bzGoalsTitle"></div>
     <div id="bzShopify"></div>
   </section>
 
@@ -3243,5 +3248,6 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/plan-breakdown-ui.js?v=80"></script>
 <script src="js/plan-week-ui.js?v=80"></script>
 <script src="js/plan-insights-ui.js?v=80"></script>
+<script src="js/plan-home-ui.js?v=80"></script>
 </body>
 </html>
