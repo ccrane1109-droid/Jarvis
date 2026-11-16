@@ -52,12 +52,12 @@ test("an ingredient needs a name and a colour; names are unique; the colour can 
   assert.equal(W.tint("junk", 0.2), "rgba(148,163,184,0.2)");
 });
 
-test("deleting an ingredient keeps its blocks (as 'no ingredient'), and undo restores it", () => {
+test("deleting a category keeps its blocks (as 'no category'), and undo restores it", () => {
   let blocks = block([], {}).blocks;
   const gone = W.removeIngredient(ING, "ing_gratiel", ctx()).ingredients;
   assert.equal(W.liveBlocks(blocks).length, 1);
   const st = W.weekStats({ weekStart: MON, today: TODAY, blocks, ingredients: gone, tasks: [] });
-  assert.equal(st.allocation[0].name, "No ingredient");
+  assert.equal(st.allocation[0].name, "No category");
   const back = W.restoreIngredient(gone, "ing_gratiel", ctx()).ingredients;
   assert.equal(W.weekStats({ weekStart: MON, today: TODAY, blocks, ingredients: back, tasks: [] }).allocation[0].name, "Gratiel");
 });
@@ -481,4 +481,27 @@ test("the weekly record keeps the two extra review questions; the monthly review
   assert.equal(W.reviewOf(m.reviews, "2026-12"), null);
   assert.equal(W.setReview([], "2026-13", {}, ctx()).ok, false);
   assert.equal(W.readers.reviews([{ id: "mo_2026-11", month: "2026-11" }, { id: "x" }, "junk"]).kept.length, 2);
+});
+
+test("one day at a glance: planned by category, taken and free minutes with overlaps counted once", () => {
+  let blocks = block([], { title: "Brand", ingredientId: "ing_gratiel", start: "09:00", end: "11:00" }).blocks;
+  blocks = block(blocks, { title: "Lecture", ingredientId: "ing_school", start: "10:00", end: "12:00" }).blocks;           // overlaps Brand by an hour
+  blocks = block(blocks, { title: "Run", ingredientId: "ing_workout", start: "17:00", end: "18:00" }).blocks;
+  const s = W.daySummary(TODAY, { blocks, ingredients: ING, settings: { dayStart: "08:00", dayEnd: "20:00", interval: 30 }, tasks: [], events: [] });
+  assert.equal(s.plannedMin, 300, "2 h + 2 h + 1 h of blocks");
+  assert.equal(s.takenMin, 240, "09:00-12:00 and 17:00-18:00: the shared hour counts once");
+  assert.equal(s.windowMin, 720);
+  assert.equal(s.freeMin, 480);
+  assert.deepEqual(s.rows.map((r) => [r.name, r.min]), [["Gratiel", 120], ["School", 120], ["Workout", 60]].sort((a, b) => b[1] - a[1]));
+  const empty = W.daySummary("2026-11-05", { blocks, ingredients: ING, settings: { dayStart: "08:00", dayEnd: "20:00", interval: 30 }, tasks: [], events: [] });
+  assert.deepEqual([empty.plannedMin, empty.takenMin, empty.freeMin, empty.rows.length], [0, 0, 720, 0]);
+});
+
+test("overlapping blocks are marked, whichever two overlap, and a block that only touches is not", () => {
+  let blocks = block([], { title: "A", start: "09:00", end: "10:00" }).blocks;
+  blocks = block(blocks, { title: "B", start: "09:30", end: "10:30" }).blocks;
+  blocks = block(blocks, { title: "C", start: "10:30", end: "11:00" }).blocks;                // starts exactly when B ends
+  const k = W.clashKeys({ blocks, ingredients: ING, events: [], tasks: [] }, TODAY, TODAY);
+  const ids = blocks.map((b) => b.id + "|" + TODAY);
+  assert.deepEqual([k[ids[0]], k[ids[1]], k[ids[2]]], ["block", "block", undefined]);
 });

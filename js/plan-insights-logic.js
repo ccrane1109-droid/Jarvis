@@ -188,7 +188,7 @@
       });
       if (!best) break;
       taken[best.task.id] = true;
-      const pick = Object.assign({}, best, { adjusted: bestScore });
+      const pick = Object.assign({}, best, { adjusted: bestScore, score: bestScore });   // the score shown is the one the listed reasons add up to
       if (bestScore !== best.score) pick.parts = best.parts.concat([{ label: "Another pick comes from the same milestone", points: bestScore - best.score }]);
       picks.push(pick);
     }

@@ -480,3 +480,13 @@ test("month tasks: a long task list stays fast", () => {
   assert.equal(ov.tasks.total, 3000);
   assert.ok(lists.inbox.items.length <= 12, "one page");
 });
+
+test("top three: the score shown always equals the listed reasons added up, including the spread-out adjustment", () => {
+  const pl = plan(), second = pl.add({ type: "milestone", title: "Second milestone", month: "2026-11", parentId: pl.pri.id });
+  const tasks = [task("a", { priority: "high" }), task("b", { priority: "high", date: "2026-11-05" }), task("c", { priority: "medium", date: "2026-11-06" })];
+  const lk = links([["a", pl.ms.id], ["b", pl.ms.id], ["c", second.id]], pl.get());
+  const picks = I.topThreePicks(context({ nodes: pl.get(), tasks, links: lk }));
+  assert.equal(picks.length, 3);
+  picks.forEach((p) => assert.equal(p.parts.reduce((s, x) => s + x.points, 0), p.score, p.task.id + ": the points listed add up to the score shown"));
+  assert.ok(picks.some((p) => p.parts.some((x) => /same milestone/.test(x.label))), "the second pick from one milestone carries a visible minus");
+});

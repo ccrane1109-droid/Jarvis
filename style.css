@@ -4697,3 +4697,24 @@ span.sp-trow-t { cursor: default; }
 
 #spSheetForm input[type="search"], .sp-filters input[type="search"] { min-height: 44px; }
 .sp-how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--accent); font-size: 14px; }
+
+/* Weekly 2.0 */
+.pw-seg { display: flex; gap: 2px; height: 28px; margin: 4px 0 6px; }
+.pw-seg-part { display: flex; align-items: center; min-width: 4px; border-radius: 4px; overflow: hidden; }
+.pw-seg-n { padding-left: 6px; font-size: 12px; font-weight: 700; color: #06101f; white-space: nowrap; }
+.pw-seg-legend { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; }
+.pw-seg-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.pw-open { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pw-open li { display: flex; flex-direction: column; }
+.pw-day { margin: 10px 0; padding: 10px 12px; background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+.pw-day .sp-h3 { margin: 0 0 2px; }
+.pw-day-rows { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pw-day-rows li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.pw-key { font-size: 12px; }
+.pw-b-tag { display: inline-block; padding: 0 5px; border-radius: 4px; background: #e9ecf3; color: #0a0e14; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+.pw-block.is-task { border-left-style: double; border-left-width: 5px; }
+.pw-block.is-clash { outline: 2px solid var(--red); outline-offset: -1px; }
+.pw-b-clashtag { color: #ffb4b4; font-weight: 700; }
+.sp-why { margin-top: 2px; } .sp-why > summary { min-height: 44px; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--accent); }
+.sp-why-list { list-style: none; margin: 0 0 6px; padding: 0 0 0 4px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.sp-why-pts { display: inline-block; min-width: 34px; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; } .sp-why-pts.is-neg { color: var(--yellow); }
