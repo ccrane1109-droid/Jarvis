@@ -490,3 +490,29 @@ test("top three: the score shown always equals the listed reasons added up, incl
   picks.forEach((p) => assert.equal(p.parts.reduce((s, x) => s + x.points, 0), p.score, p.task.id + ": the points listed add up to the score shown"));
   assert.ok(picks.some((p) => p.parts.some((x) => /same milestone/.test(x.label))), "the second pick from one milestone carries a visible minus");
 });
+
+/* ---------------- time allocation ---------------- */
+
+test("time allocation groups categories by kind; unlogged is null, never zero; workouts count once", () => {
+  let blocks = W.addBlock([], { title: "Brand", ingredientId: "ing_gratiel", date: "2026-11-02", start: "09:00", end: "11:00" }, ctx0({ ingredients: ING })).blocks;
+  blocks = W.addBlock(blocks, { title: "Quiz prep", ingredientId: "ing_studying", date: "2026-11-03", start: "19:00", end: "20:30" }, ctx0({ ingredients: ING })).blocks;
+  blocks = W.addBlock(blocks, { title: "Lift", ingredientId: "ing_workout", date: "2026-11-02", start: "06:00", end: "07:00" }, ctx0({ ingredients: ING })).blocks;
+  blocks = W.addBlock(blocks, { title: "Chill", ingredientId: "ing_rest", date: "2026-11-03", start: "21:00", end: "22:00" }, ctx0({ ingredients: ING })).blocks;
+  blocks = W.addBlock(blocks, { title: "Church", ingredientId: "ing_personal", date: "2026-11-01", start: "10:00", end: "11:00" }, ctx0({ ingredients: ING })).blocks;       // Sunday of the week before
+  const base = context({ blocks });
+  let a = I.timeAllocation(base, MON);
+  const g = (k) => a.groups.find((x) => x.key === k);
+  assert.deepEqual([g("gratiel").plannedMin, g("study").plannedMin, g("workout").plannedMin, g("personal").plannedMin, g("school").plannedMin], [120, 90, 60, 60, 0], "personal and rest are one group; last Sunday is not in this week");
+  assert.equal(g("gratiel").loggedMin, null, "nothing logged: not tracked");
+  assert.equal(g("workout").loggedMin, null);
+  // a logged workout session in Workouts (45 min on Monday) and 60 logged on the Workout block the same day: still one hour, not 105
+  const lifting = blocks.find((b) => b.title === "Lift");
+  const withLog = W.logWork(blocks, lifting.id, "2026-11-02", 60, ctx0()).blocks;
+  a = I.timeAllocation(context({ blocks: withLog, workouts: [{ id: "w1", date: "2026-11-02", duration: 45 }] }), MON);
+  assert.equal(a.groups.find((x) => x.key === "workout").loggedMin, 60, "the larger of the two, never added");
+  assert.equal(a.groups.find((x) => x.key === "gratiel").loggedMin, null, "other groups stay not tracked");
+  const series = I.allocationSeries(base, 3, "gratiel");
+  assert.deepEqual(series.map((x) => x.weekStart), ["2026-10-19", "2026-10-26", MON]);
+  assert.deepEqual(series.map((x) => x.plannedMin), [0, 0, 120]);
+  assert.deepEqual(series.map((x) => x.loggedMin), [null, null, null]);
+});

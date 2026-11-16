@@ -266,6 +266,28 @@
     return out;
   }
   // Money by month for the given month keys: null where you entered nothing.
+  // Time by kind of use, for one week: Gratiel, studying, exercise, school, personal and rest, everything else. loggedMin is null (not tracked) when
+  // none of the categories in the group has any time logged: never 0 for "we didn't write it down". Workout sessions you logged in Workouts are
+  // included once (see timeByCategory).
+  const KIND_GROUPS = [["gratiel", "Gratiel", ["gratiel"]], ["study", "Studying", ["study"]], ["workout", "Exercise", ["workout"]], ["school", "School", ["school"]], ["personal", "Personal and rest", ["personal", "rest"]], ["other", "Everything else", ["other", "none"]]];
+  function timeAllocation(ctx, ws) {
+    const tm = timeByCategory(ctx, ws, PL.addDays(ws, 6));
+    const groups = KIND_GROUPS.map(function (g) {
+      const rows = tm.rows.filter(function (r) { return g[2].indexOf(r.kind) !== -1; });
+      const logged = rows.filter(function (r) { return r.loggedMin !== null; });
+      return { key: g[0], label: g[1], plannedMin: rows.reduce(function (sum, r) { return sum + r.plannedMin; }, 0), loggedMin: logged.length ? logged.reduce(function (sum, r) { return sum + r.loggedMin; }, 0) : null };
+    });
+    return { weekStart: ws, groups: groups, plannedMin: tm.plannedMin, loggedMin: tm.loggedMin };
+  }
+  // One group's planned and logged minutes for each of the last n weeks (oldest first).
+  function allocationSeries(ctx, n, key) {
+    const out = [], cur = W.mondayOf(ctx.today);
+    for (let i = (n || 8) - 1; i >= 0; i--) {
+      const ws = PL.addDays(cur, -7 * i), a = timeAllocation(ctx, ws), g = a.groups.filter(function (x) { return x.key === key; })[0] || { plannedMin: 0, loggedMin: null };
+      out.push({ weekStart: ws, plannedMin: g.plannedMin, loggedMin: g.loggedMin });
+    }
+    return out;
+  }
   function financeSeries(periods, months) {
     return months.map(function (mk) {
       const p = PL.periodOf(periods, "month", mk) || {};
@@ -513,6 +535,6 @@
   return {
     categoryKind: categoryKind, workoutMinutesByDate: workoutMinutesByDate, timeByCategory: timeByCategory, gratielMinutes: gratielMinutes, freeMinutes: freeMinutes,
     rankTasks: rankTasks, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
-    financeSeries: financeSeries, lastMonths: lastMonths, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, monthOverview: monthOverview, monthOutcomes: monthOutcomes, monthTaskLists: monthTaskLists, proposals: proposals, hours: hours
+    financeSeries: financeSeries, lastMonths: lastMonths, timeAllocation: timeAllocation, allocationSeries: allocationSeries, KIND_GROUPS: KIND_GROUPS, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, monthOverview: monthOverview, monthOutcomes: monthOutcomes, monthTaskLists: monthTaskLists, proposals: proposals, hours: hours
   };
 });

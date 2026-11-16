@@ -43,6 +43,11 @@
     return { max: top, step: step, ticks: ticks };
   }
 
+  // Which x labels fit: every k-th, counted back from the latest so the newest one always shows.
+  function labelEvery(labels, band) {
+    const longest = labels.reduce(function (m, l) { return Math.max(m, String(l).length); }, 1);
+    return Math.max(1, Math.ceil((longest * 6.6 + 6) / Math.max(1, band)));
+  }
   function legend(series) {
     if (series.length < 2) return "";
     return '<ul class="viz-legend">' + series.map(function (s) { return '<li><span class="viz-key" style="background:' + esc(s.color) + '" aria-hidden="true"></span>' + esc(s.name) + '</li>'; }).join("") + '</ul>';
@@ -51,7 +56,7 @@
     const rows = spec.labels.map(function (lab, i) {
       return '<tr><th scope="row">' + esc(lab) + '</th>' + spec.series.map(function (s) { return '<td>' + (isNum(s.values[i]) ? esc(fmt(s.values[i])) : '<span class="viz-na">not tracked</span>') + '</td>'; }).join("") + '</tr>';
     }).join("");
-    return '<details class="viz-table"><summary>Show the numbers</summary><table><caption class="visually-hidden">' + esc(spec.title) + '</caption><thead><tr><th scope="col"></th>' + spec.series.map(function (s) { return '<th scope="col">' + esc(s.name) + '</th>'; }).join("") + '</tr></thead><tbody>' + rows + '</tbody></table></details>';
+    return '<details class="viz-table"><summary>Show the numbers</summary><table><caption class="visually-hidden">' + esc(spec.title) + '</caption><thead><tr><th scope="col"><span class="visually-hidden">Period</span></th>' + spec.series.map(function (s) { return '<th scope="col">' + esc(s.name) + '</th>'; }).join("") + '</tr></thead><tbody>' + rows + '</tbody></table></details>';
   }
   // What the tooltip shows for one position: the value first, the series name after it.
   function tipFor(spec, fmt, i) {
@@ -99,7 +104,7 @@
     const fmt = spec.format || function (v) { return String(v); };
     if (!hasAny(spec)) return empty(spec);
     const H = spec.height || 180, f = frame(spec, fmt, H), n = spec.labels.length, k = spec.series.length, band = f.plotW / n;
-    const gap = 2, bw = Math.max(4, Math.min(24, (band * 0.72 - gap * (k - 1)) / k)), groupW = bw * k + gap * (k - 1);
+    const gap = 2, bw = Math.max(4, Math.min(24, (band * 0.72 - gap * (k - 1)) / k)), groupW = bw * k + gap * (k - 1), every = labelEvery(spec.labels, band);
     let svg = f.grid + '<line class="viz-axis" x1="' + M.left + '" x2="' + (W - M.right) + '" y1="' + f.base + '" y2="' + f.base + '"/>';
     for (let i = 0; i < n; i++) {
       const cx = M.left + band * i + band / 2, x0 = cx - groupW / 2;
@@ -111,7 +116,7 @@
         col += '<path class="viz-bar" d="' + colPath(x, f.base - h, bw, h) + '" fill="' + esc(s.color) + '"/>';
         if (k === 1 && n <= 7 && band >= 36 && v > 0) col += '<text class="viz-val" x="' + r1(x + bw / 2) + '" y="' + r1(Math.max(M.top + 10, f.base - h - 4)) + '" text-anchor="middle">' + esc(fmt(v)) + '</text>';
       });
-      svg += col + '</g><text class="viz-xlab" x="' + r1(cx) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(spec.labels[i]) + '</text>';
+      svg += col + '</g>' + ((n - 1 - i) % every === 0 ? '<text class="viz-xlab" x="' + r1(cx) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(spec.labels[i]) + '</text>' : "");
     }
     svg += referenceLine(spec, fmt, f);
     return wrap(spec, svg, fmt, "bars");
@@ -123,8 +128,8 @@
     const H = spec.height || 180, f = frame(spec, fmt, H), n = spec.labels.length, step = n > 1 ? f.plotW / (n - 1) : 0;
     const xAt = function (i) { return n > 1 ? M.left + step * i : M.left + f.plotW / 2; };
     let svg = f.grid + '<line class="viz-axis" x1="' + M.left + '" x2="' + (W - M.right) + '" y1="' + f.base + '" y2="' + f.base + '"/>';
-    const every = n > 8 ? Math.ceil(n / 6) : 1;
-    for (let i = 0; i < n; i++) if (i % every === 0 || i === n - 1) svg += '<text class="viz-xlab" x="' + r1(xAt(i)) + '" y="' + (H - 6) + '" text-anchor="' + (i === 0 && n > 1 ? "start" : i === n - 1 && n > 1 ? "end" : "middle") + '">' + esc(spec.labels[i]) + '</text>';
+    const every = labelEvery(spec.labels, n > 1 ? step : f.plotW);
+    for (let i = 0; i < n; i++) if ((n - 1 - i) % every === 0) svg += '<text class="viz-xlab" x="' + r1(xAt(i)) + '" y="' + (H - 6) + '" text-anchor="' + (i === n - 1 && n > 1 ? "end" : i === 0 && n > 1 && every === 1 ? "start" : "middle") + '">' + esc(spec.labels[i]) + '</text>';
     svg += referenceLine(spec, fmt, f);
     spec.series.forEach(function (s) {
       let seg = [], last = -1;

@@ -4227,8 +4227,10 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .sp-scope .badge, .sp-sheet .badge { font-size: 13px; }
 .sp-scope .badge-accent, .sp-sheet .badge-accent { color: #bcd3ff; }
 
-.sp-sub-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 6px; overflow-x: visible; padding-right: 0; }
-.sp-sub-nav .sub-nav-btn { margin-right: 0; min-height: 44px; padding: 8px 4px; text-align: center; font-size: 15px; }
+.sp-sub-nav { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 2px; overflow-x: visible; padding-right: 0; }
+.sp-sub-nav .sub-nav-btn { margin-right: 0; min-height: 44px; padding: 8px 2px; text-align: center; font-size: 13px; }
+@media (max-width: 359px) { .sp-sub-nav .sub-nav-btn { font-size: 12px; padding: 8px 1px; } }
+@media (min-width: 420px) { .sp-sub-nav .sub-nav-btn { font-size: 15px; padding: 8px 4px; } }
 @media (min-width: 640px) { .sp-sub-nav { display: flex; gap: 6px; } .sp-sub-nav .sub-nav-btn { margin-right: 18px; } }
 
 .sp-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
@@ -4718,3 +4720,17 @@ span.sp-trow-t { cursor: default; }
 .sp-why { margin-top: 2px; } .sp-why > summary { min-height: 44px; display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--accent); }
 .sp-why-list { list-style: none; margin: 0 0 6px; padding: 0 0 0 4px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .sp-why-pts { display: inline-block; min-width: 34px; font-weight: 700; color: var(--green); font-variant-numeric: tabular-nums; } .sp-why-pts.is-neg { color: var(--yellow); }
+
+/* Insights tab */
+.sp-prows { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sp-prow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; width: 100%; min-height: 48px; padding: 8px 10px; text-align: left; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; }
+.sp-prow-t { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.sp-prow-p { font-weight: 700; font-size: 14px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.sp-prow .sp-bar { grid-column: 1 / -1; }
+.sp-prow-s { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; }
+.sp-ins-note { font-size: 12px; margin: 6px 0 0; }
+.sp-ins-pick { margin: 10px 0 0; max-width: 320px; } .sp-ins-pick select { min-height: 44px; width: 100%; }
+.sp-alloc { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sp-alloc li { display: grid; gap: 2px; }
+.sp-alloc-name { font-weight: 600; font-size: 14px; }
+.sp-alloc-n { font-size: 13px; color: var(--text-dim); }
