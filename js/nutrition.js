@@ -2188,12 +2188,12 @@
            '<div class="stat-box"><span class="stat-value">' + avg.fruitVeg + '</span><span class="stat-label">Fruit/veg servings</span></div>' +
            '<div class="stat-box"><span class="stat-value">' + avg.score + '</span><span class="stat-label">Nutrition score</span></div>' +
          '</div>')
-      : '<p class="field-hint">Log a few days to see averages here.</p>';
+      : '<p class="field-hint">Log a few days to see averages.</p>';
 
     renderNutriLineChart("historyCalorieTrend", buildTrendPoints(historyRangeDays, "calories"),
-      { ariaLabel: "Calorie trend", emptyMessage: "Log at least two days in this range to see a calorie trend." });
+      { ariaLabel: "Calorie trend", emptyMessage: "Log two days to see a calorie trend." });
     renderNutriLineChart("historyProteinTrend", buildTrendPoints(historyRangeDays, "protein"),
-      { ariaLabel: "Protein trend", emptyMessage: "Log at least two days in this range to see a protein trend." });
+      { ariaLabel: "Protein trend", emptyMessage: "Log two days to see a protein trend." });
 
     renderHistoryDetail();
   }

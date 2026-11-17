@@ -81,7 +81,7 @@
       const nowIn = years.some(function (y) { return String(y) === today.slice(0, 4); });
       let h = '<div class="sp-head"><h2 class="sp-h2" data-focus-top>Three-year roadmap</h2><div class="sp-head-btns"><button type="button" class="btn btn-secondary" data-act="breakdown">Break down a goal</button><button type="button" class="btn btn-secondary" data-act="templates">Templates</button><button type="button" class="btn btn-secondary" data-act="plan-settings">Settings</button></div></div>';
       h += A.section("yr-vision", "Your vision", (s.vision ? '<p class="sp-vision-text">' + esc(s.vision) + '</p>' : '<p class="sp-dim">Write where you want to be in three years. It stays at the top of your roadmap.</p>') +
-        '<button type="button" class="btn btn-secondary" data-act="plan-settings">' + (s.vision ? "Edit vision" : "Write your vision") + '</button>', { open: true, summary: s.vision ? esc(s.vision.length > 60 ? s.vision.slice(0, 57) + "…" : s.vision) : "not written yet" });
+        '<button type="button" class="btn btn-secondary" data-act="plan-settings">' + (s.vision ? "Edit vision" : "Write your vision") + '</button>', { open: !s.vision, summary: s.vision ? esc(s.vision.length > 60 ? s.vision.slice(0, 57) + "…" : s.vision) : "not written yet" });
       h += '<ol class="sp-rail" aria-label="Timeline from Year 1 to Year 3">' + years.map(function (y, i) { return timelineItem(m, y, i, today); }).join("") + '</ol>';
       h += '<div class="sp-roadmap">' + years.map(function (y, i) { return yearSection(m, y, i, today, !nowIn && i === 0); }).join("") + '</div>';
       h += goalsPanel(m);

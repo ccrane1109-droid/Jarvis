@@ -4994,3 +4994,36 @@ span.sp-trow-t { cursor: default; }
 .sp-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; margin: 0 0 8px; border: 1px solid var(--card-border); border-radius: 12px; }
 .sp-next-t { margin: 0; flex: 1 1 200px; }
 .sp-next-btns { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Universal pass: readable text and 44 px targets in Workout, Nutrition, Habits, Calendar and Strategy */
+#panel-workout .btn, #panel-nutrition .btn, #panel-habits .btn, #panel-calendar .btn, #panel-strategy .btn,
+#panel-workout .btn-icon, #panel-nutrition .btn-icon, #panel-habits .btn-icon, #panel-calendar .btn-icon,
+.workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn { min-height: 44px; }
+#panel-habits input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-habits select, #panel-nutrition select, #panel-nutrition input:not([type=checkbox]):not([type=radio]):not([type=hidden]) { min-height: 44px; }
+#panel-habits .task-check-btn, #panel-habits .habit-check-btn, #panel-habits .task-menu-btn, #panel-habits .habit-edit-btn, #panel-habits .habit-delete-btn,
+#panel-nutrition .food-item-menu-btn { min-width: 44px; min-height: 44px; }
+.cal-wk-head { min-height: 44px; display: inline-flex; align-items: center; }
+.badge, .day-pill-label, .stat-sub, .dc-optional, .cal-scope th, #panel-habits th, #panel-habits .field-hint-sm { font-size: 12px; }
+#panel-habits summary .dc-optional, #panel-habits summary small { font-size: 12px; }
+.sp-tile-l, .sp-tile-s, .pw-b-time, .pw-b-work, .pw-b-tag, .pw-hour, .pw-hl { font-size: 12px; }
+
+/* Universal pass, round 2: remaining small text and the 7D / 30D switch */
+.gr-fold > .card > .card-title, .gr-fold > .card > .card-title-row > .card-title { font-size: inherit; position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.gr-fold > .card > .card-title-row { position: relative; }
+.dc-heat-head span, .pw-axis span, .pw-busy { font-size: 12px; }
+.dc-heat-d { font-size: 12px; }
+#panel-nutrition .segmented-btn, #panel-habits .segmented-btn { min-height: 44px; }
+@media (max-width: 380px) {
+  .nutrition-sub-nav { gap: 4px; }
+  .nutrition-sub-nav-btn { margin-right: 8px; }
+  .cal-views-row { gap: 4px; }
+  .cal-view-btn { min-width: 0; padding: 0 9px; }
+}
+#panel-workout input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-workout select { min-height: 44px; }
+.pw-head-n { font-size: 12px; }
+
+/* Nutrition History: a flat list, not boxes */
+#nutrition-history > .card { background: none; border: 0; box-shadow: none; border-radius: 0; padding: 12px 0; border-top: 1px solid var(--card-border); }
+#nutrition-history > .sm-pills + .card { border-top: 0; padding-top: 4px; }
+#nutrition-history .empty-state { border: 0; background: none; padding: 4px 0; text-align: left; }
+#nutrition-history .card-title { font-size: 15px; margin-bottom: 6px; }

@@ -1173,6 +1173,8 @@
     if (m && m.keyTask.text) { title.textContent = m.keyTask.text; title.classList.remove("empty"); }
     else if (items.length) { title.textContent = "No main win chosen yet. First on the list: " + items[0].text; title.classList.add("empty"); }
     else { title.textContent = "Not planned yet"; title.classList.add("empty"); }
+    // With no plan today, "Next up" already says "Start with a morning plan", so the main-win card is left out instead of saying "not planned" a second and third time.
+    $("dcOverview").classList.toggle("hidden", selected === "today" && !m && !items.length);
     $("dcOverviewCount").textContent = done + " of " + items.length + " done";
     $("dcOverviewBar").parentNode.classList.toggle("hidden", !items.length);
     $("dcOverviewFill").style.width = items.length ? Math.round(100 * done / items.length) + "%" : "0%";
