@@ -120,7 +120,6 @@
       <button type="button" class="main-nav-btn" data-target="panel-nutrition" role="tab" aria-selected="false" aria-controls="panel-nutrition" id="navBtnNutrition">Nutrition</button>
       <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
       <button type="button" class="main-nav-btn" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
-      <button type="button" class="main-nav-btn" data-target="panel-discipline" role="tab" aria-selected="false" aria-controls="panel-discipline" id="navBtnDiscipline">Discipline</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-learning" role="tab" aria-selected="false" aria-controls="panel-learning" id="navBtnLearning">Learning</button>
       <button type="button" class="main-nav-btn" data-target="panel-strategy" role="tab" aria-selected="false" aria-controls="panel-strategy" id="navBtnStrategy">Strategy</button>
@@ -1716,43 +1715,35 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
   <!-- ===================== HABITS ===================== -->
   <section id="panel-habits" class="tab-panel" role="tabpanel" aria-labelledby="navBtnHabits">
-    <div class="panel-header">
+    <div class="panel-header panel-header-row">
       <h1>Habits</h1>
-      <p class="panel-subtitle">Tasks, habits, and goals — small consistent actions compound over time.</p>
-    </div>
-
-    <!-- ---------- Today Overview (always visible) ---------- -->
-    <div class="card today-overview-card">
-      <div class="card-title-row">
-        <h2 class="card-title" id="todayOverviewDate">Today</h2>
-        <span class="badge badge-neutral" id="todayOverviewStreak">0 day streak</span>
-      </div>
-      <div class="today-overview-body">
-        <div class="calorie-ring today-progress-ring" id="todayProgressRing">
-          <div class="calorie-ring-inner">
-            <span class="calorie-ring-line1" id="todayProgressPct">0%</span>
-            <span class="calorie-ring-line2">today</span>
-          </div>
-        </div>
-        <div class="today-overview-stats">
-          <div class="stat-box"><span class="stat-value" id="todayTasksStat">0 / 0</span><span class="stat-label">Tasks completed</span></div>
-          <div class="stat-box"><span class="stat-value" id="todayHabitsStat">0 / 0</span><span class="stat-label">Habits completed</span></div>
-        </div>
-      </div>
+      <button type="button" class="btn-icon sm-more" id="habitsMenuBtn" aria-haspopup="dialog" aria-label="Habits menu: reminders, wake check and settings"><span aria-hidden="true">&#8943;</span></button>
     </div>
 
     <nav class="sub-nav habits-sub-nav" role="tablist" aria-label="Habits sections">
       <button type="button" class="habits-sub-nav-btn active" data-subtarget="habits-today" role="tab" aria-selected="true" aria-controls="habits-today" id="habitsSubNavToday">Today</button>
-      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-plan" role="tab" aria-selected="false" aria-controls="habits-plan" id="habitsSubNavPlan">Plan</button>
-      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-wake" role="tab" aria-selected="false" aria-controls="habits-wake" id="habitsSubNavWake">Wake</button>
-      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-week" role="tab" aria-selected="false" aria-controls="habits-week" id="habitsSubNavWeek">Week</button>
-      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-goals" role="tab" aria-selected="false" aria-controls="habits-goals" id="habitsSubNavGoals">Goals</button>
-      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-stats" role="tab" aria-selected="false" aria-controls="habits-stats" id="habitsSubNavStats">Stats</button>
-      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-reminders" role="tab" aria-selected="false" aria-controls="habits-reminders" id="habitsSubNavReminders">Reminders</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-routines" role="tab" aria-selected="false" aria-controls="habits-routines" id="habitsSubNavRoutines">Routines</button>
+      <button type="button" class="habits-sub-nav-btn" data-subtarget="habits-progress" role="tab" aria-selected="false" aria-controls="habits-progress" id="habitsSubNavProgress">Progress</button>
+      <!-- Screens reached from the three above or from the menu: data-parent names the tab that stays lit. -->
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-today" data-subtarget="habits-plan" role="tab" aria-selected="false" aria-controls="habits-plan" id="habitsSubNavPlan">Plan</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-routines" data-subtarget="habits-wake" role="tab" aria-selected="false" aria-controls="habits-wake" id="habitsSubNavWake">Wake</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-progress" data-subtarget="habits-goals" role="tab" aria-selected="false" aria-controls="habits-goals" id="habitsSubNavGoals">Goals</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-routines" data-subtarget="habits-reminders" role="tab" aria-selected="false" aria-controls="habits-reminders" id="habitsSubNavReminders">Reminders</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-today" data-subtarget="habits-today" role="tab" aria-selected="false" aria-controls="habits-today" id="disciplineSubNavToday">Discipline today</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-routines" data-subtarget="discipline-program" role="tab" aria-selected="false" aria-controls="discipline-program" id="disciplineSubNavProgram">Program</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-progress" data-subtarget="habits-progress" role="tab" aria-selected="false" aria-controls="habits-progress" id="disciplineSubNavTrends">Trends</button>
+      <button type="button" class="habits-sub-nav-btn" hidden data-parent="habits-routines" data-subtarget="discipline-setup" role="tab" aria-selected="false" aria-controls="discipline-setup" id="disciplineSubNavSetup">Discipline settings</button>
     </nav>
 
-    <!-- ---------- Sub-panel: Today ---------- -->
+    <!-- ---------- Today: the day at a glance, the main priority, habits, tasks, reflection ---------- -->
     <div id="habits-today" class="habits-sub-panel active" role="tabpanel" aria-labelledby="habitsSubNavToday">
+      <div class="hb-strip" id="todayOverviewCard" aria-label="Today at a glance">
+        <h2 class="hb-strip-date" id="todayOverviewDate">Today</h2>
+        <span class="badge badge-accent" id="todayOverviewStreak" hidden>0 day streak</span>
+        <p class="hb-strip-counts"><span id="todayHabitsStat">0 / 0</span> habits<span class="hb-sep" aria-hidden="true"> &middot; </span><span id="todayTasksStat">0 / 0</span> tasks</p>
+        <div hidden><div class="calorie-ring today-progress-ring" id="todayProgressRing"><div class="calorie-ring-inner"><span class="calorie-ring-line1" id="todayProgressPct">0%</span></div></div></div>
+      </div>
+
       <div class="card dc-strip hidden" id="wkStrip" aria-labelledby="wkStripTitle">
         <div class="card-title-row">
           <h2 class="card-title" id="wkStripTitle">Wake check</h2>
@@ -1761,14 +1752,26 @@ npx firebase-tools deploy --only firestore:rules</pre>
         <p class="dc-line" id="wkStripText"></p>
       </div>
 
-      <div class="card dc-strip hidden" id="habitsDisciplineCard" aria-labelledby="habitsDisciplineTitle">
-        <div class="card-title-row">
-          <h2 class="card-title" id="habitsDisciplineTitle">Discipline check-in</h2>
-          <button type="button" class="btn-icon" id="habitsOpenDiscipline">Open Discipline</button>
+      <div class="card dc-overview" id="dcOverview" aria-labelledby="dcOverviewTitle">
+        <div class="dc-next-kicker" id="dcOverviewKicker">Today's main win</div>
+        <div class="dc-ov-win" id="dcOverviewTitle">Not planned yet</div>
+        <div class="dc-ov-progress">
+          <div class="dc-track" id="dcOverviewBar" role="progressbar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" aria-label="Priorities done"><div class="dc-fill" id="dcOverviewFill" style="width:0%"></div></div>
+          <span class="dc-ov-count" id="dcOverviewCount">No plan yet</span>
         </div>
-        <p class="dc-coach" id="habitsCoachText"></p>
-        <p class="field-hint" id="habitsCoachLeft"></p>
-        <p class="dc-line" id="habitsDisciplinePlan"></p>
+        <div class="dc-ov-chips" id="dcOverviewChips"></div>
+      </div>
+
+      <div class="card dc-next hidden" id="dcNextCard" aria-live="polite">
+        <div class="dc-next-kicker">Next up</div>
+        <div class="dc-next-title" id="dcNextTitle"></div>
+        <p class="dc-next-text" id="dcNextText"></p>
+        <p class="dc-next-why" id="dcNextWhy"></p>
+        <div class="dc-next-actions" id="dcNextActions"></div>
+        <details class="dc-more hidden" id="dcNextMore">
+          <summary>Something else instead</summary>
+          <div class="dc-next-actions" id="dcNextMoreActions"></div>
+        </details>
       </div>
 
       <div class="card">
@@ -1778,6 +1781,14 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <button type="button" class="btn-icon" id="daySelectorNextWeekBtn" aria-label="Next week">&rarr;</button>
         </div>
         <button type="button" class="btn-icon" id="daySelectorTodayBtn" style="margin-top:8px;">Jump to Today</button>
+      </div>
+
+      <div class="card" id="habitsDayCard">
+        <h2 class="card-title" id="habitsDayTitle">Habits</h2>
+        <div id="habitsDayNote" class="hb-note hidden" role="status"></div>
+        <div id="todayHabitsList" class="habit-card-grid">
+          <div class="empty-state">No habits yet — add one in the Week tab.</div>
+        </div>
       </div>
 
       <div class="card">
@@ -1838,427 +1849,11 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
       </div>
 
-      <div class="card" id="habitsDayCard">
-        <h2 class="card-title" id="habitsDayTitle">Habits</h2>
-        <div id="habitsDayNote" class="hb-note hidden" role="status"></div>
-        <div id="todayHabitsList" class="habit-card-grid">
-          <div class="empty-state">No habits yet — add one in the Week tab.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Plan (a section for each hour of the day) ---------- -->
-    <div id="habits-plan" class="habits-sub-panel dp-scope" role="tabpanel" aria-labelledby="habitsSubNavPlan">
-      <div class="card dp-head">
-        <div class="dp-nav">
-          <button type="button" class="btn-icon dp-step" id="dpPrev" aria-label="Previous day">&larr;</button>
-          <div class="dp-when">
-            <h2 class="card-title dp-title" id="dpTitle">Today</h2>
-            <p class="dp-date" id="dpDate"></p>
-          </div>
-          <button type="button" class="btn-icon dp-step" id="dpNext" aria-label="Next day">&rarr;</button>
-        </div>
-        <p class="dp-summary" id="dpSummary"></p>
-        <button type="button" class="btn-icon hidden" id="dpToday">Jump to today</button>
-      </div>
-
-      <div class="card dp-pool hidden" id="dpPoolCard" aria-labelledby="dpPoolTitle">
-        <h2 class="card-title" id="dpPoolTitle">Not scheduled yet</h2>
-        <p class="field-hint">Tasks for this day that have no time. Pick an hour to put one on the plan.</p>
-        <div id="dpPool" class="dp-pool-list"></div>
-      </div>
-
-      <div class="card dp-day">
-        <div id="dpHours" class="dp-hours"></div>
-      </div>
-
-      <div id="dpUndo" class="dp-undo hidden" role="status"></div>
-      <p id="dpLive" class="visually-hidden" role="status" aria-live="polite"></p>
-    </div>
-
-    <!-- ---------- Sub-panel: Week (Habit History + manage habits) ---------- -->
-    <div id="habits-week" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavWeek">
-      <div class="card">
-        <div class="card-title-row">
-          <h2 class="card-title">Habit History</h2>
-          <div class="week-nav-row">
-            <button type="button" class="btn-icon" id="historyPrevWeekBtn" aria-label="Previous week">&larr;</button>
-            <span class="field-hint" id="historyWeekLabel"></span>
-            <button type="button" class="btn-icon" id="historyNextWeekBtn" aria-label="Next week">&rarr;</button>
-          </div>
-        </div>
-        <div id="habitHistoryGrid" class="habit-history-grid-wrap">
-          <div class="empty-state">No habits yet — add one below.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title" id="habitFormTitle">Add a Habit</h2>
-        <p class="field-hint">Leave "Daily target" at 1 for a simple check-off habit, or raise it for something you do several times a day (e.g. 8 cups of water).</p>
-        <form id="habitForm" class="stacked-form" novalidate>
-          <div class="form-row two-col">
-            <div>
-              <label for="habitName">Habit name</label>
-              <input type="text" id="habitName" name="habitName" placeholder="e.g. Drink Water" required maxlength="60">
-            </div>
-            <div>
-              <label for="habitTargetDays">Target days / week</label>
-              <input type="number" id="habitTargetDays" name="habitTargetDays" min="1" max="7" step="1" value="7">
-            </div>
-          </div>
-          <div class="form-row">
-            <label for="habitDailyTarget">Daily target / count</label>
-            <input type="number" id="habitDailyTarget" name="habitDailyTarget" min="1" max="50" step="1" value="1">
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="habitSubmitBtn">Add Habit</button>
-            <button type="button" class="btn btn-secondary hidden" id="habitFormCancelBtn">Cancel</button>
-          </div>
-        </form>
-        <div id="habitManageList" class="item-list">
-          <div class="empty-state">No habits yet. Add one above to start tracking.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Goals ---------- -->
-    <div id="habits-goals" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavGoals">
-      <div class="card strategy-hint">
-        <p>Planning bigger than personal goals? The Strategy tab links a three-year vision to yearly objectives, quarterly priorities, monthly milestones and your tasks. These goals stay exactly as they are, and you can follow any of them from there.</p>
-        <button type="button" class="btn btn-secondary" data-open-strategy>Open Strategy</button>
-      </div>
-      <div class="card">
-        <h2 class="card-title" id="habitsGoalFormTitle">Create a Goal</h2>
-        <form id="habitsGoalForm" class="stacked-form" novalidate>
-          <div class="form-row">
-            <label for="habitsGoalName">Goal name</label>
-            <input type="text" id="habitsGoalName" maxlength="80" placeholder="e.g. Launch Clothing Brand">
-          </div>
-          <div class="form-row">
-            <label for="habitsGoalDescription">Description (optional)</label>
-            <textarea id="habitsGoalDescription" rows="2" placeholder="Optional details"></textarea>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="habitsGoalCategory">Category (optional)</label>
-              <input type="text" id="habitsGoalCategory" maxlength="40" placeholder="e.g. Business">
-            </div>
-            <div>
-              <label for="habitsGoalTargetDate">Target date (optional)</label>
-              <input type="date" id="habitsGoalTargetDate">
-            </div>
-          </div>
-          <div class="checklist-item">
-            <input type="checkbox" id="habitsGoalHasNumeric">
-            <label for="habitsGoalHasNumeric">Track with a numeric target (e.g. dollars saved, pounds lifted)</label>
-          </div>
-          <div class="form-row two-col hidden" id="habitsGoalNumericRow">
-            <div>
-              <label for="habitsGoalCurrentValue">Current value</label>
-              <input type="number" id="habitsGoalCurrentValue" step="any" placeholder="e.g. 1800">
-            </div>
-            <div>
-              <label for="habitsGoalTargetValue">Target value</label>
-              <input type="number" id="habitsGoalTargetValue" step="any" placeholder="e.g. 5000">
-            </div>
-          </div>
-          <div class="form-row hidden" id="habitsGoalUnitRow">
-            <label for="habitsGoalUnit">Unit (optional)</label>
-            <input type="text" id="habitsGoalUnit" maxlength="20" placeholder="e.g. $ or lb">
-          </div>
-          <div class="form-row" id="habitsGoalManualProgressRow">
-            <label for="habitsGoalManualProgress">Progress (%)</label>
-            <input type="number" id="habitsGoalManualProgress" min="0" max="100" step="1" value="0">
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="habitsGoalSubmitBtn">Save Goal</button>
-            <button type="button" class="btn btn-secondary hidden" id="habitsGoalCancelBtn">Cancel</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Your Goals</h2>
-        <div id="habitsGoalsList" class="item-list">
-          <div class="empty-state">No goals yet. Create one above.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Stats ---------- -->
-    <div id="habits-stats" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavStats">
-      <div class="card">
-        <h2 class="card-title">Productivity Stats</h2>
-        <p class="field-hint">A simple, honest snapshot from what you've actually logged — not a judgment, just a mirror.</p>
-        <div class="stat-grid" id="productivityStatsGrid"></div>
-      </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Reminders ---------- -->
-    <div id="habits-reminders" class="habits-sub-panel nr-scope rm-scope" role="tabpanel" aria-labelledby="habitsSubNavReminders">
-      <section class="nr-hero rm-hero" aria-labelledby="rmHeroTitle">
-        <p class="nr-eyebrow">Reminders</p>
-        <h2 class="nr-hero-title" id="rmHeroTitle">Your routine</h2>
-        <p class="nr-hero-sub" id="rmHeroSub"></p>
-        <div class="nr-hero-actions">
-          <button type="button" class="nr-btn nr-btn-primary" id="rmNewBtn">New reminder</button>
-        </div>
-        <p class="nr-hint">Reminders are saved on your JARVIS server, and the server is what sends them to your phone. That is built to work with JARVIS closed, but it isn't proven on your phone until you run the closed-app test below.</p>
-        <p class="nr-status-line" id="rmStatus" role="status"></p>
-      </section>
-
-      <ul class="nr-strip" id="rmStrip" aria-label="Reminder status"></ul>
-
-      <section class="nr-card" id="rmNotifCard" aria-labelledby="rmNotifTitle">
-        <div class="nr-card-head">
-          <h2 class="nr-h" id="rmNotifTitle">Phone notifications</h2>
-          <span class="nr-status-badge nr-status-off" id="rmNotifBadge"></span>
-        </div>
-        <p class="nr-hint" id="rmNotifText"></p>
-        <ol class="rm-steps hidden" id="rmNotifSteps"></ol>
-        <div class="nr-actions-row">
-          <button type="button" class="nr-btn nr-btn-primary-soft hidden" id="rmNotifOnBtn">Turn on notifications on this phone</button>
-          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifTestNowBtn">Send a test now</button>
-          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifTestLaterBtn">Test in 90 seconds</button>
-          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifOffBtn">Turn off on this phone</button>
-        </div>
-        <div class="rm-check hidden" id="rmNotifCheck">
-          <p class="rm-label" id="rmNotifCheckLabel">Did the test arrive while JARVIS was closed?</p>
-          <div class="nr-actions-row">
-            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmNotifArrivedBtn">Yes, it arrived</button>
-            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmNotifMissingBtn">No, nothing came</button>
-          </div>
-        </div>
-        <p class="nr-status-line" id="rmNotifStatus" role="status"></p>
-        <p class="nr-hint" id="rmNotifDevices"></p>
-      </section>
-
-      <section class="nr-card" aria-labelledby="rmTodayTitle">
-        <h2 class="nr-h" id="rmTodayTitle">Today</h2>
-        <div class="rm-progress hidden" id="rmProgress">
-          <div class="rm-progress-track" id="rmProgressBar" role="progressbar" aria-labelledby="rmProgressText" aria-valuemin="0" aria-valuemax="100"><span class="rm-progress-fill" id="rmProgressFill"></span></div>
-          <p class="rm-progress-text" id="rmProgressText"></p>
-        </div>
-        <div class="rm-open hidden" id="rmOpen"></div>
-        <p class="nr-hint" id="rmTodayHint"></p>
-        <div id="rmToday" aria-live="polite"></div>
-      </section>
-
-      <section class="nr-card" aria-labelledby="rmHistTitle">
-        <h2 class="nr-h" id="rmHistTitle">History</h2>
-        <p class="nr-hint" id="rmHistHint">What was sent and what you did about it. “Sent” means the push service accepted the message. It can't show whether your phone displayed it.</p>
-        <div class="nr-actions-row">
-          <button type="button" class="nr-btn nr-btn-ghost" id="rmHistBtn">Show the last 14 days</button>
-        </div>
-        <p class="nr-status-line" id="rmHistStatus" role="status"></p>
-        <div id="rmHist" aria-live="polite"></div>
-      </section>
-
-      <section class="nr-card" aria-labelledby="rmListTitle">
-        <h2 class="nr-h" id="rmListTitle">All reminders</h2>
-        <div id="rmList" aria-live="polite"></div>
-        <h3 class="nr-h3 rm-quick-title" id="rmQuickTitle">Add one quickly</h3>
-        <div class="rm-cats" id="rmQuick" role="group" aria-labelledby="rmQuickTitle"></div>
-      </section>
-
-      <section class="nr-card" aria-labelledby="rmSettingsTitle">
-        <h2 class="nr-h" id="rmSettingsTitle">Time zone and quiet hours</h2>
-        <div class="form-row">
-          <label for="rmTz">Your time zone</label>
-          <select id="rmTz"></select>
-        </div>
-        <p class="nr-hint">New reminders use this zone. Reminders keep the zone they were made in unless you move them all below, so travelling never changes them by surprise.</p>
-        <label class="nr-check"><input type="checkbox" id="rmQuietOn"> Use quiet hours</label>
-        <div class="form-row two-col">
-          <div><label for="rmQuietStart">Quiet from</label><input type="time" id="rmQuietStart" value="22:00"></div>
-          <div><label for="rmQuietEnd">Until</label><input type="time" id="rmQuietEnd" value="07:00"></div>
-        </div>
-        <p class="nr-hint">Quiet hours only apply to reminders that have &ldquo;Respect quiet hours&rdquo; turned on. By default every reminder sends on time. Your iPhone's own Focus modes work separately.</p>
-        <div class="nr-actions-row">
-          <button type="button" class="nr-btn nr-btn-primary-soft" id="rmSettingsSaveBtn">Save</button>
-          <button type="button" class="nr-btn nr-btn-ghost" id="rmSettingsMoveBtn">Save and move all reminders to this zone</button>
-        </div>
-        <p class="nr-status-line" id="rmSettingsStatus" role="status"></p>
-      </section>
-
-    </div>
-
-    <!-- ---------- Sub-panel: Wake check ---------- -->
-    <div id="habits-wake" class="habits-sub-panel wk-scope" role="tabpanel" aria-labelledby="habitsSubNavWake">
-      <section class="card" aria-labelledby="wkTitle">
-        <div class="card-title-row">
-          <h2 class="card-title" id="wkTitle">Wake check</h2>
-          <span class="badge badge-neutral" id="wkBadge">Off</span>
-        </div>
-        <div id="wkStatus"></div>
-        <p class="visually-hidden" id="wkAnnounce" role="status" aria-live="polite"></p>
-        <p class="field-hint wk-honest">Your Clock alarm does the ringing. JARVIS only records that you typed the phrases in time. It can't tell whether you're really awake, and it can't stop you silencing an alarm.</p>
-      </section>
-
-      <section class="card" aria-labelledby="wkStreakTitle">
-        <h3 class="card-title" id="wkStreakTitle">Streak</h3>
-        <div class="wk-stats" id="wkStats"></div>
-        <ol class="wk-days" id="wkDays" aria-label="Last 14 days"></ol>
-        <p class="field-hint">A morning counts when you typed both phrases in time. Days the check isn't scheduled don't count for or against you.</p>
-      </section>
-
-      <section class="card" aria-labelledby="wkSetupTitle">
-        <h3 class="card-title" id="wkSetupTitle">Set up</h3>
-        <form id="wkForm" class="stacked-form" novalidate>
-          <div class="dc-switch-row">
-            <button type="button" class="dc-switch" role="switch" id="wkEnabled" aria-checked="false" aria-labelledby="wkEnabledLabel"><span class="dc-switch-knob" aria-hidden="true"></span></button>
-            <span id="wkEnabledLabel">Wake check is on</span>
-          </div>
-          <div class="form-row">
-            <label for="wkTime">Time your alarm rings</label>
-            <input type="time" id="wkTime">
-          </div>
-          <div class="form-row">
-            <span class="wk-label" id="wkDaysLabel">Days</span>
-            <div class="wk-day-pills" id="wkDayPills" role="group" aria-labelledby="wkDaysLabel"></div>
-          </div>
-          <div class="form-row">
-            <label for="wkPhrase1">First phrase (typed after the alarm)</label>
-            <input type="text" id="wkPhrase1" maxlength="60" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-          </div>
-          <div class="form-row">
-            <label for="wkPhrase2">Check-in phrase</label>
-            <input type="text" id="wkPhrase2" maxlength="60" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-          </div>
-          <div class="form-row two-col">
-            <div><label for="wkDelay">Minutes until the check-in</label><input type="number" id="wkDelay" min="1" max="60" step="1" inputmode="numeric"></div>
-            <div><label for="wkWindow">Minutes to answer each one</label><input type="number" id="wkWindow" min="3" max="30" step="1" inputmode="numeric"></div>
-          </div>
-          <div class="dc-switch-row">
-            <button type="button" class="dc-switch" role="switch" id="wkStrict" aria-checked="false" aria-labelledby="wkStrictLabel"><span class="dc-switch-knob" aria-hidden="true"></span></button>
-            <span id="wkStrictLabel">Capital letters must match</span>
-          </div>
-          <p class="dc-error" id="wkError" role="alert"></p>
-          <div class="form-actions"><button type="submit" class="btn btn-primary">Save</button></div>
-        </form>
-        <ul class="dc-lines wk-notes">
-          <li>Set a repeating alarm in the <strong>Clock</strong> app for the same time. JARVIS can't ring your phone.</li>
-          <li>JARVIS can't send you a notification for the check-in yet. For now, keep this screen open or set an iPhone timer.</li>
-          <li>The first phrase counts from your alarm time until the minutes to answer run out. Typing it starts the countdown to the check-in.</li>
-          <li>Changing the time or the days starts counting from now. Mornings already finished keep the time they had.</li>
-          <li>A curly &rsquo; and a straight ' are treated as the same, and so are extra spaces. Pasting is turned off on the answer box.</li>
-        </ul>
-      </section>
-    </div>
-  </section>
-
-  <!-- ===================== CALENDAR ===================== -->
-  <section id="panel-calendar" class="tab-panel cal-scope" role="tabpanel" aria-labelledby="navBtnCalendar">
-    <div class="card cal-head">
-      <div class="cal-toolbar">
-        <div class="cal-nav">
-          <button type="button" class="btn-icon cal-step" id="calPrev" aria-label="Previous">&larr;</button>
-          <button type="button" class="btn btn-secondary cal-today" id="calToday">Today</button>
-          <button type="button" class="btn-icon cal-step" id="calNext" aria-label="Next">&rarr;</button>
-        </div>
-        <h2 class="cal-title" id="calTitle" aria-live="polite"></h2>
-        <button type="button" class="btn btn-primary cal-new" id="calNew">+ New</button>
-      </div>
-      <div class="cal-views" role="group" aria-label="Calendar view">
-        <button type="button" class="cal-view-btn" data-view="month" aria-pressed="false">Month</button>
-        <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
-        <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Day</button>
-        <button type="button" class="cal-view-btn" data-view="agenda" aria-pressed="false">Agenda</button>
-      
-      </div>
-      <div class="cal-tools">
-        <input type="search" id="calSearch" class="cal-search" placeholder="Search events and tasks" aria-label="Search events and tasks" autocomplete="off">
-        <button type="button" class="btn btn-secondary cal-filter-btn" id="calFilterBtn" aria-expanded="false" aria-controls="calFilters">Filters</button>
-        <button type="button" class="btn btn-secondary cal-assist-btn" id="calAssist" aria-haspopup="dialog">Assistant</button>
-      </div>
-      <div class="cal-filters hidden" id="calFilters"></div>
-    </div>
-    <div id="calStatus" class="cal-status hidden" role="status"></div>
-    <div id="calStage" class="cal-stage" aria-live="off"></div>
-    <div id="calUndo" class="cal-undo hidden" role="status"></div>
-    <p id="calLive" class="visually-hidden" role="status" aria-live="polite"></p>
-    <p class="field-hint cal-foot" id="calFoot"></p>
-  </section>
-
-  <!-- ===================== DISCIPLINE ===================== -->
-  <section id="panel-discipline" class="tab-panel" role="tabpanel" aria-labelledby="navBtnDiscipline">
-    <div class="panel-header">
-      <h1>Discipline</h1>
-      <p class="panel-subtitle">Plan the day, review it honestly, and watch the pattern. Every number here is something you entered.</p>
-    </div>
-
-    <nav class="sub-nav discipline-sub-nav" role="tablist" aria-label="Discipline sections">
-      <button type="button" class="discipline-sub-nav-btn active" data-subtarget="discipline-today" role="tab" aria-selected="true" aria-controls="discipline-today" id="disciplineSubNavToday">Today</button>
-      <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-program" role="tab" aria-selected="false" aria-controls="discipline-program" id="disciplineSubNavProgram">Program</button>
-      <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-trends" role="tab" aria-selected="false" aria-controls="discipline-trends" id="disciplineSubNavTrends">Trends</button>
-      <button type="button" class="discipline-sub-nav-btn" data-subtarget="discipline-setup" role="tab" aria-selected="false" aria-controls="discipline-setup" id="disciplineSubNavSetup">Setup</button>
-    </nav>
-
-    <!-- ---------- Sub-panel: Today ---------- -->
-    <div id="discipline-today" class="discipline-sub-panel active" role="tabpanel" aria-labelledby="disciplineSubNavToday">
-      <div class="card">
-        <div class="segmented-control" id="dcDayPills" role="group" aria-label="Which day">
-          <button type="button" class="segmented-btn" data-day="yesterday" id="dcDayYesterday" aria-pressed="false">Yesterday</button>
-          <button type="button" class="segmented-btn active" data-day="today" id="dcDayToday" aria-pressed="true">Today</button>
-          <button type="button" class="segmented-btn" data-day="tomorrow" id="dcDayTomorrow" aria-pressed="false">Tomorrow</button>
-        </div>
-        <div class="card-title-row dc-title-row">
-          <h2 class="card-title" id="dcDateTitle">Today</h2>
-          <div class="dc-badges">
-            <span class="badge badge-accent" id="dcStreakBadge">0 day streak</span>
-            <span class="badge badge-neutral" id="dcLimitBadge">Phone limit 5h</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="card dc-overview" id="dcOverview" aria-labelledby="dcOverviewTitle">
-        <div class="dc-next-kicker" id="dcOverviewKicker">Today's main win</div>
-        <div class="dc-ov-win" id="dcOverviewTitle">Not planned yet</div>
-        <div class="dc-ov-progress">
-          <div class="dc-track" id="dcOverviewBar" role="progressbar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" aria-label="Priorities done"><div class="dc-fill" id="dcOverviewFill" style="width:0%"></div></div>
-          <span class="dc-ov-count" id="dcOverviewCount">No plan yet</span>
-        </div>
-        <div class="dc-ov-chips" id="dcOverviewChips"></div>
-      </div>
-
-      <div class="card dc-next hidden" id="dcNextCard" aria-live="polite">
-        <div class="dc-next-kicker">Next up</div>
-        <div class="dc-next-title" id="dcNextTitle"></div>
-        <p class="dc-next-text" id="dcNextText"></p>
-        <p class="dc-next-why" id="dcNextWhy"></p>
-        <div class="dc-next-actions" id="dcNextActions"></div>
-        <details class="dc-more hidden" id="dcNextMore">
-          <summary>Something else instead</summary>
-          <div class="dc-next-actions" id="dcNextMoreActions"></div>
-        </details>
-      </div>
-
-      <div class="card dc-routine hidden" id="dcRoutineCard" aria-labelledby="dcRoutineTitle">
-        <div class="card-title-row">
-          <h2 class="card-title" id="dcRoutineTitle">Your routine</h2>
-          <button type="button" class="btn-icon" id="dcOpenHabits">Open Habits</button>
-        </div>
-        <p class="dc-coach" id="dcCoachText"></p>
-        <p class="field-hint" id="dcCoachLeft"></p>
-        <div class="dc-routine-list" id="dcRoutineList"></div>
-        <p class="field-hint">Kept in Habits. Discipline only reads it, so tick things off there.</p>
-      </div>
-
       <div class="card dc-flow hidden" id="dcFlowCard" aria-live="polite">
         <div id="dcFlow"></div>
       </div>
 
-      <div class="card dc-lesson hidden" id="dcLessonCard">
-        <div class="dc-next-kicker" id="dcLessonKicker"></div>
-        <div class="dc-next-title" id="dcLessonTitle"></div>
-        <div id="dcLessonBody" class="hidden"></div>
-        <p class="field-hint" id="dcLessonMissions"></p>
-        <div class="dc-next-actions">
-          <button type="button" class="btn btn-secondary" id="dcLessonToggle" aria-expanded="false">Read the lesson</button>
-          <button type="button" class="btn btn-secondary" id="dcLessonGo">See missions</button>
-        </div>
-      </div>
-
+      <details class="sm-fold hb-plan" id="hbPlanFold"><summary>Plan the day</summary>
       <div class="card" id="dcMorningCard">
         <div class="card-title-row">
           <h2 class="card-title" id="dcMorningTitle">Morning plan</h2>
@@ -2360,10 +1955,11 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </form>
         <div id="dcMorningSummary" class="dc-summary hidden"></div>
       </div>
+      </details>
 
       <div class="card" id="dcReviewCard">
         <div class="card-title-row">
-          <h2 class="card-title">Evening review</h2>
+          <h2 class="card-title">End-of-day reflection</h2>
           <button type="button" class="btn-icon hidden" id="dcReviewEditBtn">Edit review</button>
         </div>
         <p class="field-hint" id="dcReviewHint"></p>
@@ -2438,29 +2034,89 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
         <div id="dcResult" class="dc-result hidden" aria-live="polite"></div>
       </div>
-
-      <div class="card dc-progress" id="dcProgressCard">
-        <h2 class="card-title">Your progress</h2>
-        <div id="dcProgressBody"></div>
-        <div class="form-actions"><button type="button" class="btn btn-secondary" id="dcSeeTrends">See your trends</button></div>
-      </div>
     </div>
 
-    <!-- ---------- Sub-panel: Program ---------- -->
-    <div id="discipline-program" class="discipline-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavProgram">
-      <div class="card dc-prog-overview" id="dcProgHead"></div>
-      <div class="card hidden" id="dcProgMissions"></div>
-      <div class="card dc-lesson hidden" id="dcProgLesson"></div>
+    <!-- ---------- Routines: your habits, the morning and evening routines, programs ---------- -->
+    <div id="habits-routines" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavRoutines">
+      <div class="sm-head">
+        <h2 class="sm-title">Habits</h2>
+        <span class="sm-head-btns"><button type="button" class="btn btn-primary" id="habitAddToggleBtn" aria-controls="habitFormWrap" aria-expanded="false">+ Add habit</button></span>
+      </div>
+      <div id="habitFormWrap" hidden>
       <div class="card">
-        <h2 class="card-title">All 30 days</h2>
-        <p class="field-hint" id="dcProgDaysHint"></p>
-        <div id="dcProgDays"></div>
+        <h2 class="card-title" id="habitFormTitle">Add a Habit</h2>
+        <p class="field-hint">Leave "Daily target" at 1 for a simple check-off habit, or raise it for something you do several times a day (e.g. 8 cups of water).</p>
+        <form id="habitForm" class="stacked-form" novalidate>
+          <div class="form-row two-col">
+            <div>
+              <label for="habitName">Habit name</label>
+              <input type="text" id="habitName" name="habitName" placeholder="e.g. Drink Water" required maxlength="60">
+            </div>
+            <div>
+              <label for="habitTargetDays">Target days / week</label>
+              <input type="number" id="habitTargetDays" name="habitTargetDays" min="1" max="7" step="1" value="7">
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="habitDailyTarget">Daily target / count</label>
+            <input type="number" id="habitDailyTarget" name="habitDailyTarget" min="1" max="50" step="1" value="1">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="habitSubmitBtn">Add Habit</button>
+            <button type="button" class="btn btn-secondary hidden" id="habitFormCancelBtn">Cancel</button>
+          </div>
+        </form>
+        
       </div>
-      <div class="card hidden" id="dcProgManage"></div>
+      </div>
+      <div id="habitManageList" class="item-list">
+          <div class="empty-state">No habits yet. Add one above to start tracking.</div>
+        </div>
+
+      <section class="hb-sec" aria-labelledby="hbDailyH">
+        <h2 class="sm-title" id="hbDailyH">Morning and evening</h2>
+        <div id="hbRoutineRows" class="hb-rows"></div>
+      </section>
+
+      <section class="hb-sec" aria-labelledby="hbProgramsH">
+        <h2 class="sm-title" id="hbProgramsH">Programs</h2>
+        <div class="hb-rows">
+          <button type="button" class="hb-row" data-subgo="discipline-program"><span class="hb-row-main"><span class="hb-row-title">30-day discipline program</span><span class="hb-row-sub" id="hbProgramSub">Optional. A short lesson and missions each day.</span></span><span class="hb-row-go" aria-hidden="true">&rsaquo;</span></button>
+        </div>
+        <div class="card dc-lesson hidden" id="dcLessonCard">
+        <div class="dc-next-kicker" id="dcLessonKicker"></div>
+        <div class="dc-next-title" id="dcLessonTitle"></div>
+        <div id="dcLessonBody" class="hidden"></div>
+        <p class="field-hint" id="dcLessonMissions"></p>
+        <div class="dc-next-actions">
+          <button type="button" class="btn btn-secondary" id="dcLessonToggle" aria-expanded="false">Read the lesson</button>
+          <button type="button" class="btn btn-secondary" id="dcLessonGo">See missions</button>
+        </div>
+      </div>
+      </section>
     </div>
 
-    <!-- ---------- Sub-panel: Trends ---------- -->
-    <div id="discipline-trends" class="discipline-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavTrends">
+    <!-- ---------- Progress: weekly consistency, trends, past reflections ---------- -->
+    <div id="habits-progress" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavProgress">
+      <div class="sm-pills" role="group" aria-label="Progress views"><button type="button" class="sm-pill is-on" data-subgo="habits-progress" aria-pressed="true">Consistency</button><button type="button" class="sm-pill" data-subgo="habits-goals" aria-pressed="false">Goals</button></div>
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">Habit History</h2>
+          <div class="week-nav-row">
+            <button type="button" class="btn-icon" id="historyPrevWeekBtn" aria-label="Previous week">&larr;</button>
+            <span class="field-hint" id="historyWeekLabel"></span>
+            <button type="button" class="btn-icon" id="historyNextWeekBtn" aria-label="Next week">&rarr;</button>
+          </div>
+        </div>
+        <div id="habitHistoryGrid" class="habit-history-grid-wrap">
+          <div class="empty-state">No habits yet — add one below.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Recent days</h2>
+        <div id="dcRecent"></div>
+      </div>
+      <details class="sm-fold hb-more" id="hbDailyNumbers"><summary>Daily review numbers</summary>
       <div class="card">
         <div class="segmented-control" id="dcWindowPills" role="group" aria-label="Time window">
           <button type="button" class="segmented-btn active" data-window="7" id="dcWindow7" aria-pressed="true">Last 7 days</button>
@@ -2468,38 +2124,43 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
         <div class="stat-grid dc-stats" id="dcStats"></div>
         <p class="field-hint dc-insights" id="dcTrendNote"></p>
-      </div>
-      <div class="card">
+      </div><div class="card">
         <h2 class="card-title">Daily score</h2>
         <div id="dcChart"></div>
         <details class="dc-detail"><summary>Show the numbers</summary><div id="dcChartList"></div></details>
         <p class="field-hint">Always 0 to 100. A day with no review is a gap, never a zero.</p>
+      </div><div class="card">
+        <h2 class="card-title">This week and last week</h2>
+        <div id="dcCompare"></div>
       </div>
+      </details>
+      <details class="sm-fold hb-more" id="hbMoreInsights"><summary>More insights</summary>
       <div class="card">
         <h2 class="card-title">Where the points go</h2>
         <div id="dcCategories"></div>
         <p class="field-hint" id="dcCategoriesNote"></p>
-      </div>
-      <div class="card">
+      </div><div class="card">
         <h2 class="card-title">Your days</h2>
         <div id="dcHeatmap"></div>
-      </div>
-      <div class="card">
-        <h2 class="card-title">This week and last week</h2>
-        <div id="dcCompare"></div>
-      </div>
-      <div class="card">
+      </div><div class="card">
         <h2 class="card-title">Habits and rules</h2>
         <div id="dcConsistency"></div>
-      </div>
-      <div class="card">
+      </div><div class="card">
         <h2 class="card-title">What your entries say</h2>
         <div id="dcInsights"></div>
-      </div>
-      <div class="card">
+      </div><div class="card">
         <h2 class="card-title">When you avoid things</h2>
         <div id="dcAvoidStats"></div>
       </div>
+      </details>
+      <details class="sm-fold hb-more" id="hbProductivity"><summary>Productivity numbers</summary>
+      <div class="card">
+        <h2 class="card-title">Productivity Stats</h2>
+        <p class="field-hint">A simple, honest snapshot from what you've actually logged — not a judgment, just a mirror.</p>
+        <div class="stat-grid" id="productivityStatsGrid"></div>
+      </div>
+      </details>
+      <details class="sm-fold hb-more" id="hbWeeklyReview"><summary>Weekly review</summary>
       <div class="card" id="dcWeeklyCard">
         <h2 class="card-title">Weekly review</h2>
         <p class="field-hint">The last 7 days. Nothing is sent anywhere unless you tap Share.</p>
@@ -2516,14 +2177,259 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <button type="button" class="btn btn-secondary hidden" id="dcRebuildBtn">Rebuild from my choices</button>
         </div>
       </div>
-      <div class="card">
-        <h2 class="card-title">Recent days</h2>
-        <div id="dcRecent"></div>
-      </div>
+      </details>
     </div>
 
-    <!-- ---------- Sub-panel: Setup ---------- -->
-    <div id="discipline-setup" class="discipline-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavSetup">
+<div id="habits-plan" class="habits-sub-panel dp-scope" role="tabpanel" aria-labelledby="habitsSubNavPlan">
+      <div class="card dp-head">
+        <div class="dp-nav">
+          <button type="button" class="btn-icon dp-step" id="dpPrev" aria-label="Previous day">&larr;</button>
+          <div class="dp-when">
+            <h2 class="card-title dp-title" id="dpTitle">Today</h2>
+            <p class="dp-date" id="dpDate"></p>
+          </div>
+          <button type="button" class="btn-icon dp-step" id="dpNext" aria-label="Next day">&rarr;</button>
+        </div>
+        <p class="dp-summary" id="dpSummary"></p>
+        <button type="button" class="btn-icon hidden" id="dpToday">Jump to today</button>
+      </div>
+
+      <div class="card dp-pool hidden" id="dpPoolCard" aria-labelledby="dpPoolTitle">
+        <h2 class="card-title" id="dpPoolTitle">Not scheduled yet</h2>
+        <p class="field-hint">Tasks for this day that have no time. Pick an hour to put one on the plan.</p>
+        <div id="dpPool" class="dp-pool-list"></div>
+      </div>
+
+      <div class="card dp-day">
+        <div id="dpHours" class="dp-hours"></div>
+      </div>
+
+      <div id="dpUndo" class="dp-undo hidden" role="status"></div>
+      <p id="dpLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    </div>
+<div id="habits-goals" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavGoals">
+      <div class="sm-pills" role="group" aria-label="Progress views"><button type="button" class="sm-pill" data-subgo="habits-progress" aria-pressed="false">Consistency</button><button type="button" class="sm-pill is-on" data-subgo="habits-goals" aria-pressed="true">Goals</button></div>
+      <div class="card strategy-hint">
+        <p>Planning bigger than personal goals? The Strategy tab links a three-year vision to yearly objectives, quarterly priorities, monthly milestones and your tasks. These goals stay exactly as they are, and you can follow any of them from there.</p>
+        <button type="button" class="btn btn-secondary" data-open-strategy>Open Strategy</button>
+      </div>
+      <div class="card">
+        <h2 class="card-title" id="habitsGoalFormTitle">Create a Goal</h2>
+        <form id="habitsGoalForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="habitsGoalName">Goal name</label>
+            <input type="text" id="habitsGoalName" maxlength="80" placeholder="e.g. Launch Clothing Brand">
+          </div>
+          <div class="form-row">
+            <label for="habitsGoalDescription">Description (optional)</label>
+            <textarea id="habitsGoalDescription" rows="2" placeholder="Optional details"></textarea>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="habitsGoalCategory">Category (optional)</label>
+              <input type="text" id="habitsGoalCategory" maxlength="40" placeholder="e.g. Business">
+            </div>
+            <div>
+              <label for="habitsGoalTargetDate">Target date (optional)</label>
+              <input type="date" id="habitsGoalTargetDate">
+            </div>
+          </div>
+          <div class="checklist-item">
+            <input type="checkbox" id="habitsGoalHasNumeric">
+            <label for="habitsGoalHasNumeric">Track with a numeric target (e.g. dollars saved, pounds lifted)</label>
+          </div>
+          <div class="form-row two-col hidden" id="habitsGoalNumericRow">
+            <div>
+              <label for="habitsGoalCurrentValue">Current value</label>
+              <input type="number" id="habitsGoalCurrentValue" step="any" placeholder="e.g. 1800">
+            </div>
+            <div>
+              <label for="habitsGoalTargetValue">Target value</label>
+              <input type="number" id="habitsGoalTargetValue" step="any" placeholder="e.g. 5000">
+            </div>
+          </div>
+          <div class="form-row hidden" id="habitsGoalUnitRow">
+            <label for="habitsGoalUnit">Unit (optional)</label>
+            <input type="text" id="habitsGoalUnit" maxlength="20" placeholder="e.g. $ or lb">
+          </div>
+          <div class="form-row" id="habitsGoalManualProgressRow">
+            <label for="habitsGoalManualProgress">Progress (%)</label>
+            <input type="number" id="habitsGoalManualProgress" min="0" max="100" step="1" value="0">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="habitsGoalSubmitBtn">Save Goal</button>
+            <button type="button" class="btn btn-secondary hidden" id="habitsGoalCancelBtn">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Your Goals</h2>
+        <div id="habitsGoalsList" class="item-list">
+          <div class="empty-state">No goals yet. Create one above.</div>
+        </div>
+      </div>
+    </div>
+<div id="habits-reminders" class="habits-sub-panel nr-scope rm-scope" role="tabpanel" aria-labelledby="habitsSubNavReminders">
+      <section class="nr-hero rm-hero" aria-labelledby="rmHeroTitle">
+        <p class="nr-eyebrow">Reminders</p>
+        <h2 class="nr-hero-title" id="rmHeroTitle">Your routine</h2>
+        <p class="nr-hero-sub" id="rmHeroSub"></p>
+        <div class="nr-hero-actions">
+          <button type="button" class="nr-btn nr-btn-primary" id="rmNewBtn">New reminder</button>
+        </div>
+        <p class="nr-hint">Reminders are saved on your JARVIS server, and the server is what sends them to your phone. That is built to work with JARVIS closed, but it isn't proven on your phone until you run the closed-app test below.</p>
+        <p class="nr-status-line" id="rmStatus" role="status"></p>
+      </section>
+
+      <ul class="nr-strip" id="rmStrip" aria-label="Reminder status"></ul>
+
+      <section class="nr-card" id="rmNotifCard" aria-labelledby="rmNotifTitle">
+        <div class="nr-card-head">
+          <h2 class="nr-h" id="rmNotifTitle">Phone notifications</h2>
+          <span class="nr-status-badge nr-status-off" id="rmNotifBadge"></span>
+        </div>
+        <p class="nr-hint" id="rmNotifText"></p>
+        <ol class="rm-steps hidden" id="rmNotifSteps"></ol>
+        <div class="nr-actions-row">
+          <button type="button" class="nr-btn nr-btn-primary-soft hidden" id="rmNotifOnBtn">Turn on notifications on this phone</button>
+          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifTestNowBtn">Send a test now</button>
+          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifTestLaterBtn">Test in 90 seconds</button>
+          <button type="button" class="nr-btn nr-btn-ghost hidden" id="rmNotifOffBtn">Turn off on this phone</button>
+        </div>
+        <div class="rm-check hidden" id="rmNotifCheck">
+          <p class="rm-label" id="rmNotifCheckLabel">Did the test arrive while JARVIS was closed?</p>
+          <div class="nr-actions-row">
+            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmNotifArrivedBtn">Yes, it arrived</button>
+            <button type="button" class="nr-btn nr-btn-ghost nr-btn-small" id="rmNotifMissingBtn">No, nothing came</button>
+          </div>
+        </div>
+        <p class="nr-status-line" id="rmNotifStatus" role="status"></p>
+        <p class="nr-hint" id="rmNotifDevices"></p>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmTodayTitle">
+        <h2 class="nr-h" id="rmTodayTitle">Today</h2>
+        <div class="rm-progress hidden" id="rmProgress">
+          <div class="rm-progress-track" id="rmProgressBar" role="progressbar" aria-labelledby="rmProgressText" aria-valuemin="0" aria-valuemax="100"><span class="rm-progress-fill" id="rmProgressFill"></span></div>
+          <p class="rm-progress-text" id="rmProgressText"></p>
+        </div>
+        <div class="rm-open hidden" id="rmOpen"></div>
+        <p class="nr-hint" id="rmTodayHint"></p>
+        <div id="rmToday" aria-live="polite"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmHistTitle">
+        <h2 class="nr-h" id="rmHistTitle">History</h2>
+        <p class="nr-hint" id="rmHistHint">What was sent and what you did about it. “Sent” means the push service accepted the message. It can't show whether your phone displayed it.</p>
+        <div class="nr-actions-row">
+          <button type="button" class="nr-btn nr-btn-ghost" id="rmHistBtn">Show the last 14 days</button>
+        </div>
+        <p class="nr-status-line" id="rmHistStatus" role="status"></p>
+        <div id="rmHist" aria-live="polite"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmListTitle">
+        <h2 class="nr-h" id="rmListTitle">All reminders</h2>
+        <div id="rmList" aria-live="polite"></div>
+        <h3 class="nr-h3 rm-quick-title" id="rmQuickTitle">Add one quickly</h3>
+        <div class="rm-cats" id="rmQuick" role="group" aria-labelledby="rmQuickTitle"></div>
+      </section>
+
+      <section class="nr-card" aria-labelledby="rmSettingsTitle">
+        <h2 class="nr-h" id="rmSettingsTitle">Time zone and quiet hours</h2>
+        <div class="form-row">
+          <label for="rmTz">Your time zone</label>
+          <select id="rmTz"></select>
+        </div>
+        <p class="nr-hint">New reminders use this zone. Reminders keep the zone they were made in unless you move them all below, so travelling never changes them by surprise.</p>
+        <label class="nr-check"><input type="checkbox" id="rmQuietOn"> Use quiet hours</label>
+        <div class="form-row two-col">
+          <div><label for="rmQuietStart">Quiet from</label><input type="time" id="rmQuietStart" value="22:00"></div>
+          <div><label for="rmQuietEnd">Until</label><input type="time" id="rmQuietEnd" value="07:00"></div>
+        </div>
+        <p class="nr-hint">Quiet hours only apply to reminders that have &ldquo;Respect quiet hours&rdquo; turned on. By default every reminder sends on time. Your iPhone's own Focus modes work separately.</p>
+        <div class="nr-actions-row">
+          <button type="button" class="nr-btn nr-btn-primary-soft" id="rmSettingsSaveBtn">Save</button>
+          <button type="button" class="nr-btn nr-btn-ghost" id="rmSettingsMoveBtn">Save and move all reminders to this zone</button>
+        </div>
+        <p class="nr-status-line" id="rmSettingsStatus" role="status"></p>
+      </section>
+
+    </div>
+<div id="habits-wake" class="habits-sub-panel wk-scope" role="tabpanel" aria-labelledby="habitsSubNavWake">
+      <section class="card" aria-labelledby="wkTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="wkTitle">Wake check</h2>
+          <span class="badge badge-neutral" id="wkBadge">Off</span>
+        </div>
+        <div id="wkStatus"></div>
+        <p class="visually-hidden" id="wkAnnounce" role="status" aria-live="polite"></p>
+        <p class="field-hint wk-honest">Your Clock alarm does the ringing. JARVIS only records that you typed the phrases in time. It can't tell whether you're really awake, and it can't stop you silencing an alarm.</p>
+      </section>
+
+      <section class="card" aria-labelledby="wkStreakTitle">
+        <h3 class="card-title" id="wkStreakTitle">Streak</h3>
+        <div class="wk-stats" id="wkStats"></div>
+        <ol class="wk-days" id="wkDays" aria-label="Last 14 days"></ol>
+        <p class="field-hint">A morning counts when you typed both phrases in time. Days the check isn't scheduled don't count for or against you.</p>
+      </section>
+
+      <section class="card" aria-labelledby="wkSetupTitle">
+        <h3 class="card-title" id="wkSetupTitle">Set up</h3>
+        <form id="wkForm" class="stacked-form" novalidate>
+          <div class="dc-switch-row">
+            <button type="button" class="dc-switch" role="switch" id="wkEnabled" aria-checked="false" aria-labelledby="wkEnabledLabel"><span class="dc-switch-knob" aria-hidden="true"></span></button>
+            <span id="wkEnabledLabel">Wake check is on</span>
+          </div>
+          <div class="form-row">
+            <label for="wkTime">Time your alarm rings</label>
+            <input type="time" id="wkTime">
+          </div>
+          <div class="form-row">
+            <span class="wk-label" id="wkDaysLabel">Days</span>
+            <div class="wk-day-pills" id="wkDayPills" role="group" aria-labelledby="wkDaysLabel"></div>
+          </div>
+          <div class="form-row">
+            <label for="wkPhrase1">First phrase (typed after the alarm)</label>
+            <input type="text" id="wkPhrase1" maxlength="60" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          </div>
+          <div class="form-row">
+            <label for="wkPhrase2">Check-in phrase</label>
+            <input type="text" id="wkPhrase2" maxlength="60" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          </div>
+          <div class="form-row two-col">
+            <div><label for="wkDelay">Minutes until the check-in</label><input type="number" id="wkDelay" min="1" max="60" step="1" inputmode="numeric"></div>
+            <div><label for="wkWindow">Minutes to answer each one</label><input type="number" id="wkWindow" min="3" max="30" step="1" inputmode="numeric"></div>
+          </div>
+          <div class="dc-switch-row">
+            <button type="button" class="dc-switch" role="switch" id="wkStrict" aria-checked="false" aria-labelledby="wkStrictLabel"><span class="dc-switch-knob" aria-hidden="true"></span></button>
+            <span id="wkStrictLabel">Capital letters must match</span>
+          </div>
+          <p class="dc-error" id="wkError" role="alert"></p>
+          <div class="form-actions"><button type="submit" class="btn btn-primary">Save</button></div>
+        </form>
+        <ul class="dc-lines wk-notes">
+          <li>Set a repeating alarm in the <strong>Clock</strong> app for the same time. JARVIS can't ring your phone.</li>
+          <li>JARVIS can't send you a notification for the check-in yet. For now, keep this screen open or set an iPhone timer.</li>
+          <li>The first phrase counts from your alarm time until the minutes to answer run out. Typing it starts the countdown to the check-in.</li>
+          <li>Changing the time or the days starts counting from now. Mornings already finished keep the time they had.</li>
+          <li>A curly &rsquo; and a straight ' are treated as the same, and so are extra spaces. Pasting is turned off on the answer box.</li>
+        </ul>
+      </section>
+    </div>
+<div id="discipline-program" class="habits-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavProgram">
+      <div class="card dc-prog-overview" id="dcProgHead"></div>
+      <div class="card hidden" id="dcProgMissions"></div>
+      <div class="card dc-lesson hidden" id="dcProgLesson"></div>
+      <div class="card">
+        <h2 class="card-title">All 30 days</h2>
+        <p class="field-hint" id="dcProgDaysHint"></p>
+        <div id="dcProgDays"></div>
+      </div>
+      <div class="card hidden" id="dcProgManage"></div>
+    </div>
+<div id="discipline-setup" class="habits-sub-panel" role="tabpanel" aria-labelledby="disciplineSubNavSetup">
 
       <section class="dc-group" aria-labelledby="dcGrpPrefs">
         <h2 class="dc-group-title" id="dcGrpPrefs">Discipline preferences</h2>
@@ -2640,10 +2546,83 @@ npx firebase-tools deploy --only firestore:rules</pre>
         <div class="card" id="dcDataCard"></div>
       </section>
     </div>
+    <!-- Kept for the code that still fills them, never shown: the old Discipline check-in strip, the Discipline day switch,
+         the Discipline routine list (the habits above are the one list) and its progress card. -->
+    <div id="hbLegacy" hidden>
+      <div class="card dc-strip hidden" id="habitsDisciplineCard" aria-labelledby="habitsDisciplineTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="habitsDisciplineTitle">Discipline check-in</h2>
+          <button type="button" class="btn-icon" id="habitsOpenDiscipline">Open Discipline</button>
+        </div>
+        <p class="dc-coach" id="habitsCoachText"></p>
+        <p class="field-hint" id="habitsCoachLeft"></p>
+        <p class="dc-line" id="habitsDisciplinePlan"></p>
+      </div>
+      <div class="card">
+        <div class="segmented-control" id="dcDayPills" role="group" aria-label="Which day">
+          <button type="button" class="segmented-btn" data-day="yesterday" id="dcDayYesterday" aria-pressed="false">Yesterday</button>
+          <button type="button" class="segmented-btn active" data-day="today" id="dcDayToday" aria-pressed="true">Today</button>
+          <button type="button" class="segmented-btn" data-day="tomorrow" id="dcDayTomorrow" aria-pressed="false">Tomorrow</button>
+        </div>
+        <div class="card-title-row dc-title-row">
+          <h2 class="card-title" id="dcDateTitle">Today</h2>
+          <div class="dc-badges">
+            <span class="badge badge-accent" id="dcStreakBadge">0 day streak</span>
+            <span class="badge badge-neutral" id="dcLimitBadge">Phone limit 5h</span>
+          </div>
+        </div>
+      </div>
+      <div class="card dc-routine hidden" id="dcRoutineCard" aria-labelledby="dcRoutineTitle">
+        <div class="card-title-row">
+          <h2 class="card-title" id="dcRoutineTitle">Your routine</h2>
+          <button type="button" class="btn-icon" id="dcOpenHabits">Open Habits</button>
+        </div>
+        <p class="dc-coach" id="dcCoachText"></p>
+        <p class="field-hint" id="dcCoachLeft"></p>
+        <div class="dc-routine-list" id="dcRoutineList"></div>
+        <p class="field-hint">Kept in Habits. Discipline only reads it, so tick things off there.</p>
+      </div>
+      <div class="card dc-progress" id="dcProgressCard">
+        <h2 class="card-title">Your progress</h2>
+        <div id="dcProgressBody"></div>
+        <div class="form-actions"><button type="button" class="btn btn-secondary" id="dcSeeTrends">See your trends</button></div>
+      </div>
+    </div>
   </section>
 
+<section id="panel-calendar" class="tab-panel cal-scope" role="tabpanel" aria-labelledby="navBtnCalendar">
+    <div class="card cal-head">
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button type="button" class="btn-icon cal-step" id="calPrev" aria-label="Previous">&larr;</button>
+          <button type="button" class="btn btn-secondary cal-today" id="calToday">Today</button>
+          <button type="button" class="btn-icon cal-step" id="calNext" aria-label="Next">&rarr;</button>
+        </div>
+        <h2 class="cal-title" id="calTitle" aria-live="polite"></h2>
+        <button type="button" class="btn btn-primary cal-new" id="calNew">+ New</button>
+      </div>
+      <div class="cal-views" role="group" aria-label="Calendar view">
+        <button type="button" class="cal-view-btn" data-view="month" aria-pressed="false">Month</button>
+        <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
+        <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Day</button>
+        <button type="button" class="cal-view-btn" data-view="agenda" aria-pressed="false">Agenda</button>
+      
+      </div>
+      <div class="cal-tools">
+        <input type="search" id="calSearch" class="cal-search" placeholder="Search events and tasks" aria-label="Search events and tasks" autocomplete="off">
+        <button type="button" class="btn btn-secondary cal-filter-btn" id="calFilterBtn" aria-expanded="false" aria-controls="calFilters">Filters</button>
+        <button type="button" class="btn btn-secondary cal-assist-btn" id="calAssist" aria-haspopup="dialog">Assistant</button>
+      </div>
+      <div class="cal-filters hidden" id="calFilters"></div>
+    </div>
+    <div id="calStatus" class="cal-status hidden" role="status"></div>
+    <div id="calStage" class="cal-stage" aria-live="off"></div>
+    <div id="calUndo" class="cal-undo hidden" role="status"></div>
+    <p id="calLive" class="visually-hidden" role="status" aria-live="polite"></p>
+    <p class="field-hint cal-foot" id="calFoot"></p>
+  </section>
 
-  <!-- ===================== BUSINESS ===================== -->
+  <!-- ===================== DISCIPLINE ===================== -->
   <section id="panel-business" class="tab-panel bz-scope" role="tabpanel" aria-labelledby="navBtnBusiness">
     <div class="panel-header">
       <h1>Business</h1>
@@ -3087,9 +3066,6 @@ npx firebase-tools deploy --only firestore:rules</pre>
   <div class="modal-box sheet-box more-sheet-box">
     <div class="sheet-handle" aria-hidden="true"></div>
     <div class="more-list">
-      <button type="button" class="more-item" data-nav="navBtnDiscipline">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Discipline</span>
-      </button>
       <button type="button" class="more-item" data-nav="navBtnBusiness">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5l1.4-4.6a1 1 0 01.96-.7h12.28a1 1 0 01.96.7l1.4 4.6"/><path d="M4.5 9.5v9.8a1 1 0 001 1h13a1 1 0 001-1V9.5"/><path d="M3.5 9.5a2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0"/></svg><span>Business</span>
       </button>

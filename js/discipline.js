@@ -97,7 +97,7 @@
   function esc(v) { return core().escapeHtml(v); }
   function tidy(v) { return String(v === undefined || v === null ? "" : v).replace(/\s+/g, " ").trim(); }
   function reduceMotion() { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
-  function bringIntoView(id) { const el = $(id); if (el) el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" }); }
+  function bringIntoView(id) { const el = $(id); if (el) { const fold = el.closest("details"); if (fold && !fold.open) fold.open = true; } if (el) el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" }); }
   function reasonOf(key) { return L.REASONS.filter(function (r) { return r.key === key; })[0] || null; }
   function excuseOf(key) { return L.EXCUSES.filter(function (e) { return e.key === key; })[0] || null; }
 
@@ -1179,11 +1179,7 @@
     $("dcOverviewBar").setAttribute("aria-valuemax", String(Math.max(1, items.length)));
     $("dcOverviewBar").setAttribute("aria-valuenow", String(done));
     const chips = [m ? chip("Plan saved", "ok") : chip("No plan yet", "todo")];
-    if (selected !== "tomorrow") { const rs = reviewStatus(date); chips.push(chip(rs.state === "scored" ? rs.text : "Review: " + rs.text.toLowerCase(), rs.state === "scored" ? "ok" : "")); }
-    if (selected !== "tomorrow") {
-      const rr = routineOn(date);
-      if (rr && rr.routine.total) chips.push(chip("Routine " + (rr.routine.done + rr.routine.met) + "/" + rr.routine.total, rr.routine.open === 0 ? "ok" : ""));
-    }
+    // The habit count and the reflection have their own places on this screen, so they are not repeated here.
     const prog = selected === "today" ? programToday() : null;
     if (prog) {
       chips.push(chip("Program day " + prog.day + " of 30"));
@@ -1783,7 +1779,27 @@
       '<p class="field-hint">Backup copies them to your own JARVIS account. Its status is also in the gear menu at the top, with a button to try again. Half-typed plans, reviews and reflections (drafts) stay on this phone only and are not backed up. Nothing is shared unless you tap Share in the weekly review.</p>';
   }
 
+  // The Routines screen: when the morning plan and the evening review are, how many rules are kept, and where the program stands.
+  function renderRoutineSummary() {
+    const box = $("hbRoutineRows");
+    if (!box) return;
+    const t = store.settings.times || {};
+    const rules = (store.rules || []).length;
+    const row = function (title, sub) {
+      return '<button type="button" class="hb-row" data-subgo="discipline-setup"><span class="hb-row-main"><span class="hb-row-title">' + esc(title) + '</span><span class="hb-row-sub">' + esc(sub) + '</span></span><span class="hb-row-go" aria-hidden="true">Change</span></button>';
+    };
+    box.innerHTML = row("Morning plan", t.planBy ? "Plan the day by " + timeLabel(t.planBy) : "Pick a time") +
+      row("Evening review", t.review ? "Review the day from " + timeLabel(t.review) : "Pick a time") +
+      row("Personal rules", rules ? rules + (rules === 1 ? " rule" : " rules") + " you check each evening" : "None yet");
+    const sub = $("hbProgramSub");
+    if (sub && P) {
+      const pd = P.programDay(store.program.start, todayISO());
+      sub.textContent = pd.status === "active" ? "Day " + pd.day + " of 30" : pd.status === "complete" ? "Finished" : store.program.start ? "Starts " + prettyDate(store.program.start) : "Optional. A short lesson and missions each day.";
+    }
+  }
+
   function renderSetup() {
+    renderRoutineSummary();
     $("dcPhoneLimit").value = store.settings.phoneLimit;
     const times = store.settings.times;
     $("dcTimePlan").value = times.planBy;
@@ -2300,6 +2316,9 @@
     if (targetId === "discipline-setup") renderSetup();
   }
 
+  // Habits picks a day (yesterday, today or tomorrow): Discipline's plan and review follow it.
+  function followDay(which) { if ((which === "yesterday" || which === "today" || which === "tomorrow") && which !== selected) selectDay(which); }
+
   // For the Daily Briefing: has a plan been set today, the streak, and the last scored day.
   function getSummary() {
     const today = todayISO();
@@ -2356,7 +2375,6 @@
     // Paired with Habits: open each from the other, and refresh whenever the routine may have changed (switching to
     // Discipline, ticking a habit or a task in Habits). Discipline reads Habits' own saved data and never writes it.
     $("dcOpenHabits").addEventListener("click", openHabitsTab);
-    $("habitsOpenDiscipline").addEventListener("click", function () { $("navBtnDiscipline").click(); $("disciplineSubNavToday").click(); window.scrollTo(0, 0); });
     $("dcRoutineUse").addEventListener("click", function () {
       const r = routineOn(renderedDate || selectedDate());
       const answer = r && H.suggestAnswer(r.routine);
@@ -2366,7 +2384,7 @@
       captureReviewDraft();
       core().showToast("Filled in from Habits: " + ANSWER_LABELS[answer] + ". You can change it.");
     });
-    $("navBtnDiscipline").addEventListener("click", function () { renderOverview(); renderNextUp(); renderRoutineCard(); renderProgressCard(); renderRoutineReview(); });
+    $("habitsSubNavToday").addEventListener("click", function () { renderOverview(); renderNextUp(); renderRoutineCard(); renderProgressCard(); renderRoutineReview(); });
     ["navBtnHabits", "habitsSubNavToday"].forEach(function (id) { $(id).addEventListener("click", renderHabitsStrip); });
     // On the lists themselves, so this runs after Habits has handled the tap and redrawn (its own handler is registered first).
     ["todayHabitsList", "taskList"].forEach(function (id) { $(id).addEventListener("click", renderHabitsStrip); });
@@ -2477,5 +2495,5 @@
     ensureTicking();
   }
 
-  window.JarvisDiscipline = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
+  window.JarvisDiscipline = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, followDay: followDay };
 })();

@@ -433,13 +433,10 @@
       if (window.JarvisHabits && typeof window.JarvisHabits.onSubTabChange === "function") {
         window.JarvisHabits.onSubTabChange(targetId);
       }
-    });
-
-    const disciplineSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".discipline-sub-nav-btn"));
-    const disciplineSubPanels = Array.prototype.slice.call(document.querySelectorAll(".discipline-sub-panel"));
-    setupTabGroup(disciplineSubNavBtns, disciplineSubPanels, function (targetId) {
+      // Discipline lives inside Habits now: its screens refresh when the Habits screen that holds them opens.
       if (window.JarvisDiscipline && typeof window.JarvisDiscipline.onSubTabChange === "function") {
-        window.JarvisDiscipline.onSubTabChange(targetId);
+        const asDiscipline = { "habits-today": "discipline-today", "habits-progress": "discipline-trends", "habits-routines": "discipline-setup" };
+        window.JarvisDiscipline.onSubTabChange(asDiscipline[targetId] || targetId);
       }
     });
 

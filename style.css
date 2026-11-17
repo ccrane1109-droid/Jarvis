@@ -4915,3 +4915,42 @@ span.sp-trow-t { cursor: default; }
 .gr-fold > .card { border: 0; padding: 4px 0 12px; background: none; box-shadow: none; }
 .gr-fold > .card > .card-title, .gr-fold > .card > .card-title-row > .card-title { font-size: 0; height: 0; margin: 0; overflow: hidden; }
 .gr-fold > .card > .card-title-row { justify-content: flex-end; margin-bottom: 4px; }
+
+/* Habits (with Discipline inside) */
+.panel-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hb-strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 4px 0 10px; }
+.hb-strip-date { font-size: 17px; margin: 0; font-weight: 650; }
+.hb-strip-counts { margin: 0; font-size: 15px; color: var(--text-dim); flex-basis: 100%; }
+.hb-strip-counts span:first-child, .hb-strip-counts span:nth-child(3) { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hb-sec { margin: 18px 0 6px; }
+.hb-rows { display: flex; flex-direction: column; }
+.hb-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 2px; text-align: left; color: var(--text); background: none; border: 0; border-top: 1px solid var(--card-border); font: inherit; cursor: pointer; }
+.hb-rows .hb-row:first-child { border-top: 0; }
+.hb-row-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.hb-row-title { font-size: 16px; }
+.hb-row-sub { font-size: 13px; color: var(--text-dim); }
+.hb-row-go { font-size: 14px; color: #9ec1ff; }
+#habits-today > .card, #habits-progress > .card, #habits-routines > .card { background: none; border: 0; box-shadow: none; padding: 0; margin-bottom: 14px; }
+#habitFormWrap > .card { margin-bottom: 12px; }
+#habits-today .today-overview-card { display: none; }
+.habit-card-grid { display: block; }
+.habit-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border: 0; border-top: 1px solid var(--card-border); border-radius: 0; background: none; min-height: 60px; }
+.habit-row:first-child { border-top: 0; }
+.habit-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.habit-row .habit-card-name { font-size: 16px; font-weight: 600; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
+.habit-row-meta { font-size: 13px; color: var(--text-dim); }
+.habit-row .habit-toggle-btn { flex: 0 0 auto; width: auto; min-width: 96px; min-height: 44px; padding: 0 14px; margin: 0; }
+.habit-row .stepper-row { flex: 0 0 auto; margin: 0; }
+.hb-plan > summary { font-size: 16px; }
+.hb-plan > .card { border: 0; padding: 0; background: none; }
+#habits-today .dc-overview { padding: 10px 0; border: 0; border-top: 1px solid var(--card-border); border-radius: 0; background: none; }
+#habits-today .dc-next { padding: 12px 14px; }
+#habits-today #dcReviewCard, #habits-today #dcFlowCard { padding: 0; }
+.habit-card.habit-row { flex-direction: row; align-items: center; text-align: left; gap: 12px; padding: 8px 0; }
+.habit-row-main { align-items: flex-start; text-align: left; }
+#habits-today .dc-next-why, #habits-today .dc-next-text { display: none; }
+#habits-today .dc-next-title { font-size: 17px; margin-bottom: 8px; }
+.day-selector-row .btn-icon { flex: 0 0 44px; min-width: 44px; padding: 0; }
+.day-pill-row { min-width: 0; }
+#habits-today .day-pill { flex: 1 1 0; min-width: 0; padding-left: 0; padding-right: 0; }
+#habits-today .day-pill-row { overflow-x: visible; gap: 4px; }
