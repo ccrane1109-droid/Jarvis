@@ -546,22 +546,11 @@
 
   /* ---------------- Dashboard ---------------- */
 
-  function macroCardHtml(label, consumed, target, unit) {
-    const core = window.JarvisCore;
+  // One macro in the compact summary: the amount logged, and "of target" only when a target has been set.
+  function macroCellHtml(label, consumed, target, unit) {
     const hasTarget = target > 0;
-    const pct = hasTarget ? Math.min(100, Math.round((consumed / target) * 100)) : 0;
-    const overCls = hasTarget && consumed > target ? " over" : "";
-    const remaining = hasTarget ? Math.max(0, Math.round(target - consumed)) : null;
-    return (
-      '<div class="macro-mini-card">' +
-        '<div class="macro-mini-label">' + core.escapeHtml(label) + '</div>' +
-        '<div class="macro-mini-value">' + Math.round(consumed) + (hasTarget ? ' / ' + Math.round(target) : '') + unit + '</div>' +
-        (hasTarget
-          ? '<div class="macro-mini-track"><div class="macro-mini-fill' + overCls + '" style="width:' + pct + '%"></div></div>' +
-            '<div class="macro-mini-sub">' + remaining + unit + ' left</div>'
-          : '<div class="macro-mini-sub">No target set</div>') +
-      '</div>'
-    );
+    const over = hasTarget && consumed > target ? " over" : "";
+    return '<div class="nut-macro' + over + '"><span class="nut-macro-v">' + Math.round(consumed) + unit + (hasTarget ? '<span class="nut-macro-of"> / ' + Math.round(target) + '</span>' : '') + '</span><span class="nut-macro-l">' + window.JarvisCore.escapeHtml(label) + '</span></div>';
   }
 
   function renderMacroCards() {
@@ -569,38 +558,40 @@
     const totals = getDayTotals(today);
     const targets = getActiveTargets();
     $("nutritionMacroCards").innerHTML =
-      macroCardHtml("Protein", totals.protein, targets.protein, "g") +
-      macroCardHtml("Carbs", totals.carbs, targets.carbs, "g") +
-      macroCardHtml("Fat", totals.fat, targets.fat, "g") +
-      macroCardHtml("Fiber", totals.fiber, targets.fiber, "g");
+      macroCellHtml("Protein", totals.protein, targets.protein, "g") +
+      macroCellHtml("Carbs", totals.carbs, targets.carbs, "g") +
+      macroCellHtml("Fat", totals.fat, targets.fat, "g") +
+      macroCellHtml("Fiber", totals.fiber, targets.fiber, "g");
   }
 
+  // Today: calories logged; the target, what is left and a bar only once a calorie target exists; macros; water.
   function renderDashboard() {
     const core = window.JarvisCore;
     const today = core.todayISODate();
     const totals = getDayTotals(today);
     const targets = getActiveTargets();
 
-    $("nutritionModeLabel").textContent = getMode() === "bulking" ? "Bulking" : "Cutting";
-    $("nutritionCalorieTarget").textContent = targets.calories > 0 ? Math.round(targets.calories) : "Not set";
-    $("nutritionCalorieConsumed").textContent = Math.round(totals.calories);
+    $("nutritionCalorieTarget").textContent = targets.calories > 0 ? Math.round(targets.calories) : "";
+    $("nutritionCalorieConsumed").textContent = Math.round(totals.calories).toLocaleString();
     const remaining = targets.calories - totals.calories;
     const remainingEl = $("nutritionCalorieRemaining");
-    remainingEl.textContent = targets.calories > 0 ? Math.round(remaining) : "—";
-    remainingEl.className = "calorie-remaining-value " + (targets.calories > 0 ? (remaining >= 0 ? "text-positive" : "text-negative") : "");
-
-    const ring = $("calorieRing");
-    if (ring) {
-      const overTarget = targets.calories > 0 && totals.calories > targets.calories;
-      const pct = targets.calories > 0 ? Math.min(100, Math.round((totals.calories / targets.calories) * 100)) : (totals.calories > 0 ? 100 : 0);
-      ring.style.setProperty("--pct", String(pct));
-      ring.classList.toggle("over", overTarget);
+    const bar = $("nutSumBar");
+    if (targets.calories > 0) {
+      remainingEl.textContent = " of " + Math.round(targets.calories).toLocaleString() + " · " + (remaining >= 0 ? Math.round(remaining).toLocaleString() + " left" : Math.round(-remaining).toLocaleString() + " over");
+      remainingEl.className = "nut-sum-of " + (remaining >= 0 ? "" : "text-negative");
+      bar.hidden = false;
+      const pct = Math.min(100, Math.round((totals.calories / targets.calories) * 100));
+      $("nutSumFill").style.width = pct + "%";
+      bar.classList.toggle("over", remaining < 0);
+    } else {
+      remainingEl.textContent = "";
+      remainingEl.className = "nut-sum-of";
+      bar.hidden = true;
     }
 
     renderMacroCards();
 
-    $("nutritionWaterBar").innerHTML = barHtml("Water", totals.water, targets.water, " cups");
-    $("nutritionWaterCount").textContent = totals.water;
+    $("nutritionWaterBar").textContent = totals.water + (totals.water === 1 ? " cup" : " cups") + (targets.water > 0 ? " of " + targets.water : "");
 
     renderGoals();
     renderCalculator();
@@ -1274,7 +1265,7 @@
   function renderSavedFoodForm() {
     $("savedFoodFormTitle").textContent = window._savedFoodEditId ? "Edit Saved Food" : "Add Saved Food";
     $("savedFoodSubmitBtn").textContent = window._savedFoodEditId ? "Save Changes" : "Save Food";
-    $("savedFoodCancelBtn").classList.toggle("hidden", !window._savedFoodEditId);
+    $("savedFoodCancelBtn").classList.remove("hidden");   // Cancel closes the form: always offered
   }
 
   function resetSavedFoodForm() {
@@ -1286,6 +1277,7 @@
     clearScanMarks("savedFood");
     setAiStatus("savedFoodScanStatus", "");
     renderSavedFoodForm();
+    const sw = $("savedFoodFormWrap"); if (sw) sw.hidden = true;
   }
 
   function handleSavedFoodFormSubmit(e) {
@@ -1330,7 +1322,7 @@
     else list.sort(function (a, b) { return a.name.localeCompare(b.name); });
 
     if (list.length === 0) {
-      container.innerHTML = '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet. Add one above." : "No saved foods match your search.") + '</div>';
+      container.innerHTML = '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet. Tap + Add." : "No saved foods match your search.") + '</div>';
       return;
     }
     container.innerHTML = list.map(function (f) {
@@ -1372,6 +1364,7 @@
       });
       adoptBasis("savedFood", food);
       renderSavedFoodForm();
+      showFoodForm("saved");
       $("savedFoodName").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -1909,9 +1902,10 @@
     $("recipeServings").value = "1";
     $("recipeFormTitle").textContent = "Create a Recipe";
     $("recipeSubmitBtn").textContent = "Save Recipe";
-    $("recipeCancelBtn").classList.add("hidden");
+    $("recipeCancelBtn").classList.remove("hidden");
     setRecipeAiStatus("");
     renderIngredientRows();
+    const rw = $("recipeFormWrap"); if (rw) rw.hidden = true;
   }
 
   function handleRecipeFormSubmit(e) {
@@ -1953,11 +1947,13 @@
   function renderRecipes() {
     const core = window.JarvisCore;
     const container = $("recipesList");
-    if (recipes.length === 0) {
-      container.innerHTML = '<div class="empty-state">No recipes yet. Build one above.</div>';
+    const rq = savedFoodSearch.trim().toLowerCase();
+    const shownRecipes = rq ? recipes.filter(function (r) { return r.name.toLowerCase().indexOf(rq) !== -1 || r.ingredients.some(function (i) { return (i.name || "").toLowerCase().indexOf(rq) !== -1; }); }) : recipes;
+    if (shownRecipes.length === 0) {
+      container.innerHTML = '<div class="empty-state">' + (recipes.length === 0 ? "No recipes yet. Tap + Add." : "No recipes match your search.") + '</div>';
       return;
     }
-    container.innerHTML = recipes.map(function (r) {
+    container.innerHTML = shownRecipes.map(function (r) {
       const result = computeRecipeTotals(r.ingredients);
       const per = {};
       MACRO_FIELDS.forEach(function (f) { per[f] = result.totals[f] / r.servings; });
@@ -2027,6 +2023,7 @@
       $("recipeSubmitBtn").textContent = "Save Changes";
       $("recipeCancelBtn").classList.remove("hidden");
       renderIngredientRows();
+      showFoodForm("recipe");
       $("recipeName").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -2279,6 +2276,98 @@
     return "snacks";
   }
 
+  /* ---------------- the food library: one screen for saved foods and recipes ---------------- */
+
+  let foodsFilter = "all";
+  function showFoodForm(which) {
+    const sw = $("savedFoodFormWrap"), rw = $("recipeFormWrap");
+    if (sw) sw.hidden = which !== "saved";
+    if (rw) rw.hidden = which !== "recipe";
+    setFoodsFilter(which === "saved" ? "foods" : "recipes");
+  }
+  function setFoodsFilter(f) {
+    foodsFilter = f;
+    const a = $("foodsSavedSec"), b = $("foodsRecipesSec");
+    if (a) a.hidden = f === "recipes";
+    if (b) b.hidden = f === "foods";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-foodsfilter]"), function (btn) {
+      const on = btn.getAttribute("data-foodsfilter") === f;
+      btn.classList.toggle("is-on", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  function openFoodsAddMenu() {
+    window.JarvisMenu.open({
+      title: "Add to your library", opener: $("foodsAddBtn"),
+      rows: [{ key: "saved", label: "Saved food", sub: "A food you eat often, with its numbers" }, { key: "recipe", label: "Recipe", sub: "Ingredients that make servings" }],
+      onPick: function (key) {
+        if (key === "saved") { window._savedFoodEditId = null; renderSavedFoodForm(); }
+        showFoodForm(key);
+        const el = $(key === "saved" ? "savedFoodName" : "recipeName");
+        if (el) { el.scrollIntoView({ block: "center" }); el.focus(); }
+      }
+    });
+  }
+  function openTodayMenu() {
+    window.JarvisMenu.open({
+      title: "Nutrition", opener: $("nutMoreBtn"),
+      rows: [
+        { key: "scan", label: "Scan a label", sub: "Add a food from its nutrition label" },
+        { key: "recipe", label: "Log a recipe" },
+        { key: "targets", label: "Targets and goals", sub: "Calorie and macro targets, weekly check-in" },
+        { key: "nutrients", label: "Nutrient detail", sub: "Macros and micronutrients for today" }
+      ],
+      onPick: function (key) {
+        if (key === "scan") openAddFoodModal("create");
+        else if (key === "recipe") openAddFoodModal("recipe");
+        else { const b = document.querySelector('.nutrition-sub-nav-btn[data-subtarget="' + (key === "targets" ? "nutrition-goals" : "nutrition-nutrients") + '"]'); if (b) b.click(); }
+      }
+    });
+  }
+
+  // Foods you have logged on at least two days in the last 30, most often first.
+  function getFrequentFoods(limit) {
+    const counts = {}, latest = {};
+    getDateRangeDescending(30).forEach(function (d) {
+      const seenToday = {};
+      getAllEntries(d).forEach(function (item) {
+        const key = (item.name || "").trim().toLowerCase();
+        if (!key || seenToday[key]) return;
+        seenToday[key] = true;
+        counts[key] = (counts[key] || 0) + 1;
+        if (!latest[key] || (item.createdAt || 0) > (latest[key].createdAt || 0)) latest[key] = item;
+      });
+    });
+    return Object.keys(counts).filter(function (k) { return counts[k] >= 2; })
+      .sort(function (a, b) { return (counts[b] - counts[a]) || ((latest[b].createdAt || 0) - (latest[a].createdAt || 0)); })
+      .slice(0, limit || 6).map(function (k) { return latest[k]; });
+  }
+  function renderFrequentFoods() {
+    const wrap = $("foodsFrequentWrap"), box = $("foodsFrequent");
+    if (!wrap || !box) return;
+    const items = getFrequentFoods(6);
+    wrap.hidden = items.length === 0;
+    box.innerHTML = items.map(function (it) {
+      return '<button type="button" class="nut-freq-btn" data-id="' + window.JarvisCore.escapeHtml(it.id) + '" aria-label="Log ' + window.JarvisCore.escapeHtml(it.name) + ' again"><span class="nut-freq-name">' + window.JarvisCore.escapeHtml(it.name) + '</span><span class="nut-freq-meta">' + Math.round(it.calories) + ' cal &middot; + Log</span></button>';
+    }).join("");
+  }
+  // One tap logs the same food again (as it was last logged) into the meal that fits the time of day.
+  function handleFrequentClick(e) {
+    const btn = e.target.closest(".nut-freq-btn");
+    if (!btn) return;
+    const id = btn.getAttribute("data-id");
+    const item = getFrequentFoods(12).filter(function (x) { return x.id === id; })[0];
+    if (!item) return;
+    const copy = Object.assign({}, item); delete copy.id; delete copy.createdAt;
+    const meal = guessCurrentMeal();
+    getDay(window.JarvisCore.todayISODate()).meals[meal].push(sanitizeFoodItem(copy));
+    saveLog();
+    renderFoodLog();
+    renderDashboard();
+    if (window.JarvisGroceries && typeof window.JarvisGroceries.onSimpleFoodLogged === "function") window.JarvisGroceries.onSimpleFoodLogged(item.name, item.serving || "1 serving");
+    window.JarvisCore.showToast('Added "' + item.name + '" to ' + MEAL_LABELS[meal] + ".");
+  }
+
   function openAddFoodModal(tab) {
     addFoodModalTab = tab || (getRecentFoods(1).length ? "recent" : "saved");
     pickerSelection = null;
@@ -2502,6 +2591,7 @@
     renderSavedFoods();
     renderIngredientRows();
     renderRecipes();
+    renderFrequentFoods();
     renderNutrientsMacros();
     renderNutrients();
     renderHistoryList();
@@ -2528,6 +2618,7 @@
   // user switches to it, so it's never showing stale numbers.
   function onSubTabChange(targetId) {
     if (targetId === "nutrition-dashboard") renderDashboard();
+    if (targetId === "nutrition-foods") { renderFrequentFoods(); renderSavedFoods(); renderRecipes(); }
     if (targetId === "nutrition-nutrients") { renderNutrientsMacros(); renderNutrients(); }
     if (targetId === "nutrition-history") renderHistoryList();
     if (targetId === "nutrition-groceries" && window.JarvisGroceries) window.JarvisGroceries.onSubTabChange(targetId);
@@ -2554,11 +2645,12 @@
     $("nutritionWaterAddBtn").addEventListener("click", function () { handleWaterAdjust(1); });
     $("nutritionWaterRemoveBtn").addEventListener("click", function () { handleWaterAdjust(-1); });
 
-    $("qaAddFoodBtn").addEventListener("click", function () { openAddFoodModal(); });
-    $("qaScanLabelBtn").addEventListener("click", function () { openAddFoodModal("create"); });
-    $("qaAddWaterBtn").addEventListener("click", function () { handleWaterAdjust(1); });
-    $("qaLogRecentBtn").addEventListener("click", function () { openAddFoodModal("recent"); });
-    $("qaAddRecipeBtn").addEventListener("click", function () { openAddFoodModal("recipe"); });
+    $("nutMoreBtn").addEventListener("click", openTodayMenu);
+    $("foodsAddBtn").addEventListener("click", openFoodsAddMenu);
+    $("foodsFrequent").addEventListener("click", handleFrequentClick);
+    Array.prototype.forEach.call(document.querySelectorAll("[data-foodsfilter]"), function (b) {
+      b.addEventListener("click", function () { setFoodsFilter(b.getAttribute("data-foodsfilter")); });
+    });
 
     $("foodOpenModalBtn").addEventListener("click", function () { openAddFoodModal(); });
     $("addFoodModalCloseBtn").addEventListener("click", closeAddFoodModal);
@@ -2611,7 +2703,7 @@
     $("savedFoodScanRescaleBtn").addEventListener("click", function () { handleRescaleClick("savedFood"); });
     $("savedFoodScanLabelInput").addEventListener("change", handleScanSavedFoodLabelInput);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
-    $("savedFoodSearchInput").addEventListener("input", function (e) { savedFoodSearch = e.target.value; renderSavedFoods(); });
+    $("savedFoodSearchInput").addEventListener("input", function (e) { savedFoodSearch = e.target.value; renderSavedFoods(); renderRecipes(); });
     $("savedFoodSortSelect").addEventListener("change", function (e) { savedFoodSort = e.target.value; renderSavedFoods(); });
 
     $("recipeForm").addEventListener("submit", handleRecipeFormSubmit);

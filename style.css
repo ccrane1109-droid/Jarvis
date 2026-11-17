@@ -4865,3 +4865,53 @@ span.sp-trow-t { cursor: default; }
 .rt-list { margin: 0 0 8px; }
 .rt-new { min-height: 44px; }
 .rt-weekfold .rt-week { margin-top: 4px; }
+
+/* Nutrition: Today, Foods, History */
+.nut-sum { margin: 0 0 8px; }
+.nut-sum-cal { margin: 0 0 6px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; }
+.nut-sum-num { font-size: 34px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.nut-sum-unit { font-size: 15px; color: var(--text-dim); }
+.nut-sum-of { font-size: 15px; color: var(--text-dim); }
+.nut-sum-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; margin: 0 0 10px; }
+.nut-sum-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.nut-sum-bar.over .nut-sum-fill { background: #ff8a8a; }
+.nut-sum-macros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--card-border); border-bottom: 1px solid var(--card-border); padding: 10px 0; }
+.nut-macro { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.nut-macro-v { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.nut-macro-of { font-size: 13px; font-weight: 400; color: var(--text-dim); }
+.nut-macro-l { font-size: 13px; color: var(--text-dim); }
+.nut-macro.over .nut-macro-v { color: #ff8a8a; }
+.nut-water { display: flex; align-items: center; gap: 8px; min-height: 52px; margin: 4px 0 8px; }
+.nut-water-label { font-size: 15px; color: var(--text-dim); }
+.nut-water-count { flex: 1; font-size: 15px; font-variant-numeric: tabular-nums; }
+.nut-water .btn-icon { min-width: 44px; min-height: 44px; font-size: 20px; }
+.nut-water .btn { min-height: 44px; }
+.add-food-cta { width: 100%; margin: 4px 0 8px; }
+.nut-meals .meal-section { margin: 10px 0 0; padding: 0; border: 0; background: none; }
+.nut-meals .meal-section-header { font-size: 14px; color: var(--text-dim); font-weight: 600; display: flex; justify-content: space-between; border-bottom: 1px solid var(--card-border); padding-bottom: 4px; }
+.sm-sub { font-size: 14px; font-weight: 600; color: var(--text-dim); margin: 12px 0 6px; }
+.nut-freq-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.nut-freq-row::-webkit-scrollbar { display: none; }
+.nut-freq-btn { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 56px; max-width: 200px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--card-border); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.nut-freq-name { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.nut-freq-meta { font-size: 13px; color: var(--text-dim); }
+.nut-lib-bar { display: flex; gap: 8px; margin: 8px 0; }
+.nut-lib-bar input { flex: 1 1 auto; min-width: 0; }
+.nut-lib-bar select { flex: 0 0 auto; max-width: 150px; }
+.nut-lib-sec[hidden], #savedFoodFormWrap[hidden], #recipeFormWrap[hidden] { display: none; }
+.saved-food-grid { display: block; }
+.saved-food-card { padding: 10px 0; border: 0; border-top: 1px solid var(--card-border); background: none; border-radius: 0; }
+.saved-food-card:first-child { border-top: 0; }
+.nut-score-fold .card { border: 0; padding: 0; background: none; }
+.nut-meals .empty-state, .nut-lib-sec .empty-state { border: 0; background: none; padding: 6px 0; text-align: left; font-size: 14px; color: var(--text-faint); }
+.nut-meals .item-list { gap: 0; }
+.nut-meals .food-item-card { border: 0; border-top: 1px solid var(--card-border); border-radius: 0; background: none; padding: 8px 0; margin: 0; }
+.nut-meals .food-item-card:first-child { border-top: 0; }
+.nut-lib-sec .item-list { gap: 0; }
+.nut-lib-sec .list-item { border: 0; border-top: 1px solid var(--card-border); border-radius: 0; background: none; padding: 10px 0; }
+.nut-lib-sec .list-item:first-child { border-top: 0; }
+.nut-lib-sec .list-item-meta { font-size: 13px; color: var(--text-dim); }
+.nut-lib-sec .list-item-actions { flex-wrap: wrap; }
+.gr-fold > .card { border: 0; padding: 4px 0 12px; background: none; box-shadow: none; }
+.gr-fold > .card > .card-title, .gr-fold > .card > .card-title-row > .card-title { font-size: 0; height: 0; margin: 0; overflow: hidden; }
+.gr-fold > .card > .card-title-row { justify-content: flex-end; margin-bottom: 4px; }

@@ -958,63 +958,66 @@ npx firebase-tools deploy --only firestore:rules</pre>
   <section id="panel-nutrition" class="tab-panel" role="tabpanel" aria-labelledby="navBtnNutrition">
     <div class="panel-header">
       <h1>Nutrition</h1>
-      <p class="panel-subtitle">Log food, track macros, and see how your eating lines up with your goals. Manually logged only — nothing here is invented or looked up automatically, except AI estimates you explicitly ask for.</p>
     </div>
 
     <nav class="sub-nav nutrition-sub-nav" role="tablist" aria-label="Nutrition sections">
-      <button type="button" class="nutrition-sub-nav-btn active" data-subtarget="nutrition-dashboard" role="tab" aria-selected="true" aria-controls="nutrition-dashboard" id="nutritionSubNavDashboard">Dashboard</button>
-      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-food" role="tab" aria-selected="false" aria-controls="nutrition-food" id="nutritionSubNavFood">Food Log</button>
-      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-saved" role="tab" aria-selected="false" aria-controls="nutrition-saved" id="nutritionSubNavSaved">Saved</button>
-      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-recipes" role="tab" aria-selected="false" aria-controls="nutrition-recipes" id="nutritionSubNavRecipes">Recipes</button>
-      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-nutrients" role="tab" aria-selected="false" aria-controls="nutrition-nutrients" id="nutritionSubNavNutrients">Nutrients</button>
+      <button type="button" class="nutrition-sub-nav-btn active" data-subtarget="nutrition-dashboard" role="tab" aria-selected="true" aria-controls="nutrition-dashboard" id="nutritionSubNavDashboard">Today</button>
+      <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-foods" role="tab" aria-selected="false" aria-controls="nutrition-foods" id="nutritionSubNavFoods">Foods</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-history" role="tab" aria-selected="false" aria-controls="nutrition-history" id="nutritionSubNavHistory">History</button>
       <button type="button" class="nutrition-sub-nav-btn" data-subtarget="nutrition-groceries" role="tab" aria-selected="false" aria-controls="nutrition-groceries" id="nutritionSubNavGroceries">Groceries</button>
+      <!-- Reached from the screens above, not from this bar -->
+      <button type="button" class="nutrition-sub-nav-btn" hidden data-parent="nutrition-dashboard" data-subtarget="nutrition-goals" role="tab" aria-selected="false" aria-controls="nutrition-goals" id="nutritionSubNavGoals">Targets</button>
+      <button type="button" class="nutrition-sub-nav-btn" hidden data-parent="nutrition-history" data-subtarget="nutrition-nutrients" role="tab" aria-selected="false" aria-controls="nutrition-nutrients" id="nutritionSubNavNutrients">Nutrients</button>
     </nav>
 
-    <!-- ---------- Sub-panel: Dashboard ---------- -->
+    <!-- ---------- Sub-panel: Today ---------- -->
     <div id="nutrition-dashboard" class="nutrition-sub-panel active" role="tabpanel" aria-labelledby="nutritionSubNavDashboard">
-      <div class="card calorie-hero-card">
-        <div class="card-title-row">
-          <h2 class="card-title">Today</h2>
-          <span class="badge badge-neutral" id="nutritionModeLabel">Cutting</span>
-        </div>
-        <div class="calorie-hero-body">
-          <div class="calorie-ring" id="calorieRing">
-            <div class="calorie-ring-inner">
-              <span class="calorie-ring-line1"><span id="nutritionCalorieConsumed">0</span> / <span id="nutritionCalorieTarget">Not set</span></span>
-              <span class="calorie-ring-line2">kcal</span>
-            </div>
-          </div>
-          <div class="calorie-remaining-block">
-            <span class="calorie-remaining-value" id="nutritionCalorieRemaining">—</span>
-            <span class="calorie-remaining-label">remaining</span>
-          </div>
-        </div>
+      <div class="sm-head">
+        <h2 class="sm-title">Today</h2>
+        <span class="sm-head-btns"><button type="button" class="btn-icon sm-more" id="nutMoreBtn" aria-haspopup="dialog" aria-label="More nutrition options"><span aria-hidden="true">&#8943;</span></button></span>
       </div>
 
-      <div class="macro-card-grid" id="nutritionMacroCards"></div>
+      <section class="nut-sum" aria-label="Today's totals">
+        <p class="nut-sum-cal"><span class="nut-sum-num" id="nutritionCalorieConsumed">0</span> <span class="nut-sum-unit">kcal</span><span class="nut-sum-of" id="nutritionCalorieRemaining"></span></p>
+        <div class="nut-sum-bar" id="nutSumBar" hidden><span class="nut-sum-fill" id="nutSumFill"></span></div>
+        <div class="nut-sum-macros" id="nutritionMacroCards"></div>
+        <span id="nutritionCalorieTarget" hidden></span>
+      </section>
 
-      <div class="card water-card">
-        <div class="card-title-row">
-          <h2 class="card-title">Water</h2>
-          <span class="field-hint" id="nutritionWaterCount">0</span>
-        </div>
-        <div id="nutritionWaterBar"></div>
-        <div class="form-actions" style="margin-top:10px;align-items:center;">
-          <button type="button" class="btn-icon" id="nutritionWaterRemoveBtn" aria-label="Remove a cup of water">&minus; Cup</button>
-          <button type="button" class="btn btn-secondary" id="nutritionWaterAddBtn">+1 Cup</button>
-        </div>
+      <div class="nut-water">
+        <span class="nut-water-label">Water</span>
+        <span class="nut-water-count" id="nutritionWaterBar"></span>
+        <button type="button" class="btn-icon" id="nutritionWaterRemoveBtn" aria-label="Remove a cup of water">&minus;</button>
+        <button type="button" class="btn btn-secondary" id="nutritionWaterAddBtn">+ Cup</button>
       </div>
 
-      <div class="quick-actions-row">
-        <button type="button" class="quick-action-btn" id="qaAddFoodBtn"><span class="quick-action-icon" aria-hidden="true">＋</span><span>Food</span></button>
-        <button type="button" class="quick-action-btn" id="qaScanLabelBtn"><span class="quick-action-icon" aria-hidden="true">📷</span><span>Scan Label</span></button>
-        <button type="button" class="quick-action-btn" id="qaAddWaterBtn"><span class="quick-action-icon" aria-hidden="true">💧</span><span>Water</span></button>
-        <button type="button" class="quick-action-btn" id="qaLogRecentBtn"><span class="quick-action-icon" aria-hidden="true">↻</span><span>Recent</span></button>
-        <button type="button" class="quick-action-btn" id="qaAddRecipeBtn"><span class="quick-action-icon" aria-hidden="true">🍲</span><span>Recipe</span></button>
-      </div>
+      <button type="button" class="btn btn-primary btn-lg add-food-cta" id="foodOpenModalBtn">+ Log Food</button>
 
-      <details class="card collapsible-card" id="goalsDetails">
+      <div class="nut-meals">
+        <span class="visually-hidden" id="foodLogTotals"></span>
+        <div class="meal-section" data-meal="breakfast">
+          <div class="meal-section-header"><span>Breakfast</span><span class="meal-section-total" id="foodMealTotal_breakfast"></span></div>
+          <div id="foodMeal_breakfast" class="item-list"></div>
+        </div>
+        <div class="meal-section" data-meal="lunch">
+          <div class="meal-section-header"><span>Lunch</span><span class="meal-section-total" id="foodMealTotal_lunch"></span></div>
+          <div id="foodMeal_lunch" class="item-list"></div>
+        </div>
+        <div class="meal-section" data-meal="dinner">
+          <div class="meal-section-header"><span>Dinner</span><span class="meal-section-total" id="foodMealTotal_dinner"></span></div>
+          <div id="foodMeal_dinner" class="item-list"></div>
+        </div>
+        <div class="meal-section" data-meal="snacks">
+          <div class="meal-section-header"><span>Snacks</span><span class="meal-section-total" id="foodMealTotal_snacks"></span></div>
+          <div id="foodMeal_snacks" class="item-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- Sub-panel: Targets and goals (from the menu on Today) ---------- -->
+    <div id="nutrition-goals" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavGoals">
+      <div class="sm-head"><button type="button" class="btn-icon" data-subgo="nutrition-dashboard">&larr; Today</button></div>
+      <details class="card collapsible-card" id="goalsDetails" open>
         <summary class="card-title">Goals &amp; Targets</summary>
         <div class="collapsible-body">
 
@@ -1273,55 +1276,37 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
       </details>
 
-      <div class="card">
-        <h2 class="card-title">Nutrition Score</h2>
-        <div class="strength-score-hero">
-          <div class="strength-score-value" id="nutritionScoreValue">0</div>
-          <div class="strength-score-level">out of 100 — a heuristic from what you've logged, not medical advice or a judgment of you</div>
-        </div>
-        <div class="form-row two-col">
-          <div>
-            <h3 class="checklist-title">Good</h3>
-            <ul class="plain-list" id="nutritionScoreGood"></ul>
-          </div>
-          <div>
-            <h3 class="checklist-title">Could Improve</h3>
-            <ul class="plain-list" id="nutritionScoreImprove"></ul>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- ---------- Sub-panel: Food Log ---------- -->
-    <div id="nutrition-food" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavFood">
-      <button type="button" class="btn btn-primary btn-lg add-food-cta" id="foodOpenModalBtn">+ Add Food</button>
-
-      <div class="card">
-        <div class="card-title-row">
-          <h2 class="card-title">Today's Food</h2>
-          <span class="field-hint" id="foodLogTotals"></span>
-        </div>
-        <div class="meal-section" data-meal="breakfast">
-          <div class="meal-section-header"><span>Breakfast</span><span class="meal-section-total" id="foodMealTotal_breakfast"></span></div>
-          <div id="foodMeal_breakfast" class="item-list"></div>
-        </div>
-        <div class="meal-section" data-meal="lunch">
-          <div class="meal-section-header"><span>Lunch</span><span class="meal-section-total" id="foodMealTotal_lunch"></span></div>
-          <div id="foodMeal_lunch" class="item-list"></div>
-        </div>
-        <div class="meal-section" data-meal="dinner">
-          <div class="meal-section-header"><span>Dinner</span><span class="meal-section-total" id="foodMealTotal_dinner"></span></div>
-          <div id="foodMeal_dinner" class="item-list"></div>
-        </div>
-        <div class="meal-section" data-meal="snacks">
-          <div class="meal-section-header"><span>Snacks</span><span class="meal-section-total" id="foodMealTotal_snacks"></span></div>
-          <div id="foodMeal_snacks" class="item-list"></div>
-        </div>
+    <!-- ---------- Sub-panel: Foods (saved foods, meals and recipes in one library) ---------- -->
+    <div id="nutrition-foods" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavFoods">
+      <div class="sm-head">
+        <h2 class="sm-title">Food library</h2>
+        <span class="sm-head-btns"><button type="button" class="btn btn-primary" id="foodsAddBtn" aria-haspopup="dialog">+ Add</button></span>
       </div>
-    </div>
 
-    <!-- ---------- Sub-panel: Saved Foods ---------- -->
-    <div id="nutrition-saved" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavSaved">
+      <section class="nut-freq" id="foodsFrequentWrap" aria-labelledby="foodsFreqH" hidden>
+        <h3 class="sm-sub" id="foodsFreqH">Log again</h3>
+        <div class="nut-freq-row" id="foodsFrequent"></div>
+      </section>
+
+      <div class="nut-lib-bar">
+        <label class="visually-hidden" for="savedFoodSearchInput">Search foods and recipes</label>
+        <input type="search" id="savedFoodSearchInput" placeholder="Search foods and recipes" autocomplete="off">
+        <label class="visually-hidden" for="savedFoodSortSelect">Sort</label>
+        <select id="savedFoodSortSelect">
+          <option value="name">Name (A&ndash;Z)</option>
+          <option value="recent">Recently added</option>
+          <option value="calories">Calories (low to high)</option>
+        </select>
+      </div>
+      <div class="sm-pills" role="group" aria-label="Show">
+        <button type="button" class="sm-pill is-on" data-foodsfilter="all" aria-pressed="true">All</button>
+        <button type="button" class="sm-pill" data-foodsfilter="foods" aria-pressed="false">Foods</button>
+        <button type="button" class="sm-pill" data-foodsfilter="recipes" aria-pressed="false">Recipes</button>
+      </div>
+
+      <div id="savedFoodFormWrap" hidden>
       <div class="card">
         <h2 class="card-title" id="savedFoodFormTitle">Add Saved Food</h2>
         <p class="field-hint">For foods you eat often — save them once, then log them in one tap from Food Log's "+ Add Food".</p>
@@ -1411,32 +1396,8 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </form>
       </div>
 
-      <div class="card">
-        <div class="card-title-row">
-          <h2 class="card-title">Your Saved Foods</h2>
-        </div>
-        <div class="form-row two-col" style="margin-bottom:10px;">
-          <div>
-            <label for="savedFoodSearchInput">Search</label>
-            <input type="text" id="savedFoodSearchInput" placeholder="Search saved foods">
-          </div>
-          <div>
-            <label for="savedFoodSortSelect">Sort</label>
-            <select id="savedFoodSortSelect">
-              <option value="name">Name (A–Z)</option>
-              <option value="recent">Recently added</option>
-              <option value="calories">Calories (low to high)</option>
-            </select>
-          </div>
-        </div>
-        <div id="savedFoodsList" class="saved-food-grid">
-          <div class="empty-state">No saved foods yet.</div>
-        </div>
       </div>
-    </div>
-
-    <!-- ---------- Sub-panel: Recipes ---------- -->
-    <div id="nutrition-recipes" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavRecipes">
+      <div id="recipeFormWrap" hidden>
       <div class="card">
         <h2 class="card-title" id="recipeFormTitle">Create a Recipe</h2>
         <form id="recipeForm" class="stacked-form" novalidate>
@@ -1478,16 +1439,25 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </form>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Your Recipes</h2>
-        <div id="recipesList" class="item-list">
-          <div class="empty-state">No recipes yet. Build one above.</div>
-        </div>
       </div>
+
+      <section class="nut-lib-sec" id="foodsSavedSec" aria-labelledby="foodsSavedH">
+        <h3 class="sm-sub" id="foodsSavedH">Foods</h3>
+        <div id="savedFoodsList" class="saved-food-grid">
+          <div class="empty-state">No saved foods yet.</div>
+        </div>
+      </section>
+      <section class="nut-lib-sec" id="foodsRecipesSec" aria-labelledby="foodsRecipesH">
+        <h3 class="sm-sub" id="foodsRecipesH">Recipes</h3>
+        <div id="recipesList" class="item-list">
+          <div class="empty-state">No recipes yet.</div>
+        </div>
+      </section>
     </div>
 
     <!-- ---------- Sub-panel: Nutrients ---------- -->
     <div id="nutrition-nutrients" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavNutrients">
+      <div class="sm-pills" role="group" aria-label="History views"><button type="button" class="sm-pill" data-subgo="nutrition-history" aria-pressed="false">Days and trends</button><button type="button" class="sm-pill is-on" data-subgo="nutrition-nutrients" aria-pressed="true">Nutrients</button></div>
       <div class="card">
         <h2 class="card-title">Macros</h2>
         <p class="field-hint">Shows a progress bar only when you've set a target for it in Goals &amp; Targets — otherwise just the amount logged today.</p>
@@ -1506,6 +1476,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: History ---------- -->
     <div id="nutrition-history" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavHistory">
+      <div class="sm-pills" role="group" aria-label="History views"><button type="button" class="sm-pill is-on" data-subgo="nutrition-history" aria-pressed="true">Days and trends</button><button type="button" class="sm-pill" data-subgo="nutrition-nutrients" aria-pressed="false">Nutrients</button></div>
       <div class="card">
         <div class="card-title-row">
           <h2 class="card-title">Averages</h2>
@@ -1531,36 +1502,29 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <div class="card" id="historyDetailCard">
         <div id="historyDetail"><div class="empty-state">Pick a day above to see its details.</div></div>
       </div>
+      <details class="sm-fold nut-score-fold"><summary>Nutrition score</summary>
+      <div class="card">
+        <h2 class="card-title">Nutrition Score</h2>
+        <div class="strength-score-hero">
+          <div class="strength-score-value" id="nutritionScoreValue">0</div>
+          <div class="strength-score-level">out of 100 — a heuristic from what you've logged, not medical advice or a judgment of you</div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <h3 class="checklist-title">Good</h3>
+            <ul class="plain-list" id="nutritionScoreGood"></ul>
+          </div>
+          <div>
+            <h3 class="checklist-title">Could Improve</h3>
+            <ul class="plain-list" id="nutritionScoreImprove"></ul>
+          </div>
+        </div>
+      </div>
+      </details>
     </div>
 
     <!-- ---------- Sub-panel: Groceries ---------- -->
     <div id="nutrition-groceries" class="nutrition-sub-panel" role="tabpanel" aria-labelledby="nutritionSubNavGroceries">
-      <div class="card" id="grocerySetupCard">
-        <h2 class="card-title">Groceries Setup</h2>
-        <div id="grocerySetupSummary" class="hidden">
-          <p class="field-hint" id="grocerySetupSummaryText"></p>
-          <button type="button" class="btn-icon" id="grocerySetupEditBtn">Change</button>
-        </div>
-        <form id="grocerySetupForm" class="stacked-form" novalidate>
-          <p class="field-hint">Pick the day you usually shop. Your grocery list automatically covers meals planned for the week ahead.</p>
-          <div class="form-row">
-            <label for="groceryShoppingDaySelect">Shopping day</label>
-            <select id="groceryShoppingDaySelect">
-              <option value="0">Sunday</option>
-              <option value="1">Monday</option>
-              <option value="2">Tuesday</option>
-              <option value="3">Wednesday</option>
-              <option value="4">Thursday</option>
-              <option value="5">Friday</option>
-              <option value="6">Saturday</option>
-            </select>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save</button>
-          </div>
-        </form>
-      </div>
-
       <div class="card hidden" id="groceryUpdateBanner">
         <div class="list-item-row">
           <div class="list-item-main">
@@ -1575,6 +1539,43 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
       </div>
 
+      <div class="card">
+        <div class="card-title-row"><h2 class="card-title">Grocery list</h2><button type="button" class="btn btn-secondary" id="groceryAddRecipeBtn">+ Add recipe</button></div>
+        <div id="groceryListContainer"></div>
+        <form id="groceryAddItemForm" class="stacked-form" novalidate style="margin-top:14px;">
+          <div class="form-row two-col">
+            <div>
+              <label for="groceryAddItemName">Add an item</label>
+              <input type="text" id="groceryAddItemName" maxlength="60">
+            </div>
+            <div>
+              <label for="groceryAddItemQty">Quantity</label>
+              <div class="form-row two-col">
+                <input type="number" id="groceryAddItemQty" min="0" step="0.1" value="1">
+                <select id="groceryAddItemUnit">
+                  <option value="each">each</option><option value="g">g</option><option value="kg">kg</option>
+                  <option value="oz">oz</option><option value="lb">lb</option><option value="ml">ml</option>
+                  <option value="l">l</option><option value="tsp">tsp</option><option value="tbsp">tbsp</option>
+                  <option value="cup">cup</option><option value="qt">qt</option><option value="pt">pt</option>
+                  <option value="gal">gal</option><option value="can">can</option><option value="clove">clove</option>
+                  <option value="slice">slice</option><option value="bunch">bunch</option><option value="package">package</option>
+                  <option value="head">head</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-secondary">Add Item</button>
+          </div>
+        </form>
+      </div>
+      <div class="card hidden" id="groceryPlanNeedsDetailsCard">
+        <h2 class="card-title">Meals Needing Ingredient Details</h2>
+        <p class="field-hint">These planned meals aren't linked to a recipe, so nothing is guessed for them. Save them as a Recipe with ingredients to include them automatically.</p>
+        <div id="groceryPlanNeedsDetails" class="item-list"></div>
+      </div>
+
+      <details class="sm-fold gr-fold" id="groceryPlanFold"><summary>Meal plan</summary>
       <div class="card">
         <div class="card-title-row">
           <h2 class="card-title">Meal Plan</h2>
@@ -1639,18 +1640,16 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
       </div>
 
-      <div class="card hidden" id="groceryPlanNeedsDetailsCard">
-        <h2 class="card-title">Meals Needing Ingredient Details</h2>
-        <p class="field-hint">These planned meals aren't linked to a recipe, so nothing is guessed for them. Save them as a Recipe with ingredients to include them automatically.</p>
-        <div id="groceryPlanNeedsDetails" class="item-list"></div>
-      </div>
-
+      </details>
+      <details class="sm-fold gr-fold" id="groceryRegularFold"><summary>Regularly eaten foods</summary>
       <div class="card">
         <h2 class="card-title">Regularly Eaten Foods</h2>
         <p class="field-hint">Foods you've logged often. Turn on auto-add to restock them every week without having to plan a meal for them.</p>
         <div id="groceryRegularFoodsList" class="item-list"></div>
       </div>
 
+      </details>
+      <details class="sm-fold gr-fold" id="groceryPantryFold"><summary>Pantry</summary>
       <div class="card">
         <h2 class="card-title">Pantry</h2>
         <p class="field-hint">Estimated from purchases and recipes you've logged as eaten. Correct any amount any time.</p>
@@ -1683,36 +1682,35 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </form>
       </div>
 
-      <div class="card">
-        <h2 class="card-title">Grocery List</h2>
-        <div id="groceryListContainer"></div>
-        <form id="groceryAddItemForm" class="stacked-form" novalidate style="margin-top:14px;">
-          <div class="form-row two-col">
-            <div>
-              <label for="groceryAddItemName">Add an item</label>
-              <input type="text" id="groceryAddItemName" maxlength="60">
-            </div>
-            <div>
-              <label for="groceryAddItemQty">Quantity</label>
-              <div class="form-row two-col">
-                <input type="number" id="groceryAddItemQty" min="0" step="0.1" value="1">
-                <select id="groceryAddItemUnit">
-                  <option value="each">each</option><option value="g">g</option><option value="kg">kg</option>
-                  <option value="oz">oz</option><option value="lb">lb</option><option value="ml">ml</option>
-                  <option value="l">l</option><option value="tsp">tsp</option><option value="tbsp">tbsp</option>
-                  <option value="cup">cup</option><option value="qt">qt</option><option value="pt">pt</option>
-                  <option value="gal">gal</option><option value="can">can</option><option value="clove">clove</option>
-                  <option value="slice">slice</option><option value="bunch">bunch</option><option value="package">package</option>
-                  <option value="head">head</option>
-                </select>
-              </div>
-            </div>
+      </details>
+      <details class="sm-fold gr-fold" id="grocerySetupFold"><summary>Shopping day</summary>
+      <div class="card" id="grocerySetupCard">
+        <h2 class="card-title">Groceries Setup</h2>
+        <div id="grocerySetupSummary" class="hidden">
+          <p class="field-hint" id="grocerySetupSummaryText"></p>
+          <button type="button" class="btn-icon" id="grocerySetupEditBtn">Change</button>
+        </div>
+        <form id="grocerySetupForm" class="stacked-form" novalidate>
+          <p class="field-hint">Pick the day you usually shop. Your grocery list automatically covers meals planned for the week ahead.</p>
+          <div class="form-row">
+            <label for="groceryShoppingDaySelect">Shopping day</label>
+            <select id="groceryShoppingDaySelect">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
           </div>
           <div class="form-actions">
-            <button type="submit" class="btn btn-secondary">Add Item</button>
+            <button type="submit" class="btn btn-primary">Save</button>
           </div>
         </form>
       </div>
+
+      </details>
     </div>
   </section>
 
