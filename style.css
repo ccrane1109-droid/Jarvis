@@ -4814,3 +4814,54 @@ span.sp-trow-t { cursor: default; }
 .sp-sug { padding: 8px 10px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
 .sp-sug-t { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; } .sp-sug p { margin: 2px 0 6px; font-size: 14px; }
 .sp-sug-btns { display: flex; flex-wrap: wrap; gap: 8px; } .sp-sug-btns .btn { min-height: 44px; }
+
+/* ==========================================================================
+   Simplified sections (Workout, Nutrition, Habits, Calendar, Strategy): shared pieces.
+   Smaller headings, no subtitles, flat rows instead of boxed cards, one menu sheet, pill switches.
+   ========================================================================== */
+.panel-header { margin-bottom: 8px; }
+.panel-header h1 { font-size: 22px; line-height: 1.2; }
+.panel-subtitle { display: none; }
+.sm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 8px; }
+.sm-title { font-size: 17px; margin: 0; font-weight: 650; }
+.sm-head-btns { display: inline-flex; align-items: center; gap: 8px; }
+.sm-more { min-width: 44px; min-height: 44px; font-size: 20px; line-height: 1; }
+.sm-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.sm-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid transparent; background: none; color: var(--text-dim); font: inherit; font-size: 15px; cursor: pointer; }
+.sm-pill:hover { color: var(--text); }
+.sm-pill.is-on, .sm-pill[aria-pressed="true"] { color: #fff; background: rgba(79, 140, 255, 0.2); border-color: rgba(79, 140, 255, 0.55); }
+.sm-pill-quiet { margin-left: auto; font-size: 14px; }
+.sm-fold { margin: 12px 0; border-top: 1px solid var(--card-border); }
+.sm-fold > summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; color: var(--text-dim); font-size: 15px; }
+.sm-fold[open] > summary { color: var(--text); }
+.sm-menu { display: flex; flex-direction: column; margin: 0 0 8px; }
+.sm-menu-heading { margin: 12px 0 2px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.sm-menu-item { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 56px; padding: 8px 4px; background: none; border: 0; border-top: 1px solid var(--card-border); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.sm-menu-item:first-of-type, .sm-menu-heading + .sm-menu-item { border-top: 0; }
+.sm-menu-item:hover { background: var(--card-hover); }
+.sm-menu-main { font-size: 17px; }
+.sm-menu-sub { font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
+.sm-menu-item.is-current .sm-menu-main { color: var(--accent); }
+.sm-menu-item.is-minor .sm-menu-main { font-size: 16px; color: #cfd6ee; }
+.sm-menu-item.is-danger .sm-menu-main { color: #ff8a8a; }
+.sm-box-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 4px; }
+.sm-box-title { font-size: 18px; margin: 0; }
+.sm-close { min-height: 44px; min-width: 44px; }
+.sm-overlay { z-index: 1200; }
+
+/* Workout: Today and Routines */
+.wk-hero { padding: 16px; }
+.wk-hero-title { font-size: 22px; }
+.wk-hero-meta { margin: 0 0 12px; }
+.wk-choose { display: block; margin: 4px auto 0; font-size: 15px; }
+.wk-block-title { font-size: 15px; font-weight: 600; color: var(--text-dim); margin: 14px 0 6px; }
+.wk-scope .wk-row { background: none; border: 0; border-top: 1px solid var(--card-border); border-radius: 0; padding: 8px 2px; }
+.rt-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-top: 1px solid var(--card-border); margin: 0; }
+.rt-row:first-child { border-top: 0; }
+.rt-row-main { flex: 1; min-width: 0; }
+.rt-row .rt-name { font-size: 16px; margin: 0 0 2px; }
+.rt-row .rt-meta { margin: 0; font-size: 13px; }
+.rt-row .rt-actions .btn { flex: none; min-width: 72px; min-height: 44px; }
+.rt-list { margin: 0 0 8px; }
+.rt-new { min-height: 44px; }
+.rt-weekfold .rt-week { margin-top: 4px; }

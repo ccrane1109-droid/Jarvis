@@ -180,20 +180,19 @@ npx firebase-tools deploy --only firestore:rules</pre>
   <section id="panel-workout" class="tab-panel" role="tabpanel" aria-labelledby="navBtnWorkout">
     <div class="panel-header">
       <h1>Workout</h1>
-      <p class="panel-subtitle">Log sessions, build routines, and track real strength progress.</p>
     </div>
 
     <nav class="sub-nav workout-sub-nav" role="tablist" aria-label="Workout sections">
-      <button type="button" class="workout-sub-nav-btn active" data-subtarget="wk-home" role="tab" aria-selected="true" aria-controls="wk-home" id="workoutSubNavWkHome">Home</button>
-      <button type="button" class="workout-sub-nav-btn" data-subtarget="wk-session" role="tab" aria-selected="false" aria-controls="wk-session" id="workoutSubNavWkSession">Workout</button>
+      <button type="button" class="workout-sub-nav-btn active" data-subtarget="wk-home" role="tab" aria-selected="true" aria-controls="wk-home" id="workoutSubNavWkHome">Today</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-routines" role="tab" aria-selected="false" aria-controls="workout-routines" id="workoutSubNavRoutines">Routines</button>
       <button type="button" class="workout-sub-nav-btn" data-subtarget="workout-progress" role="tab" aria-selected="false" aria-controls="workout-progress" id="workoutSubNavProgress">Progress</button>
-      <button type="button" class="workout-sub-nav-btn" data-subtarget="wk-history" role="tab" aria-selected="false" aria-controls="wk-history" id="workoutSubNavWkHistory">History</button>
-      <!-- Reached from links inside the screens above, not from this bar -->
-      <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
-      <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-library" role="tab" aria-selected="false" aria-controls="workout-library" id="workoutSubNavLibrary">Exercises</button>
-      <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
-      <button type="button" class="workout-sub-nav-btn" hidden data-subtarget="workout-log" role="tab" aria-selected="false" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
+      <!-- Reached from links inside the screens above, not from this bar. data-parent names the tab that stays highlighted. -->
+      <button type="button" class="workout-sub-nav-btn" hidden data-parent="wk-home" data-subtarget="wk-session" role="tab" aria-selected="false" aria-controls="wk-session" id="workoutSubNavWkSession">Workout</button>
+      <button type="button" class="workout-sub-nav-btn" hidden data-parent="workout-progress" data-subtarget="wk-history" role="tab" aria-selected="false" aria-controls="wk-history" id="workoutSubNavWkHistory">History</button>
+      <button type="button" class="workout-sub-nav-btn" hidden data-parent="workout-routines" data-subtarget="workout-programs" role="tab" aria-selected="false" aria-controls="workout-programs" id="workoutSubNavPrograms">Programs</button>
+      <button type="button" class="workout-sub-nav-btn" hidden data-parent="workout-routines" data-subtarget="workout-library" role="tab" aria-selected="false" aria-controls="workout-library" id="workoutSubNavLibrary">Exercises</button>
+      <button type="button" class="workout-sub-nav-btn" hidden data-parent="workout-progress" data-subtarget="workout-form-check" role="tab" aria-selected="false" aria-controls="workout-form-check" id="workoutSubNavFormCheck">Form Check</button>
+      <button type="button" class="workout-sub-nav-btn" hidden data-parent="wk-home" data-subtarget="workout-log" role="tab" aria-selected="false" aria-controls="workout-log" id="workoutSubNavLog">Log</button>
     </nav>
 
     <!-- ---------- Sub-panel: Home (new) ---------- -->
@@ -208,6 +207,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: History ---------- -->
     <div id="wk-history" class="workout-sub-panel wk-scope" role="tabpanel" aria-labelledby="workoutSubNavWkHistory">
+      <div class="sm-pills" role="group" aria-label="Progress views"><button type="button" class="sm-pill" data-subgo="workout-progress" aria-pressed="false">Strength</button><button type="button" class="sm-pill is-on" data-subgo="wk-history" aria-pressed="true">History</button><button type="button" class="sm-pill sm-pill-quiet" data-subgo="workout-form-check" aria-pressed="false">Form check</button></div>
       <div id="hsRoot" class="hs-root"></div>
       <!-- The earlier History list. It stays in the page (the older code still fills it) but is hidden; the History screen above (history-ui.js) replaces it. -->
       <div id="hsLegacy" hidden>
@@ -381,7 +381,6 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Routines ---------- -->
     <div id="workout-routines" class="workout-sub-panel wk-scope" role="tabpanel" aria-labelledby="workoutSubNavRoutines">
-      <div class="wk-linkrow"><button type="button" class="btn btn-secondary" data-wk-go="workout-library">Exercise library</button><button type="button" class="btn btn-secondary" data-wk-go="workout-programs">Programs</button></div>
       <div id="rtRoot" class="rt-root" aria-live="off"></div>
 
       <div id="rtGenerator" class="rt-generator">
@@ -541,7 +540,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
     <!-- ---------- Sub-panel: Progress ---------- -->
     <div id="workout-progress" class="workout-sub-panel wk-scope" role="tabpanel" aria-labelledby="workoutSubNavProgress">
-      <div class="wk-linkrow"><button type="button" class="btn btn-secondary" data-wk-go="workout-form-check">Form check (beta)</button></div>
+      <div class="sm-pills" role="group" aria-label="Progress views"><button type="button" class="sm-pill is-on" data-subgo="workout-progress" aria-pressed="true">Strength</button><button type="button" class="sm-pill" data-subgo="wk-history" aria-pressed="false">History</button><button type="button" class="sm-pill sm-pill-quiet" data-subgo="workout-form-check" aria-pressed="false">Form check</button></div>
       <div id="pgRoot" class="pg-root"></div>
 
       <!-- Body weight and measurements: the same cards as before, moved here so everything still works. -->
@@ -3163,6 +3162,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/cloud-backup.js?v=82"></script>
 <script type="module" src="js/auth.js?v=82"></script>
 <script src="js/app.js?v=82"></script>
+<script src="js/menu-ui.js?v=82"></script>
 <script src="js/exercises.js?v=82"></script>
 <script src="js/workout-logic.js?v=82"></script>
 <script src="js/exercise-logic.js?v=82"></script>

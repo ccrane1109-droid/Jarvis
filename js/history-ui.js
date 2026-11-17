@@ -291,5 +291,5 @@
     render();
   }
 
-  window.JarvisHistoryUI = { init: init, render: render };
+  window.JarvisHistoryUI = { init: init, render: render, openDetail: openDetail };
 })();

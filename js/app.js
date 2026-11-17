@@ -101,6 +101,17 @@
         });
         btn.classList.add("active");
         btn.setAttribute("aria-selected", "true");
+        // A screen that is reached from another screen (not from the tab bar) names the tab it belongs to with
+        // data-parent, so that tab stays highlighted while the screen is open.
+        const parentId = btn.getAttribute("data-parent");
+        if (parentId) {
+          buttons.forEach(function (b) {
+            if (b !== btn && (b.getAttribute("data-target") || b.getAttribute("data-subtarget")) === parentId) {
+              b.classList.add("active");
+              b.setAttribute("aria-selected", "true");
+            }
+          });
+        }
         panels.forEach(function (p) {
           if (p.id === targetId) {
             p.classList.add("active");
@@ -430,6 +441,15 @@
       if (window.JarvisDiscipline && typeof window.JarvisDiscipline.onSubTabChange === "function") {
         window.JarvisDiscipline.onSubTabChange(targetId);
       }
+    });
+
+    // Any element with data-subgo="<screen id>" opens that screen of its section (the same as pressing its tab button).
+    document.addEventListener("click", function (e) {
+      const el = e.target.closest ? e.target.closest("[data-subgo]") : null;
+      if (!el) return;
+      const id = el.getAttribute("data-subgo");
+      const btn = document.querySelector('[data-subtarget="' + id + '"]');
+      if (btn) { e.preventDefault(); btn.click(); window.scrollTo(0, 0); }
     });
 
     initScrollFades();

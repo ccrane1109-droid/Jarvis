@@ -30,6 +30,7 @@ const APP_SHELL = [
   "./js/cloud-backup.js?v=82",
   "./js/auth.js?v=82",
   "./js/app.js?v=82",
+  "./js/menu-ui.js?v=82",
   "./js/exercises.js?v=82",
   "./js/workout-logic.js?v=82",
   "./js/exercise-logic.js?v=82",
