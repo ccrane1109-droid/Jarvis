@@ -4980,3 +4980,17 @@ span.sp-trow-t { cursor: default; }
   .cal-head-btns { order: 1; }
   .cal-nav { order: 0; flex-basis: auto; }
 }
+
+/* Strategy: Overview, Goals, Weekly */
+.sp-sub-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sp-sub-nav .sub-nav-btn { font-size: 15px; }
+.sp-ov { padding: 12px 0; border-top: 1px solid var(--card-border); }
+.sp-ov:first-of-type { border-top: 0; }
+.sp-ov-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.sp-ov-h { font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 6px; font-weight: 650; }
+.sp-ov-head .sp-ov-h { margin-bottom: 0; }
+.sp-ov .sp-vis { margin: 0 0 6px; }
+.sp-ov-foot { margin: 8px 0 0; }
+.sp-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; margin: 0 0 8px; border: 1px solid var(--card-border); border-radius: 12px; }
+.sp-next-t { margin: 0; flex: 1 1 200px; }
+.sp-next-btns { display: inline-flex; align-items: center; gap: 8px; }

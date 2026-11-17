@@ -373,7 +373,7 @@
   A.acts["detail"] = function (el) { A.openDetailSheet(el.getAttribute("data-id")); };
   A.acts["task-detail"] = function (el) { A.openTaskSheet(el.getAttribute("data-id")); };
   A.acts["dash-toggle"] = function () { A.ui.dash = !A.ui.dash; A.saveUi(); A.renderDash(); const b = A.$("spDash").querySelector(".sp-dash-btn"); if (b) b.focus(); };
-  A.acts["onboarding-dismiss"] = function () { if (!store.setSettings({ onboardingDismissed: true })) { A.saveFailed(); return; } A.renderDash(); A.say("Getting started hidden. You can bring it back under Plan settings."); };
+  A.acts["onboarding-dismiss"] = function () { if (!store.setSettings({ onboardingDismissed: true })) { A.saveFailed(); return; } A.render(); A.say("Getting started hidden. You can bring it back under Plan settings."); };
   A.acts["go-weekly"] = function () { A.go("weekly"); };
   A.acts["go-monthly"] = function () { A.go("monthly", { month: A.PL.monthOfDate(store.today()) }); };
   A.acts["go-quarterly"] = function () { A.go("quarterly"); };
@@ -418,4 +418,89 @@
       if (el.matches && el.matches('input[type="checkbox"][data-act]')) { const fn = A.acts[el.getAttribute("data-act")]; if (fn) fn(el, e); }
     });
   })();
+  /* ---------------- the three tabs: Overview and Goals ---------------- */
+
+  // One next step instead of the five-step list: the first thing that is not done yet.
+  function nextStepHtml() {
+    const s = store.settings();
+    if (s.onboardingDismissed) return "";
+    const m = A.model();
+    const steps = [
+      [!!s.vision, "Write your three-year vision", "plan-settings", "Write it"],
+      [m.all("objective").length > 0, "Add a yearly objective", "add-objective-first", "Add one"],
+      [m.all("priority").length + m.all("milestone").length > 0, "Break an objective down", "breakdown", "Break down a goal"],
+      [A.tasks().some(function (t) { return m.nodeOfTask(t.id); }), "Link a task to a goal", "link-first-task", "Link a task"],
+      [store.list("blocks").length > 0, "Plan time for it in Weekly", "go-weekly", "Open Weekly"]
+    ];
+    const next = steps.filter(function (x) { return !x[0]; })[0];
+    if (!next) return "";
+    const done = steps.filter(function (x) { return x[0]; }).length;
+    return '<section class="sp-next" aria-label="Next step"><p class="sp-next-t"><span class="sp-dim">Step ' + (done + 1) + ' of ' + steps.length + '</span> ' + esc(next[1]) + '</p><div class="sp-next-btns"><button type="button" class="btn btn-secondary" data-act="' + next[2] + '">' + esc(next[3]) + '</button>' +
+      '<button type="button" class="sp-link" data-act="onboarding-dismiss" aria-label="Hide the next steps">Hide</button></div></section>';
+  }
+
+  A.acts["go-insights"] = function () { A.go("insights"); };
+
+  A.register("overview", {
+    html: function () {
+      const c = A.ictx(), d = I.dashboard(c), m = A.model(), s = m.settings;
+      let h = '<h2 class="visually-hidden" data-focus-top>Overview</h2>';
+      h += suggestionsHtml(c) + nextStepHtml();
+      // the three-year vision, small
+      h += '<section class="sp-ov" aria-labelledby="spOvVis"><div class="sp-ov-head"><h3 class="sp-ov-h" id="spOvVis">Three-year vision</h3><button type="button" class="sp-link" data-act="plan-settings">' + (s.vision ? "Edit" : "Write it") + '</button></div>' +
+        (s.vision ? '<p class="sp-vis">' + esc(s.vision) + '</p>' : '<p class="sp-dim">Not written yet.</p>') + '</section>';
+      // the top three goals of the year (this quarter's priorities when there are no yearly ones)
+      const goals = (d.objectives.length ? d.objectives : d.priorities).slice(0, 3);
+      h += '<section class="sp-ov" aria-labelledby="spOvGoals"><div class="sp-ov-head"><h3 class="sp-ov-h" id="spOvGoals">Top goals</h3><button type="button" class="sp-link" data-act="go-goals">All goals</button></div>' +
+        (goals.length ? '<div class="sp-chips">' + goals.map(function (n) { return chipHtml(n); }).join("") + '</div>'
+          : '<p class="sp-dim">No goals yet.</p><button type="button" class="btn btn-secondary" data-act="add-objective-first">Add a goal</button>') + '</section>';
+      // the milestones that matter: open ones in order of their dates
+      const open = d.milestones.filter(function (n) { return m.statusOf(n.id) !== "completed"; })
+        .sort(function (a, b) { return m.deadline(a) < m.deadline(b) ? -1 : m.deadline(a) > m.deadline(b) ? 1 : 0; }).slice(0, 3);
+      h += '<section class="sp-ov" aria-labelledby="spOvMs"><h3 class="sp-ov-h" id="spOvMs">Milestones</h3>' +
+        (open.length ? '<ul class="sp-dl">' + open.map(function (n) {
+          const due = m.deadline(n), left = due ? PL.diffDays(store.today(), due) : null;
+          return '<li><button type="button" class="sp-dl-btn' + (left !== null && left < 0 ? " is-late" : "") + '" data-act="detail" data-id="' + esc(n.id) + '"><span class="sp-dl-t">' + esc(n.title) + '</span><span class="sp-dl-k">' + (left === null ? "" : esc(dayShort(left))) + '</span></button></li>';
+        }).join("") + '</ul>' : '<p class="sp-dim">None open this month.</p>') + '</section>';
+      // what to do next: the top three of the week, else what is dated today
+      let focus = "";
+      if (d.week.top.length) {
+        focus = (d.week.topSuggested ? '<p class="sp-dim">Suggested from your plan.</p>' : "") + '<ol class="sp-top3">' + d.week.top.map(function (x) {
+          const n = x.node;
+          return '<li class="' + (x.done ? "is-done" : "") + '">' + (x.task ? check(x.task.id, x.done, x.text, "data-act") + '<button type="button" class="sp-trow-t" data-act="task-detail" data-id="' + esc(x.task.id) + '"><span class="sp-trow-n">' + esc(x.text) + '</span>' + (n ? '<span class="sp-trow-s">' + esc(n.title) + '</span>' : "") + '</button>' : '<span class="sp-trow-n">' + esc(x.text) + '</span>') + '</li>';
+        }).join("") + '</ol>' + (d.week.topSuggested ? '<button type="button" class="btn btn-secondary" data-act="top-accept">Use these three</button>' : "");
+      } else if (d.today.open.length) {
+        focus = '<ul class="sp-trows">' + d.today.open.slice(0, 3).map(function (t) { return taskRow(t, m); }).join("") + '</ul>';
+      } else focus = '<p class="sp-dim">Nothing to rank yet.</p><button type="button" class="btn btn-secondary" data-act="quick-task">Add a task</button>';
+      h += '<section class="sp-ov sp-ov-focus" aria-labelledby="spOvFocus"><div class="sp-ov-head"><h3 class="sp-ov-h" id="spOvFocus">Focus next</h3><button type="button" class="sp-link" data-act="go-weekly">Open the week</button></div>' + focus + '</section>';
+      h += '<p class="sp-ov-foot"><button type="button" class="sp-link" data-act="go-insights">More numbers</button></p>';
+      return h;
+    }
+  });
+  A.acts["go-goals"] = function () { A.go("goals"); };
+
+  // Goals: the year, the quarter and the month, each folded until opened. Each section is the screen it always was.
+  function asSubheads(html) { return String(html).replace(/<h2\b/g, "<h4").replace(/<\/h2>/g, "</h4>"); }
+  A.register("goals", {
+    html: function () {
+      const m = A.model(), s = m.settings, st = A.state, y = st.year, q = st.quarter, mk = st.month;
+      const nObj = m.all("objective").length, nPri = m.prioritiesOf(y, q).filter(function (p) { return p.status !== "dropped"; }).length, nMs = m.milestonesIn(mk).length;
+      let h = '<h2 class="visually-hidden" data-focus-top>Goals</h2>';
+      h += A.section("g-year", "Year", asSubheads(A.viewHtml("yearly")), { open: true, summary: esc(A.plural(nObj, "objective")) });
+      h += A.section("g-quarter", "Quarter", asSubheads(A.viewHtml("quarterly")), { open: false, summary: "Q" + q + " " + y + " &middot; " + esc(A.plural(nPri, "priority", "priorities")) });
+      h += A.section("g-month", "Month", asSubheads(A.viewHtml("monthly")), { open: false, summary: esc(A.monthLabel(mk)) + " &middot; " + esc(A.plural(nMs, "milestone")) });
+      void s;
+      return h;
+    },
+    after: function () {
+      const id = A.state.focusSec;
+      if (!id) return;
+      A.state.focusSec = "";
+      const sec = document.querySelector('#spView [data-sec="' + id + '"]');
+      if (sec && sec.scrollIntoView) sec.scrollIntoView({ block: "start" });
+    }
+  });
+  // The overview above the tabs is gone: the Overview tab holds it.
+  A.renderDash = function () { const host = A.$("spDash"); if (host) host.innerHTML = ""; };
+
 })();

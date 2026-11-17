@@ -19,7 +19,10 @@
   const store = window.JarvisPlanStore;
   const views = {};
   const A = { acts: {}, PL: PL, store: store };
-  const state = { view: "yearly", year: 0, quarter: 0, month: "", open: {}, week: "" };
+  const state = { view: "overview", year: 0, quarter: 0, month: "", open: {}, week: "", focusSec: "" };
+  // The three tabs are Overview, Goals and Weekly. Yearly, Quarterly and Monthly are the three sections of Goals; Insights is reached from Overview.
+  const GOAL_SECTIONS = { yearly: "g-year", quarterly: "g-quarter", monthly: "g-month" };
+  const TAB_OF = { overview: "overview", insights: "overview", goals: "goals", yearly: "goals", quarterly: "goals", monthly: "goals", weekly: "weekly" };
   // What this device remembers about how you like the screen: whether the overview is open and which sections you folded.
   // Kept on this device only (never synced), and the screen works without it.
   const UI_KEY = "jarvisPlanUi";
@@ -277,7 +280,9 @@
   /* ---------------- navigation and drawing ---------------- */
 
   A.register = function (name, view) { views[name] = view; };
+  A.viewHtml = function (name) { return views[name] ? views[name].html() : ""; };
   A.go = function (view, extra) {
+    if (view && GOAL_SECTIONS[view]) { ui.collapsed[GOAL_SECTIONS[view]] = false; saveUi(); state.focusSec = GOAL_SECTIONS[view]; view = "goals"; }
     if (view && views[view]) state.view = view;
     if (extra) Object.keys(extra).forEach(function (k) { if (k !== "noScroll") state[k] = extra[k]; });
     A.render();
@@ -285,7 +290,7 @@
   };
   function syncTabs() {
     Array.prototype.forEach.call(document.querySelectorAll("#panel-strategy .sp-sub-nav .sub-nav-btn"), function (b) {
-      const on = b.getAttribute("data-sp") === state.view;
+      const on = b.getAttribute("data-sp") === (TAB_OF[state.view] || state.view);
       b.classList.toggle("active", on);
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
