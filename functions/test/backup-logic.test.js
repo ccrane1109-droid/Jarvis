@@ -23,7 +23,6 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft", // the new logger's bookkeeping and its one-time safety copy
   "jarvisRetiredState",
   "jarvisLearnTimer",       // a reading timer that is running right now: this phone only (a timer on two devices at once would be wrong)
-  "jarvisLearnCaptureType",
   "jarvisLiveHandled", "jarvisLiveRefreshedAt", "jarvisLiveTab",
   "jarvisSyncedFp"]    // the fingerprint of each whole-value key the last time it matched the cloud (this device only)   // session-only bookkeeping of the "refresh when the other device saved" feature; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
 

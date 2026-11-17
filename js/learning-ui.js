@@ -422,21 +422,13 @@
     const form = e.target.closest("form[data-form]");
     if (!form) return;
     e.preventDefault();
-    if (shared.submit(form)) return;
     const view = views[state.tab];
     if (view && view.submit) view.submit(form, e);
   }
 
   /* ---------------- things more than one section does ---------------- */
 
-  // The quick "what page are you on?" form, on the Dashboard and the Books screens.
-  function pageForm(b, cls) {
-    return '<form class="ln-page-form ' + (cls || "") + '" data-form="page" data-id="' + esc(b.id) + '" novalidate>' +
-      '<label class="visually-hidden" for="lnp_' + esc(b.id) + '">Current page of ' + esc(b.title) + '</label>' +
-      '<input type="number" id="lnp_' + esc(b.id) + '" name="page" inputmode="numeric" min="0"' + (b.totalPages > 0 ? ' max="' + b.totalPages + '"' : "") + ' value="' + b.currentPage + '" data-fk="page_' + esc(b.id) + '">' +
-      '<button type="submit" class="btn btn-secondary">Update page</button><p class="ln-err hidden" data-err="page" role="alert"></p></form>';
-  }
-  // A page number typed by hand -> { n } or { error }. Used by the page boxes and by the reading timer's "page you reached".
+  // A page number typed by hand -> { n } or { error }. Used by the Log reading sheet and the reading timer's "page you reached".
   function checkPage(b, raw) {
     const t = String(raw == null ? "" : raw).trim();
     const n = /^\d{1,6}$/.test(t) ? Number(t) : NaN;
@@ -454,37 +446,6 @@
     if (!store.put("books", next)) return { ok: false, book: b };
     return { ok: true, book: next };
   }
-  function savePage(form) {
-    const id = form.getAttribute("data-id"), b = store.get("books", id);
-    if (!b) return;
-    const c = checkPage(b, form.elements.page.value);
-    if (c.error) { showErrors(form, { page: c.error }); return; }
-    const n = c.n, res = applyPage(b, n);
-    if (res.same) { say("Still on page " + n + "."); return; }
-    if (!res.ok) { saveFailed(); return; }
-    const next = res.book;
-    const last = next.totalPages > 0 && n >= next.totalPages;
-    if (last && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
-    else say(next.title + ": page " + n + (L.progress(next) !== null ? ", " + L.progress(next) + " percent" : "") + ".");
-  }
-  // One-tap progress: "+10" adds that many pages to where you are (never past the last page), through the same page log as typing a number.
-  function quickPagesHtml(b) {
-    if (b.status === "completed") return "";
-    return '<div class="ln-quickpages" role="group" aria-label="Add pages to ' + esc(b.title) + '"><span class="ln-quickpages-l">Add pages</span>' +
-      [5, 10, 25].map(function (k) { return '<button type="button" class="btn btn-secondary" data-act="page-add" data-id="' + esc(b.id) + '" data-n="' + k + '" aria-label="Add ' + k + ' pages to ' + esc(b.title) + '">+' + k + '</button>'; }).join("") + '</div>';
-  }
-  function quickPages(id, k) {
-    const b = store.get("books", id);
-    if (!b || !(k > 0)) return;
-    let n = b.currentPage + k;
-    if (b.totalPages > 0 && n > b.totalPages) n = b.totalPages;
-    if (n === b.currentPage) { say("Already on the last page."); return; }
-    const before = b, res = applyPage(b, n);
-    if (!res.ok) { saveFailed(); return; }
-    const next = res.book;
-    if (next.totalPages > 0 && n >= next.totalPages && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
-    else notice(next.title + ": page " + n + " (+" + (n - before.currentPage) + ").", "Undo", function () { store.put("books", before); });
-  }
   function setBookStatus(id, status) {
     const b = store.get("books", id);
     if (!b || b.status === status) return;
@@ -501,18 +462,10 @@
   const shared = {
     click: function (act, el) {
       if (api.acts[act]) { api.acts[act](el, act); return true; }
-      if (act === "page-add") { quickPages(el.getAttribute("data-id"), Number(el.getAttribute("data-n"))); return true; }
-      if (act === "status-book") { setBookStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
-      if (act === "status-action") { setActionStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
       if (act.indexOf("note-") === 0 || act === "tag-filter") return api.noteClick ? api.noteClick(act, el) : false;
       if (act.indexOf("action-") === 0) return api.actionClick ? api.actionClick(act, el) : false;
       if (act === "clear-filters") { state.filters[state.tab] = Object.assign({}, DEFAULT_FILTERS[state.tab] || {}); render(false); return true; }
-      if (act === "quick-add") { const f = api.quickAdd[el.getAttribute("data-kind")]; if (f) f(); return true; }
       if (act === "ln-back") { const b = backFor(); if (b) b.fn(); return true; }
-      return false;
-    },
-    submit: function (form) {
-      if (form.getAttribute("data-form") === "page") { savePage(form); return true; }
       return false;
     }
   };
@@ -594,12 +547,12 @@
     init: init, onShow: onShow, onHide: onHide, register: register, go: go, render: function () { render(false); },
     esc: esc, L: L, store: store, state: state, ctx: ctx,
     fmtDate: fmtDate, fmtShort: fmtShort, plural: plural, snippet: snippet, badge: badge, statusBadge: statusBadge, prioBadge: prioBadge,
-    coverHtml: coverHtml, barHtml: barHtml, starsHtml: starsHtml, progressText: progressText, pageForm: pageForm, noteSource: noteSource,
+    coverHtml: coverHtml, barHtml: barHtml, starsHtml: starsHtml, progressText: progressText, noteSource: noteSource,
     say: say, notice: notice, saveFailed: saveFailed,
     fText: fText, fArea: fArea, fSelect: fSelect, rowHtml: rowHtml, opts: opts, datalist: datalist, formValues: formValues, showErrors: showErrors,
     toolbar: toolbar, filtersActive: filtersActive, DEFAULT_FILTERS: DEFAULT_FILTERS,
     openSheet: openSheet, closeSheet: closeSheet, confirmSheet: confirmSheet,
-    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, quickPagesHtml: quickPagesHtml, srsLabel: srsLabel, bars: bars,
+    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, srsLabel: srsLabel, bars: bars,
     BOOK_WORDS: BOOK_WORDS, notesSeg: notesSeg, contextPreset: contextPreset, openMenu: openMenu, openAddMenu: openAddMenu, openMoreMenu: openMoreMenu,
     quickAdd: {}, acts: {}
   };
