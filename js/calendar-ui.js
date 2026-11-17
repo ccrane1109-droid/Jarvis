@@ -211,14 +211,14 @@
       return '<div class="cal-empty"><p>' + (filtered ? "Nothing matches your search and filters." : "Nothing planned.") + '</p>' +
         (filtered ? '<button type="button" class="btn btn-secondary" data-cal="clear">Clear search and filters</button>' : '<button type="button" class="btn btn-primary" data-cal="new">+ Add</button>') + '</div>';
     }
-    return '<div class="cal-daylist">' + list.map(rowHtml).join("") + '</div>';
+    return '<div class="cal-todaylist">' + list.map(rowHtml).join("") + '</div>';
   }
   // Week on a phone: the seven days one under the other, each with its own items.
   function weekListHtml(items, dates) {
     const t = today();
     return '<div class="cal-weeklist">' + dates.map(function (d) {
       const list = dayItems(items, d);
-      return '<section class="cal-wk-day' + (d === t ? " is-today" : "") + '" aria-label="' + esc(dayName(d)) + '"><h3 class="cal-ag-day' + (d === t ? " is-today" : "") + '"><button type="button" class="cal-wk-head" data-cal="goto-day" data-date="' + d + '">' + esc((d === t ? "Today \u00b7 " : "") + dayName(d, { weekday: "short", month: "short", day: "numeric" })) + '</button></h3>' +
+      return '<section class="cal-wk-day' + (d === t ? " is-today" : "") + '" aria-label="' + esc(dayName(d)) + '"><h3 class="cal-ag-day' + (d === t ? " is-today" : "") + '"><button type="button" class="cal-wk-dayhead" data-cal="goto-day" data-date="' + d + '">' + esc((d === t ? "Today \u00b7 " : "") + dayName(d, { weekday: "short", month: "short", day: "numeric" })) + '</button></h3>' +
         (list.length ? list.map(rowHtml).join("") : '<p class="cal-wk-none">Nothing planned</p>') + '</section>';
     }).join("") + '</div>';
   }

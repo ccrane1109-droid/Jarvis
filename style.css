@@ -2704,10 +2704,10 @@ button.rm-hist-row { cursor: pointer; }
 
 /* Contrast: on the dark cards the shared faint grey and the white-on-bright-blue pair fall under 4.5:1. These are
    adjusted inside Discipline only, so other modules look exactly as before. */
-#panel-discipline { --text-faint: #8b93a7; }
-#panel-discipline .badge-accent { color: #9ec1ff; }
-#panel-discipline .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
-#panel-discipline .btn-primary:hover { background: #2a66d4; border-color: #2a66d4; }
+#panel-habits { --text-faint: #8b93a7; }
+#panel-habits .badge-accent { color: #9ec1ff; }
+#panel-habits .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+#panel-habits .btn-primary:hover { background: #2a66d4; border-color: #2a66d4; }
 
 .dc-group { margin-top: 22px; }
 .dc-group:first-child { margin-top: 4px; }
@@ -2768,29 +2768,29 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .dc-loading .nr-status-badge { opacity: 0.7; }
 
 /* Keyboard focus: a clear ring on everything in Discipline and the bottom bar, only for keyboard use */
-#panel-discipline :is(button, a, input, select, textarea, summary, [tabindex], [role="switch"], [role="checkbox"]):focus-visible,
+#panel-habits :is(button, a, input, select, textarea, summary, [tabindex], [role="switch"], [role="checkbox"]):focus-visible,
 #bottomNav button:focus-visible, #moreSheet button:focus-visible {
   outline: 2px solid var(--accent-hover); outline-offset: 2px;
 }
-#panel-discipline .segmented-btn:focus-visible { outline-offset: -2px; }
+#panel-habits .segmented-btn:focus-visible { outline-offset: -2px; }
 
 /* Comfortable touch targets: every button and disclosure in Discipline is at least 44px tall */
-#panel-discipline .btn, #panel-discipline .btn-icon { min-height: 44px; }
-#panel-discipline summary { min-height: 44px; display: flex; align-items: center; }
+#panel-habits .btn, #panel-habits .btn-icon { min-height: 44px; }
+#panel-habits summary { min-height: 44px; display: flex; align-items: center; }
 
 /* Reduced motion: no transitions or animations anywhere in Discipline or the bottom bar */
 @media (prefers-reduced-motion: reduce) {
-  #panel-discipline, #panel-discipline *, #bottomNav, #bottomNav *, #moreSheet, #moreSheet * { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+  #panel-habits, #panel-habits *, #bottomNav, #bottomNav *, #moreSheet, #moreSheet * { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
 
 /* Motion: short and quiet. Nothing here runs when the phone is set to reduce motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .discipline-sub-panel.active { animation: dcPanelIn 0.16s ease-out; }
+  .habits-sub-panel.active { animation: dcPanelIn 0.16s ease-out; }
   @keyframes dcPanelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  #panel-discipline .btn, #panel-discipline .dc-chip, #panel-discipline .segmented-btn, #panel-discipline .dc-check, #panel-discipline .btn-icon {
+  #panel-habits .btn, #panel-habits .dc-chip, #panel-habits .segmented-btn, #panel-habits .dc-check, #panel-habits .btn-icon {
     transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
-  #panel-discipline .btn:active, #panel-discipline .dc-chip:active, #panel-discipline .segmented-btn:active, #panel-discipline .dc-check:active { transform: scale(0.98); }
+  #panel-habits .btn:active, #panel-habits .dc-chip:active, #panel-habits .segmented-btn:active, #panel-habits .dc-check:active { transform: scale(0.98); }
   .dc-switch, .dc-switch-knob { transition: background-color 0.15s ease, border-color 0.15s ease, left 0.15s ease; }
   .dc-box { transition: background-color 0.15s ease, border-color 0.15s ease; }
   .dc-check.pop .dc-box { animation: dcPop 0.2s ease-out; }
@@ -4964,9 +4964,9 @@ span.sp-trow-t { cursor: default; }
 .cal-views { display: inline-grid; grid-template-columns: repeat(3, auto); gap: 2px; margin-top: 0; padding: 3px; flex: 0 1 auto; }
 .cal-view-btn { padding: 0 14px; min-width: 70px; }
 .cal-nav .cal-step { min-width: 44px; min-height: 44px; }
-.cal-daylist, .cal-weeklist { background: none; }
-.cal-wk-head { background: none; border: 0; color: inherit; font: inherit; font-weight: 700; padding: 0; cursor: pointer; min-height: 32px; }
-.cal-wk-none { margin: 0; padding: 4px 14px 10px; font-size: 13px; color: var(--text-faint); }
+.cal-daylist, .cal-todaylist, .cal-weeklist { background: none; }
+.cal-wk-dayhead { background: none; border: 0; color: inherit; font: inherit; font-weight: 700; padding: 0; cursor: pointer; min-height: 32px; }
+.cal-wk-none { margin: 0; padding: 4px 14px 10px; font-size: 13px; color: var(--text-dim); }
 .cal-wk-day { border-top: 1px solid var(--card-border); }
 .cal-wk-day:first-child { border-top: 0; }
 .cal-stage { background: none; border: 0; }
@@ -5003,7 +5003,7 @@ span.sp-trow-t { cursor: default; }
 :where(#panel-habits input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-habits select, #panel-nutrition select, #panel-nutrition input:not([type=checkbox]):not([type=radio]):not([type=hidden])) { min-height: 44px; }
 #panel-habits .task-check-btn, #panel-habits .habit-check-btn, #panel-habits .task-menu-btn, #panel-habits .habit-edit-btn, #panel-habits .habit-delete-btn,
 #panel-nutrition .food-item-menu-btn { min-width: 44px; min-height: 44px; }
-.cal-wk-head { min-height: 44px; display: inline-flex; align-items: center; }
+.cal-wk-dayhead { min-height: 44px; display: inline-flex; align-items: center; }
 .badge, .day-pill-label, .stat-sub, .dc-optional, .cal-scope th, #panel-habits th, #panel-habits .field-hint-sm { font-size: 12px; }
 #panel-habits summary .dc-optional, #panel-habits summary small { font-size: 12px; }
 .sp-tile-l, .sp-tile-s, .pw-b-time, .pw-b-work, .pw-b-tag, .pw-hour, .pw-hl { font-size: 12px; }
@@ -5028,3 +5028,4 @@ span.sp-trow-t { cursor: default; }
 #nutrition-history > .sm-pills + .card { border-top: 0; padding-top: 4px; }
 #nutrition-history .empty-state { border: 0; background: none; padding: 4px 0; text-align: left; }
 #nutrition-history .card-title { font-size: 15px; margin-bottom: 6px; }
+#panel-habits #historyPrevWeekBtn, #panel-habits #historyNextWeekBtn, #panel-habits #daySelectorPrevWeekBtn, #panel-habits #daySelectorNextWeekBtn { min-width: 44px; }

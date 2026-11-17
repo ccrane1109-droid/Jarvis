@@ -2498,5 +2498,9 @@
     ensureTicking();
   }
 
-  window.JarvisDiscipline = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, followDay: followDay };
+  // Habits is on the same screen now: after a tick there, the parts of Today that read the habit list follow right away.
+  // (Only those parts: it must not move the screen to another day, so the midnight roll-over in refreshForClock still sees the change.)
+  function refreshFromHabits() { renderOverview(); renderNextUp(); renderRoutineCard(); renderHabitsStrip(); renderProgressCard(); renderRoutineReview(); }
+
+  window.JarvisDiscipline = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, followDay: followDay, refreshFromHabits: refreshFromHabits };
 })();
