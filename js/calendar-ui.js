@@ -26,6 +26,8 @@
   let loadError = "", saveError = "";
   let view = "week", anchor = "", selected = "";
   let filters = { q: "", categories: [], hideDone: false }, filtersOpen = false;
+  let toolsOpen = false;          // the search and filter row, opened from the menu
+  let dayStyle = "list";          // Today as a list ("list") or hour by hour ("hours")
   let modal = null;          // the open popup: { kind: "event" | "task" | "settings", ... }
   let undo = null;           // { timer, fn }
   let itemMap = {};          // key -> item, for what is on screen
@@ -126,7 +128,9 @@
   /* ---------------- drawing ---------------- */
 
   function renderToolbar() {
-    $("calTitle").textContent = C.viewTitle(view, anchor, settings.weekStart);
+    $("calTitle").textContent = view === "day" && dayStyle === "list" ? (anchor === today() ? "Today \u00b7 " : "") + dayName(anchor, { weekday: "short", month: "short", day: "numeric" }) : C.viewTitle(view, anchor, settings.weekStart);
+    Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.classList.toggle("hidden", false); });
+    const tools = $("calTools"); if (tools) tools.classList.toggle("hidden", !(toolsOpen || filters.q || filters.categories.length || filters.hideDone));
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === view)); });
     const n = filters.categories.length + (filters.hideDone ? 1 : 0);
     $("calFilterBtn").textContent = n ? "Filters · " + n : "Filters";
@@ -174,7 +178,7 @@
     });
     html += '</div>';
     html += '<div class="cal-daylist"><div class="cal-daylist-head"><h3>' + esc(dayName(selected)) + '</h3>' +
-      '<button type="button" class="btn btn-primary" data-cal="new-on" data-date="' + selected + '">+ Add</button></div>' + agendaRows(dayItems(items, selected), selected, true) + '</div>';
+      '<button type="button" class="btn btn-secondary cal-addday" data-cal="new-on" data-date="' + selected + '" aria-label="Add to this day">+ Add here</button></div>' + agendaRows(dayItems(items, selected), selected, true) + '</div>';
     return html;
   }
 
@@ -198,6 +202,25 @@
       '</button>' +
       (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
     '</div>';
+  }
+  // Today as a list: everything on the day in time order, all-day first, with a tick on what can be ticked.
+  function dayListHtml(items) {
+    const list = dayItems(items, anchor);
+    if (!list.length) {
+      const filtered = filters.q || filters.categories.length || filters.hideDone;
+      return '<div class="cal-empty"><p>' + (filtered ? "Nothing matches your search and filters." : "Nothing planned.") + '</p>' +
+        (filtered ? '<button type="button" class="btn btn-secondary" data-cal="clear">Clear search and filters</button>' : '<button type="button" class="btn btn-primary" data-cal="new">+ Add</button>') + '</div>';
+    }
+    return '<div class="cal-daylist">' + list.map(rowHtml).join("") + '</div>';
+  }
+  // Week on a phone: the seven days one under the other, each with its own items.
+  function weekListHtml(items, dates) {
+    const t = today();
+    return '<div class="cal-weeklist">' + dates.map(function (d) {
+      const list = dayItems(items, d);
+      return '<section class="cal-wk-day' + (d === t ? " is-today" : "") + '" aria-label="' + esc(dayName(d)) + '"><h3 class="cal-ag-day' + (d === t ? " is-today" : "") + '"><button type="button" class="cal-wk-head" data-cal="goto-day" data-date="' + d + '">' + esc((d === t ? "Today \u00b7 " : "") + dayName(d, { weekday: "short", month: "short", day: "numeric" })) + '</button></h3>' +
+        (list.length ? list.map(rowHtml).join("") : '<p class="cal-wk-none">Nothing planned</p>') + '</section>';
+    }).join("") + '</div>';
   }
   function agendaRows(list, date, inMonth) {
     if (!list.length) return '<div class="cal-empty">' + (inMonth ? "Nothing planned for this day." : "Nothing here.") + '</div>';
@@ -252,6 +275,8 @@
     const r = C.rangeFor(view, anchor, settings.weekStart), items = visibleItems(r.from, r.to).shown;
     if (view === "month") stage.innerHTML = monthHtml(items);
     else if (view === "agenda") stage.innerHTML = agendaHtml(items);
+    else if (view === "day" && dayStyle === "list") stage.innerHTML = dayListHtml(items);
+    else if (view === "week" && isPhone()) { const wd = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) wd.push(d); stage.innerHTML = weekListHtml(items, wd); }
     else {
       const dates = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) dates.push(d);
       stage.innerHTML = gridHtml(dates, items);
@@ -275,6 +300,7 @@
   /* ---------------- moving around ---------------- */
 
   function setView(v) {
+    if (v === "day") { anchor = today(); selected = anchor; if (view === "day" && dayStyle === "list") { render(); return; } }
     if (view === v) return;
     view = v; wantScroll = true;
     if (v === "month") selected = selected && C.rangeFor("month", anchor, settings.weekStart).from <= selected ? selected : anchor;
@@ -406,7 +432,7 @@
     const zones = ZONES.slice(); if (zones.indexOf(dz) === -1) zones.unshift(dz); if (s.timeZone && zones.indexOf(s.timeZone) === -1) zones.unshift(s.timeZone);
     return '<div class="cal-field"><label for="calS_zone">Time zone</label><select id="calS_zone"><option value="">This device (' + esc(dz.replace(/_/g, " ")) + ')</option>' + zones.map(function (z) { return '<option value="' + esc(z) + '"' + (z === s.timeZone ? " selected" : "") + '>' + esc(z.replace(/_/g, " ")) + '</option>'; }).join("") + '</select></div>' +
       '<div class="cal-row"><div class="cal-field"><label for="calS_week">Week starts on</label><select id="calS_week"><option value="1"' + (s.weekStart === 1 ? " selected" : "") + '>Monday</option><option value="0"' + (s.weekStart === 0 ? " selected" : "") + '>Sunday</option></select></div>' +
-      '<div class="cal-field"><label for="calS_view">Opens in</label><select id="calS_view">' + selOpts([{ value: "", label: "Automatic" }, { value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "day", label: "Day" }, { value: "agenda", label: "Agenda" }], s.defaultView) + '</select></div></div>' +
+      '<div class="cal-field"><label for="calS_view">Opens in</label><select id="calS_view">' + selOpts([{ value: "", label: "Automatic" }, { value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "day", label: "Day, hour by hour" }, { value: "agenda", label: "Next 30 days" }], s.defaultView) + '</select></div></div>' +
       '<div class="cal-field"><label for="calS_len">New events last</label><select id="calS_len">' + selOpts([30, 45, 60, 90, 120, 180].map(function (n) { return { value: n, label: n < 60 ? n + " minutes" : (n / 60) + (n === 60 ? " hour" : " hours") }; }), s.defaultDuration) + '</select></div>' +
       '<div class="cal-field"><label for="calS_rem">New events remind me</label><select id="calS_rem">' + selOpts([{ value: -1, label: "Not at all" }].concat(C.REMINDER_CHOICES), s.defaultReminder) + '</select></div>' +
       '<button type="button" class="btn btn-secondary" data-cal="rem-settings">Reminder and notification settings</button>' +
@@ -733,6 +759,28 @@
       '<div class="cal-actions"><button type="submit" class="btn btn-primary">Close</button></div>';
   }
   function openKeys() { modal = { kind: "keys", opener: document.activeElement }; showModal(); focusSoon("#calForm .btn-primary"); }
+  // The less used things, one tap away.
+  function openCalMenu() {
+    window.JarvisMenu.open({
+      title: "Calendar", opener: $("calMenuBtn"),
+      rows: [
+        { key: "search", label: "Search and filters", sub: "Find an event or task, or show only some kinds" },
+        { key: "assist", label: "Planning assistant", sub: "Find time, plan a week, catch up" },
+        { key: "style", label: dayStyle === "list" ? "Show Today hour by hour" : "Show Today as a list" },
+        { key: "agenda", label: "Next 30 days", sub: "Everything coming up, as a list" },
+        { key: "settings", label: "Calendar settings", sub: "Time zone, reminders, files" },
+        { key: "keys", label: "Keyboard shortcuts", minor: true }
+      ],
+      onPick: function (key) {
+        if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
+        else if (key === "assist") { const b = $("calAssist"); if (b) b.click(); }
+        else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "Today as a list." : "Today hour by hour."); }
+        else if (key === "agenda") setView("agenda");
+        else if (key === "settings") openSettings();
+        else if (key === "keys") openKeys();
+      }
+    });
+  }
   function openSettings() { modal = { kind: "settings", opener: document.activeElement }; showModal(); focusSoon("#calS_zone"); }
 
   function onModalClick(e) {
@@ -827,11 +875,13 @@
     if (!$("panel-calendar") || !C) return;
     load();
     anchor = today(); selected = anchor;
-    view = settings.defaultView || (isPhone() ? "agenda" : "week");
+    view = settings.defaultView || "day";
+    if (view === "day" && settings.defaultView === "day") dayStyle = "hours";   // someone who chose Day in the settings gets the hours
     $("calPrev").addEventListener("click", function () { go(-1); });
     $("calNext").addEventListener("click", function () { go(1); });
     $("calToday").addEventListener("click", goToday);
     $("calNew").addEventListener("click", function () { openNew({}); focusSoon("#calF_title"); });
+    $("calMenuBtn").addEventListener("click", openCalMenu);
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view")); }); });
     $("calFilterBtn").addEventListener("click", function () { filtersOpen = !filtersOpen; renderToolbar(); });
     $("calFilters").addEventListener("click", onToolbarClick);

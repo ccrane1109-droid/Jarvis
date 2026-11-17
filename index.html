@@ -2591,27 +2591,30 @@ npx firebase-tools deploy --only firestore:rules</pre>
   </section>
 
 <section id="panel-calendar" class="tab-panel cal-scope" role="tabpanel" aria-labelledby="navBtnCalendar">
-    <div class="card cal-head">
+    <div class="cal-head">
       <div class="cal-toolbar">
+        <h2 class="cal-title" id="calTitle" aria-live="polite"></h2>
+        <span class="cal-head-btns">
+          <button type="button" class="btn btn-primary cal-new" id="calNew">+ Add</button>
+          <button type="button" class="btn-icon sm-more" id="calMenuBtn" aria-haspopup="dialog" aria-label="More calendar options"><span aria-hidden="true">&#8943;</span></button>
+        </span>
+      </div>
+      <div class="cal-views-row">
+        <div class="cal-views" role="group" aria-label="Calendar view">
+          <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Today</button>
+          <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
+          <button type="button" class="cal-view-btn" data-view="month" aria-pressed="false">Month</button>
+        </div>
         <div class="cal-nav">
           <button type="button" class="btn-icon cal-step" id="calPrev" aria-label="Previous">&larr;</button>
-          <button type="button" class="btn btn-secondary cal-today" id="calToday">Today</button>
           <button type="button" class="btn-icon cal-step" id="calNext" aria-label="Next">&rarr;</button>
         </div>
-        <h2 class="cal-title" id="calTitle" aria-live="polite"></h2>
-        <button type="button" class="btn btn-primary cal-new" id="calNew">+ New</button>
+        <button type="button" class="cal-jump" id="calToday" hidden>Today</button>
       </div>
-      <div class="cal-views" role="group" aria-label="Calendar view">
-        <button type="button" class="cal-view-btn" data-view="month" aria-pressed="false">Month</button>
-        <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
-        <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Day</button>
-        <button type="button" class="cal-view-btn" data-view="agenda" aria-pressed="false">Agenda</button>
-      
-      </div>
-      <div class="cal-tools">
+      <div class="cal-tools hidden" id="calTools">
         <input type="search" id="calSearch" class="cal-search" placeholder="Search events and tasks" aria-label="Search events and tasks" autocomplete="off">
         <button type="button" class="btn btn-secondary cal-filter-btn" id="calFilterBtn" aria-expanded="false" aria-controls="calFilters">Filters</button>
-        <button type="button" class="btn btn-secondary cal-assist-btn" id="calAssist" aria-haspopup="dialog">Assistant</button>
+        <button type="button" class="btn btn-secondary cal-assist-btn" id="calAssist" aria-haspopup="dialog" hidden>Assistant</button>
       </div>
       <div class="cal-filters hidden" id="calFilters"></div>
     </div>
@@ -2619,7 +2622,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
     <div id="calStage" class="cal-stage" aria-live="off"></div>
     <div id="calUndo" class="cal-undo hidden" role="status"></div>
     <p id="calLive" class="visually-hidden" role="status" aria-live="polite"></p>
-    <p class="field-hint cal-foot" id="calFoot"></p>
+    <p class="field-hint cal-foot" id="calFoot" hidden></p>
   </section>
 
   <!-- ===================== DISCIPLINE ===================== -->
