@@ -190,7 +190,7 @@
     return false;
   }
 
-  /* ---------------- the Knowledge library ---------------- */
+  /* ---------------- the Notes list ---------------- */
 
   function rangeBounds(r, today) {
     if (r === "7") return { from: L.addDays(today, -6), to: today };

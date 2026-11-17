@@ -132,7 +132,7 @@
     const linked = L.notesFor(store.list("notes"), "book", id).length;
     A.confirmSheet({
       title: "Delete this book?",
-      text: "“" + b.title + "” will be removed." + (linked ? " Its " + A.plural(linked, "note") + " stay in your Knowledge library, no longer linked to the book." : "") + " You can undo for a few seconds afterwards.",
+      text: "“" + b.title + "” will be removed." + (linked ? " Its " + A.plural(linked, "note") + " stay in your Notes, no longer linked to the book." : "") + " You can undo for a few seconds afterwards.",
       yes: "Delete book",
       onYes: function () {
         if (!store.remove("books", id)) { A.saveFailed(); return; }

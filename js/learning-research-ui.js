@@ -97,9 +97,9 @@
     if (!r) return;
     const linked = L.notesFor(store.list("notes"), "research", id).length;
     A.confirmSheet({
-      title: "Delete this research project?",
-      text: "“" + r.title + "” and its " + A.plural(r.sources.length, "source") + " will be removed." + (linked ? " Its " + A.plural(linked, "note") + " stay in your Knowledge library, no longer linked to the project." : "") + " You can undo for a few seconds afterwards.",
-      yes: "Delete project",
+      title: "Delete this research topic?",
+      text: "“" + r.title + "” and its " + A.plural(r.sources.length, "source") + " will be removed." + (linked ? " Its " + A.plural(linked, "note") + " stay in your Notes, no longer linked to the topic." : "") + " You can undo for a few seconds afterwards.",
+      yes: "Delete topic",
       onYes: function () {
         if (!store.remove("research", id)) { A.saveFailed(); return; }
         const changes = store.unlinkFrom("research", id, r.title);
@@ -187,6 +187,7 @@
     const notes = L.notesFor(S.notes, "research", r.id).length, cp = L.checklistProgress(r);
     const meta = [L.labelOf(L.RESEARCH_STATUS, r.status), A.plural(r.sources.length, "source"), A.plural(notes, "note")];
     if (r.priority === "high") meta.unshift("High priority");
+    if (cp.total) meta.push(cp.done + "/" + cp.total + " steps");
     if (r.archived) meta.push("Archived");
     return '<li class="ln-brow"><button type="button" class="ln-brow-open" data-go="research" data-id="' + esc(r.id) + '" aria-label="Open ' + esc(r.title) + '"><span class="ln-item-main">' +
       '<span class="ln-item-title">' + esc(r.title) + '</span>' +
@@ -273,10 +274,19 @@
       '<p class="ln-text">' + (r.question ? esc(r.question) : '<span class="ln-item-sub">No question yet. Use Edit to add one.</span>') + '</p></section>';
 
     const notes = L.filterNotes(S.notes, S, { researchId: r.id, sort: "newest" });
+    // What a source says (findings, with the evidence), what I think (opinions, not verified) and everything else stay in separate groups.
+    const groups = [
+      { key: "finding", title: "Findings", sub: "", items: notes.filter(function (n) { return n.type === "finding"; }) },
+      { key: "opinion", title: "My opinions", sub: "What I think but have not verified.", items: notes.filter(function (n) { return n.type === "opinion"; }) },
+      { key: "other", title: "Other notes", sub: "", items: notes.filter(function (n) { return n.type !== "finding" && n.type !== "opinion"; }) }
+    ];
     h += '<section class="ln-sec" aria-labelledby="lnRsNotes"><div class="ln-sec-head"><h2 class="ln-label" id="lnRsNotes">Findings and notes (' + notes.length + ')</h2><button type="button" class="ln-link-btn" data-act="add-note" data-type="finding" data-id="' + esc(r.id) + '">+ Finding</button></div>' +
-      (notes.length ? '<div class="ln-list">' + notes.map(function (n) { return A.noteCard(n); }).join("") + '</div>' : '<p class="ln-quiet">No findings yet. When a source tells you something, record it with the evidence behind it.</p>') + '</section>';
+      (notes.length ? groups.filter(function (g) { return g.items.length; }).map(function (g) {
+        return '<div class="ln-group ln-group-' + g.key + '"><h3 class="ln-h3">' + g.title + ' (' + g.items.length + ')</h3>' + (g.sub ? '<p class="ln-quiet">' + g.sub + '</p>' : "") +
+          '<div class="ln-list">' + g.items.map(function (n) { return A.noteCard(n); }).join("") + '</div></div>';
+      }).join("") : '<p class="ln-quiet">No findings yet. When a source tells you something, record it with the evidence behind it.</p>') + '</section>';
 
-    h += '<section class="ln-sec" aria-labelledby="lnRsSrc"><div class="ln-sec-head"><h2 class="ln-label" id="lnRsSrc">Sources and links (' + r.sources.length + ')</h2><button type="button" class="ln-link-btn" data-act="add-source" data-id="' + esc(r.id) + '">+ Source</button></div>' +
+    h += '<section class="ln-sec" aria-labelledby="lnRsSrc"><div class="ln-sec-head"><h2 class="ln-label" id="lnRsSrc">Sources and links (' + r.sources.length + ')' + (r.sources.length ? ' <span class="ln-item-sub">' + r.sources.filter(function (x) { return x.state === "reviewed"; }).length + ' reviewed</span>' : "") + '</h2><button type="button" class="ln-link-btn" data-act="add-source" data-id="' + esc(r.id) + '">+ Source</button></div>' +
       (r.sources.length ? '<ul class="ln-sources">' + r.sources.map(function (s) { return sourceRow(r, s); }).join("") + '</ul>' : '<p class="ln-quiet">No sources yet. Add the articles, videos and websites you’re using.</p>') + '</section>';
 
     const acts = L.actionsFor(S.actions, "research", r.id);

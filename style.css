@@ -4283,6 +4283,7 @@ details.ln-card > summary { cursor: pointer; min-height: 44px; display: flex; al
 .ln-more { background: none; border: 0; border-top: 1px solid var(--card-border); border-radius: 0; padding: 0; margin: 0 0 10px; }
 .ln-more > summary { color: var(--text-dim); }
 .ln-addmore { width: 100%; margin: 4px 0 10px; }
+.ln-scope .ln-link-btn { min-width: 44px; justify-content: center; }
 .ln-sched-row, .ln-session { background: none; border: 0; border-top: 1px solid var(--card-border); border-radius: 0; padding: 10px 0; }
 .ln-inbox { margin-bottom: 20px; }
 @media (prefers-reduced-motion: reduce) { .ln-pill, .ln-fig { transition: none; } }
