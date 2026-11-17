@@ -773,7 +773,7 @@
       ],
       onPick: function (key) {
         if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
-        else if (key === "assist") { const b = $("calAssist"); if (b) b.click(); }
+        else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
         else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "Today as a list." : "Today hour by hour."); }
         else if (key === "agenda") setView("agenda");
         else if (key === "settings") openSettings();
@@ -791,7 +791,7 @@
     if (act === "scope") { syncForm(); modal.form.scope = el.getAttribute("data-v"); redrawModal(); focusSoon('#calForm [data-cal="scope"][data-v="' + modal.form.scope + '"]'); return; }
     if (act === "byday") { syncForm(); const d = Number(el.getAttribute("data-v")), a = modal.form.byDay, i = a.indexOf(d); if (i === -1) a.push(d); else if (a.length > 1) a.splice(i, 1); modal.form.byDay = a.sort(function (x, y) { return x - y; }); redrawModal(); focusSoon('#calForm [data-cal="byday"][data-v="' + d + '"]'); return; }
     if (act === "rem-settings") { if (modal && modal.kind === "event") syncForm(); if (window.JarvisCalReminders) window.JarvisCalReminders.openSettings(el); return; }
-    if (act === "ics-open") { closeModal(false); if (window.JarvisCalFile) window.JarvisCalFile.open($("calFoot") ? $("calFoot").querySelector('[data-cal="settings"]') : null); return; }   // closed first: the Undo bar must not sit behind it
+    if (act === "ics-open") { closeModal(false); if (window.JarvisCalFile) window.JarvisCalFile.open($("calMenuBtn")); return; }   // closed first: the Undo bar must not sit behind it
     if (act === "duplicate") { duplicateFromModal(); return; }
     if (act === "delete") { deleteFromModal(); return; }
     if (act === "ext-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
@@ -852,7 +852,7 @@
     if (tag === "input" || tag === "textarea" || tag === "select" || (tg && tg.isContentEditable)) { if (e.key === "Escape" && tg.id === "calSearch") { tg.blur(); } return; }
     const k = e.key;
     if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "p" && window.JarvisAssistant) window.JarvisAssistant.open($("calAssist")); else if (k === "?") { e.preventDefault(); openKeys(); }
-    else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); $("calSearch").focus(); }
+    else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); if (!toolsOpen) { toolsOpen = true; render(); } $("calSearch").focus(); }
     else if (k === "ArrowLeft" && tag !== "button") go(-1); else if (k === "ArrowRight" && tag !== "button") go(1);
     else if (k === "j") go(1); else if (k === "k") go(-1);
     else return;

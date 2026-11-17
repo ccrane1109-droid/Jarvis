@@ -694,6 +694,9 @@
     renderHabitManageList();
     renderHabitHistoryGrid();
     renderTodayOverview();
+    // Habits and Discipline are one screen now, so Discipline's "Next up" and routine numbers follow a tick straight away
+    // (they used to refresh when you switched tabs).
+    if (window.JarvisDiscipline && typeof window.JarvisDiscipline.onSubTabChange === "function") window.JarvisDiscipline.onSubTabChange("discipline-today");
   }
 
   /* ==================== GOALS ==================== */

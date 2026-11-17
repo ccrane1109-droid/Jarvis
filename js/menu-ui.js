@@ -56,8 +56,11 @@
       if (e.target === overlay || e.target.closest("[data-sm-close]")) { close(); return; }
       const b = e.target.closest("[data-sm-key]");
       if (!b) return;
-      const key = b.getAttribute("data-sm-key"), fn = handler;
+      const key = b.getAttribute("data-sm-key"), fn = handler, back = returnFocus;
       close(false);
+      // Put focus back on the button that opened the menu before the chosen action runs, so a dialog it opens
+      // remembers that button and gives focus back to it when it closes (not to the page behind it).
+      if (back && back.focus && document.contains(back)) back.focus();
       if (fn) window.setTimeout(function () { fn(key); }, 0);
     });
     document.body.appendChild(overlay);

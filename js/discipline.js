@@ -1227,6 +1227,7 @@
     renderPlanResults();
     renderResult();
     renderProgressCard();
+    renderRoutineReview();     // the review's habit line follows a tick made on the same screen
   }
 
   /* ---------------- rules ---------------- */

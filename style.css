@@ -4996,10 +4996,11 @@ span.sp-trow-t { cursor: default; }
 .sp-next-btns { display: inline-flex; align-items: center; gap: 8px; }
 
 /* Universal pass: readable text and 44 px targets in Workout, Nutrition, Habits, Calendar and Strategy */
-#panel-workout .btn, #panel-nutrition .btn, #panel-habits .btn, #panel-calendar .btn, #panel-strategy .btn,
-#panel-workout .btn-icon, #panel-nutrition .btn-icon, #panel-habits .btn-icon, #panel-calendar .btn-icon,
-.workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn { min-height: 44px; }
-#panel-habits input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-habits select, #panel-nutrition select, #panel-nutrition input:not([type=checkbox]):not([type=radio]):not([type=hidden]) { min-height: 44px; }
+/* :where() keeps these at zero specificity, so a larger size set by a class (the 56 px Start button, 48 px fields) still wins. */
+:where(#panel-workout .btn, #panel-nutrition .btn, #panel-habits .btn, #panel-calendar .btn, #panel-strategy .btn,
+  #panel-workout .btn-icon, #panel-nutrition .btn-icon, #panel-habits .btn-icon, #panel-calendar .btn-icon,
+  .workout-sub-nav-btn, .nutrition-sub-nav-btn, .habits-sub-nav-btn) { min-height: 44px; }
+:where(#panel-habits input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-habits select, #panel-nutrition select, #panel-nutrition input:not([type=checkbox]):not([type=radio]):not([type=hidden])) { min-height: 44px; }
 #panel-habits .task-check-btn, #panel-habits .habit-check-btn, #panel-habits .task-menu-btn, #panel-habits .habit-edit-btn, #panel-habits .habit-delete-btn,
 #panel-nutrition .food-item-menu-btn { min-width: 44px; min-height: 44px; }
 .cal-wk-head { min-height: 44px; display: inline-flex; align-items: center; }
@@ -5019,7 +5020,7 @@ span.sp-trow-t { cursor: default; }
   .cal-views-row { gap: 4px; }
   .cal-view-btn { min-width: 0; padding: 0 9px; }
 }
-#panel-workout input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-workout select { min-height: 44px; }
+:where(#panel-workout input:not([type=checkbox]):not([type=radio]):not([type=hidden]), #panel-workout select) { min-height: 44px; }
 .pw-head-n { font-size: 12px; }
 
 /* Nutrition History: a flat list, not boxes */
