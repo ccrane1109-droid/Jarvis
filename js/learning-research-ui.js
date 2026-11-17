@@ -1,6 +1,6 @@
 /* ==========================================================================
-   JARVIS — Learning & Research Hub: Research (the list, a project's own page, sources, the add/edit forms).
-   Findings and notes are kept in the Knowledge library's records and shown here through their link to the project.
+   JARVIS — Learning & Research Hub: Research (the list, a topic's own page, sources, the add/edit forms).
+   Findings and notes are kept with the other notes and shown here through their link to the topic.
    ========================================================================== */
 
 (function () {
@@ -17,15 +17,17 @@
   function openResearchForm(r) {
     const isNew = !r, S = store.state();
     const x = r || { title: "", category: "", question: "", purpose: "", priority: "medium", status: "planned", conclusion: "", completedAt: "" };
+    const moreOpen = !isNew && !!(x.purpose || x.category || x.priority !== "medium" || x.status !== "planned");
     const body =
+      A.fText("title", "Topic", x.title, { required: true, max: 200 }) +
+      A.fArea("question", "Main question", x.question, { rows: 2, max: 500, placeholder: "What are you trying to find out?" }) +
+      '<details class="ln-more"' + (moreOpen ? " open" : "") + '><summary>More details</summary>' +
       (isNew ? A.fSelect("template", "Start from a template (optional)", [["", "No template"]].concat(L.TEMPLATES.map(function (t) { return [t.key, t.label]; })), "", {}) + '<p class="field-hint" id="lnTmplNote">A template suggests a question and a checklist of steps. You can change all of it.</p>' : "") +
-      A.fText("title", "Title", x.title, { required: true, max: 200 }) +
-      A.fArea("question", "Main research question", x.question, { rows: 2, max: 500, placeholder: "What are you trying to find out?" }) +
       A.fArea("purpose", "Purpose", x.purpose, { rows: 2, max: 1000, placeholder: "Why does this matter? What will you use it for?" }) +
       A.fText("category", "Category", x.category, { max: 60, list: "lnCats" }) + A.datalist("lnCats", L.allCategories(S)) +
-      '<div class="ln-two">' + A.fSelect("priority", "Priority", A.opts(L.PRIORITY), x.priority, { required: true }) + A.fSelect("status", "Status", A.opts(L.RESEARCH_STATUS), x.status, { required: true }) + '</div>';
+      '<div class="ln-two">' + A.fSelect("priority", "Priority", A.opts(L.PRIORITY), x.priority, { required: true }) + A.fSelect("status", "Status", A.opts(L.RESEARCH_STATUS), x.status, { required: true }) + '</div></details>';
     A.openSheet({
-      title: isNew ? "New research project" : "Edit research", body: body, submit: isNew ? "Create project" : "Save changes",
+      title: isNew ? "New research topic" : "Edit research", body: body, submit: isNew ? "Create topic" : "Save changes",
       onChange: function (t, el) {
         if (t.id !== "lnf_template") return;
         const tm = L.TEMPLATES.filter(function (k) { return k.key === t.value; })[0];
@@ -114,12 +116,6 @@
     A.say(r.title + ": " + L.labelOf(L.RESEARCH_STATUS, status) + ".");
   }
 
-  function setSourceState(rid, sid, state) {
-    const r = store.get("research", rid);
-    if (!r) return;
-    const sources = r.sources.map(function (x) { return x.id === sid ? Object.assign({}, x, { state: state }) : x; });
-    if (!store.put("research", Object.assign({}, r, { sources: sources }))) A.saveFailed();
-  }
   function setArchived(id, flag) {
     const r = store.get("research", id);
     if (!r) return;
@@ -187,13 +183,16 @@
 
   /* ---------------- the list ---------------- */
 
-  function card(r, S) {
-    const notes = L.notesFor(S.notes, "research", r.id).length, acts = L.actionsFor(S.actions, "research", r.id).length, cp = L.checklistProgress(r);
-    return '<article class="ln-card-item"><button type="button" class="ln-item ln-item-open ln-item-flat ln-res-open" data-go="research" data-id="' + esc(r.id) + '" aria-label="Open ' + esc(r.title) + '"><span class="ln-item-main">' +
-      '<span class="ln-item-title">' + esc(r.title) + '</span><span class="ln-badges">' + A.statusBadge(r.status, L.labelOf(L.RESEARCH_STATUS, r.status)) + A.prioBadge(r.priority) + (r.category ? A.badge("neutral", r.category) : "") + (r.archived ? A.badge("neutral", "Archived") : "") + '</span>' +
-      (r.question ? '<span class="ln-item-sub ln-clamp">' + esc(A.snippet(r.question, 160)) + '</span>' : '<span class="ln-item-sub">No research question yet</span>') +
-      (cp.total ? A.barHtml(cp.pct, r.title + ": " + cp.pct + "% of the steps done") + '<span class="ln-item-sub">' + cp.done + ' of ' + A.plural(cp.total, "step") + ' done</span>' : "") +
-      '<span class="ln-item-sub">' + esc([A.plural(r.sources.length, "source"), A.plural(notes, "note"), A.plural(acts, "action")].join(" · ")) + '</span></span></button></article>';
+  function row(r, S) {
+    const notes = L.notesFor(S.notes, "research", r.id).length, cp = L.checklistProgress(r);
+    const meta = [L.labelOf(L.RESEARCH_STATUS, r.status), A.plural(r.sources.length, "source"), A.plural(notes, "note")];
+    if (r.priority === "high") meta.unshift("High priority");
+    if (r.archived) meta.push("Archived");
+    return '<li class="ln-brow"><button type="button" class="ln-brow-open" data-go="research" data-id="' + esc(r.id) + '" aria-label="Open ' + esc(r.title) + '"><span class="ln-item-main">' +
+      '<span class="ln-item-title">' + esc(r.title) + '</span>' +
+      (r.question ? '<span class="ln-item-sub ln-clamp">' + esc(A.snippet(r.question, 160)) + '</span>' : "") +
+      (cp.total ? A.barHtml(cp.pct, r.title + ": " + cp.pct + "% of the steps done") : "") +
+      '<span class="ln-item-sub">' + esc(meta.join(" · ")) + '</span></span></button></li>';
   }
   function listResults() {
     const S = store.state(), f = A.state.filters.research;
@@ -201,40 +200,46 @@
     if (!list.length) {
       return L.live(S.research).length
         ? '<p class="empty-state">No research matches. <button type="button" class="btn-icon" data-act="clear-filters">Clear filters</button></p>'
-        : '<div class="empty-state"><p>No research projects yet.</p><p class="field-hint">A project keeps one question together with its sources, findings and your conclusion.</p><button type="button" class="btn btn-primary" data-act="add-research">Start your first project</button></div>';
+        : '<div class="empty-state"><p>No research topics yet.</p><button type="button" class="btn btn-primary" data-act="add-research">Start your first topic</button></div>';
     }
-    return '<div class="ln-grid ln-grid-wide">' + list.map(function (r) { return card(r, S); }).join("") + '</div>';
+    return '<ul class="ln-brows">' + list.map(function (r) { return row(r, S); }).join("") + '</ul>';
   }
   function listCount() {
     const n = L.filterResearch(store.state().research, A.state.filters.research).length, total = L.live(store.state().research).length;
-    return n === total ? A.plural(total, "project") : n + " of " + total + " projects";
+    return n === total ? A.plural(total, "topic") : n + " of " + total + " topics";
+  }
+  function statusChips(S) {
+    const live = L.live(S.research).filter(function (r) { return !r.archived; }), f = A.state.filters.research;
+    const cur = f.active ? "active" : (f.status || "");
+    const n = function (fn) { return live.filter(fn).length; };
+    const items = [["", "All", live.length], ["active", "Active", n(function (r) { return r.status === "researching" || r.status === "analyzing"; })], ["planned", "Planned", n(function (r) { return r.status === "planned"; })], ["completed", "Completed", n(function (r) { return r.status === "completed"; })]];
+    return '<div class="ln-pills ln-pills-filter" role="group" aria-label="Show research">' + items.map(function (x) {
+      return '<button type="button" class="ln-pill" data-act="res-show" data-v="' + x[0] + '" aria-pressed="' + (cur === x[0]) + '">' + esc(x[1]) + ' <span class="ln-pill-n">' + x[2] + '</span></button>';
+    }).join("") + '</div>';
   }
   function list() {
     const S = store.state(), cats = L.allCategories({ research: S.research });
-    return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Research</h2><button type="button" class="btn btn-primary" data-act="add-research">+ New research</button></div>' +
+    return '<h2 class="visually-hidden" data-focus-top>Research</h2>' + statusChips(S) +
       A.toolbar("research", [
         { name: "q", kind: "search", label: "Search research", placeholder: "Search title, question, sources" },
-        { name: "status", kind: "select", label: "Filter by status", options: [["", "All statuses"]].concat(L.RESEARCH_STATUS.map(function (x) { return [x.key, x.label]; })) },
         { name: "priority", kind: "select", label: "Filter by priority", options: [["", "All priorities"]].concat(L.PRIORITY.map(function (x) { return [x.key, x.label]; })) },
         { name: "category", kind: "select", label: "Filter by category", options: [["", "All categories"]].concat(cats.map(function (c) { return [c, c]; })) },
-        { name: "archived", kind: "select", label: "Archived projects", options: [["", "Hide archived"], ["show", "Show archived too"], ["only", "Only archived"]] },
+        { name: "archived", kind: "select", label: "Archived topics", options: [["", "Hide archived"], ["show", "Show archived too"], ["only", "Only archived"]] },
         { name: "sort", kind: "select", label: "Sort research", options: [["recent", "Recently updated"], ["priority", "Priority"], ["added", "Recently added"], ["title", "Title A–Z"]] }
-      ], { fold: 1 }) + (A.state.filters.research.active ? '<p class="ln-item-sub">Showing active research only (researching or analyzing).</p>' : "") +
+      ], { fold: 1 }) +
       '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(listCount()) + '</p><div id="lnResults">' + listResults() + '</div>';
   }
 
-  /* ---------------- a project's own page ---------------- */
+  /* ---------------- a topic's own page ---------------- */
 
   function sourceRow(r, s) {
-    return '<li class="ln-source"><div class="ln-source-main"><span class="ln-badges">' + A.badge("neutral", L.labelOf(L.SOURCE_KIND, s.kind)) + '</span>' +
+    const state = s.state && s.state !== "unreviewed" ? L.labelOf(L.SOURCE_STATE, s.state) : "";
+    return '<li class="ln-source"><div class="ln-source-main">' +
       '<a class="ln-link" href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.title) + '<span class="visually-hidden"> (opens in a new tab)</span></a>' +
-      '<span class="ln-item-sub">' + esc(L.hostOf(s.url)) + '</span>' + (s.note ? '<span class="ln-item-sub">' + esc(s.note) + '</span>' : "") +
-      (s.credibility ? '<span class="ln-item-sub ln-cred">Trust: ' + esc(s.credibility) + '</span>' : "") +
-      '<div class="ln-seg ln-seg-sm ln-seg-src" role="group" aria-label="Review status of ' + esc(s.title) + '">' + L.SOURCE_STATE.map(function (x) {
-        return '<button type="button" class="ln-seg-btn" data-act="source-state" data-id="' + esc(r.id) + '" data-sid="' + esc(s.id) + '" data-v="' + x.key + '" aria-pressed="' + ((s.state || "unreviewed") === x.key) + '">' + esc(x.label) + '</button>';
-      }).join("") + '</div></div>' +
-      '<div class="ln-item-btns"><button type="button" class="btn btn-secondary" data-act="edit-source" data-id="' + esc(r.id) + '" data-sid="' + esc(s.id) + '" aria-label="Edit source ' + esc(s.title) + '">Edit</button>' +
-      '<button type="button" class="btn btn-secondary ln-danger" data-act="delete-source" data-id="' + esc(r.id) + '" data-sid="' + esc(s.id) + '" aria-label="Remove source ' + esc(s.title) + '">Remove</button></div></li>';
+      '<span class="ln-item-sub">' + esc([L.labelOf(L.SOURCE_KIND, s.kind), L.hostOf(s.url), state].filter(Boolean).join(" · ")) + '</span>' + (s.note ? '<span class="ln-item-sub">' + esc(s.note) + '</span>' : "") +
+      (s.credibility ? '<span class="ln-item-sub ln-cred">Trust: ' + esc(s.credibility) + '</span>' : "") + '</div>' +
+      '<div class="ln-item-btns"><button type="button" class="ln-link-btn" data-act="edit-source" data-id="' + esc(r.id) + '" data-sid="' + esc(s.id) + '" aria-label="Edit source ' + esc(s.title) + '">Edit</button>' +
+      '<button type="button" class="ln-link-btn ln-danger" data-act="delete-source" data-id="' + esc(r.id) + '" data-sid="' + esc(s.id) + '" aria-label="Remove source ' + esc(s.title) + '">Remove</button></div></li>';
   }
 
   function checklistHtml(r) {
@@ -245,59 +250,46 @@
         '<button type="button" class="btn-icon ln-ck-btn" data-act="ck-edit" data-id="' + esc(r.id) + '" data-ck="' + esc(x.id) + '" aria-label="Edit step ' + esc(x.text) + '">Edit</button>' +
         '<button type="button" class="btn-icon ln-ck-btn ln-danger" data-act="ck-delete" data-id="' + esc(r.id) + '" data-ck="' + esc(x.id) + '" aria-label="Remove step ' + esc(x.text) + '">Remove</button></li>';
     };
-    return '<section class="card ln-card" aria-labelledby="lnRsCk"><div class="card-title-row"><h2 class="card-title" id="lnRsCk">Checklist' + (cp.total ? ' (' + cp.done + '/' + cp.total + ')' : "") + '</h2></div>' +
-      (cp.total ? A.barHtml(cp.pct, "Checklist: " + cp.pct + "% done") + '<p class="ln-item-sub">' + cp.pct + '% done' + (cp.done === cp.total && r.status !== "completed" ? ' · every step is done. You can mark the project completed.' : "") + '</p>' : "") +
-      (list.length ? '<ul class="ln-cks">' + list.map(row).join("") + '</ul>' : '<p class="empty-state-compact">No steps yet. Add the steps this research needs, or start from a template.</p>') +
+    return '<details class="ln-more ln-sec" data-keep="ck_' + esc(r.id) + '"' + (A.state.open["ck_" + r.id] ? " open" : "") + '><summary>Checklist' + (cp.total ? ' (' + cp.done + '/' + cp.total + ')' : "") + '</summary>' +
+      (cp.total ? A.barHtml(cp.pct, "Checklist: " + cp.pct + "% done") + '<p class="ln-item-sub">' + cp.pct + '% done' + (cp.done === cp.total && r.status !== "completed" ? ' · every step is done. You can mark the topic completed.' : "") + '</p>' : "") +
+      (list.length ? '<ul class="ln-cks">' + list.map(row).join("") + '</ul>' : "") +
       '<form data-form="checklist" data-id="' + esc(r.id) + '" class="ln-ck-add" novalidate><label for="lnCkNew" class="visually-hidden">New step</label><input id="lnCkNew" name="step" type="text" maxlength="200" placeholder="Add a step…" data-fk="step" autocomplete="off"><button type="submit" class="btn btn-secondary">Add step</button><p class="ln-err hidden" data-err="step" role="alert"></p></form>' +
-      '<details class="ln-more" data-keep="tmpl_' + esc(r.id) + '"' + (A.state.open["tmpl_" + r.id] ? " open" : "") + '><summary>Add steps from a template</summary><div class="ln-item-btns">' +
-      L.TEMPLATES.map(function (t) { return '<button type="button" class="btn btn-secondary" data-act="ck-template" data-id="' + esc(r.id) + '" data-t="' + t.key + '">' + esc(t.label) + '</button>'; }).join("") + '</div></details></section>';
+      '<div class="ln-item-btns"><span class="ln-item-sub">Add steps from a template:</span>' +
+      L.TEMPLATES.map(function (t) { return '<button type="button" class="ln-link-btn" data-act="ck-template" data-id="' + esc(r.id) + '" data-t="' + t.key + '">' + esc(t.label) + '</button>'; }).join("") + '</div></details>';
   }
 
   function detail(id) {
     const r = store.get("research", id);
-    if (!r) return '<div class="ln-head"><button type="button" class="btn-icon" data-go="research">← All research</button></div><p class="empty-state" data-focus-top>This research project no longer exists.</p>';
+    if (!r) return '<div class="ln-head"><button type="button" class="btn-icon" data-go="research">← Research</button></div><p class="empty-state" data-focus-top>This research topic no longer exists.</p>';
     const S = store.state();
-    const statusBtns = L.RESEARCH_STATUS.map(function (s) {
-      return '<button type="button" class="ln-seg-btn" data-act="status-research" data-id="' + esc(r.id) + '" data-v="' + s.key + '" aria-pressed="' + (r.status === s.key) + '">' + esc(s.label) + '</button>';
-    }).join("");
-    let h = '<div class="ln-head"><button type="button" class="btn-icon" data-go="research">← All research</button>' +
-      '<div class="ln-head-btns"><button type="button" class="btn btn-secondary" data-act="edit-research" data-id="' + esc(r.id) + '">Edit</button>' +
+    let h = '<div class="ln-head"><button type="button" class="btn-icon" data-go="research">← Research</button>' +
+      '<details class="ln-pop"><summary class="btn btn-secondary ln-more-btn" aria-label="Edit, archive or delete this topic">&#8943;</summary><div class="ln-pop-body"><button type="button" class="btn btn-secondary" data-act="edit-research" data-id="' + esc(r.id) + '">Edit</button>' +
       (r.status === "completed" ? '<button type="button" class="btn btn-secondary" data-act="archive-research" data-id="' + esc(r.id) + '" data-on="' + (r.archived ? "0" : "1") + '">' + (r.archived ? "Unarchive" : "Archive") + '</button>' : "") +
-      '<button type="button" class="btn btn-secondary ln-danger" data-act="delete-research" data-id="' + esc(r.id) + '">Delete</button></div></div>' +
-      '<section class="card ln-card"><h2 class="ln-h2" data-focus-top>' + esc(r.title) + '</h2><div class="ln-badges">' + A.statusBadge(r.status, L.labelOf(L.RESEARCH_STATUS, r.status)) + A.prioBadge(r.priority) + (r.category ? A.badge("neutral", r.category) : "") +
-      (r.completedAt ? A.badge("green", "Completed " + A.fmtShort(r.completedAt)) : "") + (r.archived ? A.badge("neutral", "Archived") : "") + '</div>' +
-      '<div class="ln-seg" role="group" aria-label="Research status">' + statusBtns + '</div>' +
-      '<h3 class="ln-h3">Main question</h3><p class="ln-text">' + (r.question ? esc(r.question) : '<span class="ln-item-sub">Not written yet. Use Edit to add it.</span>') + '</p>' +
-      '<h3 class="ln-h3">Purpose</h3><p class="ln-text">' + (r.purpose ? esc(r.purpose) : '<span class="ln-item-sub">Not written yet.</span>') + '</p></section>';
-
-    h += checklistHtml(r);
-
-    h += '<section class="card ln-card" aria-labelledby="lnRsSrc"><div class="card-title-row"><h2 class="card-title" id="lnRsSrc">Sources (' + r.sources.length + ')' + (r.sources.length ? ' <span class="ln-item-sub">' + r.sources.filter(function (x) { return x.state === "reviewed"; }).length + ' reviewed</span>' : "") + '</h2><button type="button" class="btn btn-secondary" data-act="add-source" data-id="' + esc(r.id) + '">+ Add source</button></div>' +
-      (r.sources.length ? '<ul class="ln-sources">' + r.sources.map(function (s) { return sourceRow(r, s); }).join("") + '</ul>' : '<p class="empty-state-compact">No sources yet. Add the articles, videos and websites you’re using.</p>') + '</section>';
+      '<button type="button" class="btn btn-secondary ln-danger" data-act="delete-research" data-id="' + esc(r.id) + '">Delete</button></div></details></div>' +
+      '<section class="ln-sec"><h2 class="ln-h2" data-focus-top>' + esc(r.title) + '</h2>' +
+      '<div class="ln-badges">' + (r.category ? A.badge("neutral", r.category) : "") + (r.completedAt ? A.badge("green", "Completed " + A.fmtShort(r.completedAt)) : "") + (r.archived ? A.badge("neutral", "Archived") : "") + '</div>' +
+      '<label class="visually-hidden" for="lnResStatus">Research status</label><select id="lnResStatus" class="ln-status-sel" data-status-research data-id="' + esc(r.id) + '">' +
+      L.RESEARCH_STATUS.map(function (s) { return '<option value="' + s.key + '"' + (r.status === s.key ? " selected" : "") + '>' + esc(s.label) + '</option>'; }).join("") + '</select>' +
+      '<p class="ln-text">' + (r.question ? esc(r.question) : '<span class="ln-item-sub">No question yet. Use Edit to add one.</span>') + '</p></section>';
 
     const notes = L.filterNotes(S.notes, S, { researchId: r.id, sort: "newest" });
-    const groups = [
-      { key: "finding", title: "Findings", sub: "Checked against a source, with the evidence behind them.", items: notes.filter(function (n) { return n.type === "finding"; }), empty: "No findings yet. When a source tells you something, record it with the evidence behind it." },
-      { key: "opinion", title: "My opinions", sub: "What I think but have not verified. Kept apart from findings so I do not mix them up.", items: notes.filter(function (n) { return n.type === "opinion"; }), empty: "No opinions recorded." },
-      { key: "other", title: "Other notes", sub: "", items: notes.filter(function (n) { return n.type !== "finding" && n.type !== "opinion"; }), empty: "" }
-    ];
-    h += '<section class="card ln-card" aria-labelledby="lnRsNotes"><div class="card-title-row"><h2 class="card-title" id="lnRsNotes">Findings and notes (' + notes.length + ')</h2></div>' +
-      '<div class="ln-quick" role="group" aria-label="Add to this project"><button type="button" class="btn btn-secondary" data-act="add-note" data-type="finding" data-id="' + esc(r.id) + '">+ Finding</button>' +
-      '<button type="button" class="btn btn-secondary" data-act="add-note" data-type="opinion" data-id="' + esc(r.id) + '">+ Opinion</button>' +
-      '<button type="button" class="btn btn-secondary" data-act="add-note" data-type="note" data-id="' + esc(r.id) + '">+ Note</button></div>' +
-      groups.map(function (g) {
-        if (g.key === "other" && !g.items.length) return "";
-        return '<div class="ln-group ln-group-' + g.key + '"><h3 class="ln-h3">' + g.title + ' (' + g.items.length + ')</h3>' + (g.sub ? '<p class="field-hint">' + g.sub + '</p>' : "") +
-          (g.items.length ? '<div class="ln-list">' + g.items.map(function (n) { return A.noteCard(n); }).join("") + '</div>' : '<p class="empty-state-compact">' + g.empty + '</p>') + '</div>';
-      }).join("") + '</section>';
+    h += '<section class="ln-sec" aria-labelledby="lnRsNotes"><div class="ln-sec-head"><h2 class="ln-label" id="lnRsNotes">Findings and notes (' + notes.length + ')</h2><button type="button" class="ln-link-btn" data-act="add-note" data-type="finding" data-id="' + esc(r.id) + '">+ Finding</button></div>' +
+      (notes.length ? '<div class="ln-list">' + notes.map(function (n) { return A.noteCard(n); }).join("") + '</div>' : '<p class="ln-quiet">No findings yet. When a source tells you something, record it with the evidence behind it.</p>') + '</section>';
 
-    h += '<section class="card ln-card" aria-labelledby="lnRsConc"><div class="card-title-row"><h2 class="card-title" id="lnRsConc">My conclusion</h2></div>' +
-      '<form data-form="conclusion" data-id="' + esc(r.id) + '" novalidate><div class="form-row"><label for="lnConc" class="visually-hidden">My conclusion</label><textarea id="lnConc" name="conclusion" rows="4" maxlength="5000" placeholder="What do you conclude from what you’ve found? Leave empty until you know." data-fk="conclusion">' + esc(r.conclusion) + '</textarea></div>' +
-      '<button type="submit" class="btn btn-secondary">Save conclusion</button><p class="ln-err hidden" data-err="conclusion" role="alert"></p></form></section>';
+    h += '<section class="ln-sec" aria-labelledby="lnRsSrc"><div class="ln-sec-head"><h2 class="ln-label" id="lnRsSrc">Sources and links (' + r.sources.length + ')</h2><button type="button" class="ln-link-btn" data-act="add-source" data-id="' + esc(r.id) + '">+ Source</button></div>' +
+      (r.sources.length ? '<ul class="ln-sources">' + r.sources.map(function (s) { return sourceRow(r, s); }).join("") + '</ul>' : '<p class="ln-quiet">No sources yet. Add the articles, videos and websites you’re using.</p>') + '</section>';
 
     const acts = L.actionsFor(S.actions, "research", r.id);
-    h += '<section class="card ln-card" aria-labelledby="lnRsActs"><div class="card-title-row"><h2 class="card-title" id="lnRsActs">Next steps (' + acts.length + ')</h2><button type="button" class="btn btn-secondary" data-act="add-action" data-id="' + esc(r.id) + '">+ Add next step</button></div>' +
-      (acts.length ? '<div class="ln-list">' + acts.map(function (a) { return A.actionRow(a); }).join("") + '</div>' : '<p class="empty-state-compact">What will you do with what you’ve found? Add the next step.</p>') + '</section>';
+    h += '<details class="ln-more ln-sec" data-keep="rsact_' + esc(r.id) + '"' + (A.state.open["rsact_" + r.id] ? " open" : "") + '><summary>Next steps (' + acts.length + ')</summary>' +
+      (acts.length ? '<div class="ln-list">' + acts.map(function (a) { return A.actionRow(a); }).join("") + '</div>' : '<p class="ln-quiet">What will you do with what you’ve found?</p>') +
+      '<button type="button" class="btn btn-secondary" data-act="add-action" data-id="' + esc(r.id) + '">+ Add next step</button></details>';
+
+    h += '<details class="ln-more ln-sec" data-keep="rsconc_' + esc(r.id) + '"' + (A.state.open["rsconc_" + r.id] || r.conclusion ? " open" : "") + '><summary>Conclusion' + (r.conclusion ? "" : " (not written)") + '</summary>' +
+      '<form data-form="conclusion" data-id="' + esc(r.id) + '" novalidate><div class="form-row"><label for="lnConc" class="visually-hidden">My conclusion</label><textarea id="lnConc" name="conclusion" rows="4" maxlength="5000" placeholder="What do you conclude from what you’ve found? Leave empty until you know." data-fk="conclusion">' + esc(r.conclusion) + '</textarea></div>' +
+      '<button type="submit" class="btn btn-secondary">Save conclusion</button><p class="ln-err hidden" data-err="conclusion" role="alert"></p></form></details>';
+
+    h += checklistHtml(r);
+    if (r.purpose) h += '<details class="ln-more ln-sec"><summary>Purpose</summary><p class="ln-text">' + esc(r.purpose) + '</p></details>';
     return h;
   }
 
@@ -310,19 +302,19 @@
       if (act === "add-research") openResearchForm(null);
       else if (act === "edit-research") { const r = store.get("research", id); if (r) openResearchForm(r); }
       else if (act === "delete-research") deleteResearch(id);
-      else if (act === "status-research") setStatus(id, el.getAttribute("data-v"));
+      else if (act === "res-show") { const v = el.getAttribute("data-v"); A.state.filters.research = Object.assign({}, A.state.filters.research, { status: v === "active" ? "" : v, active: v === "active" }); A.render(); }
       else if (act === "archive-research") setArchived(id, el.getAttribute("data-on") === "1");
-      else if (act === "source-state") setSourceState(id, el.getAttribute("data-sid"), el.getAttribute("data-v"));
       else if (act === "ck-edit") editChecklistItem(id, el.getAttribute("data-ck"));
       else if (act === "ck-delete") deleteChecklistItem(id, el.getAttribute("data-ck"));
       else if (act === "ck-template") applyTemplate(id, el.getAttribute("data-t"));
       else if (act === "add-source") openSourceForm(id, null);
       else if (act === "edit-source") { const r = store.get("research", id); const s = r && r.sources.filter(function (x) { return x.id === el.getAttribute("data-sid"); })[0]; if (s) openSourceForm(id, s); }
       else if (act === "delete-source") deleteSource(id, el.getAttribute("data-sid"));
-      else if (act === "add-note") A.editNote(null, { type: el.getAttribute("data-type"), researchIds: [id] });
+      else if (act === "add-note") A.editNote(null, { type: el.getAttribute("data-type") || "finding", researchIds: [id] });
       else if (act === "add-action") { const r = store.get("research", id); A.editAction(null, { sourceType: "research", sourceId: id, label: r ? r.title : "" }); }
     },
     change: function (el) {
+      if (el.hasAttribute("data-status-research")) { setStatus(el.getAttribute("data-id"), el.value); return; }
       if (el.getAttribute("data-act") !== "ck-toggle") return;
       const r = store.get("research", el.getAttribute("data-id"));
       if (!r) return;

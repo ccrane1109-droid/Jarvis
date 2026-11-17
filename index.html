@@ -2659,24 +2659,22 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
   <!-- ===================== LEARNING & RESEARCH ===================== -->
   <section id="panel-learning" class="tab-panel ln-scope" role="tabpanel" aria-labelledby="navBtnLearning">
-    <div class="panel-header">
+    <div class="ln-top">
       <h1>Learning &amp; Research</h1>
-      <p class="panel-subtitle">The books you read, the research you do, what you learned and what you'll do with it. Every number comes from what you enter here.</p>
+      <div class="ln-top-btns">
+        <button type="button" id="lnAdd" class="btn btn-primary" aria-haspopup="dialog">+ Add</button>
+        <button type="button" id="lnMore" class="btn btn-secondary ln-more-btn" aria-haspopup="dialog" aria-label="More">&#8943;</button>
+      </div>
     </div>
     <p id="lnLive" class="visually-hidden" role="status" aria-live="polite"></p>
     <nav class="sub-nav ln-sub-nav" aria-label="Learning sections">
-      <button type="button" class="sub-nav-btn active" data-ln="dashboard" aria-current="page">Dashboard</button>
+      <button type="button" class="sub-nav-btn active" data-ln="overview" aria-current="page">Overview</button>
       <button type="button" class="sub-nav-btn" data-ln="books">Books</button>
       <button type="button" class="sub-nav-btn" data-ln="research">Research</button>
-      <button type="button" class="sub-nav-btn" data-ln="knowledge">Knowledge</button>
-      <button type="button" class="sub-nav-btn" data-ln="actions">Actions</button>
-      <button type="button" class="sub-nav-btn" data-ln="goals">Goals</button>
-      <button type="button" class="sub-nav-btn" data-ln="study">Study</button>
-      <button type="button" class="sub-nav-btn" data-ln="review">Weekly</button>
+      <button type="button" class="sub-nav-btn" data-ln="notes">Notes</button>
     </nav>
     <div id="lnView"></div>
     <div id="lnUndo" class="ln-undo hidden"></div>
-    <button type="button" id="lnFab" class="ln-fab" aria-haspopup="dialog">+ Capture</button>
   </section>
 
   <!-- ===================== STRATEGIC PLANNING CENTER ===================== -->
@@ -3224,6 +3222,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/learning-links-logic.js?v=81"></script>
 <script src="js/learning-reading-logic.js?v=81"></script>
 <script src="js/learning-weekly-logic.js?v=81"></script>
+<script src="js/learning-overview-logic.js?v=81"></script>
 <script src="js/learning-store.js?v=81"></script>
 <script src="js/learning-ui.js?v=81"></script>
 <script src="js/learning-books-ui.js?v=81"></script>
@@ -3236,6 +3235,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/learning-goals-ui.js?v=81"></script>
 <script src="js/learning-reading-ui.js?v=81"></script>
 <script src="js/learning-capture-ui.js?v=81"></script>
+<script src="js/learning-overview-ui.js?v=81"></script>
 <script src="js/plan-logic.js?v=81"></script>
 <script src="js/plan-store.js?v=81"></script>
 <script src="js/plan-week-logic.js?v=81"></script>
