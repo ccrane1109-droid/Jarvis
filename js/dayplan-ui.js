@@ -334,6 +334,9 @@
     $("dpPrev").addEventListener("click", function () { step(-1); });
     $("dpNext").addEventListener("click", function () { step(1); });
     $("dpToday").addEventListener("click", jump);
+    // The Calendar's Day screen is the day planner (the same tasks, plus time blocks and free time); this is the way there.
+    const oc = $("dpOpenCal");
+    if (oc) oc.addEventListener("click", function () { const d = date(), b = $("navBtnCalendar"); if (b) b.click(); if (window.JarvisCalendar && window.JarvisCalendar.goTo) window.JarvisCalendar.goTo(d, "day"); });
     document.addEventListener("jarvis-habits-day-changed", function () { ui = null; if (panelActive()) render(); });
     // The "Now" marker moves on at the top of the hour.
     window.setInterval(function () {

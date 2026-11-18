@@ -156,7 +156,7 @@
       }
       return '<li class="cdp-slot' + (s.done ? " is-done" : "") + '"><span class="cdp-n" aria-hidden="true">' + n + '</span>' +
         (s.linked ? tickHtml(s.done, s.text, 'data-cdp="top-tick" data-i="' + s.index + '"') : '<span class="cdp-nolink" aria-hidden="true"></span>') +
-        '<button type="button" class="cdp-slot-text" data-cdp="top-open" data-i="' + s.index + '">' + esc(s.text) + (s.linked ? "" : ' <small>(task removed)</small>') + '</button>' +
+        '<button type="button" class="cdp-slot-text" data-cdp="top-open" data-i="' + s.index + '">' + esc(s.text) + (s.taskId && !s.linked ? ' <small>(task removed)</small>' : "") + '</button>' +
         '<button type="button" class="cdp-x" data-cdp="top-clear" data-i="' + s.index + '" aria-label="' + esc("Remove from the top three: " + s.text) + '">&times;</button></li>';
     }).join("") + '</ol>';
   }
@@ -471,7 +471,11 @@
     let taskId = "";
     if (h) { const made = h.addTask({ text: text, date: date }); if (made) taskId = made.id; }
     const r = saveDay(date, { type: "top", index: i, taskId: taskId, text: text });
-    if (!r.ok) { tell(r.error || "That couldn't be saved.", ""); return; }
+    if (!r.ok) {
+      // the priority could not be saved, so the task made for it is taken back out: nothing half done
+      if (taskId && h) h.commitTasks(h.getTasks().filter(function (t) { return t.id !== taskId; }));
+      tell(r.error || "That couldn't be saved.", ""); return;
+    }
     say("Priority " + (i + 1) + " set.");
   }
   function openTopTask(i, date) {

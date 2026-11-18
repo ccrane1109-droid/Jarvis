@@ -46,6 +46,8 @@ change the length (15-minute steps). **List** takes you back.
 
 The day arrows and **Today** move between days; the shortcuts `t`, `d`, `w`, `m`, `n`, `j`, `k` still work.
 
+Habits › Plan (the older hour-by-hour list of tasks) is unchanged and has a **Plan this day in Calendar** button that opens the Day planner on the day it was showing. Both read and write the same tasks.
+
 ## Time blocking
 
 * **+ Add** (or the floating + on a phone) offers **Task**, **Time block** or **Event**. Tapping a free stretch or an empty slot in the

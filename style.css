@@ -5264,6 +5264,7 @@ span.sp-trow-t { cursor: default; }
   .cdp-side { order: 2; position: sticky; top: 8px; }
   .cdp-main { order: 1; }
   .cdp-plan { margin: 0; }
+  .cdp-plan-sum { white-space: normal; }
 }
 @media (max-width: 700px) {
   .cal-new { display: none; }
@@ -5314,3 +5315,4 @@ span.sp-trow-t { cursor: default; }
 .cdw-day.is-sel .cdw-dow { color: var(--text); }
 .cdw-n { font-size: 12px; }
 @media (max-width: 380px) { .cal-view-btn { min-width: 56px; padding: 0 8px; } }
+.dp-opencal { display: block; margin: 8px auto 0; min-height: 44px; }
