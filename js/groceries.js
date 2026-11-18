@@ -726,7 +726,7 @@
     const container = $("groceryListContainer");
     if (!container) return;
     if (groceryList.length === 0) {
-      container.innerHTML = '<div class="empty-state">Your grocery list is empty. Plan a meal above or add an item manually below.</div>';
+      container.innerHTML = '<div class="empty-state">Nothing on the list. Tap + Add recipe, or add an item below.</div>';
       return;
     }
     const byCategory = {};
@@ -845,6 +845,7 @@
       $("groceryPlanDate").value = plan.date || "";
       $("groceryPlanRestaurantChk").checked = !!plan.isRestaurant;
       $("groceryPlanIncludeChk").checked = !!plan.includeInGroceries;
+      const pf = $("groceryPlanFold"); if (pf) pf.open = true;
       $("groceryPlanAddToggleBtn").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -1001,6 +1002,12 @@
     $("groceryUpdateDismissBtn").addEventListener("click", dismissChangeBanner);
     $("groceryUpdateDetailsToggle").addEventListener("click", function () { showChangeDetails = !showChangeDetails; renderUpdateBanner(); });
 
+    // "+ Add recipe": plan a meal from a recipe, which puts its ingredients on the grocery list.
+    $("groceryAddRecipeBtn").addEventListener("click", function () {
+      const pf = $("groceryPlanFold"); if (pf) pf.open = true;
+      if (!planFormVisible) $("groceryPlanAddToggleBtn").click();
+      const f = $("groceryPlanForm"); if (f && f.scrollIntoView) f.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
     $("groceryPlanAddToggleBtn").addEventListener("click", function () {
       if (planFormVisible) { resetPlanForm(); renderPlanForm(); return; }
       planFormVisible = true;

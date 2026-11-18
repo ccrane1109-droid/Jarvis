@@ -18,11 +18,11 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisVideoConnections", "jarvisInsightSocialKey", "jarvisVideoBlobs", "jarvisGroceryChangelog",
   "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice",
   "jarvisDisciplineDrafts", // unsaved typing in the Discipline forms; stays on the phone
+  "jarvisPlanUi", // which Strategy sections are open or closed on this phone; a screen preference, not plan data
   "jarvisWorkoutDraft",     // the workout in progress: on the phone only, so an old cloud copy can never replace a newer one
   "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft", // the new logger's bookkeeping and its one-time safety copy
   "jarvisRetiredState",
   "jarvisLearnTimer",       // a reading timer that is running right now: this phone only (a timer on two devices at once would be wrong)
-  "jarvisLearnCaptureType",
   "jarvisLiveHandled", "jarvisLiveRefreshedAt", "jarvisLiveTab",
   "jarvisSyncedFp"]    // the fingerprint of each whole-value key the last time it matched the cloud (this device only)   // session-only bookkeeping of the "refresh when the other device saved" feature; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
 
@@ -314,7 +314,7 @@ test("learning hub: books, research, notes, actions and reviews are backed up an
 
 
 test("strategic planning: nodes, money, links, ingredients, blocks and weeks merge by record; the settings by newest", () => {
-  const keys = ["jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks"];
+  const keys = ["jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks", "jarvisPlanTemplates", "jarvisPlanReviews"];
   ["jarvisPlanSettings"].concat(keys).forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k + " is in the backup list"));
   const rec = (o) => Object.assign({ id: "r1", title: "Launch", createdAt: 100, updatedAt: 100 }, o);
   keys.forEach((k) => {

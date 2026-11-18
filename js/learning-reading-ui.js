@@ -1,6 +1,6 @@
 /* ==========================================================================
-   JARVIS — Learning & Research Hub: reading stats and the optional reading timer.
-   Shown as "Reading stats" inside Books, as a card on the Dashboard and as a line on each book's page.
+   JARVIS — Learning & Research Hub: Books > History and the optional reading timer.
+   Shown as "History" inside Books, as a running clock on the Overview and as a line on each book's page.
    Pages come only from the book page log (each page counted once); minutes come only from saved reading-time sessions.
    The rules live in learning-reading-logic.js.
    ========================================================================== */
@@ -58,17 +58,6 @@
     if (rd.timerBook && live.some(function (b) { return b.id === rd.timerBook; })) return rd.timerBook;
     const cur = L.currentBooks(store.state());
     return cur.length ? cur[0].id : "";
-  }
-
-  function timerCard() {
-    let h = '<section class="card ln-card" aria-labelledby="lnRtTimer"><div class="card-title-row"><h2 class="card-title" id="lnRtTimer">Reading timer</h2></div>';
-    if (timer) return h + clockHtml() + '</section>';
-    h += '<p class="field-hint">Optional. Start it when you begin and save the minutes when you stop. It never changes your page count: update the page as you always do.</p>' +
-      '<div class="ln-timer-start"><div class="form-row"><label for="lnTimerBook">Book</label><select id="lnTimerBook" name="timerBook" data-fk="timerBook">' + bookOptions(defaultBook()).map(function (x) {
-        return '<option value="' + esc(x[0]) + '"' + (x[0] === defaultBook() ? " selected" : "") + '>' + esc(x[1]) + '</option>';
-      }).join("") + '</select></div>' +
-      '<div class="ln-item-btns"><button type="button" class="btn btn-primary" data-act="timer-start">Start timer</button><button type="button" class="btn btn-secondary" data-act="time-add">Add time by hand</button></div></div>';
-    return h + '</section>';
   }
 
   /* ---------------- saving a session (from the timer or by hand) ---------------- */
@@ -131,17 +120,19 @@
 
   /* ---------------- actions ---------------- */
 
-  A.acts["timer-start"] = function (el) {
+  function startTimer(id) {
     if (timer) { A.say("A timer is already running."); return; }
-    let id = el && el.getAttribute("data-id");
-    if (!id) { const sel = document.getElementById("lnTimerBook"); id = sel ? sel.value : defaultBook(); }
+    if (!id) id = defaultBook();
     if (id && !store.get("books", id)) id = "";
     rd.timerBook = id;
     timer = R.timerStart(id, Date.now());
     saveTimer(); syncTick(); A.render();
     const b = id ? store.get("books", id) : null;
     A.say("Reading timer started" + (b ? " for " + b.title : "") + ".");
-  };
+  }
+  A.startTimer = startTimer;
+  A.timerHtml = function () { return timer ? clockHtml() : ""; };
+  A.acts["timer-start"] = function (el) { startTimer(el && el.getAttribute ? el.getAttribute("data-id") || "" : ""); };
   A.acts["timer-pause"] = function () { if (!timer) return; timer = R.timerPause(timer, Date.now()); saveTimer(); syncTick(); A.render(); A.say("Timer paused."); };
   A.acts["timer-resume"] = function () { if (!timer) return; timer = R.timerResume(timer, Date.now()); saveTimer(); syncTick(); A.render(); A.say("Timer running."); };
   A.acts["timer-finish"] = function () {
@@ -164,6 +155,7 @@
   A.acts["cal-nav"] = function (el) { rd.month = el.getAttribute("data-ym"); A.render(); };
   A.acts["bpart"] = function (el) { A.state.bpart = el.getAttribute("data-v"); A.render(); };
   A.acts["reading-open"] = function () { A.state.bpart = "stats"; A.go("books"); };
+  A.acts["book-more-numbers"] = function () { };
 
   /* ---------------- the screen ---------------- */
 
@@ -179,13 +171,14 @@
     const o = R.overview(L.live(S.books), S.sessions, today());
     const cell = function (label, t) { return tile(String(t.pages), label, plural(t.pages, "page").replace(/^\d+ /, "") + " · " + minTxt(t.minutes)); };
     const ap = o.avgPages.last30, am = o.avgMinutes.last30, fin = o.year.booksFinished;
-    let h = '<section class="card ln-card" aria-labelledby="lnRtNow"><div class="card-title-row"><h2 class="card-title" id="lnRtNow">At a glance</h2></div><div class="ln-tiles">' +
-      cell("Today", o.today) + cell("This week", o.week) + cell("This month", o.month) + '</div><div class="ln-tiles">' +
+    let h = '<section class="ln-sec" aria-labelledby="lnRtNow"><h2 class="ln-label" id="lnRtNow">Pages read</h2><div class="ln-tiles">' +
+      cell("Today", o.today) + cell("This week", o.week) + cell("This month", o.month) + '</div>' +
+      '<p class="ln-item-sub">Day streak ' + o.streak.current + ' · best ' + o.streak.longest + (o.streak.longest === 1 ? " day" : " days") + '</p>' +
+      '<details class="ln-more" data-keep="rd_more"' + (A.state.open.rd_more ? " open" : "") + '><summary>More numbers</summary><div class="ln-tiles">' +
       tile(String(fin.count), "Books finished in " + today().slice(0, 4), fin.undated ? plural(fin.undated, "finished book") + " with no finish date not counted" : "") +
       tile(ap ? String(ap.avg) : "–", "Pages per session", ap ? "last 30 days · " + plural(ap.sessions, "session") : "no pages logged in 30 days") +
-      tile(String(o.streak.current), "Day streak", "best " + o.streak.longest + (o.streak.longest === 1 ? " day" : " days")) + '</div>';
-    if (am) h += '<p class="ln-item-sub">Average timed session, last 30 days: ' + esc(R.minutesText(am.avg)) + ' (' + plural(am.sessions, "session") + ').</p>';
-    h += '<p class="field-hint">A session is one book on one day you logged pages. A streak counts days with pages logged or reading time saved; a day with neither is a day with nothing recorded. The week runs Monday to Sunday.</p></section>';
+      (am ? tile(R.minutesText(am.avg), "Timed session", "last 30 days · " + plural(am.sessions, "session")) : "") + '</div>' +
+      '<p class="field-hint">A session is one book on one day you logged pages. A streak counts days with pages logged or reading time saved. The week runs Monday to Sunday.</p></details></section>';
     return h;
   }
 
@@ -195,7 +188,7 @@
     const items = pts.map(function (x) { return { label: x.label, value: x[val], title: x.title }; });
     const total = pts.reduce(function (s, x) { return s + x[val]; }, 0);
     const any = pts.some(function (x) { return x.pages > 0 || x.minutes > 0; });
-    return '<section class="card ln-card" aria-labelledby="lnRtHist"><div class="card-title-row"><h2 class="card-title" id="lnRtHist">Reading history</h2></div>' +
+    return '<section class="ln-sec" aria-labelledby="lnRtHist"><h2 class="ln-label" id="lnRtHist">History</h2>' +
       seg("History length", "rd-range", RANGES, rd.range) + seg("What to show", "rd-metric", [["pages", "Pages"], ["minutes", "Minutes"]], val) +
       (any ? A.bars(items, "Reading history: " + val + " over " + RANGE_WORDS[rd.range], val) + '<p class="ln-item-sub">' + (val === "pages" ? plural(total, "page") : R.minutesText(total)) + ' over ' + RANGE_WORDS[rd.range] + '.</p>'
         : '<p class="empty-state-compact">Nothing recorded in ' + RANGE_WORDS[rd.range] + '. Update the page of a book you are reading, and it shows up here.</p>') + '</section>';
@@ -205,7 +198,7 @@
     const t = today(), ym = /^\d{4}-\d{2}$/.test(rd.month) ? rd.month : t.slice(0, 7);
     const c = R.calendar(L.live(S.books), S.sessions, ym, t);
     const wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    let h = '<section class="card ln-card" aria-labelledby="lnRtCal"><div class="card-title-row"><h2 class="card-title" id="lnRtCal">Consistency</h2></div>' +
+    let h = '<details class="ln-more ln-sec" data-keep="rd_cal"' + (A.state.open.rd_cal ? " open" : "") + '><summary>Consistency calendar</summary>' +
       '<div class="ln-cal-nav"><button type="button" class="btn btn-secondary ln-cal-btn" data-act="cal-nav" data-ym="' + c.prev + '" aria-label="Previous month">←</button><span class="ln-cal-title" aria-live="polite">' + esc(c.title) + '</span>' +
       '<button type="button" class="btn btn-secondary ln-cal-btn" data-act="cal-nav" data-ym="' + c.next + '" aria-label="Next month"' + (c.canNext ? "" : " disabled") + '>→</button></div>' +
       '<table class="ln-cal"><caption class="visually-hidden">' + esc(c.title) + ': ' + plural(c.activeDays, "day") + ' with reading recorded</caption><thead><tr>' + wd.map(function (d) { return '<th scope="col"><abbr title="' + ({ Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" })[d] + '">' + d.slice(0, 2) + '</abbr></th>'; }).join("") + '</tr></thead><tbody>';
@@ -217,51 +210,37 @@
         return '<td><span class="' + cls + '"' + (x.today ? ' aria-current="date"' : "") + '>' + x.day + say + '</span></td>';
       }).join("") + '</tr>';
     });
-    return h + '</tbody></table><p class="ln-item-sub">' + plural(c.activeDays, "day") + ' with pages logged or reading time saved in ' + esc(c.title) + '.</p></section>';
+    return h + '</tbody></table><p class="ln-item-sub">' + plural(c.activeDays, "day") + ' with pages logged or reading time saved in ' + esc(c.title) + '.</p></details>';
   }
 
   function timeList(S) {
     const all = L.live(S.sessions), list = R.recentSessions(all, 10);
-    let h = '<section class="card ln-card" aria-labelledby="lnRtTimes"><div class="card-title-row"><h2 class="card-title" id="lnRtTimes">Reading time (' + all.length + ')</h2><button type="button" class="btn btn-secondary" data-act="time-add">+ Add time</button></div>';
-    if (!list.length) return h + '<p class="empty-state-compact">No reading time saved. Use the timer above, or add minutes by hand.</p></section>';
+    let h = '<section class="ln-sec" aria-labelledby="lnRtTimes"><div class="ln-sec-head"><h2 class="ln-label" id="lnRtTimes">Reading time (' + all.length + ')</h2><button type="button" class="ln-link-btn" data-act="time-add">Add time for another day</button></div>';
+    if (!list.length) return h + '<p class="ln-quiet">No reading time saved yet. Log reading with minutes, or use the timer.</p></section>';
     h += '<ul class="ln-sessions">' + list.map(function (x) {
       const b = x.bookId ? store.get("books", x.bookId) : null;
       return '<li class="ln-session"><div class="ln-source-main"><span class="ln-item-title">' + esc(R.minutesText(x.minutes)) + (b ? " · " + esc(b.title) : "") + '</span><span class="ln-item-sub">' + esc(A.fmtDate(x.day)) + (x.note ? " · " + esc(x.note) : "") + '</span></div>' +
         '<div class="ln-item-btns"><button type="button" class="btn btn-secondary" data-act="time-edit" data-id="' + esc(x.id) + '" aria-label="Edit ' + esc(R.minutesText(x.minutes)) + ' on ' + esc(A.fmtDate(x.day)) + '">Edit</button>' +
         '<button type="button" class="btn btn-secondary ln-danger" data-act="time-delete" data-id="' + esc(x.id) + '" aria-label="Delete ' + esc(R.minutesText(x.minutes)) + ' on ' + esc(A.fmtDate(x.day)) + '">Delete</button></div></li>';
     }).join("") + '</ul>';
-    if (all.length > list.length) h += '<p class="field-hint">Showing the latest ' + list.length + '. Older reading time is kept and still counted.</p>';
+    if (all.length > list.length) h += '<p class="ln-quiet">Showing the latest ' + list.length + '. Older reading time is kept and still counted.</p>';
     return h + '</section>';
   }
 
   A.readingHtml = function () {
     const S = store.state();
-    return timerCard() + glance(S) + history(S) + calendar(S) + timeList(S);
+    return (timer ? '<section class="ln-sec"><h2 class="ln-label">Reading timer</h2>' + clockHtml() + '</section>' : "") + glance(S) + history(S) + timeList(S) + calendar(S);
   };
 
   /* ---------------- on each book's page ---------------- */
 
   A.readingBookHtml = function (b) {
     const S = store.state(), mins = R.bookMinutes(S.sessions, b.id), n = L.live(S.sessions).filter(function (x) { return x.bookId === b.id; }).length;
-    const total = mins ? '<span class="ln-item-sub">Reading time: ' + esc(R.minutesText(mins)) + ' in ' + plural(n, "session") + '</span>' : '<span class="ln-item-sub">No reading time saved for this book.</span>';
+    const total = mins ? '<span class="ln-item-sub">Reading time: ' + esc(R.minutesText(mins)) + ' in ' + plural(n, "session") + '</span>' : "";
     if (timer && timer.bookId === b.id) return '<div class="ln-readline">' + clockHtml() + total + '</div>';
     if (timer) return '<div class="ln-readline">' + total + '<span class="ln-item-sub">The reading timer is running' + (timerBookTitle() ? " for " + esc(timerBookTitle()) : "") + '.</span></div>';
-    return '<div class="ln-readline">' + total + '<button type="button" class="btn btn-secondary" data-act="timer-start" data-id="' + esc(b.id) + '">Start reading timer</button></div>';
+    return '<div class="ln-readline">' + total + '<button type="button" class="ln-link-btn" data-act="timer-start" data-id="' + esc(b.id) + '">Start reading timer</button></div>';
   };
-
-  /* ---------------- on the Dashboard ---------------- */
-
-  A.dashTop.push(function (S) {
-    const books = L.live(S.books);
-    const o = R.overview(books, S.sessions, today());
-    let h = '<section class="card ln-card" aria-labelledby="lnDashRead"><div class="card-title-row"><h2 class="card-title" id="lnDashRead">Reading</h2><button type="button" class="btn-icon" data-act="reading-open">Reading stats</button></div>';
-    if (timer) h += clockHtml();
-    const none = !o.streak.totalDays;
-    if (none && !timer) return h + '<p class="empty-state-compact">Update the page of a book you are reading and your pages, streak and history appear here.</p></section>';
-    h += '<div class="ln-tiles">' + tile(String(o.today.pages), "Pages today", minTxt(o.today.minutes)) + tile(String(o.week.pages), "Pages this week", minTxt(o.week.minutes)) + tile(String(o.streak.current), "Day streak", "best " + o.streak.longest) + '</div>';
-    if (!timer) h += '<div class="ln-item-btns"><button type="button" class="btn btn-secondary" data-act="timer-start">Start reading timer</button></div>';
-    return h + '</section>';
-  });
 
   window.addEventListener("pagehide", function () { if (tick) { window.clearInterval(tick); tick = 0; } });
   window.addEventListener("pageshow", function () { syncTick(); paintClocks(); });

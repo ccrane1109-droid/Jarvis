@@ -1,5 +1,5 @@
 /* ==========================================================================
-   JARVIS — Learning & Research Hub: the Action Center. Each action is something you learned that you mean to do:
+   JARVIS — Learning & Research Hub: Actions (Notes tab). Each action is something you learned that you mean to do:
    the lesson, where you learned it, how you'll put it into practice, an optional target date, and where it stands.
    ========================================================================== */
 
@@ -22,18 +22,17 @@
   function actionRow(a) {
     const today = store.today(), overdue = !!(a.targetDate && a.status !== "done" && a.targetDate < today);
     const src = sourceHtml(a);
-    const seg = L.ACTION_STATUS.map(function (s) {
-      return '<button type="button" class="ln-seg-btn" data-act="status-action" data-id="' + esc(a.id) + '" data-v="' + s.key + '" aria-pressed="' + (a.status === s.key) + '">' + esc(s.label) + '</button>';
-    }).join("");
+    const sel = '<label class="visually-hidden" for="lnas_' + esc(a.id) + '">Status of this action</label><select id="lnas_' + esc(a.id) + '" class="ln-status-sel" data-status-action data-id="' + esc(a.id) + '">' +
+      L.ACTION_STATUS.map(function (s) { return '<option value="' + s.key + '"' + (a.status === s.key ? " selected" : "") + '>' + esc(s.label) + '</option>'; }).join("") + '</select>';
     return '<div class="ln-action" id="lnact_' + esc(a.id) + '"><div class="ln-action-main"><p class="ln-item-title">' + esc(a.lesson) + '</p>' +
-      '<div class="ln-badges">' + A.statusBadge(a.status, L.labelOf(L.ACTION_STATUS, a.status)) +
+      '<div class="ln-badges">' +
       (a.targetDate && a.status !== "done" ? (overdue ? A.badge("red", "Overdue · " + A.fmtShort(a.targetDate)) : A.badge("neutral", "Due " + A.fmtShort(a.targetDate))) : "") +
       (a.status === "done" && a.implementedAt ? A.badge("green", "Implemented " + A.fmtShort(a.implementedAt)) : "") + '</div>' +
       (src ? '<p class="ln-links ln-item-sub">Learned from: ' + src + '</p>' : "") +
       (a.plan ? '<p class="ln-text"><span class="ln-item-sub">How I’ll do it:</span> ' + esc(a.plan) + '</p>' : "") + '</div>' +
-      '<div class="ln-seg ln-seg-sm" role="group" aria-label="Status of this action">' + seg + '</div>' +
-      '<div class="ln-item-btns"><button type="button" class="btn btn-secondary" data-act="action-edit" data-id="' + esc(a.id) + '" aria-label="Edit action">Edit</button>' +
-      '<button type="button" class="btn btn-secondary ln-danger" data-act="action-delete" data-id="' + esc(a.id) + '" aria-label="Delete action">Delete</button></div></div>';
+      '<div class="ln-action-btns">' + sel +
+      '<button type="button" class="ln-link-btn" data-act="action-edit" data-id="' + esc(a.id) + '" aria-label="Edit action">Edit</button>' +
+      '<button type="button" class="ln-link-btn ln-danger" data-act="action-delete" data-id="' + esc(a.id) + '" aria-label="Delete action">Delete</button></div></div>';
   }
 
   /* ---------------- the editor ---------------- */
@@ -110,14 +109,16 @@
     return n === total ? A.plural(total, "action") : n + " of " + total + " actions";
   }
   function view() {
-    const live = L.live(store.state().actions);
+    const live = L.live(store.state().actions), f = A.state.filters.actions;
     const c = { todo: 0, doing: 0, done: 0 };
     live.forEach(function (a) { c[a.status] = (c[a.status] || 0) + 1; });
-    return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Action Center</h2><button type="button" class="btn btn-primary" data-act="add-action-new">+ Add action</button></div>' +
-      '<p class="ln-item-sub">' + esc(c.todo + " not started · " + c.doing + " in progress · " + c.done + " implemented") + '</p>' +
+    const chip = function (v, label, n) {
+      return '<button type="button" class="ln-pill" data-act="action-filter" data-v="' + v + '" aria-pressed="' + ((f.status || "") === v) + '">' + esc(label) + ' <span class="ln-pill-n">' + n + '</span></button>';
+    };
+    return A.notesSeg("actions") + '<h2 class="visually-hidden" data-focus-top>Actions</h2>' +
+      '<div class="ln-pills ln-pills-filter" role="group" aria-label="Show actions">' + chip("", "All", live.length) + chip("todo", "To do", c.todo) + chip("doing", "In progress", c.doing) + chip("done", "Done", c.done) + '</div>' +
       A.toolbar("actions", [
         { name: "q", kind: "search", label: "Search actions", placeholder: "Search lessons and plans" },
-        { name: "status", kind: "select", label: "Filter by status", options: [["", "All statuses"]].concat(L.ACTION_STATUS.map(function (x) { return [x.key, x.label]; })) },
         { name: "sort", kind: "select", label: "Sort actions", options: [["date", "Target date"], ["newest", "Newest first"], ["status", "By status"]] }
       ], { fold: 1 }) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(count()) + '</p><div id="lnResults">' + results() + '</div>';
   }
@@ -126,7 +127,10 @@
     html: view,
     results: results,
     count: count,
-    click: function (act) { if (act === "add-action-new") editAction(null, {}); }
+    click: function (act, el) {
+      if (act === "add-action-new") editAction(null, {});
+      else if (act === "action-filter") { A.state.filters.actions = Object.assign({}, A.state.filters.actions, { status: el.getAttribute("data-v") }); A.render(); }
+    }
   });
   A.quickAdd.action = function () { editAction(null, {}); };
   A.actionRow = actionRow;

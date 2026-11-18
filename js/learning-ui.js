@@ -1,12 +1,19 @@
 /* ==========================================================================
-   JARVIS — Learning & Research Hub: the shell (navigation between its sections, the helpers every section
-   shares) and the Dashboard.
+   JARVIS — Learning & Research Hub: the shell (the four tabs, the + Add and More menus, the helpers every
+   screen shares).
 
-   The sections are separate files that register themselves here:
+   Four tabs: Overview, Books, Research, Notes. Everything else is still here, one step further in:
+     Notes tab        Notes | Flashcards | Actions
+     More menu (...)  Learning goals, Weekly review, Topics, Collections, Review schedule, Review history
+   The screens are separate files that register themselves here:
+     learning-overview-ui.js  Overview and the Log reading form
      learning-books-ui.js     Books (list, detail)
+     learning-reading-ui.js   Books > History, the reading timer
      learning-research-ui.js  Research (list, detail)
-     learning-library-ui.js   Knowledge (searchable library) and the note editor every section uses
-     learning-actions-ui.js   Action Center
+     learning-library-ui.js   Notes (searchable list) and the note editor every screen uses
+     learning-study-ui.js     Flashcards and reviews
+     learning-actions-ui.js   Actions
+     learning-goals-ui.js     Learning goals
      learning-review-ui.js    Weekly Learning Review
    A section is { html(), after(host), click(act, el, ev), input(el), change(el), submit(form, ev) } and is drawn into
    #lnView; one click/submit listener here hands events to the open section. All the rules (what counts as progress, how
@@ -20,12 +27,18 @@
 
   const L = window.JarvisLearningLogic;
   const store = window.JarvisLearningStore;
-  const TABS = [["dashboard", "Dashboard"], ["books", "Books"], ["research", "Research"], ["knowledge", "Knowledge"], ["actions", "Actions"], ["review", "Review"]];
   const views = {};
+  // The four tabs. Each screen belongs to one of them (a screen is named by its view: "knowledge" is the Notes list, "study" the Flashcards).
+  const PARENT = { overview: "overview", goals: "overview", review: "overview", books: "books", research: "research", knowledge: "notes", study: "notes", actions: "notes" };
+  const HOME = { overview: "overview", books: "books", research: "research", notes: "knowledge" };
+  const ALIAS = { dashboard: "overview", notes: "knowledge" };
+  // The words for a book's status (the stored values don't change).
+  const BOOK_WORDS = { want: "To read", reading: "Reading", completed: "Finished", paused: "Paused" };
+  const NOTES_SEG = [["knowledge", "Notes"], ["study", "Flashcards"], ["actions", "Actions"]];
   const DEFAULT_FILTERS = { books: { sort: "recent" }, research: { sort: "recent" }, knowledge: { sort: "newest" }, actions: { sort: "date" }, study: { sort: "newest" } };
   // What is open: which section, and (for a detail page) which record. Filters are remembered while the app is open.
   const state = {
-    tab: "dashboard", id: "",
+    tab: "overview", id: "",
     filters: { books: { sort: "recent" }, research: { sort: "recent" }, knowledge: { sort: "newest" }, actions: { sort: "date" }, study: { sort: "newest" } },
     week: "", openNote: "", open: {}
   };
@@ -282,11 +295,46 @@
     openSheet({ title: o.title, body: '<p>' + esc(o.text) + '</p>' + (o.extra || ""), submit: o.yes, danger: o.danger !== false, focus: ".btn-secondary", onSubmit: function (v) { o.onYes(v); return { ok: true }; } });
   }
 
+  /* ---------------- the + Add and More menus ---------------- */
+
+  // A list of choices in a sheet. rows: [{ key, label, minor }]. The sheet closes, then pick(key) runs.
+  function openMenu(title, rows, pick, opener) {
+    openSheet({
+      title: title,
+      body: '<div class="ln-menu" role="group" aria-label="' + esc(title) + '">' + rows.map(function (r) {
+        return '<button type="button" class="ln-menu-item' + (r.minor ? " ln-menu-minor" : "") + '" data-sheet-act="' + esc(r.key) + '">' + esc(r.label) + '</button>';
+      }).join("") + '</div>',
+      focus: ".ln-menu-item",
+      onAct: function (act) { closeSheet(); window.setTimeout(function () { pick(act); }, 0); }
+    });
+  }
+  // What a new note should be attached to by default: the book or research project you have open.
+  function contextPreset() {
+    if (state.tab === "books" && state.id) return { bookIds: [state.id] };
+    if (state.tab === "research" && state.id) return { researchIds: [state.id] };
+    return {};
+  }
+  function openAddMenu() {
+    openMenu("Add", [{ key: "book", label: "Book" }, { key: "research", label: "Research topic" }, { key: "note", label: "Note" }, { key: "card", label: "Flashcard", minor: true }, { key: "action", label: "Action idea", minor: true }], function (k) {
+      const f = api.quickAdd[k];
+      if (f) f();
+    });
+  }
+  function openMoreMenu() {
+    openMenu("More", [{ key: "goals", label: "Learning goals" }, { key: "review", label: "Weekly review" }, { key: "topics", label: "Topics" }, { key: "collections", label: "Collections" }, { key: "schedule", label: "Review schedule" }, { key: "history", label: "Review history" }], function (k) {
+      if (k === "goals" || k === "review") go(k);
+      else if (k === "topics" || k === "collections") { state.kpart = k; state.collId = ""; go("knowledge"); }
+      else go("study", "", { part: k });
+    });
+  }
+
   /* ---------------- navigation ---------------- */
 
   function register(name, view) { views[name] = view; }
   function go(tab, id, extra) {
+    tab = ALIAS[tab] || tab;
     state.tab = tab; state.id = id || "";
+    if (state.study) state.study.part = extra && extra.part ? extra.part : (tab === "study" ? "cards" : state.study.part);
     if (extra && extra.openNote !== undefined) state.openNote = extra.openNote;
     if (extra && extra.filters) state.filters[tab] = Object.assign({}, state.filters[tab], extra.filters);
     if (extra && extra.replaceFilters) state.filters[tab] = extra.replaceFilters;
@@ -298,7 +346,7 @@
 
   function syncTabs() {
     Array.prototype.forEach.call(document.querySelectorAll("#panel-learning .ln-sub-nav .sub-nav-btn"), function (b) {
-      const on = b.getAttribute("data-ln") === state.tab;
+      const on = b.getAttribute("data-ln") === PARENT[state.tab];
       b.classList.toggle("active", on);
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
@@ -314,7 +362,8 @@
     const fk = !focusTop && a && host.contains(a) ? a.getAttribute("data-fk") : "";
     let sel = null;
     if (fk && a && typeof a.selectionStart === "number") sel = [a.selectionStart, a.selectionEnd];
-    host.innerHTML = integrityBanner() + view.html();
+    const back = backFor();
+    host.innerHTML = integrityBanner() + (back ? '<div class="ln-back"><button type="button" class="btn-icon" data-act="ln-back">← ' + esc(back.label) + '</button></div>' : "") + view.html();
     syncTabs();
     if (view.after) view.after(host);
     if (fk) {
@@ -324,6 +373,19 @@
       const h = host.querySelector("[data-focus-top]");
       if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
     }
+  }
+  // Screens one step in from a tab (reached from the More menu) get a way back.
+  function backFor() {
+    if (state.tab === "goals" || state.tab === "review") return { label: "Overview", fn: function () { go("overview"); } };
+    if (state.tab === "knowledge" && !state.openNote && !state.collId && (state.kpart === "topics" || state.kpart === "collections")) return { label: "Notes", fn: function () { state.kpart = "notes"; go("knowledge"); } };
+    if (state.tab === "study" && state.study && !state.study.session && (state.study.part === "schedule" || state.study.part === "history")) return { label: "Flashcards", fn: function () { go("study", "", { part: "cards" }); } };
+    return null;
+  }
+  // The small row that switches between the three parts of the Notes tab. Hidden while a review session is on.
+  function notesSeg(active) {
+    return '<div class="ln-pills" role="group" aria-label="Notes sections">' + NOTES_SEG.map(function (x) {
+      return '<button type="button" class="ln-pill" data-go="' + x[0] + '" aria-pressed="' + (x[0] === active) + '">' + x[1] + '</button>';
+    }).join("") + '</div>';
   }
   // If something stored couldn't be read, say so on every screen: that list is hidden and is never saved over.
   function integrityBanner() {
@@ -344,8 +406,9 @@
     if (goEl) {
       e.preventDefault();
       const note = goEl.getAttribute("data-open-note") || "";
-      if (goEl.getAttribute("data-go") === "knowledge") state.kpart = "notes";
-      go(goEl.getAttribute("data-go"), goEl.getAttribute("data-id") || "", note ? { openNote: note, replaceFilters: Object.assign({}, DEFAULT_FILTERS[goEl.getAttribute("data-go")] || {}) } : { openNote: "" });
+      if (goEl.getAttribute("data-go") === "knowledge") { state.kpart = "notes"; state.collId = ""; }
+      const part = goEl.getAttribute("data-part");
+      go(goEl.getAttribute("data-go"), goEl.getAttribute("data-id") || "", note ? { openNote: note, replaceFilters: Object.assign({}, DEFAULT_FILTERS[goEl.getAttribute("data-go")] || {}) } : (part ? { openNote: "", part: part } : { openNote: "" }));
       return;
     }
     const actEl = e.target.closest("[data-act]");
@@ -359,21 +422,13 @@
     const form = e.target.closest("form[data-form]");
     if (!form) return;
     e.preventDefault();
-    if (shared.submit(form)) return;
     const view = views[state.tab];
     if (view && view.submit) view.submit(form, e);
   }
 
   /* ---------------- things more than one section does ---------------- */
 
-  // The quick "what page are you on?" form, on the Dashboard and the Books screens.
-  function pageForm(b, cls) {
-    return '<form class="ln-page-form ' + (cls || "") + '" data-form="page" data-id="' + esc(b.id) + '" novalidate>' +
-      '<label class="visually-hidden" for="lnp_' + esc(b.id) + '">Current page of ' + esc(b.title) + '</label>' +
-      '<input type="number" id="lnp_' + esc(b.id) + '" name="page" inputmode="numeric" min="0"' + (b.totalPages > 0 ? ' max="' + b.totalPages + '"' : "") + ' value="' + b.currentPage + '" data-fk="page_' + esc(b.id) + '">' +
-      '<button type="submit" class="btn btn-secondary">Update page</button><p class="ln-err hidden" data-err="page" role="alert"></p></form>';
-  }
-  // A page number typed by hand -> { n } or { error }. Used by the page boxes and by the reading timer's "page you reached".
+  // A page number typed by hand -> { n } or { error }. Used by the Log reading sheet and the reading timer's "page you reached".
   function checkPage(b, raw) {
     const t = String(raw == null ? "" : raw).trim();
     const n = /^\d{1,6}$/.test(t) ? Number(t) : NaN;
@@ -391,42 +446,11 @@
     if (!store.put("books", next)) return { ok: false, book: b };
     return { ok: true, book: next };
   }
-  function savePage(form) {
-    const id = form.getAttribute("data-id"), b = store.get("books", id);
-    if (!b) return;
-    const c = checkPage(b, form.elements.page.value);
-    if (c.error) { showErrors(form, { page: c.error }); return; }
-    const n = c.n, res = applyPage(b, n);
-    if (res.same) { say("Still on page " + n + "."); return; }
-    if (!res.ok) { saveFailed(); return; }
-    const next = res.book;
-    const last = next.totalPages > 0 && n >= next.totalPages;
-    if (last && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
-    else say(next.title + ": page " + n + (L.progress(next) !== null ? ", " + L.progress(next) + " percent" : "") + ".");
-  }
-  // One-tap progress: "+10" adds that many pages to where you are (never past the last page), through the same page log as typing a number.
-  function quickPagesHtml(b) {
-    if (b.status === "completed") return "";
-    return '<div class="ln-quickpages" role="group" aria-label="Add pages to ' + esc(b.title) + '"><span class="ln-quickpages-l">Add pages</span>' +
-      [5, 10, 25].map(function (k) { return '<button type="button" class="btn btn-secondary" data-act="page-add" data-id="' + esc(b.id) + '" data-n="' + k + '" aria-label="Add ' + k + ' pages to ' + esc(b.title) + '">+' + k + '</button>'; }).join("") + '</div>';
-  }
-  function quickPages(id, k) {
-    const b = store.get("books", id);
-    if (!b || !(k > 0)) return;
-    let n = b.currentPage + k;
-    if (b.totalPages > 0 && n > b.totalPages) n = b.totalPages;
-    if (n === b.currentPage) { say("Already on the last page."); return; }
-    const before = b, res = applyPage(b, n);
-    if (!res.ok) { saveFailed(); return; }
-    const next = res.book;
-    if (next.totalPages > 0 && n >= next.totalPages && next.status === "reading") notice("You reached the last page of " + next.title + ".", "Mark completed", function () { setBookStatus(next.id, "completed"); });
-    else notice(next.title + ": page " + n + " (+" + (n - before.currentPage) + ").", "Undo", function () { store.put("books", before); });
-  }
   function setBookStatus(id, status) {
     const b = store.get("books", id);
     if (!b || b.status === status) return;
     if (!store.put("books", L.withStatus(b, status, store.today(), Date.now()))) { saveFailed(); return; }
-    say(b.title + ": " + L.labelOf(L.BOOK_STATUS, status) + ".");
+    say(b.title + ": " + (BOOK_WORDS[status] || status) + ".");
   }
   function setActionStatus(id, status) {
     const a = store.get("actions", id);
@@ -438,77 +462,12 @@
   const shared = {
     click: function (act, el) {
       if (api.acts[act]) { api.acts[act](el, act); return true; }
-      if (act === "page-add") { quickPages(el.getAttribute("data-id"), Number(el.getAttribute("data-n"))); return true; }
-      if (act === "status-book") { setBookStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
-      if (act === "status-action") { setActionStatus(el.getAttribute("data-id"), el.getAttribute("data-v")); return true; }
       if (act.indexOf("note-") === 0 || act === "tag-filter") return api.noteClick ? api.noteClick(act, el) : false;
       if (act.indexOf("action-") === 0) return api.actionClick ? api.actionClick(act, el) : false;
       if (act === "clear-filters") { state.filters[state.tab] = Object.assign({}, DEFAULT_FILTERS[state.tab] || {}); render(false); return true; }
-      if (act === "quick-add") { const f = api.quickAdd[el.getAttribute("data-kind")]; if (f) f(); return true; }
-      return false;
-    },
-    submit: function (form) {
-      if (form.getAttribute("data-form") === "page") { savePage(form); return true; }
+      if (act === "ln-back") { const b = backFor(); if (b) b.fn(); return true; }
       return false;
     }
-  };
-
-  /* ---------------- Dashboard ---------------- */
-
-  const dashboard = {
-    html: function () {
-      const S = store.state(), st = L.stats(S), today = store.today();
-      const stat = function (n, label, tab, filters) {
-        return '<button type="button" class="ln-stat" data-go="' + tab + '" data-filters=\'' + esc(JSON.stringify(filters || {})) + '\' data-stat="' + label + '"><span class="ln-stat-n">' + n + '</span><span class="ln-stat-l">' + esc(label) + '</span></button>';
-      };
-      let h = '<h2 class="visually-hidden" data-focus-top>Dashboard</h2>' +
-        '<div class="ln-stats">' + stat(st.booksReading, "Books reading", "books", { status: "reading" }) + stat(st.activeResearch, "Active research", "research", { active: true }) +
-        stat(st.takeaways, "Key takeaways", "knowledge", { type: "takeaway" }) + stat(st.implemented, "Ideas implemented", "actions", { status: "done" }) + '</div>' +
-        '<div class="ln-quick" role="group" aria-label="Add something">' +
-        '<button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="book">+ Book</button><button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="research">+ Research</button>' +
-        '<button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="note">+ Note</button><button type="button" class="btn btn-secondary" data-act="quick-add" data-kind="action">+ Action</button></div>';
-      // cards other sections add at the top of the Dashboard (Review Knowledge, Goals, Captured)
-      api.dashTop.forEach(function (fn) { try { h += fn(S, today) || ""; } catch (e) { if (window.console) console.error(e); } });
-
-      h += '<div class="ln-cols">';
-      const books = L.currentBooks(S);
-      h += '<section class="card ln-card" aria-labelledby="lnDashBooks"><div class="card-title-row"><h2 class="card-title" id="lnDashBooks">Current books</h2><button type="button" class="btn-icon" data-go="books">All books</button></div>';
-      h += books.length ? '<div class="ln-list">' + books.slice(0, 6).map(function (b) {
-        return '<div class="ln-item"><button type="button" class="ln-item-open" data-go="books" data-id="' + esc(b.id) + '">' + coverHtml(b, "ln-cover-sm") +
-          '<span class="ln-item-main"><span class="ln-item-title">' + esc(b.title) + '</span><span class="ln-item-sub">' + esc(b.author || "No author") + '</span>' + barHtml(L.progress(b), b.title + ": " + L.progress(b) + "% read") +
-          '<span class="ln-item-sub">' + esc(progressText(b) || "No page logged yet") + '</span></span></button>' + pageForm(b) + quickPagesHtml(b) + '</div>';
-      }).join("") + '</div>' : '<p class="empty-state-compact">No book in progress. Add one, or set a book on your list to Reading.</p>';
-      h += '</section>';
-
-      const res = L.activeResearch(S);
-      h += '<section class="card ln-card" aria-labelledby="lnDashRes"><div class="card-title-row"><h2 class="card-title" id="lnDashRes">Active research</h2><button type="button" class="btn-icon" data-go="research">All research</button></div>';
-      h += res.length ? '<div class="ln-list">' + res.slice(0, 5).map(function (r) {
-        return '<button type="button" class="ln-item ln-item-open ln-item-flat" data-go="research" data-id="' + esc(r.id) + '"><span class="ln-item-main"><span class="ln-item-title">' + esc(r.title) + '</span>' +
-          '<span class="ln-badges">' + statusBadge(r.status, L.labelOf(L.RESEARCH_STATUS, r.status)) + prioBadge(r.priority) + (r.sources.length ? badge("neutral", plural(r.sources.length, "source")) : "") + '</span>' +
-          (r.question ? '<span class="ln-item-sub">' + esc(snippet(r.question, 110)) + '</span>' : "") + '</span></button>';
-      }).join("") + '</div>' : '<p class="empty-state-compact">No research under way. Start a project to keep its question, sources and findings together.</p>';
-      h += '</section>';
-
-      const notes = L.recentNotes(S, 5);
-      h += '<section class="card ln-card" aria-labelledby="lnDashNotes"><div class="card-title-row"><h2 class="card-title" id="lnDashNotes">Recent notes</h2><button type="button" class="btn-icon" data-go="knowledge">Knowledge library</button></div>';
-      h += notes.length ? '<div class="ln-list">' + notes.map(function (n) {
-        return '<button type="button" class="ln-item ln-item-open ln-item-flat" data-go="knowledge" data-open-note="' + esc(n.id) + '"><span class="ln-item-main"><span class="ln-badges">' + badge("accent", L.labelOf(L.NOTE_TYPE, n.type)) +
-          (n.important ? badge("yellow", "Starred") : "") + '</span><span class="ln-item-title ln-clamp">' + esc(snippet(n.title || n.text, 140)) + '</span><span class="ln-item-sub">' + esc(noteSource(n)) + '</span></span></button>';
-      }).join("") + '</div>' : '<p class="empty-state-compact">No notes yet. Capture a takeaway while you read, or a finding while you research.</p>';
-      h += '</section>';
-
-      const up = L.upcomingActions(S, 5, today);
-      h += '<section class="card ln-card" aria-labelledby="lnDashAct"><div class="card-title-row"><h2 class="card-title" id="lnDashAct">Upcoming learning tasks</h2><button type="button" class="btn-icon" data-go="actions">Action center</button></div>';
-      h += up.length ? '<div class="ln-list">' + up.map(function (a) {
-        return '<div class="ln-item"><div class="ln-item-main"><span class="ln-item-title">' + esc(snippet(a.lesson, 120)) + '</span><span class="ln-badges">' + statusBadge(a.status, L.labelOf(L.ACTION_STATUS, a.status)) +
-          (a.targetDate ? (a.overdue ? badge("red", "Overdue · " + fmtShort(a.targetDate)) : badge("neutral", "Due " + fmtShort(a.targetDate))) : "") + '</span></div>' +
-          '<div class="ln-item-btns">' + (a.status === "todo" ? '<button type="button" class="btn btn-secondary" data-act="status-action" data-id="' + esc(a.id) + '" data-v="doing">Start</button>' : "") +
-          '<button type="button" class="btn btn-secondary" data-act="status-action" data-id="' + esc(a.id) + '" data-v="done">Implemented</button></div></div>';
-      }).join("") + '</div>' : '<p class="empty-state-compact">Nothing waiting. When you learn something worth acting on, add it to the Action Center.</p>';
-      h += '</section></div>';
-      return h;
-    },
-    click: function () { return false; }
   };
 
   // Where a note came from, in words: its book(s), project(s).
@@ -538,7 +497,6 @@
     if (!host) return;
     started = true;
     store.init();
-    register("dashboard", dashboard);
     host.addEventListener("click", function (e) { applyFilterPresets(e); onClick(e); });
     host.addEventListener("submit", onSubmit);
     host.addEventListener("input", function (e) {
@@ -546,6 +504,8 @@
       const v = views[state.tab]; if (v && v.input) v.input(e.target, e);
     });
     host.addEventListener("change", function (e) {
+      if (e.target.hasAttribute("data-status-book")) { setBookStatus(e.target.getAttribute("data-id"), e.target.value); return; }
+      if (e.target.hasAttribute("data-status-action")) { setActionStatus(e.target.getAttribute("data-id"), e.target.value); return; }
       if (e.target.hasAttribute("data-filter")) { if (e.target.type !== "search") onFilter(e.target); return; }   // the search box already updated while typing; redrawing again on blur would swallow a tap on what is beside it
       const v = views[state.tab]; if (v && v.change) v.change(e.target, e);
     });
@@ -554,8 +514,17 @@
       if (id) { if (e.target.open) state.open[id] = true; else delete state.open[id]; }
     }, true);
     Array.prototype.forEach.call(document.querySelectorAll("#panel-learning .ln-sub-nav .sub-nav-btn"), function (b) {
-      b.addEventListener("click", function () { go(b.getAttribute("data-ln"), "", { replaceFilters: state.filters[b.getAttribute("data-ln")] }); });
+      b.addEventListener("click", function () {
+        const name = b.getAttribute("data-ln");
+        let to = HOME[name];
+        if (name === "notes" && state.study && state.study.session) to = "study";      // a review in progress is where the Notes tab opens
+        if (name === "notes") { state.kpart = "notes"; state.collId = ""; }
+        go(to, "", { replaceFilters: state.filters[to] });
+      });
     });
+    const add = $("lnAdd"), more = $("lnMore");
+    if (add) add.addEventListener("click", openAddMenu);
+    if (more) more.addEventListener("click", openMoreMenu);
     const bar = $("lnUndo");
     if (bar) bar.addEventListener("click", function (e) {
       if (!e.target.closest("[data-ln-undo]")) return;
@@ -578,13 +547,14 @@
     init: init, onShow: onShow, onHide: onHide, register: register, go: go, render: function () { render(false); },
     esc: esc, L: L, store: store, state: state, ctx: ctx,
     fmtDate: fmtDate, fmtShort: fmtShort, plural: plural, snippet: snippet, badge: badge, statusBadge: statusBadge, prioBadge: prioBadge,
-    coverHtml: coverHtml, barHtml: barHtml, starsHtml: starsHtml, progressText: progressText, pageForm: pageForm, noteSource: noteSource,
+    coverHtml: coverHtml, barHtml: barHtml, starsHtml: starsHtml, progressText: progressText, noteSource: noteSource,
     say: say, notice: notice, saveFailed: saveFailed,
     fText: fText, fArea: fArea, fSelect: fSelect, rowHtml: rowHtml, opts: opts, datalist: datalist, formValues: formValues, showErrors: showErrors,
     toolbar: toolbar, filtersActive: filtersActive, DEFAULT_FILTERS: DEFAULT_FILTERS,
     openSheet: openSheet, closeSheet: closeSheet, confirmSheet: confirmSheet,
-    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, quickPagesHtml: quickPagesHtml, srsLabel: srsLabel, bars: bars,
-    quickAdd: {}, acts: {}, dashTop: []
+    setBookStatus: setBookStatus, setActionStatus: setActionStatus, checkPage: checkPage, applyPage: applyPage, srsLabel: srsLabel, bars: bars,
+    BOOK_WORDS: BOOK_WORDS, notesSeg: notesSeg, contextPreset: contextPreset, openMenu: openMenu, openAddMenu: openAddMenu, openMoreMenu: openMoreMenu,
+    quickAdd: {}, acts: {}
   };
   window.JarvisLearning = api;
 })();

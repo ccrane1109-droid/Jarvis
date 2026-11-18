@@ -52,12 +52,12 @@ test("an ingredient needs a name and a colour; names are unique; the colour can 
   assert.equal(W.tint("junk", 0.2), "rgba(148,163,184,0.2)");
 });
 
-test("deleting an ingredient keeps its blocks (as 'no ingredient'), and undo restores it", () => {
+test("deleting a category keeps its blocks (as 'no category'), and undo restores it", () => {
   let blocks = block([], {}).blocks;
   const gone = W.removeIngredient(ING, "ing_gratiel", ctx()).ingredients;
   assert.equal(W.liveBlocks(blocks).length, 1);
   const st = W.weekStats({ weekStart: MON, today: TODAY, blocks, ingredients: gone, tasks: [] });
-  assert.equal(st.allocation[0].name, "No ingredient");
+  assert.equal(st.allocation[0].name, "No category");
   const back = W.restoreIngredient(gone, "ing_gratiel", ctx()).ingredients;
   assert.equal(W.weekStats({ weekStart: MON, today: TODAY, blocks, ingredients: back, tasks: [] }).allocation[0].name, "Gratiel");
 });
@@ -464,4 +464,62 @@ test("putting a task into an existing block; a task that was in another block le
   assert.equal(W.assignTask(blocks, id, "ghost", tasks, ctx()).ok, false);
   const rep = W.addBlock([], { title: "Workout", date: TODAY, start: "06:00", end: "07:00", repeatFreq: "weekly" }, ctx()).blocks;
   assert.match(W.assignTask(rep, rep[0].id, "t1", tasks, ctx()).error, /repeats/);
+});
+
+test("the weekly record keeps the two extra review questions; the monthly review has its own record", () => {
+  let r = W.setWeek([], MON, { wins: "Shipped", unfinished: "Photos", onPriorities: "Mostly", lessons: "Meetings", nextFocus: "Fewer meetings" }, ctx());
+  assert.deepEqual([r.week.unfinished, r.week.onPriorities], ["Photos", "Mostly"]);
+  r = W.setWeek(r.weeks, MON, { reviewedAt: NOW }, ctx());
+  assert.deepEqual([r.week.unfinished, r.week.wins], ["Photos", "Shipped"], "saving the time stamp keeps the text");
+  let m = W.setReview([], "2026-11", { wins: "Launched", fellBehind: "Photos", progress: "On track", nextFocus: "Sales" }, ctx());
+  assert.equal(m.ok, true);
+  assert.equal(m.review.id, "mo_2026-11");
+  m = W.setReview(m.reviews, "2026-11", { reviewedAt: NOW + 5 }, ctx({ now: NOW + 5 }));
+  assert.equal(m.reviews.length, 1);
+  assert.deepEqual([m.review.wins, m.review.reviewedAt], ["Launched", NOW + 5]);
+  assert.equal(W.reviewOf(m.reviews, "2026-11").fellBehind, "Photos");
+  assert.equal(W.reviewOf(m.reviews, "2026-12"), null);
+  assert.equal(W.setReview([], "2026-13", {}, ctx()).ok, false);
+  assert.equal(W.readers.reviews([{ id: "mo_2026-11", month: "2026-11" }, { id: "x" }, "junk"]).kept.length, 2);
+});
+
+test("one day at a glance: planned by category, taken and free minutes with overlaps counted once", () => {
+  let blocks = block([], { title: "Brand", ingredientId: "ing_gratiel", start: "09:00", end: "11:00" }).blocks;
+  blocks = block(blocks, { title: "Lecture", ingredientId: "ing_school", start: "10:00", end: "12:00" }).blocks;           // overlaps Brand by an hour
+  blocks = block(blocks, { title: "Run", ingredientId: "ing_workout", start: "17:00", end: "18:00" }).blocks;
+  const s = W.daySummary(TODAY, { blocks, ingredients: ING, settings: { dayStart: "08:00", dayEnd: "20:00", interval: 30 }, tasks: [], events: [] });
+  assert.equal(s.plannedMin, 300, "2 h + 2 h + 1 h of blocks");
+  assert.equal(s.takenMin, 240, "09:00-12:00 and 17:00-18:00: the shared hour counts once");
+  assert.equal(s.windowMin, 720);
+  assert.equal(s.freeMin, 480);
+  assert.deepEqual(s.rows.map((r) => [r.name, r.min]), [["Gratiel", 120], ["School", 120], ["Workout", 60]].sort((a, b) => b[1] - a[1]));
+  const empty = W.daySummary("2026-11-05", { blocks, ingredients: ING, settings: { dayStart: "08:00", dayEnd: "20:00", interval: 30 }, tasks: [], events: [] });
+  assert.deepEqual([empty.plannedMin, empty.takenMin, empty.freeMin, empty.rows.length], [0, 0, 720, 0]);
+});
+
+test("overlapping blocks are marked, whichever two overlap, and a block that only touches is not", () => {
+  let blocks = block([], { title: "A", start: "09:00", end: "10:00" }).blocks;
+  blocks = block(blocks, { title: "B", start: "09:30", end: "10:30" }).blocks;
+  blocks = block(blocks, { title: "C", start: "10:30", end: "11:00" }).blocks;                // starts exactly when B ends
+  const k = W.clashKeys({ blocks, ingredients: ING, events: [], tasks: [] }, TODAY, TODAY);
+  const ids = blocks.map((b) => b.id + "|" + TODAY);
+  assert.deepEqual([k[ids[0]], k[ids[1]], k[ids[2]]], ["block", "block", undefined]);
+});
+
+test("calendar items: plain blocks appear once, a block that holds a task is left out (the task is already there), repeats expand", () => {
+  let blocks = block([], { title: "Brand", ingredientId: "ing_gratiel", date: TODAY, start: "09:00", end: "10:30" }).blocks;
+  blocks = W.addBlock(blocks, { title: "Gym", ingredientId: "ing_workout", date: "2026-11-02", start: "06:00", end: "07:00", repeatFreq: "weekly", repeatDays: [1, 3] }, ctx({ ingredients: ING })).blocks;
+  const t = task("t1");
+  blocks = W.placeTask(blocks, "t1", { date: "2026-11-05", start: "13:00", end: "14:00", ingredientId: "ing_gratiel" }, [t], ctx({ ingredients: ING })).blocks;
+  const items = W.calendarItems({ blocks, ingredients: ING }, MON, "2026-11-08");
+  assert.deepEqual(items.map((i) => [i.title, i.date, i.time, i.endTime]).sort(), [["Brand", TODAY, "09:00", "10:30"], ["Gym", "2026-11-02", "06:00", "07:00"], ["Gym", TODAY, "06:00", "07:00"]].sort(), "the Brand block, and the Gym block on Monday and Wednesday: 3 items");
+  assert.ok(!items.some((i) => i.date === "2026-11-05"), "the block that holds task t1 is not listed: the task is");
+  const it = items[0];
+  assert.equal(it.source, "plan");
+  assert.equal(it.readOnly, true);
+  assert.equal(it.allDay, false);
+  assert.ok(it.key.startsWith("block:") && it.key.includes("@" + it.date), "a distinct key per day, so a repeating block is not one item");
+  assert.equal(new Set(items.map((i) => i.key)).size, items.length, "no two items share a key");
+  assert.equal(items.find((i) => i.title === "Gym").color, ING.find((i) => i.id === "ing_workout").color, "drawn in its category colour");
+  assert.deepEqual(W.calendarItems({ blocks, ingredients: ING }, "2026-12-01", "2026-12-07").filter((i) => i.title === "Brand"), [], "outside the range: nothing");
 });

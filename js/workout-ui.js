@@ -215,79 +215,109 @@
     return Math.round(d.reduce(function (t, w) { return t + w.duration; }, 0) / d.length);
   }
 
+  // What "Start Workout" on Today will start. Kept only while the app is open: { kind: "routine" | "empty" | "last" | "program", id }.
+  let homeSel = null;
+
+  function programTarget(p) {
+    const day = p.days[p.currentIndex % p.days.length], r = api().routineById(day.routineId);
+    return { day: day, routine: r && !r.archivedAt ? r : null };
+  }
+  // The workout Today offers: your pick if it is still valid, else today's scheduled routine, else the one you used last, else an empty workout.
+  function resolveSel(workouts, routines, scheduled) {
+    const s = homeSel;
+    if (s) {
+      if (s.kind === "empty") return s;
+      if (s.kind === "routine" && routines.some(function (r) { return r.id === s.id; })) return s;
+      if (s.kind === "last" && WL.lastWorkoutPlan(workouts)) return s;
+      if (s.kind === "program") { const p = api().getPrograms().filter(function (x) { return x.id === s.id && x.days.length; })[0]; if (p && programTarget(p).routine) return s; }
+    }
+    if (scheduled) return { kind: "routine", id: scheduled.id, why: "scheduled" };
+    const rec = WL.recentRoutines(workouts, routines)[0];
+    if (rec) return { kind: "routine", id: rec.routine.id, why: "last" };
+    return { kind: "empty" };
+  }
+
   function renderHome() {
     const root = $("wkHomeRoot");
     if (!root) return;
     const a = api(), workouts = a.getWorkouts(), routines = activeRoutines(), now = Date.now();
     const d = draft();
     const trainedToday = WL.sessionsOf(workouts).some(function (w) { return w.date === WL.dayKey(now); });
-    const today = a.routineScheduledToday();
+    const scheduled = a.routineScheduledToday();
     let hero;
     if (isActive()) {
       const p = WL.pendingSets(d);
-      hero = '<section class="wk-hero card" aria-labelledby="wkHeroTitle"><p class="wk-kicker">Workout in progress</p><h2 class="wk-hero-title" id="wkHeroTitle">' + esc(workoutTitle(d)) + '</h2>' +
+      hero = '<section class="wk-hero card" aria-labelledby="wkHeroTitle"><p class="wk-kicker">In progress</p><h2 class="wk-hero-title" id="wkHeroTitle">' + esc(workoutTitle(d)) + '</h2>' +
         '<p class="wk-hero-meta"><span class="wk-elapsed">' + esc(elapsedText(d)) + '</span> &middot; ' + p.done + ' of ' + p.total + ' sets done</p>' +
         '<button type="button" class="btn btn-primary wk-big-btn" data-wk="resume">Resume workout</button></section>';
-    } else if (today) {
-      const typical = typicalMinutes(today.id, workouts);
-      hero = '<section class="wk-hero card" aria-labelledby="wkHeroTitle"><p class="wk-kicker">' + (trainedToday ? "Today &middot; you already trained" : "Today") + '</p><h2 class="wk-hero-title" id="wkHeroTitle">' + esc(today.name) + '</h2>' +
-        '<p class="wk-hero-meta">' + today.exercises.length + ' ' + plural(today.exercises.length, "exercise") + ' &middot; ' + esc(lastUsedText(today.id, workouts)) + (typical ? ' &middot; usually about ' + typical + ' min' : '') + '</p>' +
-        '<button type="button" class="btn btn-primary wk-big-btn" data-wk="start-routine" data-id="' + esc(today.id) + '">Start ' + esc(today.name) + '</button></section>';
     } else {
-      const last = WL.sessionsOf(workouts).slice().sort(function (x, y) { return x.dateTime < y.dateTime ? 1 : -1; })[0];
-      hero = '<section class="wk-hero card" aria-labelledby="wkHeroTitle"><p class="wk-kicker">Ready when you are</p><h2 class="wk-hero-title" id="wkHeroTitle">Start a workout</h2>' +
-        '<p class="wk-hero-meta">' + (last ? 'Last workout: ' + esc(routineName(last.routineId) || last.routineName || "Workout") + ', ' + esc(prettyDate(last.date)) : 'Pick a routine below, or start from nothing.') + '</p>' +
-        '<button type="button" class="btn btn-primary wk-big-btn" data-wk="start-empty">Start empty workout</button></section>';
+      const sel = resolveSel(workouts, routines, scheduled);
+      let kicker, title, meta, startAttrs;
+      if (sel.kind === "routine") {
+        const r = a.routineById(sel.id), typical = typicalMinutes(r.id, workouts);
+        const picked = homeSel && homeSel.kind === "routine" && homeSel.id === r.id;
+        kicker = picked ? "Your pick" : sel.why === "scheduled" ? (trainedToday ? "Scheduled today &middot; already trained" : "Scheduled today") : "Last used";
+        title = r.name;
+        meta = r.exercises.length + ' ' + plural(r.exercises.length, "exercise") + ' &middot; ' + esc(lastUsedText(r.id, workouts)) + (typical ? ' &middot; about ' + typical + ' min' : '');
+        startAttrs = 'data-wk="start-routine" data-id="' + esc(r.id) + '"';
+      } else if (sel.kind === "last") {
+        const plan = WL.lastWorkoutPlan(workouts);
+        kicker = "Your pick"; title = routineName(plan.routineId) || "Repeat last workout";
+        meta = 'The same exercises as ' + esc(prettyDate(plan.date));
+        startAttrs = 'data-wk="repeat-last"';
+      } else if (sel.kind === "program") {
+        const p = a.getPrograms().filter(function (x) { return x.id === sel.id; })[0], t = programTarget(p);
+        kicker = "Your pick &middot; program"; title = p.name; meta = esc(t.day.label) + ' &middot; ' + esc(t.routine.name);
+        startAttrs = 'data-wk="start-program" data-id="' + esc(p.id) + '"';
+      } else {
+        kicker = routines.length ? "Your pick" : "Ready when you are"; title = "Empty workout"; meta = "Add exercises as you go.";
+        startAttrs = 'data-wk="start-empty"';
+      }
+      const hasChoice = routines.length > 0 || !!WL.lastWorkoutPlan(workouts) || a.getPrograms().some(function (p) { return p.days.length > 0; });
+      hero = '<section class="wk-hero card" aria-labelledby="wkHeroTitle"><p class="wk-kicker">' + kicker + '</p><h2 class="wk-hero-title" id="wkHeroTitle">' + esc(title) + '</h2>' +
+        '<p class="wk-hero-meta">' + meta + '</p>' +
+        '<button type="button" class="btn btn-primary wk-big-btn" ' + startAttrs + '>Start Workout</button>' +
+        (hasChoice ? '<button type="button" class="wk-link wk-choose" data-wk="choose">Choose a different workout</button>'
+          : '<p class="wk-hero-meta">No routines yet. <button type="button" class="wk-link" data-subgo="workout-routines">Create one</button></p>') + '</section>';
     }
 
+    // The last finished workout, one line, opens its detail.
+    const last = WL.sessionsOf(workouts).slice().sort(function (x, y) { return x.dateTime < y.dateTime ? 1 : -1; })[0];
+    let lastHtml = "";
+    if (last) {
+      const st = WL.sessionStats(last), name = routineName(last.routineId) || last.routineName || last.name || "Workout";
+      const bits = [prettyDate(last.date), st.durationMin ? minutesText(st.durationMin) : "", st.workingSets ? st.workingSets + " sets" : "", st.volume ? st.volume.toLocaleString() + " lb" : ""].filter(Boolean);
+      lastHtml = '<section class="wk-block" aria-labelledby="wkLastH"><h2 id="wkLastH" class="wk-block-title">Last workout</h2>' +
+        '<button type="button" class="wk-row" data-wk="open-last" data-id="' + esc(last.id) + '"><span class="wk-row-main"><span class="wk-row-title">' + esc(name) + '</span><span class="wk-row-sub">' + esc(bits.join(" · ")) + '</span></span><span class="wk-row-go" aria-hidden="true">&rsaquo;</span></button></section>';
+    }
+    root.innerHTML = hero + lastHtml;
+  }
+
+  // The workout chooser: your routines, then the next day of each program, then repeat last, then an empty workout.
+  function openChooser() {
+    const a = api(), workouts = a.getWorkouts(), routines = activeRoutines();
+    const cur = resolveSel(workouts, routines, a.routineScheduledToday());
+    const rows = [];
+    WL.recentRoutines(workouts, routines).concat(routines.filter(function (r) { return !WL.recentRoutines(workouts, routines).some(function (x) { return x.routine.id === r.id; }); }).map(function (r) { return { routine: r }; })).forEach(function (x) {
+      const r = x.routine;
+      rows.push({ key: "routine:" + r.id, label: r.name, sub: r.exercises.length + ' ' + plural(r.exercises.length, "exercise") + ' · ' + lastUsedText(r.id, workouts), current: cur.kind === "routine" && cur.id === r.id });
+    });
+    a.getPrograms().filter(function (p) { return p.days.length > 0; }).forEach(function (p) {
+      const t = programTarget(p);
+      if (t.routine) rows.push({ key: "program:" + p.id, label: p.name, sub: "Program · " + t.day.label + " · " + t.routine.name, current: cur.kind === "program" && cur.id === p.id });
+    });
     const plan = WL.lastWorkoutPlan(workouts);
-    const quick = '<div class="wk-quick"><button type="button" class="btn btn-secondary wk-wide-btn" data-wk="start-empty">Empty workout</button>' +
-      '<button type="button" class="btn btn-secondary wk-wide-btn" data-wk="repeat-last"' + (plan ? "" : " disabled") + '>Repeat last' + (plan ? ' <span class="wk-btn-sub">' + esc(routineName(plan.routineId) || prettyDate(plan.date)) + '</span>' : '') + '</button></div>';
-
-    // The routine already shown as today's big button isn't repeated in the list under it.
-    const heroRoutineId = !isActive() && today ? today.id : null;
-    const recents = WL.recentRoutines(workouts, routines).filter(function (r) { return r.routine.id !== heroRoutineId; }).slice(0, 4);
-    const routinesHtml = recents.length
-      ? '<section class="wk-block" aria-labelledby="wkRoutinesH"><div class="wk-block-head"><h2 id="wkRoutinesH" class="wk-block-title">Your routines</h2><button type="button" class="btn-icon" data-wk-go="workout-routines">See all</button></div><div class="wk-list">' +
-        recents.map(function (r) {
-          return '<button type="button" class="wk-row" data-wk="start-routine" data-id="' + esc(r.routine.id) + '"><span class="wk-row-main"><span class="wk-row-title">' + esc(r.routine.name) + '</span><span class="wk-row-sub">' + r.routine.exercises.length + ' ' + plural(r.routine.exercises.length, "exercise") + ' &middot; ' + esc(r.lastUsed ? "last " + prettyDate(r.lastUsed.slice(0, 10)) : "not used yet") + '</span></span><span class="wk-row-go" aria-hidden="true">Start</span></button>';
-        }).join("") + '</div></section>'
-      : '<section class="wk-block"><h2 class="wk-block-title">Your routines</h2><p class="wk-empty">No routines yet. <button type="button" class="wk-link" data-wk-go="workout-routines">Build one in about a minute</button>, or start an empty workout.</p></section>';
-
-    const scheduledDays = {};
-    routines.forEach(function (r) { (r.scheduledDays || []).forEach(function (x) { scheduledDays[x] = true; }); });
-    const target = Object.keys(scheduledDays).length;
-    const wk = WL.weekSummary(workouts, now, target);
-    const names = ["M", "T", "W", "T", "F", "S", "S"];
-    const longNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    const weekHtml = '<section class="wk-block" aria-labelledby="wkWeekH"><h2 id="wkWeekH" class="wk-block-title">This week</h2><div class="card wk-week">' +
-      '<p class="wk-week-count"><strong>' + wk.count + '</strong>' + (wk.target ? ' of ' + wk.target + ' ' + plural(wk.target, "workout") + ' planned' : ' ' + plural(wk.count, "workout")) + '</p>' +
-      '<ol class="wk-dots" aria-label="Days this week">' + wk.days.map(function (day, i) {
-        return '<li class="wk-dot' + (day.trained ? " is-on" : "") + (day.today ? " is-today" : "") + '" aria-label="' + longNames[i] + (day.trained ? ", trained" : day.future ? ", still to come" : day.today ? ", today, not yet" : ", rest") + '"><span aria-hidden="true">' + names[i] + '</span></li>';
-      }).join("") + '</ol>' +
-      '<p class="wk-week-meta">' + (wk.minutes ? minutesText(wk.minutes) + ' &middot; ' : '') + (wk.volume ? wk.volume.toLocaleString() + ' lb volume &middot; ' : '') + 'last week: ' + wk.lastWeekCount + '</p></div></section>';
-
-    const prs = WL.recentPRs(workouts, { limit: 3, sinceDate: WL.addDays(WL.dayKey(now), -60) });
-    const prHtml = prs.length
-      ? '<section class="wk-block" aria-labelledby="wkPrH"><h2 id="wkPrH" class="wk-block-title">Recent records</h2><div class="card"><ul class="wk-prs">' + prs.map(function (p) {
-          return '<li><span class="wk-pr-name">' + esc(exInfo(p.exerciseId).name) + '</span><span class="wk-pr-set">' + num(p.weight) + ' &times; ' + p.reps + '</span><span class="wk-pr-meta">' + esc(prettyDate(p.date)) + ' &middot; est. 1RM ' + Math.round(p.e1rm) + ' (was ' + Math.round(p.previousE1rm) + ')</span></li>';
-        }).join("") + '</ul><p class="field-hint">Estimated 1RM is worked out from weight and reps. It is not a tested max.</p></div></section>'
-      : "";
-
-    const programs = a.getPrograms().filter(function (p) { return p.days.length > 0; });
-    const progHtml = programs.length
-      ? '<section class="wk-block" aria-labelledby="wkProgH"><h2 id="wkProgH" class="wk-block-title">Programs</h2><div class="wk-list">' + programs.map(function (p) {
-          const day = p.days[p.currentIndex % p.days.length];
-          const r = a.routineById(day.routineId);
-          const usable = r && !r.archivedAt;
-          return usable
-            ? '<button type="button" class="wk-row" data-wk="start-program" data-id="' + esc(p.id) + '"><span class="wk-row-main"><span class="wk-row-title">' + esc(p.name) + '</span><span class="wk-row-sub">' + esc(day.label) + ' &middot; ' + esc(r.name) + '</span></span><span class="wk-row-go" aria-hidden="true">Start</span></button>'
-            : '<div class="wk-row wk-row-warn"><span class="wk-row-main"><span class="wk-row-title">' + esc(p.name) + '</span><span class="wk-row-sub">' + esc(day.label) + ' needs a routine. ' + (r ? 'The one it used, ' + esc(r.name) + ', is archived.' : 'The one it used is gone.') + '</span></span><button type="button" class="btn btn-secondary" data-wk-go="workout-programs">Fix it</button></div>';
-        }).join("") + '</div></section>'
-      : "";
-
-    const tools = '<div class="wk-tools"><button type="button" class="wk-link" data-wk-go="workout-programs">Programs</button><button type="button" class="wk-link" data-wk-go="workout-form-check">Form check (beta)</button></div>';
-    root.innerHTML = hero + quick + routinesHtml + weekHtml + prHtml + progHtml + tools;
+    if (plan) rows.push({ key: "last", label: "Repeat last workout", sub: (routineName(plan.routineId) || "Same exercises") + " · " + prettyDate(plan.date), minor: true, current: cur.kind === "last" });
+    rows.push({ key: "empty", label: "Empty workout", sub: "Add exercises as you go", minor: true, current: cur.kind === "empty" });
+    window.JarvisMenu.open({
+      title: "Choose a workout", rows: rows, opener: document.querySelector('[data-wk="choose"]'),
+      onPick: function (key) {
+        const i = key.indexOf(":");
+        homeSel = i > 0 ? { kind: key.slice(0, i), id: key.slice(i + 1) } : { kind: key };
+        renderHome();
+        const start = document.querySelector('#wkHomeRoot .wk-hero .btn-primary'); if (start) start.focus();
+      }
+    });
   }
 
   /* ---------------- the live logger ---------------- */
@@ -372,18 +402,10 @@
   }
 
   function idleHtml() {
-    const workouts = api().getWorkouts();
-    const plan = WL.lastWorkoutPlan(workouts);
-    const recents = WL.recentRoutines(workouts, api().getRoutines()).slice(0, 5);
-    return '<section class="wk-hero card"><p class="wk-kicker">No workout in progress</p><h2 class="wk-hero-title">Start one</h2>' +
-      '<button type="button" class="btn btn-primary wk-big-btn" data-wk="start-empty">Start empty workout</button>' +
-      '<button type="button" class="btn btn-secondary wk-big-btn" data-wk="repeat-last"' + (plan ? "" : " disabled") + '>Repeat last workout</button></section>' +
-      (recents.length ? '<section class="wk-block"><h2 class="wk-block-title">Or pick a routine</h2><div class="wk-list">' + recents.map(function (r) {
-        return '<button type="button" class="wk-row" data-wk="start-routine" data-id="' + esc(r.routine.id) + '"><span class="wk-row-main"><span class="wk-row-title">' + esc(r.routine.name) + '</span><span class="wk-row-sub">' + r.routine.exercises.length + ' ' + plural(r.routine.exercises.length, "exercise") + '</span></span><span class="wk-row-go" aria-hidden="true">Start</span></button>';
-      }).join("") + '</div></section>' : '') +
+    return '<section class="wk-hero card"><p class="wk-kicker">No workout in progress</p><h2 class="wk-hero-title">Start one from Today</h2>' +
+      '<button type="button" class="btn btn-primary wk-big-btn" data-subgo="wk-home">Go to Today</button></section>' +
       '<div class="wk-tools"><button type="button" class="wk-link" data-wk="classic">Open the classic logger</button></div>';
   }
-
   function summaryHtml() {
     const s = summary, st = s.stats;
     const stat = function (v, l) { return '<div class="wk-stat"><span class="wk-stat-v">' + v + '</span><span class="wk-stat-l">' + l + '</span></div>'; };
@@ -871,6 +893,8 @@
     switch (act) {
       case "resume": goTo("wk-session"); break;
       case "start-routine": startRoutine(id); break;
+      case "choose": openChooser(); break;
+      case "open-last": goTo("wk-history"); if (window.JarvisHistoryUI && window.JarvisHistoryUI.openDetail) window.JarvisHistoryUI.openDetail(id); break;
       case "start-program": startProgram(id); break;
       case "start-empty": startEmpty(); break;
       case "repeat-last": repeatLast(); break;

@@ -456,6 +456,14 @@
     $("habitFormTitle").textContent = "Add a Habit";
     $("habitSubmitBtn").textContent = "Add Habit";
     $("habitFormCancelBtn").classList.add("hidden");
+    showHabitForm(false);
+  }
+
+  // The add/edit form stays folded away until "+ Add habit" (or Edit on a habit) opens it.
+  function showHabitForm(on) {
+    const wrap = $("habitFormWrap"), btn = $("habitAddToggleBtn");
+    if (wrap) wrap.hidden = !on;
+    if (btn) { btn.setAttribute("aria-expanded", on ? "true" : "false"); btn.textContent = on ? "Close" : "+ Add habit"; }
   }
 
   function handleHabitFormSubmit(e) {
@@ -491,29 +499,23 @@
     const weekDates = getWeekDatesISO(getMondayISO(date));
     const weeklyDone = habitWeeklyDone(h, weekDates);
     const weeklyTargetVal = habitWeeklyTarget(h);
-    const total = habitTotalCompletions(h);
     const isCountHabit = target > 1;
     const dis = editable ? "" : " disabled";
     const dayWord = HL.dayLabel(date, today);
+    const e = core.escapeHtml;
+    const thisWeek = date >= getMondayISO(today) && date <= addDaysISO(getMondayISO(today), 6);
+    const meta = (isCountHabit ? e(dayWord) + ": " + count + " / " + target + " · " : "") + weeklyDone + " of " + weeklyTargetVal + (thisWeek ? " this week" : " that week") + (streak >= 2 ? " · " + streak + "-day streak" : "");
     return (
-      '<div class="habit-card" data-id="' + core.escapeHtml(h.id) + '">' +
-        '<div class="habit-card-header"><span class="habit-card-name">' + core.escapeHtml(h.name) + '</span></div>' +
+      '<div class="habit-card habit-row" data-id="' + e(h.id) + '">' +
+        '<div class="habit-row-main"><span class="habit-card-name">' + e(h.name) + '</span><span class="habit-row-meta">' + meta + '</span></div>' +
         (isCountHabit
-          ? '<div class="habit-card-today-row">' +
-              '<span class="field-hint">' + core.escapeHtml(dayWord) + ': ' + count + ' / ' + target + '</span>' +
-              '<div class="stepper-row">' +
-                '<button type="button" class="stepper-btn habit-decrement-btn" data-id="' + core.escapeHtml(h.id) + '" aria-label="Decrease ' + core.escapeHtml(h.name) + ' for ' + core.escapeHtml(dayWord) + '"' + dis + '>&minus;</button>' +
-                '<span class="habit-card-count-value">' + count + '</span>' +
-                '<button type="button" class="stepper-btn habit-increment-btn" data-id="' + core.escapeHtml(h.id) + '" aria-label="Increase ' + core.escapeHtml(h.name) + ' for ' + core.escapeHtml(dayWord) + '"' + dis + '>+</button>' +
-              '</div>' +
+          ? '<div class="stepper-row">' +
+              '<button type="button" class="stepper-btn habit-decrement-btn" data-id="' + e(h.id) + '" aria-label="Decrease ' + e(h.name) + ' for ' + e(dayWord) + '"' + dis + '>&minus;</button>' +
+              '<span class="habit-card-count-value">' + count + '</span>' +
+              '<button type="button" class="stepper-btn habit-increment-btn" data-id="' + e(h.id) + '" aria-label="Increase ' + e(h.name) + ' for ' + e(dayWord) + '"' + dis + '>+</button>' +
             '</div>'
-          : '<button type="button" class="habit-toggle-btn' + (done ? " done" : "") + '" data-id="' + core.escapeHtml(h.id) + '" aria-pressed="' + done + '" aria-label="' + core.escapeHtml(h.name) + ', ' + core.escapeHtml(dayWord) + (done ? ', done' : ', not done') + '"' + dis + '>' + (done ? "&#10003; Done" : "Mark done") + '</button>'
+          : '<button type="button" class="habit-toggle-btn' + (done ? " done" : "") + '" data-id="' + e(h.id) + '" aria-pressed="' + done + '" aria-label="' + e(h.name) + ', ' + e(dayWord) + (done ? ", done" : ", not done") + '"' + dis + '>' + (done ? "&#10003; Done" : "Done") + '</button>'
         ) +
-        '<div class="habit-card-body">' +
-          '<span>' + (date >= getMondayISO(today) && date <= addDaysISO(getMondayISO(today), 6) ? 'This week' : 'That week') + ': ' + weeklyDone + ' / ' + weeklyTargetVal + '</span>' +
-          '<span>Current streak: ' + streak + ' day' + (streak === 1 ? "" : "s") + '</span>' +
-          '<span>Total: ' + total + ' completion' + (total === 1 ? "" : "s") + '</span>' +
-        '</div>' +
       '</div>'
     );
   }
@@ -538,7 +540,7 @@
     if (title) title.textContent = selectedDate === today ? "Habits" : "Habits \u2014 " + parseISODateLocal(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
     if (note) { const html = habitsDayNoteHtml(); note.innerHTML = html; note.classList.toggle("hidden", !html); }
     if (habits.length === 0) {
-      container.innerHTML = '<div class="empty-state">No habits yet — add one in the Week tab.</div>';
+      container.innerHTML = '<div class="empty-state">No habits yet. Add one in Routines.</div>';
       return;
     }
     container.innerHTML = habits.map(habitCardHtml).join("");
@@ -621,6 +623,8 @@
       $("habitFormTitle").textContent = "Edit Habit";
       $("habitSubmitBtn").textContent = "Save Changes";
       $("habitFormCancelBtn").classList.remove("hidden");
+      showHabitForm(true);
+      $("habitName").focus();
       $("habitName").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
@@ -690,6 +694,9 @@
     renderHabitManageList();
     renderHabitHistoryGrid();
     renderTodayOverview();
+    // Habits and Discipline are one screen now, so Discipline's "Next up" and routine numbers follow a tick straight away
+    // (they used to refresh when you switched tabs).
+    if (window.JarvisDiscipline && typeof window.JarvisDiscipline.refreshFromHabits === "function") window.JarvisDiscipline.refreshFromHabits();
   }
 
   /* ==================== GOALS ==================== */
@@ -990,7 +997,7 @@
   function renderTodayOverview() {
     const core = window.JarvisCore;
     const today = core.todayISODate();
-    $("todayOverviewDate").textContent = parseISODateLocal(today).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    $("todayOverviewDate").textContent = parseISODateLocal(today).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
     const todayTasks = tasksForDate(today);
     const todayTasksDone = todayTasks.filter(function (t) { return t.completed; }).length;
@@ -1008,7 +1015,9 @@
 
     let bestStreak = 0;
     habits.forEach(function (h) { bestStreak = Math.max(bestStreak, computeCurrentStreak(h)); });
-    $("todayOverviewStreak").textContent = bestStreak + " day" + (bestStreak === 1 ? "" : "s") + " streak";
+    const streakEl = $("todayOverviewStreak");
+    streakEl.textContent = bestStreak + " day" + (bestStreak === 1 ? "" : "s") + " streak";
+    streakEl.hidden = bestStreak < 2;   // a streak is shown once there is one to speak of
   }
 
   function renderDaySelectorPills() {
@@ -1040,6 +1049,27 @@
     renderTaskGoalSelectOptions();
     renderTodayHabitsList();
     document.dispatchEvent(new CustomEvent("jarvis-habits-day-changed", { detail: { date: date } }));
+    // The plan and the review (Discipline) follow the day picked here.
+    if (window.JarvisDiscipline && typeof window.JarvisDiscipline.followDay === "function") {
+      window.JarvisDiscipline.followDay(date === today ? "today" : date === addDaysISO(today, -1) ? "yesterday" : date === addDaysISO(today, 1) ? "tomorrow" : "");
+    }
+  }
+
+  // The menu on Habits: the screens that are not in the three tabs.
+  function openHabitsMenu() {
+    const go = function (id) { const b = document.querySelector('.habits-sub-nav-btn[data-subtarget="' + id + '"]'); if (b) { b.click(); window.scrollTo(0, 0); } };
+    window.JarvisMenu.open({
+      title: "Habits", opener: $("habitsMenuBtn"),
+      rows: [
+        { key: "habits-plan", label: "Day planner", sub: "Put tasks into the hours of a day" },
+        { key: "habits-goals", label: "Goals", sub: "Personal goals and their progress" },
+        { key: "habits-reminders", label: "Reminders", sub: "Phone notifications and quiet hours" },
+        { key: "habits-wake", label: "Wake check", sub: "Prove you are up" },
+        { key: "discipline-program", label: "30-day program", sub: "Optional lessons and missions" },
+        { key: "discipline-setup", label: "Discipline settings", sub: "Phone limit, rules, schedule, your data" }
+      ],
+      onPick: go
+    });
   }
 
   function handleDaySelectorClick(e) {
@@ -1129,9 +1159,9 @@
   function onSubTabChange(targetId) {
     if (targetId === "habits-plan" && window.JarvisDayPlan && typeof window.JarvisDayPlan.onShow === "function") window.JarvisDayPlan.onShow();
     if (targetId === "habits-today") { renderDaySelectorPills(); renderTaskList(); renderTodayHabitsList(); renderTodayOverview(); }
-    if (targetId === "habits-week") renderHabitHistoryGrid();
+    if (targetId === "habits-progress") { renderHabitHistoryGrid(); renderStats(); }
+    if (targetId === "habits-routines") renderHabitManageList();
     if (targetId === "habits-goals") renderGoalsList();
-    if (targetId === "habits-stats") renderStats();
   }
 
   function init() {
@@ -1163,6 +1193,11 @@
     $("habitHistoryGrid").addEventListener("click", handleHabitGridClick);
     $("habitForm").addEventListener("submit", handleHabitFormSubmit);
     $("habitFormCancelBtn").addEventListener("click", resetHabitForm);
+    $("habitAddToggleBtn").addEventListener("click", function () {
+      const open = !$("habitFormWrap").hidden;
+      if (open) resetHabitForm(); else { showHabitForm(true); $("habitName").focus(); }
+    });
+    $("habitsMenuBtn").addEventListener("click", openHabitsMenu);
     $("habitManageList").addEventListener("click", handleHabitManageListClick);
     $("historyPrevWeekBtn").addEventListener("click", function () { handleHistoryWeekNav(-1); });
     $("historyNextWeekBtn").addEventListener("click", function () { handleHistoryWeekNav(1); });

@@ -17,10 +17,19 @@
 
   const PL = window.JarvisPlanLogic;
   const store = window.JarvisPlanStore;
-  const VIEWS = [["yearly", "Yearly"], ["quarterly", "Quarterly"], ["monthly", "Monthly"], ["weekly", "Weekly"]];
   const views = {};
   const A = { acts: {}, PL: PL, store: store };
-  const state = { view: "yearly", year: 0, quarter: 0, month: "", open: {}, week: "" };
+  const state = { view: "overview", year: 0, quarter: 0, month: "", open: {}, week: "", focusSec: "" };
+  // The three tabs are Overview, Goals and Weekly. Yearly, Quarterly and Monthly are the three sections of Goals; Insights is reached from Overview.
+  const GOAL_SECTIONS = { yearly: "g-year", quarterly: "g-quarter", monthly: "g-month" };
+  const TAB_OF = { overview: "overview", insights: "overview", goals: "goals", yearly: "goals", quarterly: "goals", monthly: "goals", weekly: "weekly" };
+  // What this device remembers about how you like the screen: whether the overview is open and which sections you folded.
+  // Kept on this device only (never synced), and the screen works without it.
+  const UI_KEY = "jarvisPlanUi";
+  const ui = { dash: true, collapsed: {} };
+  try { const v = JSON.parse(window.localStorage.getItem(UI_KEY) || "null"); if (v && typeof v === "object") { ui.dash = v.dash !== false; ui.collapsed = v.collapsed && typeof v.collapsed === "object" ? v.collapsed : {}; } } catch (e) { /* no saved layout: the defaults */ }
+  function saveUi() { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (e) { /* the layout just isn't remembered */ } }
+  A.ui = ui; A.saveUi = saveUi;
   let started = false, shown = false, sheet = null, undoTimer = null, version = 0, cached = null, cachedVer = -1;
 
   function $(id) { return document.getElementById(id); }
@@ -32,6 +41,22 @@
   function habits() { return window.JarvisHabits || null; }
   A.tasks = function () { const h = habits(); return h && h.getTasks ? (h.getTasks() || []) : []; };
   A.goals = function () { const h = habits(); return h && h.getGoals ? (h.getGoals() || []) : []; };
+  // The habits you already track (Habits tab). The plan only reads them: it never changes a habit.
+  A.allHabits = function () {
+    try { const h = window.JarvisCore.loadJSON("jarvisHabits", []); return Array.isArray(h) ? h.filter(function (x) { return x && typeof x.id === "string" && x.name; }) : []; } catch (e) { return []; }
+  };
+  // The habits linked to a goal, each with how often it was done over the last 7 days (counted from its own check-offs).
+  A.habitsOf = function (n) {
+    const all = A.allHabits(), t = store.today(), out = [];
+    (n.habitIds || []).forEach(function (id) {
+      const hb = all.filter(function (x) { return x.id === id; })[0];
+      if (!hb) return;
+      const target = Math.max(1, Number(hb.dailyTarget) || 1); let done = 0;
+      for (let i = 0; i < 7; i++) { if ((Number(hb.completions && hb.completions[PL.addDays(t, -i)]) || 0) >= target) done++; }
+      out.push({ id: id, name: hb.name, line: done + " of the last 7 days" });
+    });
+    return out;
+  };
   A.data = function () {
     return { nodes: store.all("nodes"), links: store.all("links"), tasks: A.tasks(), periods: store.all("periods"), settings: store.settings(), goals: A.goals(), today: store.today() };
   };
@@ -41,6 +66,19 @@
     return cached;
   };
   A.bump = function () { version++; };
+  // Everything the insight rules read, assembled once per draw (they never read storage themselves).
+  function calEvents() { return window.JarvisCalendar && window.JarvisCalendar.getEvents ? window.JarvisCalendar.getEvents() : []; }
+  function calZone() { try { return window.JarvisCalendar && window.JarvisCalendarLogic ? window.JarvisCalendarLogic.viewZone(window.JarvisCalendar.getSettings()) : "UTC"; } catch (e) { return "UTC"; } }
+  A.ictx = function (weekStart) {
+    const d = A.data(), W = window.JarvisPlanWeekLogic, now = new Date();
+    let workouts = [];
+    try { const w = window.JarvisCore.loadJSON("jarvisWorkouts", []); workouts = Array.isArray(w) ? w : []; } catch (e) { workouts = []; }
+    return {
+      today: d.today, nowMin: now.getHours() * 60 + now.getMinutes(), nowMs: Date.now(), weekStart: weekStart || state.week || W.mondayOf(d.today),
+      tasks: d.tasks, links: d.links, model: A.model(), blocks: store.all("blocks"), ingredients: store.all("ingredients"), events: calEvents(), zone: calZone(),
+      settings: d.settings, weeks: store.all("weeks"), reviews: store.all("reviews"), periods: d.periods, workouts: workouts
+    };
+  };
 
   /* ---------------- small display helpers ---------------- */
 
@@ -60,6 +98,30 @@
   A.typeLabel = function (t) { return PL.TYPE_LABEL[t] || t; };
   A.monthLabel = function (mk) { return PL.monthName(mk, false) + " " + mk.slice(0, 4); };
 
+  // Status in plain words (Not started, On track, At risk, Completed). Overdue and over-budget get their own red label.
+  const STATUS_CLS = { notstarted: "neutral", ontrack: "green", atrisk: "yellow", completed: "green", paused: "neutral", dropped: "neutral" };
+  A.statusBadge = function (id) {
+    const m = A.model(), st = m.statusOf(id), h = m.health(id);
+    if (!st) return "";
+    if (h === "overdue") return A.badge("red", "Overdue");
+    if (h === "over") return A.badge("red", "Over budget");
+    return A.badge(STATUS_CLS[st] || "neutral", PL.STATUS_LABEL[st] || st);
+  };
+  A.statusTone = function (id) { const st = A.model().statusOf(id), h = A.model().health(id); return h === "overdue" || h === "over" ? "red" : st === "atrisk" ? "yellow" : st === "ontrack" || st === "completed" ? "green" : ""; };
+  A.pctText = function (p) { return p === null || p === undefined ? "–" : p + "%"; };
+  A.hoursText = function (min) { return min === null || min === undefined ? "not tracked" : (Math.round(min / 6) / 10) + " h"; };
+
+  // A collapsible section. The heading is a button (so it works from the keyboard); what you fold is remembered on this device.
+  // o: { open: default (true), summary: short text shown while folded or beside the title, actions: html shown beside the title }
+  A.isOpen = function (id, dflt) { return ui.collapsed[id] === undefined ? dflt !== false : !ui.collapsed[id]; };
+  A.section = function (id, title, body, o) {
+    o = o || {};
+    const open = A.isOpen(id, o.open);
+    return '<section class="sp-sec' + (open ? " is-open" : "") + '" data-sec="' + esc(id) + '"><h3 class="sp-sec-h"><button type="button" class="sp-sec-btn" data-act="sec-toggle" data-id="' + esc(id) + '" aria-expanded="' + open + '" aria-controls="spsec_' + esc(id) + '">' +
+      '<span class="sp-sec-title">' + esc(title) + '</span>' + (o.summary ? '<span class="sp-sec-sum">' + o.summary + '</span>' : "") + '<span class="sp-chev" aria-hidden="true"></span></button>' + (o.actions ? '<span class="sp-sec-actions">' + o.actions + '</span>' : "") + '</h3>' +
+      '<div class="sp-sec-body" id="spsec_' + esc(id) + '"' + (open ? "" : " hidden") + '>' + body + '</div></section>';
+  };
+
   /* ---------------- messages ---------------- */
 
   A.say = function (text) { const e = $("spLive"); if (e) { e.textContent = ""; window.setTimeout(function () { e.textContent = text || ""; }, 30); } };
@@ -74,7 +136,18 @@
     A.say(text);
     undoTimer = window.setTimeout(function () { bar.classList.add("hidden"); bar._fn = null; }, 9000);
   };
-  A.saveFailed = function () { A.notice(store.error() || "That couldn't be saved.", ""); };
+  A.saveFailed = function () { A.notice(store.error() || "That couldn't be saved.", ""); A.savedNow(true); };
+  // "Saved" shows briefly after every change (changes are written the moment you make them); a failed save says so.
+  let savedTimer = null;
+  A.savedNow = function (failed) {
+    const el = $("spSaved");
+    if (!el) return;
+    window.clearTimeout(savedTimer);
+    el.classList.toggle("is-error", !!failed);
+    el.textContent = failed ? "Not saved" : "Saved";
+    el.classList.add("is-on");
+    if (!failed) savedTimer = window.setTimeout(function () { el.classList.remove("is-on"); el.textContent = "All changes saved"; }, 2200);
+  };
 
   /* ---------------- form fields ---------------- */
 
@@ -207,7 +280,9 @@
   /* ---------------- navigation and drawing ---------------- */
 
   A.register = function (name, view) { views[name] = view; };
+  A.viewHtml = function (name) { return views[name] ? views[name].html() : ""; };
   A.go = function (view, extra) {
+    if (view && GOAL_SECTIONS[view]) { ui.collapsed[GOAL_SECTIONS[view]] = false; saveUi(); state.focusSec = GOAL_SECTIONS[view]; view = "goals"; }
     if (view && views[view]) state.view = view;
     if (extra) Object.keys(extra).forEach(function (k) { if (k !== "noScroll") state[k] = extra[k]; });
     A.render();
@@ -215,7 +290,7 @@
   };
   function syncTabs() {
     Array.prototype.forEach.call(document.querySelectorAll("#panel-strategy .sp-sub-nav .sub-nav-btn"), function (b) {
-      const on = b.getAttribute("data-sp") === state.view;
+      const on = b.getAttribute("data-sp") === (TAB_OF[state.view] || state.view);
       b.classList.toggle("active", on);
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
@@ -232,6 +307,7 @@
     if (!view) { host.innerHTML = '<p class="sp-empty">This view is not available.</p>'; return; }
     host.innerHTML = (blocked ? '<p class="sp-warn" role="alert">' + esc(blocked) + '</p>' : "") + view.html();
     if (view.after) view.after(host);
+    if (A.renderDash) A.renderDash();
     if (sig) { const back = host.querySelector(sig); if (back) back.focus(); }
   };
 
@@ -262,6 +338,23 @@
       '<span class="sp-task-meta">' + (t.date ? esc(A.fmtShort(t.date)) : "") + (t.time ? " " + esc(t.time) : "") + (est ? " · " + est + " min" : "") + (t.priority === "high" ? " · high" : "") + '</span>' +
       '<button type="button" class="btn btn-secondary sp-task-unlink" data-act="task-unlink" data-id="' + esc(t.id) + '" aria-label="Unlink ' + esc(t.text) + ' (the task is kept)">Unlink</button></li>';
   }
+  // Planned against actual, as two bars and one sentence: the share of the time that has passed (the pace the plan asks for) and the share done.
+  A.paceBars = function (pc, health) {
+    if (!pc) return "";
+    let say;
+    if (pc.state === "before") say = "Starts " + A.fmtDate(pc.start) + ".";
+    else if (pc.actual === null) say = "Nothing to measure yet, so no comparison.";
+    else if (pc.gap >= 0) say = pc.gap === 0 ? "Right on the pace." : pc.gap + " points ahead of the pace.";
+    else say = (-pc.gap) + " points behind the pace." + (pc.state === "after" ? " It is past its deadline." : "");
+    return '<div class="sp-pace" role="group" aria-label="Planned against actual">' +
+      '<div class="sp-pace-row"><span class="sp-pace-l">Planned by now</span>' + A.bar(pc.expected, "Planned by now", "") + '<span class="sp-pace-v">' + pc.expected + '%</span></div>' +
+      '<div class="sp-pace-row"><span class="sp-pace-l">Actual</span>' + (pc.actual === null ? '<span class="sp-pace-none">no data yet</span>' : A.bar(pc.actual, "Actual progress", health)) + '<span class="sp-pace-v">' + (pc.actual === null ? "–" : pc.actual + "%") + '</span></div>' +
+      '<p class="sp-pace-say' + (pc.gap !== null && pc.gap < -10 ? " is-behind" : "") + '">' + esc(say) + '</p></div>';
+  };
+  A.paceHtml = function (id) {
+    const m = A.model(), n = m.node(id), pc = m.pace(id);
+    return !n || !pc || n.measure === "budget" ? "" : A.paceBars(pc, m.health(id));
+  };
   // The expandable card for an objective, a priority or a milestone. o: { children: html to show under it }
   A.nodeCard = function (n, o) {
     o = o || {};
@@ -272,21 +365,29 @@
     let h5 = '<article class="' + cls + '" data-node="' + esc(n.id) + '" aria-label="' + esc(n.title) + '">' +
       '<button type="button" class="sp-card-head" data-act="toggle-card" data-id="' + esc(n.id) + '" aria-expanded="' + open + '">' +
       '<span class="sp-card-title">' + esc(n.title) + '</span>' +
-      '<span class="sp-card-badges">' + A.healthBadge(h) + (o.showType ? A.badge("accent", A.typeLabel(n.type)) : "") + '</span>' +
+      '<span class="sp-card-badges">' + A.statusBadge(n.id) + (o.showType ? A.badge("accent", A.typeLabel(n.type)) : "") + '</span>' +
+      (o.parentLine && parent ? '<span class="sp-card-parent">Supports: ' + esc(parent.title) + '</span>' : "") +
+      (n.successMetric ? '<span class="sp-card-parent">Success metric: ' + esc(n.successMetric) + '</span>' : "") +
       '<span class="sp-card-sub">' + esc(p.note) + (n.due ? " · due " + esc(A.fmtShort(n.due)) : "") + '</span>' + A.bar(p.pct, n.title + " progress", h) +
       '</button>';
     if (open) {
       h5 += '<div class="sp-card-body">';
       if (parent && o.showParent !== false) h5 += '<p class="sp-parent">Part of: <button type="button" class="sp-link" data-act="open-node" data-id="' + esc(parent.id) + '">' + esc(parent.title) + '</button></p>';
+      if (n.description) h5 += '<p class="sp-notes">' + esc(n.description) + '</p>';
       if (n.notes) h5 += '<p class="sp-notes">' + esc(n.notes) + '</p>';
-      h5 += '<dl class="sp-facts">' + (n.measure !== "tasks" ? '<div><dt>Measured by</dt><dd>' + esc((PL.MEASURES.filter(function (x) { return x.key === n.measure; })[0] || {}).label || "") + '</dd></div>' : "") +
+      if (o.pace !== false) h5 += A.paceHtml(n.id);
+      h5 += '<dl class="sp-facts">' + (n.successMetric ? '<div><dt>Success metric</dt><dd>' + esc(n.successMetric) + '</dd></div>' : "") + (n.criteria ? '<div><dt>Done when</dt><dd>' + esc(n.criteria) + '</dd></div>' : "") + (n.weight > 1 ? '<div><dt>Weight</dt><dd>' + n.weight + ' of 5</dd></div>' : "") + (n.measure !== "tasks" ? '<div><dt>Measured by</dt><dd>' + esc((PL.MEASURES.filter(function (x) { return x.key === n.measure; })[0] || {}).label || "") + '</dd></div>' : "") +
         '<div><dt>Deadline</dt><dd>' + esc(A.fmtDate(dl)) + (n.due ? "" : " (end of its " + (n.type === "objective" ? "year" : n.type === "priority" ? "quarter" : "month") + ")") + '</dd></div></dl>';
       if (o.children) h5 += o.children;
       if (n.measure === "number") h5 += '<div class="sp-inline"><label for="spnum_' + esc(n.id) + '">Current' + (n.unit ? " (" + esc(n.unit) + ")" : "") + '</label><input type="number" inputmode="decimal" min="0" id="spnum_' + esc(n.id) + '" data-num-for="' + esc(n.id) + '" value="' + esc(n.current === null ? 0 : n.current) + '"><button type="button" class="btn btn-secondary" data-act="save-number" data-id="' + esc(n.id) + '">Update</button></div>';
       // tasks: the ones linked straight to this item; the ones under items below it show on those items
       h5 += '<h4 class="sp-h4">Tasks linked here</h4>';
       h5 += direct.length ? '<ul class="sp-tasks">' + direct.map(function (t) { return taskRow(t, m); }).join("") + '</ul>' : '<p class="sp-dim">No tasks linked straight to this yet.</p>';
-      h5 += '<div class="sp-card-actions"><button type="button" class="btn btn-secondary" data-act="link-tasks" data-id="' + esc(n.id) + '">Link or add tasks</button>';
+      const hb = A.habitsOf(n);
+      if (hb.length) h5 += '<h4 class="sp-h4">Habits that support it</h4><ul class="sp-sublist">' + hb.map(function (x) { return '<li>' + esc(x.name) + ' <span class="sp-dim">' + esc(x.line) + '</span></li>'; }).join("") + '</ul>';
+      h5 += '<div class="sp-card-actions"><button type="button" class="btn btn-secondary" data-act="detail" data-id="' + esc(n.id) + '">Details</button><button type="button" class="btn btn-secondary" data-act="link-tasks" data-id="' + esc(n.id) + '">Link or add tasks</button>';
+      if (n.type !== "milestone") h5 += '<button type="button" class="btn btn-secondary" data-act="breakdown-from" data-id="' + esc(n.id) + '">Break it down</button>';
+      if (n.type === "objective") h5 += '<button type="button" class="btn btn-secondary" data-act="save-template" data-id="' + esc(n.id) + '">Save as template</button>';
       if (m.canMarkDone(n.id)) h5 += '<button type="button" class="btn btn-secondary" data-act="mark-done" data-id="' + esc(n.id) + '">' + (n.doneAt ? "Mark not done" : "Mark done") + '</button>';
       h5 += '<button type="button" class="btn btn-secondary" data-act="edit-node" data-id="' + esc(n.id) + '">Edit</button>';
       if (o.add) h5 += o.add;
@@ -338,6 +439,13 @@
     body += '<div data-for="number" class="form-row two-col"><div><label for="spf_current">Current number</label><input id="spf_current" name="current" inputmode="decimal" value="' + esc(n.current === null || n.current === undefined ? "" : n.current) + '" autocomplete="off"><p class="sp-err hidden" data-err="current" role="alert"></p></div><div><label for="spf_unit">Unit</label><input id="spf_unit" name="unit" maxlength="16" value="' + esc(n.unit) + '" placeholder="e.g. hires" autocomplete="off"></div></div>';
     body += '<div data-for="goal">' + A.fSelect("goalId", "Your goal", goalOpts, n.goalId, { hint: "Follows that goal's own progress from Habits → Goals." }) + '</div>';
     body += A.fText("due", "Deadline (optional)", n.due, { type: "date", hint: "Leave empty to use the end of the " + (type === "objective" ? "year" : type === "priority" ? "quarter" : "month") + "." });
+    const hbAll = A.allHabits(), filled = !!(n.description || n.successMetric || n.criteria || (n.weight && n.weight > 1) || (n.habitIds && n.habitIds.length));
+    body += '<details class="sp-more"' + (filled ? " open" : "") + '><summary>More about it (description, success metric, completion criteria, weight' + (hbAll.length ? ", habits" : "") + ')</summary>' +
+      A.fArea("description", "What it is", n.description || "", { rows: 2, max: 500, placeholder: "A sentence or two so future-you remembers what this means" }) +
+      A.fText("successMetric", "Success metric", n.successMetric || "", { max: 140, placeholder: type === "objective" ? "e.g. $100k in sales" : type === "priority" ? "e.g. first 25 orders" : "e.g. three quotes compared" }) +
+      A.fArea("criteria", "Completion criteria", n.criteria || "", { rows: 2, max: 500, hint: "What has to be true before you can call it done. Jarvis shows this when you mark it complete.", placeholder: "e.g. samples approved and the pre-order page is live" }) +
+      A.fSelect("weight", "How much it counts toward what it belongs to", [["1", "1 · normal"], ["2", "2"], ["3", "3 · matters more"], ["4", "4"], ["5", "5 · counts most"]], String(n.weight || 1), { hint: "Its parent averages its parts; a part with a higher weight pulls the average harder." }) +
+      (hbAll.length ? '<fieldset class="sp-habit-pick"><legend>Habits that support it</legend>' + hbAll.map(function (hb) { return '<label class="pw-check"><input type="checkbox" name="habitIds" data-multi value="' + esc(hb.id) + '"' + ((n.habitIds || []).indexOf(hb.id) !== -1 ? " checked" : "") + '> ' + esc(hb.name) + '</label>'; }).join("") + '<p class="field-hint">Your habits stay exactly as they are. This only shows how they are going next to the goal.</p></fieldset>' : "") + '</details>';
     body += A.fArea("notes", "Notes", n.notes, { max: PL.NOTES_MAX });
     if (editing) body += A.fSelect("status", "Status", PL.STATUSES.map(function (x) { return [x.key, x.label]; }), n.status, { hint: "Paused keeps it but stops warnings. Dropped takes it out of your parents' progress." });
     function sync(root) {
@@ -536,6 +644,13 @@
 
   /* ---------------- clicks ---------------- */
 
+  A.acts["sec-toggle"] = function (el) {
+    const id = el.getAttribute("data-id"), open = el.getAttribute("aria-expanded") === "true";
+    ui.collapsed[id] = open;            // it was open, so it is folded now (and the other way round)
+    saveUi();
+    const sec = el.closest(".sp-sec"), body = sec && sec.querySelector(".sp-sec-body");
+    if (sec && body) { sec.classList.toggle("is-open", !open); body.hidden = open; el.setAttribute("aria-expanded", String(!open)); }
+  };
   A.acts["toggle-card"] = function (el) { const id = el.getAttribute("data-id"); state.open[id] = !state.open[id]; A.render(); };
   A.acts["open-node"] = function (el) {
     const n = A.model().node(el.getAttribute("data-id"));
@@ -609,7 +724,10 @@
     $("spView").addEventListener("click", onClick);
     $("spView").addEventListener("change", onChange);
     $("spUndo").addEventListener("click", onClick);
-    store.subscribe(function () { A.bump(); });
+    // the tab row sticks just under the app header, wherever that ends up (it changes with the screen width)
+    const setHdr = function () { const h = document.querySelector(".app-header"); if (h) panel.style.setProperty("--sp-hdr", h.offsetHeight + "px"); };
+    setHdr(); window.addEventListener("resize", setHdr);
+    store.subscribe(function () { A.bump(); A.savedNow(); });
     // A task was ticked, added or moved anywhere (Habits, Calendar, here): the progress shown follows it.
     document.addEventListener("jarvis-tasks-changed", function () {
       A.bump();

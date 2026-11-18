@@ -74,24 +74,20 @@
     const muscles = RL.muscleSummary(r, exInfo);
     const days = RL.dayText(r.scheduledDays || []);
     const n = r.exercises.length;
-    return '<article class="rt-card card" aria-labelledby="rtN_' + esc(r.id) + '">' +
-      '<h3 class="rt-name" id="rtN_' + esc(r.id) + '">' + esc(r.name) + '</h3>' +
-      '<p class="rt-meta">' + n + ' ' + plural(n, "exercise") + ' &middot; ' + RL.workingSetCount(r) + ' sets' + (muscles.length ? ' &middot; ' + esc(muscles.slice(0, 3).join(", ")) : '') + '</p>' +
-      '<p class="rt-meta">' + (days ? esc(days) : 'Not on your week') + ' &middot; ' + esc(lastUsedText(r.id)) + '</p>' +
-      '<p class="rt-ex-line">' + esc(exerciseLine(r)) + '</p>' +
+    const meta = [n + ' ' + plural(n, "exercise"), RL.workingSetCount(r) + ' sets', days || '', lastUsedText(r.id)].filter(Boolean).join(' · ');
+    return '<article class="rt-card rt-row" aria-labelledby="rtN_' + esc(r.id) + '">' +
+      '<div class="rt-row-main"><h3 class="rt-name" id="rtN_' + esc(r.id) + '">' + esc(r.name) + '</h3>' +
+      '<p class="rt-meta">' + esc(meta) + '</p>' + (muscles.length ? '<p class="rt-meta rt-muscles">' + esc(muscles.slice(0, 3).join(", ")) + '</p>' : '') + '</div>' +
       '<div class="rt-actions"><button type="button" class="btn btn-primary" data-rt="start" data-id="' + esc(r.id) + '">Start</button>' +
-      '<button type="button" class="btn btn-secondary" data-rt="edit" data-id="' + esc(r.id) + '">Edit</button>' +
       '<button type="button" class="wk-icon-btn" data-rt="menu" data-id="' + esc(r.id) + '" aria-label="More for ' + esc(r.name) + '"><span aria-hidden="true">&#8943;</span></button></div></article>';
   }
-
   function weekHtml() {
-    return '<section class="wk-block" aria-labelledby="rtWeekH"><h2 class="wk-block-title" id="rtWeekH">Your week</h2>' +
-      '<p class="field-hint">One routine per day. It repeats every week. Doing a routine on another day never changes this.</p>' +
+    return '<details class="sm-fold rt-weekfold" data-keep="rt_week"' + (weekOpen ? " open" : "") + '><summary>Weekly schedule</summary>' +
+      '<p class="field-hint">One routine per day. It repeats every week.</p>' +
       '<div class="rt-week">' + RL.weekPlan(api().getRoutines()).map(function (d) {
         return '<button type="button" class="rt-day-row" data-rt="week-day" data-day="' + d.day + '"><span class="rt-day-name">' + esc(d.label) + '</span><span class="rt-day-val' + (d.routine ? "" : " is-rest") + '">' + esc(d.routine ? d.routine.name : "Rest day") + '</span><span class="rt-day-go" aria-hidden="true">Change</span></button>';
-      }).join("") + '</div></section>';
+      }).join("") + '</div></details>';
   }
-
   function archivedHtml() {
     const list = RL.archived(api().getRoutines());
     if (!list.length) return "";
@@ -112,12 +108,15 @@
       '<span class="rt-notice-actions"><button type="button" class="wk-link" data-rt="draft-continue">Continue</button><button type="button" class="wk-link" data-rt="draft-discard">Discard</button></span></div>' : "";
     const empty = '<section class="wk-block"><p class="wk-empty">No routines yet. Build your first one in about a minute: a name, then the exercises. Sets and reps are filled in for you.</p></section>';
     el.innerHTML = draftHtml +
-      '<button type="button" class="btn btn-primary wk-big-btn rt-new" data-rt="new" id="rtNewBtn">New routine</button>' +
-      (routines.length ? '<section class="wk-block rt-list" aria-labelledby="rtListH"><h2 class="wk-block-title" id="rtListH">Your routines</h2>' + routines.map(cardHtml).join("") + '</section>' : empty) +
-      weekHtml() + archivedHtml();
-    showGenerator(true);
+      '<div class="sm-head"><h2 class="sm-title" id="rtListH">Routines</h2><span class="sm-head-btns">' +
+      '<button type="button" class="btn-icon sm-more" data-rt="more" id="rtMoreBtn" aria-haspopup="dialog" aria-label="More routine options"><span aria-hidden="true">&#8943;</span></button>' +
+      '<button type="button" class="btn btn-primary rt-new" data-rt="new" id="rtNewBtn">+ New routine</button></span></div>' +
+      (routines.length ? '<section class="rt-list" aria-labelledby="rtListH">' + routines.map(cardHtml).join("") + '</section>' : empty) +
+      (routines.length ? weekHtml() : "") + archivedHtml();
+    showGenerator(genOpen);
   }
 
+  let genOpen = false, weekOpen = false;
   function showGenerator(show) { const g = $("rtGenerator"); if (g) g.classList.toggle("hidden", !show); }
 
   /* ---------------- list actions ---------------- */
@@ -132,12 +131,31 @@
     return true;
   }
 
+  // The small extras of this screen, one tap away.
+  function openMore(opener) {
+    window.JarvisMenu.open({
+      title: "Routines", opener: opener,
+      rows: [{ key: "library", label: "Exercise library", sub: "Browse, search and add your own exercises" }, { key: "programs", label: "Programs", sub: "Routines that cycle in order" }, { key: "generate", label: "Build a routine for me", sub: "Answer a few questions" }],
+      onPick: function (key) {
+        if (key === "library") { const b = document.querySelector('.workout-sub-nav-btn[data-subtarget="workout-library"]'); if (b) b.click(); }
+        else if (key === "programs") { const b = document.querySelector('.workout-sub-nav-btn[data-subtarget="workout-programs"]'); if (b) b.click(); }
+        else {
+          genOpen = true; showGenerator(true);
+          const body = $("generatorBody"), tg = $("generatorToggleBtn");
+          if (body && body.classList.contains("hidden") && tg) tg.click();
+          const g = $("rtGenerator"); if (g && g.scrollIntoView) g.scrollIntoView({ block: "start" });
+        }
+      }
+    });
+  }
   function openMenu(id) {
     const r = RL.findById(api().getRoutines(), id);
     if (!r) return;
     kit().openSheet(r.name,
+      '<button type="button" class="wk-menu-item" data-rt="edit" data-id="' + esc(id) + '">Edit routine</button>' +
       '<button type="button" class="wk-menu-item" data-rt="duplicate" data-id="' + esc(id) + '">Duplicate</button>' +
       '<button type="button" class="wk-menu-item" data-rt="days" data-id="' + esc(id) + '">Change days</button>' +
+      '<button type="button" class="wk-menu-item" data-rt="delete" data-id="' + esc(id) + '">Delete<span class="wk-menu-sub">Removes it for good. Your workouts that used it stay in History.</span></button>' +
       '<button type="button" class="wk-menu-item" data-rt="archive" data-id="' + esc(id) + '">Archive<span class="wk-menu-sub">Hides it. Your history stays. You can restore it.</span></button>');
   }
 
@@ -493,8 +511,9 @@
     switch (act) {
       case "new": openBuilder(RL.blankBuilder(), 1); focusSel("#rtName"); break;
       case "start": if (window.JarvisWorkoutUI) window.JarvisWorkoutUI.startRoutine(id); break;
-      case "edit": { const r = RL.findById(api().getRoutines(), id); if (r) openBuilder(RL.builderFromRoutine(r), 2); break; }
+      case "edit": { kit().closeSheet(true); const r = RL.findById(api().getRoutines(), id); if (r) openBuilder(RL.builderFromRoutine(r), 2); break; }
       case "menu": openMenu(id); break;
+      case "more": openMore(el); break;
       case "duplicate": { const r = RL.findById(api().getRoutines(), id); kit().closeSheet(true); if (r) { openBuilder(RL.builderFromCopy(r, api().getRoutines()), 1); } break; }
       case "days": openDays(id); break;
       case "sheet-day": { const at = sheetDays.indexOf(day); if (at === -1) sheetDays.push(day); else sheetDays.splice(at, 1); el.classList.toggle("is-on", at === -1); el.setAttribute("aria-pressed", String(at === -1)); updateSheetConflict(el.closest(".wk-sheet").querySelector('[data-rt="days-save"]').getAttribute("data-id")); break; }
@@ -583,6 +602,7 @@
     panel.addEventListener("change", onChange);
     panel.addEventListener("keydown", onKeyDown);
     document.addEventListener("jarvis-workout-changed", function () { if (!builder && !(document.activeElement && root().contains(document.activeElement) && document.activeElement.matches("input, select, textarea"))) renderList(); });
+    root().addEventListener("toggle", function (e) { if (e.target.classList && e.target.classList.contains("rt-weekfold")) weekOpen = e.target.open; }, true);
     const tabBtn = $("workoutSubNavRoutines");
     if (tabBtn) tabBtn.addEventListener("click", function () { window.setTimeout(render, 0); });
     renderList();

@@ -2,7 +2,7 @@
    JARVIS — Learning & Research Hub: connecting ideas.
      - "Related ideas" inside every note (links you made, shared topics, similar wording, with the reason for each)
      - linking notes to each other, from the editor or the note's "More" menu
-     - the Topics view in Knowledge (every topic with its notes, books and projects; rename or merge a topic)
+     - the Topics screen (More menu; every topic with its notes, books and projects; rename or merge a topic)
      - Collections: gather notes, books and research around a subject, optionally filled by a topic
    The rules are in learning-links-logic.js. Plain tags, manual links and word matching on this device; no AI.
    ========================================================================== */

@@ -26,6 +26,8 @@
   let loadError = "", saveError = "";
   let view = "week", anchor = "", selected = "";
   let filters = { q: "", categories: [], hideDone: false }, filtersOpen = false;
+  let toolsOpen = false;          // the search and filter row, opened from the menu
+  let dayStyle = "list";          // Today as a list ("list") or hour by hour ("hours")
   let modal = null;          // the open popup: { kind: "event" | "task" | "settings", ... }
   let undo = null;           // { timer, fn }
   let itemMap = {};          // key -> item, for what is on screen
@@ -50,7 +52,7 @@
     }, 0);
   }
   function ctx() { return { now: Date.now(), zone: zone(), defaultDuration: settings.defaultDuration, makeId: function () { return core().uid("ev"); } }; }
-  function colorOf(it) { return it.source === "task" ? TASK_COLOR : C.categoryInfo(it.category).color; }
+  function colorOf(it) { return it.source === "task" ? TASK_COLOR : it.color || C.categoryInfo(it.category).color; }
   function shortTime(t) { const h = Number(t.slice(0, 2)), m = t.slice(3); return ((h + 11) % 12 + 1) + (m === "00" ? "" : ":" + m) + (h < 12 ? "a" : "p"); }
   function dayName(date, opts) { return C.fmtDate(date, opts || { weekday: "long", month: "long", day: "numeric" }); }
 
@@ -97,9 +99,15 @@
   /* ---------------- what is on screen ---------------- */
 
   function sortItems(a, b) { return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || (a.startMin || 0) - (b.startMin || 0) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); }
+  // Time blocks from Strategy > Weekly, read-only. A block that holds a task is not listed (the task already is).
+  function planItems(from, to) {
+    const P = window.JarvisPlanStore, PW = window.JarvisPlanWeekLogic;
+    if (!P || !PW || !PW.calendarItems) return [];
+    try { P.init(); return PW.calendarItems({ blocks: P.all("blocks"), ingredients: P.all("ingredients") }, from, to); } catch (e) { return []; }
+  }
   function allItems(from, to) {
     const h = habits();
-    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : []);
+    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : [], planItems(from, to));
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
@@ -120,7 +128,9 @@
   /* ---------------- drawing ---------------- */
 
   function renderToolbar() {
-    $("calTitle").textContent = C.viewTitle(view, anchor, settings.weekStart);
+    $("calTitle").textContent = view === "day" && dayStyle === "list" ? (anchor === today() ? "Today \u00b7 " : "") + dayName(anchor, { weekday: "short", month: "short", day: "numeric" }) : C.viewTitle(view, anchor, settings.weekStart);
+    Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.classList.toggle("hidden", false); });
+    const tools = $("calTools"); if (tools) tools.classList.toggle("hidden", !(toolsOpen || filters.q || filters.categories.length || filters.hideDone));
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === view)); });
     const n = filters.categories.length + (filters.hideDone ? 1 : 0);
     $("calFilterBtn").textContent = n ? "Filters · " + n : "Filters";
@@ -168,13 +178,14 @@
     });
     html += '</div>';
     html += '<div class="cal-daylist"><div class="cal-daylist-head"><h3>' + esc(dayName(selected)) + '</h3>' +
-      '<button type="button" class="btn btn-primary" data-cal="new-on" data-date="' + selected + '">+ Add</button></div>' + agendaRows(dayItems(items, selected), selected, true) + '</div>';
+      '<button type="button" class="btn btn-secondary cal-addday" data-cal="new-on" data-date="' + selected + '" aria-label="Add to this day">+ Add here</button></div>' + agendaRows(dayItems(items, selected), selected, true) + '</div>';
     return html;
   }
 
   function rowHtml(it) {
     const sub = [];
     if (it.source === "task") sub.push("Task");
+    else if (it.source === "plan") sub.push("Time block" + (it.categoryName ? " \u00b7 " + it.categoryName : ""));
     else {
       const kind = C.kindInfo(it.kind).label, cat = C.categoryInfo(it.category).label;
       if (it.kind !== "event" && kind !== cat) sub.push(kind);
@@ -191,6 +202,25 @@
       '</button>' +
       (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
     '</div>';
+  }
+  // Today as a list: everything on the day in time order, all-day first, with a tick on what can be ticked.
+  function dayListHtml(items) {
+    const list = dayItems(items, anchor);
+    if (!list.length) {
+      const filtered = filters.q || filters.categories.length || filters.hideDone;
+      return '<div class="cal-empty"><p>' + (filtered ? "Nothing matches your search and filters." : "Nothing planned.") + '</p>' +
+        (filtered ? '<button type="button" class="btn btn-secondary" data-cal="clear">Clear search and filters</button>' : '<button type="button" class="btn btn-primary" data-cal="new">+ Add</button>') + '</div>';
+    }
+    return '<div class="cal-todaylist">' + list.map(rowHtml).join("") + '</div>';
+  }
+  // Week on a phone: the seven days one under the other, each with its own items.
+  function weekListHtml(items, dates) {
+    const t = today();
+    return '<div class="cal-weeklist">' + dates.map(function (d) {
+      const list = dayItems(items, d);
+      return '<section class="cal-wk-day' + (d === t ? " is-today" : "") + '" aria-label="' + esc(dayName(d)) + '"><h3 class="cal-ag-day' + (d === t ? " is-today" : "") + '"><button type="button" class="cal-wk-dayhead" data-cal="goto-day" data-date="' + d + '">' + esc((d === t ? "Today \u00b7 " : "") + dayName(d, { weekday: "short", month: "short", day: "numeric" })) + '</button></h3>' +
+        (list.length ? list.map(rowHtml).join("") : '<p class="cal-wk-none">Nothing planned</p>') + '</section>';
+    }).join("") + '</div>';
   }
   function agendaRows(list, date, inMonth) {
     if (!list.length) return '<div class="cal-empty">' + (inMonth ? "Nothing planned for this day." : "Nothing here.") + '</div>';
@@ -245,6 +275,8 @@
     const r = C.rangeFor(view, anchor, settings.weekStart), items = visibleItems(r.from, r.to).shown;
     if (view === "month") stage.innerHTML = monthHtml(items);
     else if (view === "agenda") stage.innerHTML = agendaHtml(items);
+    else if (view === "day" && dayStyle === "list") stage.innerHTML = dayListHtml(items);
+    else if (view === "week" && isPhone()) { const wd = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) wd.push(d); stage.innerHTML = weekListHtml(items, wd); }
     else {
       const dates = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) dates.push(d);
       stage.innerHTML = gridHtml(dates, items);
@@ -268,6 +300,7 @@
   /* ---------------- moving around ---------------- */
 
   function setView(v) {
+    if (v === "day") { anchor = today(); selected = anchor; if (view === "day" && dayStyle === "list") { render(); return; } }
     if (view === v) return;
     view = v; wantScroll = true;
     if (v === "month") selected = selected && C.rangeFor("month", anchor, settings.weekStart).from <= selected ? selected : anchor;
@@ -374,12 +407,13 @@
   }
 
   const EXT = {
+    plan: { title: "Time block", where: "Strategy \u203a Weekly", nav: "navBtnStrategy", after: function () { const b = document.querySelector('#panel-strategy .sp-sub-nav [data-sp="weekly"]'); if (b) b.click(); }, note: "This is a time block from your weekly plan. Change or move it in Strategy, on the Weekly tab." },
     goal: { title: "Goal", where: "Habits \u203a Goals", nav: "navBtnHabits", sub: "habitsSubNavGoals", note: "This date comes from one of your personal goals. Change it in Habits." }
   };
   function externalTitle(it) { return (EXT[it.source] || EXT.goal).title; }
   function externalSheetHtml(m) {
     const it = m.item, x = EXT[it.source] || EXT.goal, canTick = false;
-    return '<div class="cal-field"><span class="cal-lab">' + esc(x.title) + '</span><p><strong>' + esc(it.title) + '</strong></p><p class="field-hint">' + esc(dayName(it.date)) + (it.completed ? " \u00b7 done" : "") + '</p></div>' +
+    return '<div class="cal-field"><span class="cal-lab">' + esc(x.title) + '</span><p><strong>' + esc(it.title) + '</strong></p><p class="field-hint">' + esc(dayName(it.date)) + (it.source === "plan" ? " \u00b7 " + esc(C.timeLabel(it.time) + " \u2013 " + C.timeLabel(it.endTime)) + (it.categoryName ? " \u00b7 " + esc(it.categoryName) : "") : "") + (it.completed ? " \u00b7 done" : "") + '</p></div>' +
       '<p class="field-hint">' + esc(x.note) + '</p>' +
       '<div class="cal-actions">' + (canTick ? '<button type="button" class="btn btn-primary" data-cal="ext-toggle">' + (it.completed ? "Mark not done" : "Mark done") + '</button>' : "") +
       '<button type="button" class="btn ' + (canTick ? "btn-secondary" : "btn-primary") + '" data-cal="ext-open">Open in ' + esc(x.where.split(" \u203a ")[0]) + '</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
@@ -389,7 +423,8 @@
     const x = EXT[it.source];
     if (!x) return;
     const b = $(x.nav); if (b) b.click();
-    const sub = $(x.sub); if (sub) sub.click();
+    const sub = x.sub ? $(x.sub) : null; if (sub) sub.click();
+    if (x.after) x.after();
   }
 
   function settingsFormHtml() {
@@ -397,7 +432,7 @@
     const zones = ZONES.slice(); if (zones.indexOf(dz) === -1) zones.unshift(dz); if (s.timeZone && zones.indexOf(s.timeZone) === -1) zones.unshift(s.timeZone);
     return '<div class="cal-field"><label for="calS_zone">Time zone</label><select id="calS_zone"><option value="">This device (' + esc(dz.replace(/_/g, " ")) + ')</option>' + zones.map(function (z) { return '<option value="' + esc(z) + '"' + (z === s.timeZone ? " selected" : "") + '>' + esc(z.replace(/_/g, " ")) + '</option>'; }).join("") + '</select></div>' +
       '<div class="cal-row"><div class="cal-field"><label for="calS_week">Week starts on</label><select id="calS_week"><option value="1"' + (s.weekStart === 1 ? " selected" : "") + '>Monday</option><option value="0"' + (s.weekStart === 0 ? " selected" : "") + '>Sunday</option></select></div>' +
-      '<div class="cal-field"><label for="calS_view">Opens in</label><select id="calS_view">' + selOpts([{ value: "", label: "Automatic" }, { value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "day", label: "Day" }, { value: "agenda", label: "Agenda" }], s.defaultView) + '</select></div></div>' +
+      '<div class="cal-field"><label for="calS_view">Opens in</label><select id="calS_view">' + selOpts([{ value: "", label: "Automatic" }, { value: "month", label: "Month" }, { value: "week", label: "Week" }, { value: "day", label: "Day, hour by hour" }, { value: "agenda", label: "Next 30 days" }], s.defaultView) + '</select></div></div>' +
       '<div class="cal-field"><label for="calS_len">New events last</label><select id="calS_len">' + selOpts([30, 45, 60, 90, 120, 180].map(function (n) { return { value: n, label: n < 60 ? n + " minutes" : (n / 60) + (n === 60 ? " hour" : " hours") }; }), s.defaultDuration) + '</select></div>' +
       '<div class="cal-field"><label for="calS_rem">New events remind me</label><select id="calS_rem">' + selOpts([{ value: -1, label: "Not at all" }].concat(C.REMINDER_CHOICES), s.defaultReminder) + '</select></div>' +
       '<button type="button" class="btn btn-secondary" data-cal="rem-settings">Reminder and notification settings</button>' +
@@ -700,7 +735,7 @@
     }
   }
   function openItem(it) {
-    if (it.source === "goal") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
+    if (it.source === "goal" || it.source === "plan") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
     if (it.source === "task") { modal = { kind: "task", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="task-toggle"]'); return; }
     openEdit(it); focusSoon("#calF_title");
   }
@@ -724,6 +759,28 @@
       '<div class="cal-actions"><button type="submit" class="btn btn-primary">Close</button></div>';
   }
   function openKeys() { modal = { kind: "keys", opener: document.activeElement }; showModal(); focusSoon("#calForm .btn-primary"); }
+  // The less used things, one tap away.
+  function openCalMenu() {
+    window.JarvisMenu.open({
+      title: "Calendar", opener: $("calMenuBtn"),
+      rows: [
+        { key: "search", label: "Search and filters", sub: "Find an event or task, or show only some kinds" },
+        { key: "assist", label: "Planning assistant", sub: "Find time, plan a week, catch up" },
+        { key: "style", label: dayStyle === "list" ? "Show Today hour by hour" : "Show Today as a list" },
+        { key: "agenda", label: "Next 30 days", sub: "Everything coming up, as a list" },
+        { key: "settings", label: "Calendar settings", sub: "Time zone, reminders, files" },
+        { key: "keys", label: "Keyboard shortcuts", minor: true }
+      ],
+      onPick: function (key) {
+        if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
+        else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
+        else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "Today as a list." : "Today hour by hour."); }
+        else if (key === "agenda") setView("agenda");
+        else if (key === "settings") openSettings();
+        else if (key === "keys") openKeys();
+      }
+    });
+  }
   function openSettings() { modal = { kind: "settings", opener: document.activeElement }; showModal(); focusSoon("#calS_zone"); }
 
   function onModalClick(e) {
@@ -734,7 +791,7 @@
     if (act === "scope") { syncForm(); modal.form.scope = el.getAttribute("data-v"); redrawModal(); focusSoon('#calForm [data-cal="scope"][data-v="' + modal.form.scope + '"]'); return; }
     if (act === "byday") { syncForm(); const d = Number(el.getAttribute("data-v")), a = modal.form.byDay, i = a.indexOf(d); if (i === -1) a.push(d); else if (a.length > 1) a.splice(i, 1); modal.form.byDay = a.sort(function (x, y) { return x - y; }); redrawModal(); focusSoon('#calForm [data-cal="byday"][data-v="' + d + '"]'); return; }
     if (act === "rem-settings") { if (modal && modal.kind === "event") syncForm(); if (window.JarvisCalReminders) window.JarvisCalReminders.openSettings(el); return; }
-    if (act === "ics-open") { closeModal(false); if (window.JarvisCalFile) window.JarvisCalFile.open($("calFoot") ? $("calFoot").querySelector('[data-cal="settings"]') : null); return; }   // closed first: the Undo bar must not sit behind it
+    if (act === "ics-open") { closeModal(false); if (window.JarvisCalFile) window.JarvisCalFile.open($("calMenuBtn")); return; }   // closed first: the Undo bar must not sit behind it
     if (act === "duplicate") { duplicateFromModal(); return; }
     if (act === "delete") { deleteFromModal(); return; }
     if (act === "ext-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
@@ -795,7 +852,7 @@
     if (tag === "input" || tag === "textarea" || tag === "select" || (tg && tg.isContentEditable)) { if (e.key === "Escape" && tg.id === "calSearch") { tg.blur(); } return; }
     const k = e.key;
     if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "p" && window.JarvisAssistant) window.JarvisAssistant.open($("calAssist")); else if (k === "?") { e.preventDefault(); openKeys(); }
-    else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); $("calSearch").focus(); }
+    else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); if (!toolsOpen) { toolsOpen = true; render(); } $("calSearch").focus(); }
     else if (k === "ArrowLeft" && tag !== "button") go(-1); else if (k === "ArrowRight" && tag !== "button") go(1);
     else if (k === "j") go(1); else if (k === "k") go(-1);
     else return;
@@ -818,11 +875,13 @@
     if (!$("panel-calendar") || !C) return;
     load();
     anchor = today(); selected = anchor;
-    view = settings.defaultView || (isPhone() ? "agenda" : "week");
+    view = settings.defaultView || "day";
+    if (view === "day" && settings.defaultView === "day") dayStyle = "hours";   // someone who chose Day in the settings gets the hours
     $("calPrev").addEventListener("click", function () { go(-1); });
     $("calNext").addEventListener("click", function () { go(1); });
     $("calToday").addEventListener("click", goToday);
     $("calNew").addEventListener("click", function () { openNew({}); focusSoon("#calF_title"); });
+    $("calMenuBtn").addEventListener("click", openCalMenu);
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view")); }); });
     $("calFilterBtn").addEventListener("click", function () { filtersOpen = !filtersOpen; renderToolbar(); });
     $("calFilters").addEventListener("click", onToolbarClick);

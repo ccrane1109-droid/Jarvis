@@ -1,8 +1,8 @@
 /* ==========================================================================
-   JARVIS — Learning & Research Hub: Study (spaced-repetition reviews, flashcards, the schedule, and your history).
+   JARVIS — Learning & Research Hub: Flashcards and reviews (spaced repetition).
 
-   Four parts:  Review   what is due now (lessons and flashcards together) and practice sessions you choose
-                Cards    your flashcards: add, edit, pause, delete, and see when each will be reviewed
+   The Flashcards screen (Notes tab) shows what is due with one Start review button, your flashcards, and a folded
+   Practice section. Two more screens sit behind the More menu:
                 Schedule everything that is being reviewed, soonest first, and what isn't yet
                 History  how many you reviewed and how often you recalled them (no figure until there is something to measure)
 
@@ -20,8 +20,7 @@
   const SRS = window.JarvisLearningSRS, K = window.JarvisLearningCards;
 
   // What is open in the Study section.
-  const ui = A.state.study = { part: "review", session: null, practice: { tag: "", bookId: "", researchId: "", limit: "20", shuffle: true } };
-  const PARTS = [["review", "Review"], ["cards", "Flashcards"], ["schedule", "Schedule"], ["history", "History"]];
+  const ui = A.state.study = { part: "cards", session: null, practice: { tag: "", bookId: "", researchId: "", limit: "20", shuffle: true } };
 
   function today() { return store.today(); }
   function plural(n, a, b) { return A.plural(n, a, b); }
@@ -54,31 +53,13 @@
     if (setSrs(kind, id, next)) A.say(next.paused ? "Reviews paused." : "Reviews resumed.");
   }
 
-  /* ---------------- the Dashboard card ---------------- */
-
-  A.dashTop.push(function () {
-    const x = all(), items = x.notes.concat(x.cards), sum = SRS.summary(items, today());
-    const dueNotes = SRS.dueItems(x.notes, today()).length, dueCards = SRS.dueItems(x.cards, today()).length;
-    let h = '<section class="card ln-card ln-review-card" aria-labelledby="lnDashReview"><div class="card-title-row"><h2 class="card-title" id="lnDashReview">Review Knowledge</h2><button type="button" class="btn-icon" data-act="study-open">Study</button></div>';
-    if (sum.due) {
-      h += '<p class="ln-big" data-due="' + sum.due + '">' + plural(sum.due, "item") + ' due for review</p><p class="ln-item-sub">' + esc([dueNotes ? plural(dueNotes, "lesson") : "", dueCards ? plural(dueCards, "flashcard") : ""].filter(Boolean).join(" · ") + (sum.overdue ? " · " + sum.overdue + " overdue" : "")) + '</p>' +
-        '<button type="button" class="btn btn-primary" data-act="study-start-due">Start review</button>';
-    } else if (sum.scheduled) {
-      h += '<p class="ln-big" data-due="0">Nothing due today</p><p class="ln-item-sub">' + (sum.nextDue ? "Next review " + esc(A.fmtShort(sum.nextDue)) + " · " : "") + esc(plural(sum.scheduled, "item") + " in your schedule" + (sum.paused ? ", " + sum.paused + " paused" : "")) + '.</p>';
-    } else {
-      h += '<p class="ln-big" data-due="0">Nothing to review yet</p><p class="empty-state-compact">Tick “Remember this” when you save a takeaway, or add a flashcard, and JARVIS will bring it back after 1, 3, 7, 14 and 30 days.</p>' +
-        '<button type="button" class="btn btn-secondary" data-act="study-open">Set up reviews</button>';
-    }
-    return h + '</section>';
-  });
-
   /* ---------------- starting and running a session ---------------- */
 
   function startSession(mode, opts) {
     const q = K.queue(store.state(), Object.assign({ mode: mode }, opts || {}), today());
     if (!q.length) { A.say(mode === "due" ? "Nothing is due for review." : "No flashcards match."); A.notice(mode === "due" ? "Nothing is due for review." : "No flashcards match those choices.", ""); return; }
     ui.session = { mode: mode, queue: q, i: 0, revealed: false, results: [], skipped: 0, paused: 0 };
-    ui.part = "review";
+    ui.part = "cards";
     A.go("study", "");
   }
   function current() {
@@ -225,35 +206,38 @@
       '<button type="button" class="btn btn-secondary ln-danger" data-act="card-delete" data-id="' + esc(cd.id) + '">Delete</button></div></div></details>';
   }
   A.cardRow = cardRow;
+  A.dueBar = dueBar;
   A.editCard = editCard;
 
   /* ---------------- the four parts ---------------- */
 
-  function reviewPart() {
-    const x = all(), items = x.notes.concat(x.cards), sum = SRS.summary(items, today());
+  // One line: how many are due, with the button that starts the review. Nothing at all if nothing is scheduled.
+  function dueBar() {
+    const x = all(), sum = SRS.summary(x.notes.concat(x.cards), today());
     const dueNotes = SRS.dueItems(x.notes, today()).length, dueCards = SRS.dueItems(x.cards, today()).length;
-    let h = '<section class="card ln-card" aria-labelledby="lnStDue"><div class="card-title-row"><h2 class="card-title" id="lnStDue">Due for review</h2></div>';
-    if (sum.due) h += '<p class="ln-big">' + plural(sum.due, "item") + '</p><p class="ln-item-sub">' + esc([dueNotes ? plural(dueNotes, "lesson") : "", dueCards ? plural(dueCards, "flashcard") : ""].filter(Boolean).join(" · ")) + '</p><button type="button" class="btn btn-primary" data-act="study-start-due">Start review (' + sum.due + ')</button>';
-    else h += '<p class="ln-big">Nothing due today</p><p class="ln-item-sub">' + (sum.nextDue ? "Your next review is " + esc(A.fmtDate(sum.nextDue)) + "." : sum.scheduled ? "" : "Nothing is in your schedule yet.") + '</p>';
-    h += '<p class="field-hint">Each lesson comes back after 1, 3, 7, 14 and 30 days (then 60 and 90, so a lesson you keep remembering is still checked now and then). Easy skips ahead, Hard comes back sooner, Forgot starts again tomorrow.</p></section>';
-
-    // practice
-    const cards = x.cards, tags = L.allTags(cards.map(function (c) { return { tags: c.tags, deletedAt: c.deletedAt }; }));
+    if (sum.due) {
+      return '<div class="ln-duebar"><div class="ln-duebar-t"><strong data-due="' + sum.due + '">' + plural(sum.due, "item") + ' due</strong><span class="ln-item-sub">' +
+        esc([dueNotes ? plural(dueNotes, "note") : "", dueCards ? plural(dueCards, "flashcard") : ""].filter(Boolean).join(" · ") + (sum.overdue ? " · " + sum.overdue + " overdue" : "")) + '</span></div>' +
+        '<button type="button" class="btn btn-primary" data-act="study-start-due">Start review</button></div>';
+    }
+    if (sum.scheduled) return '<p class="ln-quiet" data-due="0">Nothing due today' + (sum.nextDue ? ". Next review " + esc(A.fmtShort(sum.nextDue)) + "." : ".") + '</p>';
+    return "";
+  }
+  // Practice: pick some flashcards and go through them without touching your review dates. Folded away until wanted.
+  function practiceFold() {
+    const x = all(), cards = x.cards;
+    if (!cards.length) return "";
+    const tags = L.allTags(cards.map(function (c) { return { tags: c.tags, deletedAt: c.deletedAt }; }));
     const bookIds = {}, resIds = {};
     cards.forEach(function (c) { (c.bookIds || []).forEach(function (id) { bookIds[id] = 1; }); (c.researchIds || []).forEach(function (id) { resIds[id] = 1; }); });
     const pr = ui.practice;
-    h += '<section class="card ln-card" aria-labelledby="lnStPractice"><div class="card-title-row"><h2 class="card-title" id="lnStPractice">Practice flashcards</h2><button type="button" class="btn-icon" data-act="card-add">+ Flashcard</button></div>';
-    if (!cards.length) h += '<p class="empty-state-compact">No flashcards yet. Write a question and its answer, or turn a note into a flashcard from the library.</p><button type="button" class="btn btn-secondary" data-act="card-add">Add your first flashcard</button>';
-    else {
-      h += '<form data-form="practice" novalidate><div class="ln-two">' +
-        A.fSelect("p_tag", "Topic", [["", "All topics"]].concat(tags.map(function (t) { return [t.tag, "#" + t.tag + " (" + t.count + ")"]; })), pr.tag, {}) +
-        A.fSelect("p_book", "Book", [["", "All books"]].concat(store.list("books").filter(function (b) { return bookIds[b.id]; }).map(function (b) { return [b.id, b.title]; })), pr.bookId, {}) + '</div>' +
-        '<div class="ln-two">' + A.fSelect("p_research", "Research project", [["", "All projects"]].concat(store.list("research").filter(function (r) { return resIds[r.id]; }).map(function (r) { return [r.id, r.title]; })), pr.researchId, {}) +
-        A.fSelect("p_limit", "How many", [["10", "10 cards"], ["20", "20 cards"], ["50", "50 cards"], ["0", "All"]], pr.limit, {}) + '</div>' +
-        '<div class="form-row"><label class="ln-check"><input type="checkbox" name="p_shuffle"' + (pr.shuffle ? " checked" : "") + '><span>Shuffle the order</span></label></div>' +
-        '<p class="field-hint" id="lnPracticeCount">' + practiceCountText() + '</p><button type="submit" class="btn btn-primary">Start practice</button></form>';
-    }
-    return h + '</section>';
+    return '<details class="ln-more ln-sec" data-keep="practice"' + (A.state.open.practice ? " open" : "") + '><summary>Practice flashcards</summary><form data-form="practice" novalidate><div class="ln-two">' +
+      A.fSelect("p_tag", "Topic", [["", "All topics"]].concat(tags.map(function (t) { return [t.tag, "#" + t.tag + " (" + t.count + ")"]; })), pr.tag, {}) +
+      A.fSelect("p_book", "Book", [["", "All books"]].concat(store.list("books").filter(function (b) { return bookIds[b.id]; }).map(function (b) { return [b.id, b.title]; })), pr.bookId, {}) + '</div>' +
+      '<div class="ln-two">' + A.fSelect("p_research", "Research project", [["", "All projects"]].concat(store.list("research").filter(function (r) { return resIds[r.id]; }).map(function (r) { return [r.id, r.title]; })), pr.researchId, {}) +
+      A.fSelect("p_limit", "How many", [["10", "10 cards"], ["20", "20 cards"], ["50", "50 cards"], ["0", "All"]], pr.limit, {}) + '</div>' +
+      '<div class="form-row"><label class="ln-check"><input type="checkbox" name="p_shuffle"' + (pr.shuffle ? " checked" : "") + '><span>Shuffle the order</span></label></div>' +
+      '<p class="field-hint" id="lnPracticeCount">' + practiceCountText() + '</p><button type="submit" class="btn btn-secondary">Start practice</button></form></details>';
   }
   function practiceFilter() { const pr = ui.practice; return { mode: "practice", tag: pr.tag, bookId: pr.bookId, researchId: pr.researchId, limit: Number(pr.limit) || 0, shuffle: pr.shuffle }; }
   function practiceCountText() {
@@ -283,12 +267,13 @@
       { name: "bookId", kind: "select", label: "Filter by book", options: [["", "All books"]].concat(store.list("books").map(function (b) { return [b.id, b.title]; })) },
       { name: "researchId", kind: "select", label: "Filter by project", options: [["", "All projects"]].concat(store.list("research").map(function (r) { return [r.id, r.title]; })) },
       { name: "sort", kind: "select", label: "Sort flashcards", options: [["newest", "Newest first"], ["due", "Next review"], ["hardest", "Hardest first"], ["question", "A to Z"]] }
-    ], { fold: 2 }) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(cardsCount()) + '</p><div id="lnResults">' + cardsResults() + '</div>';
+    ], { fold: 1 }) + '<p class="ln-count" id="lnResultCount" aria-live="polite">' + esc(cardsCount()) + '</p><div id="lnResults">' + cardsResults() + '</div>';
   }
 
   function schedulePart() {
     const x = all(), items = SRS.scheduled(x.notes.map(function (n) { return Object.assign({ _k: "notes" }, n); }).concat(x.cards.map(function (c) { return Object.assign({ _k: "cards" }, c); })));
-    let h = '<section class="card ln-card" aria-labelledby="lnStSched"><div class="card-title-row"><h2 class="card-title" id="lnStSched">When things come back (' + items.length + ')</h2></div>';
+    let h = '<p class="ln-quiet">Each note or flashcard comes back after 1, 3, 7, 14 and 30 days (then 60 and 90, so one you keep remembering is still checked now and then). Easy skips ahead, Hard comes back sooner, Forgot starts again tomorrow.</p>' +
+      '<section class="card ln-card" aria-labelledby="lnStSched"><div class="card-title-row"><h2 class="card-title" id="lnStSched">When things come back (' + items.length + ')</h2></div>';
     if (!items.length) h += '<p class="empty-state-compact">Nothing is in your schedule yet. Lessons and flashcards you add to your reviews appear here with the date of their next review.</p>';
     else h += '<ul class="ln-sched">' + items.map(function (it) {
       const d = describe(it._k, it);
@@ -339,11 +324,9 @@
 
   function html() {
     if (ui.session) return sessionHtml();
-    const tabs = '<div class="ln-seg ln-seg-parts" role="group" aria-label="Study sections">' + PARTS.map(function (p) {
-      return '<button type="button" class="ln-seg-btn" data-act="study-part" data-v="' + p[0] + '" aria-pressed="' + (ui.part === p[0]) + '">' + p[1] + '</button>';
-    }).join("") + '</div>';
-    const body = ui.part === "cards" ? cardsPart() : ui.part === "schedule" ? schedulePart() : ui.part === "history" ? historyPart() : reviewPart();
-    return '<div class="ln-head"><h2 class="ln-h2" data-focus-top>Study</h2><button type="button" class="btn btn-primary" data-act="card-add">+ Flashcard</button></div>' + tabs + body;
+    if (ui.part === "schedule") return '<h2 class="ln-h2" data-focus-top>Review schedule</h2>' + schedulePart();
+    if (ui.part === "history") return '<h2 class="ln-h2" data-focus-top>Review history</h2>' + historyPart();
+    return A.notesSeg("study") + '<h2 class="visually-hidden" data-focus-top>Flashcards</h2>' + dueBar() + cardsPart() + practiceFold();
   }
 
   A.register("study", {
@@ -351,8 +334,7 @@
     results: cardsResults,
     count: cardsCount,
     click: function (act, el) {
-      if (act === "study-part") { ui.part = el.getAttribute("data-v"); A.render(); }
-      else if (act === "study-reveal") { if (ui.session) { ui.session.revealed = true; A.render(); const g = document.querySelector(".ln-grade"); if (g) g.focus(); } }
+      if (act === "study-reveal") { if (ui.session) { ui.session.revealed = true; A.render(); const g = document.querySelector(".ln-grade"); if (g) g.focus(); } }
       else if (act === "study-grade") answer(el.getAttribute("data-g"));
       else if (act === "study-skip") skip();
       else if (act === "study-pause-current") pauseCurrent();
@@ -381,7 +363,7 @@
 
   /* ---------------- actions other screens use ---------------- */
 
-  A.acts["study-open"] = function () { ui.session = null; ui.part = "review"; A.go("study", ""); };
+  A.acts["study-open"] = function () { ui.session = null; ui.part = "cards"; A.go("study", ""); };
   A.acts["study-start-due"] = function () { startSession("due"); };
   A.acts["srs-pause"] = function (el) { setPaused(el.getAttribute("data-kind"), el.getAttribute("data-id")); };
   A.acts["srs-remember"] = function (el) { setRemember(el.getAttribute("data-kind"), el.getAttribute("data-id"), el.getAttribute("data-on") === "1"); };

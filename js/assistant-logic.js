@@ -63,6 +63,7 @@
       let s, e;
       if (it.source === "task") { s = it.startMin; e = it.endMin > s ? it.endMin : s + 30; }
       else if (it.source === "event" && !it.point) { s = it.date < date ? 0 : it.startMin; e = (it.endDate || it.date) > date ? 1440 : it.endMin; }
+      else if (it.source === "plan") { s = it.startMin; e = it.endMin; }           // a time block from the weekly plan is time already spoken for
       else return;
       if (e > s) out.push([s, e]);
     });

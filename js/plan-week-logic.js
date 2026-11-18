@@ -68,7 +68,7 @@
     return "rgba(" + parseInt(hex.slice(1, 3), 16) + "," + parseInt(hex.slice(3, 5), 16) + "," + parseInt(hex.slice(5, 7), 16) + "," + alpha + ")";
   }
 
-  /* ---------------- ingredients ---------------- */
+  /* ---------------- time block categories (stored as "ingredients", the name they had first) ---------------- */
   function liveIngredients(list) { return live(list).sort(function (a, b) { return (a.order || 0) - (b.order || 0) || (a.createdAt || 0) - (b.createdAt || 0); }); }
   function ingredientById(list, id) { return live(list).filter(function (r) { return r.id === id; })[0] || null; }
   function checkIngredient(input, ctx) {
@@ -96,7 +96,7 @@
     const next = Object.assign({}, cur, r.value, { updatedAt: c.now });
     return { ok: true, ingredients: list.map(function (x) { return x.id === id ? next : x; }), ingredient: next };
   }
-  // Deleting an ingredient leaves the blocks that used it in place (shown in grey as "No ingredient"); Undo brings it back.
+  // Deleting an ingredient leaves the blocks that used it in place (shown in grey as "No category"); Undo brings it back.
   function removeIngredient(list, id, ctx) {
     const c = ctxOf(ctx), cur = ingredientById(list, id);
     if (!cur) return { ok: false, ingredients: list };
@@ -128,7 +128,7 @@
     b.taskId = typeof i.taskId === "string" ? i.taskId : "";
     if (b.taskId && Array.isArray(c.tasks) && !c.tasks.some(function (t) { return t && t.id === b.taskId; })) errors.taskId = "That task isn't there any more.";
     b.ingredientId = typeof i.ingredientId === "string" ? i.ingredientId : "";
-    if (b.ingredientId && Array.isArray(c.ingredients) && !liveIngredients(c.ingredients).some(function (x) { return x.id === b.ingredientId; })) errors.ingredientId = "That ingredient isn't there any more.";
+    if (b.ingredientId && Array.isArray(c.ingredients) && !liveIngredients(c.ingredients).some(function (x) { return x.id === b.ingredientId; })) errors.ingredientId = "That category isn't there any more.";
     let title = oneLine(i.title);
     if (!title && b.taskId) title = oneLine(taskText(c.tasks, b.taskId));
     if (!title && b.ingredientId) { const ing = ingredientById(c.ingredients, b.ingredientId); title = ing ? ing.name : ""; }
@@ -361,9 +361,9 @@
   function weekOf(weeks, weekStart) { return live(weeks).filter(function (w) { return w.id === weekId(weekStart); })[0] || null; }
   function readWeek(w) {
     const top = (Array.isArray(w && w.top) ? w.top : []).filter(isObj).slice(0, 3).map(function (x) { return { taskId: typeof x.taskId === "string" ? x.taskId : "", text: oneLine(x.text).slice(0, TITLE_MAX) }; }).filter(function (x) { return x.taskId || x.text; });
-    return { weekStart: w && w.weekStart, top: top, wins: text(w && w.wins, 2000), lessons: text(w && w.lessons, 2000), nextFocus: text(w && w.nextFocus, 2000), reviewedAt: Number(w && w.reviewedAt) || 0 };
+    return { weekStart: w && w.weekStart, top: top, wins: text(w && w.wins, 2000), lessons: text(w && w.lessons, 2000), nextFocus: text(w && w.nextFocus, 2000), unfinished: text(w && w.unfinished, 2000), onPriorities: text(w && w.onPriorities, 2000), reviewedAt: Number(w && w.reviewedAt) || 0 };
   }
-  // patch holds only what changes: top (a list), wins, lessons, nextFocus, reviewedAt.
+  // patch holds only what changes: top (a list), wins (what I accomplished), lessons (obstacles), unfinished, onPriorities, nextFocus (what to change), reviewedAt.
   function setWeek(weeks, weekStart, patch, ctx) {
     const c = ctxOf(ctx), p = patch || {};
     if (!isDate(weekStart) || weekday(weekStart) !== 1) return { ok: false, weeks: weeks, error: "A week starts on a Monday." };
@@ -372,6 +372,22 @@
     delete next.deletedAt;
     const had = (weeks || []).some(function (w) { return w && w.id === next.id; });
     return { ok: true, weeks: had ? weeks.map(function (w) { return w && w.id === next.id ? next : w; }) : (weeks || []).concat([next]), week: next };
+  }
+
+  /* ---------------- the monthly review record (jarvisPlanReviews) ---------------- */
+  function reviewId(month) { return "mo_" + month; }
+  function reviewOf(reviews, month) { return live(reviews).filter(function (r) { return r.id === reviewId(month); })[0] || null; }
+  function readReview(r) {
+    return { month: r && r.month, wins: text(r && r.wins, 2000), fellBehind: text(r && r.fellBehind, 2000), progress: text(r && r.progress, 2000), nextFocus: text(r && r.nextFocus, 2000), reviewedAt: Number(r && r.reviewedAt) || 0 };
+  }
+  function setReview(reviews, month, patch, ctx) {
+    const c = ctxOf(ctx), p = patch || {};
+    if (!PL.isMonth(month)) return { ok: false, reviews: reviews, error: "That isn't a month." };
+    const cur = reviewOf(reviews, month), base = readReview(cur || { month: month });
+    const next = Object.assign({}, cur || { id: reviewId(month), month: month, createdAt: c.now }, readReview(Object.assign({}, base, p, { month: month })), { id: reviewId(month), month: month, updatedAt: c.now });
+    delete next.deletedAt;
+    const had = (reviews || []).some(function (r) { return r && r.id === next.id; });
+    return { ok: true, reviews: had ? reviews.map(function (r) { return r && r.id === next.id ? next : r; }) : (reviews || []).concat([next]), review: next };
   }
 
   /* ---------------- what the week looks like ---------------- */
@@ -446,7 +462,7 @@
     linkedTasks.forEach(function (t) { const n = m.nodeOfTask(t.id); (byNode[n.id] = byNode[n.id] || { nodeId: n.id, title: n.title, type: n.type, tasks: 0, done: 0 }).tasks++; if (t.completed) byNode[n.id].done++; });
     const allocation = order.map(function (id) {
       const b = per[id], ing = id ? ingredientById(c.ingredients, id) : null;
-      return { ingredientId: id, name: ing ? ing.name : "No ingredient", color: ing ? ing.color : "#94a3b8", planned: b.planned, actual: b.actual, blocks: b.blocks, logged: b.logged, share: planned ? Math.round(100 * b.planned / planned) : 0 };
+      return { ingredientId: id, name: ing ? ing.name : "No category", color: ing ? ing.color : "#94a3b8", planned: b.planned, actual: b.actual, blocks: b.blocks, logged: b.logged, share: planned ? Math.round(100 * b.planned / planned) : 0 };
     }).sort(function (a, b) { return b.planned - a.planned; });
     return {
       weekStart: dates[0], plannedMin: planned, actualMin: actual, blocks: occ.length, pastBlocks: past, loggedBlocks: logged, blocksDone: blocksDone, allocation: allocation,
@@ -489,6 +505,58 @@
   }
 
   // Warnings about too much in too little time. Every one comes with the figures behind it.
+  /* ---------------- what the Calendar shows from the plan ---------------- */
+  // Time blocks as read-only calendar items. A block that holds a task is left out on purpose: that task is already in the Calendar as itself
+  // (at the day and time the block gave it), so showing the block too would list it twice. ctx: { blocks, ingredients }.
+  function calendarItems(ctx, from, to) {
+    const out = [];
+    occurrences(ctx.blocks, from, to).forEach(function (o) {
+      if (o.taskId) return;
+      const ing = o.ingredientId ? ingredientById(ctx.ingredients, o.ingredientId) : null;
+      out.push({
+        key: "block:" + o.blockId + "@" + o.date, id: o.blockId, occDate: o.date, source: "plan", title: o.title, description: o.notes || "", kind: "event", category: "other", priority: "medium",
+        recurring: !!o.recurring, linked: null, status: "", reminders: [], completed: !!o.done, point: false, tz: "", allDay: false, date: o.date, endDate: o.date, time: o.start, endTime: o.end,
+        startMin: o.startMin, endMin: o.endMin, startMs: null, endMs: null, readOnly: true, conflict: false, color: ing ? ing.color : "#94a3b8", categoryName: ing ? ing.name : ""
+      });
+    });
+    return out;
+  }
+
+  /* ---------------- one day at a glance, and which blocks overlap ---------------- */
+  // Blocks that overlap another block, or a calendar event, on the same day. -> { "blockId|date": "block" | "event" } ("block" wins if both)
+  function clashKeys(ctx, from, to) {
+    const occ = occurrences(ctx.blocks, from, to), out = {};
+    const key = function (o) { return o.blockId + "|" + o.date; };
+    for (let i = 0; i < occ.length; i++) for (let j = i + 1; j < occ.length; j++) {
+      if (occ[i].date === occ[j].date && occ[i].startMin < occ[j].endMin && occ[j].startMin < occ[i].endMin) { out[key(occ[i])] = "block"; out[key(occ[j])] = "block"; }
+    }
+    weekDatesBetween(from, to).forEach(function (d) {
+      const evs = eventItems(ctx, d, d);
+      occ.filter(function (o) { return o.date === d; }).forEach(function (o) {
+        if (out[key(o)]) return;
+        if (evs.some(function (it) { const es = it.date === d ? it.startMin : 0, ee = it.endDate === d ? it.endMin : 1440; return o.startMin < ee && es < o.endMin; })) out[key(o)] = "event";
+      });
+    });
+    return out;
+  }
+  function weekDatesBetween(from, to) { const out = []; for (let d = from; d <= to && out.length < 400; d = PL.addDays(d, 1)) out.push(d); return out; }
+  // One day: minutes planned in blocks, by category; minutes taken (blocks, calendar events and timed tasks, overlaps counted once, inside your day window); minutes free.
+  function daySummary(date, ctx) {
+    const w = winOf(ctx.settings), occ = occurrences(ctx.blocks, date, date), rows = {}, order = [];
+    let planned = 0;
+    occ.forEach(function (o) {
+      const ing = o.ingredientId ? ingredientById(ctx.ingredients, o.ingredientId) : null, id = ing ? o.ingredientId : "";
+      if (!rows[id]) { rows[id] = { ingredientId: id, name: ing ? ing.name : "No category", color: ing ? ing.color : "#94a3b8", min: 0, rest: !!(ing && ing.rest) }; order.push(id); }
+      const len = o.endMin - o.startMin; rows[id].min += len; planned += len;
+    });
+    const spans = busyOn(date, ctx).map(function (b) { return [Math.max(b.start, w.start), Math.min(b.end, w.end)]; }).filter(function (x) { return x[1] > x[0]; }).sort(function (a, b) { return a[0] - b[0]; });
+    let taken = 0, cur = null;
+    spans.forEach(function (x) { if (!cur || x[0] > cur[1]) { if (cur) taken += cur[1] - cur[0]; cur = [x[0], x[1]]; } else cur[1] = Math.max(cur[1], x[1]); });
+    if (cur) taken += cur[1] - cur[0];
+    const windowMin = Math.max(0, w.end - w.start);
+    return { date: date, plannedMin: planned, takenMin: taken, windowMin: windowMin, freeMin: Math.max(0, windowMin - taken), rows: order.map(function (id) { return rows[id]; }).sort(function (a, b) { return b.min - a.min; }) };
+  }
+
   function capacity(ctx) {
     const dates = weekDates(ctx.weekStart), w = winOf(ctx.settings), today = ctx.today || "", out = [], rest = rolesOf(ctx);
     const perDay = {};
@@ -583,9 +651,9 @@
     liveBlocks: liveBlocks, blockById: blockById, blockOfTask: blockOfTask, checkBlock: checkBlock, addBlock: addBlock, editBlock: editBlock, removeBlock: removeBlock, restoreBlock: restoreBlock,
     removeOccurrence: removeOccurrence, restoreOccurrence: restoreOccurrence, occurrences: occurrences, occurrence: occurrence, moveOccurrence: moveOccurrence, resizeOccurrence: resizeOccurrence, editOccurrence: editOccurrence,
     logWork: logWork, setBlockDone: setBlockDone, placeTask: placeTask, unplaceTask: unplaceTask, detachTasks: detachTasks, releaseTask: releaseTask, assignTask: assignTask, followTasks: followTasks, scheduledBlock: scheduledBlock, displayTitle: displayTitle,
-    weekId: weekId, weekOf: weekOf, readWeek: readWeek, setWeek: setWeek, purge: purge,
+    weekId: weekId, weekOf: weekOf, readWeek: readWeek, setWeek: setWeek, reviewId: reviewId, reviewOf: reviewOf, readReview: readReview, setReview: setReview, purge: purge,
     winOf: winOf, busyOn: busyOn, freeSlots: freeSlots, weekStats: weekStats, unscheduledHigh: unscheduledHigh, topThree: topThree, capacity: capacity, suggest: suggest,
-    carryForward: carryForward, carryTasks: carryTasks, carryTarget: carryTarget,
+    carryForward: carryForward, carryTasks: carryTasks, carryTarget: carryTarget, clashKeys: clashKeys, daySummary: daySummary, calendarItems: calendarItems,
     readers: {
       ingredients: function (raw) { const items = [], kept = []; (Array.isArray(raw) ? raw : []).forEach(function (r) { if (isObj(r) && typeof r.id === "string" && r.id && typeof r.name === "string") items.push(Object.assign({}, r, { color: hexOk(r.color) ? r.color : "#94a3b8", rest: !!r.rest, order: Number(r.order) || 0 })); else kept.push(r); }); return { items: items, kept: kept }; },
       blocks: function (raw) {
@@ -596,6 +664,7 @@
         });
         return { items: items, kept: kept };
       },
+      reviews: function (raw) { const items = [], kept = []; (Array.isArray(raw) ? raw : []).forEach(function (r) { if (isObj(r) && typeof r.id === "string" && PL.isMonth(r.month)) items.push(Object.assign({}, r, readReview(r), { month: r.month })); else kept.push(r); }); return { items: items, kept: kept }; },
       weeks: function (raw) { const items = [], kept = []; (Array.isArray(raw) ? raw : []).forEach(function (r) { if (isObj(r) && typeof r.id === "string" && isDate(r.weekStart)) items.push(Object.assign({}, r, readWeek(r), { weekStart: r.weekStart })); else kept.push(r); }); return { items: items, kept: kept }; }
     }
   };

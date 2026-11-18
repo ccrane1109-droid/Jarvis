@@ -35,7 +35,7 @@
 
   const KEYS = {
     nodes: "jarvisPlanNodes", periods: "jarvisPlanPeriods", links: "jarvisPlanLinks", settings: "jarvisPlanSettings",
-    ingredients: "jarvisPlanIngredients", blocks: "jarvisPlanBlocks", weeks: "jarvisPlanWeeks"
+    ingredients: "jarvisPlanIngredients", blocks: "jarvisPlanBlocks", weeks: "jarvisPlanWeeks", templates: "jarvisPlanTemplates", reviews: "jarvisPlanReviews"
   };
   const TYPES = ["objective", "priority", "milestone"];
   const TYPE_LABEL = { objective: "Yearly objective", priority: "Quarterly priority", milestone: "Monthly milestone" };
@@ -50,6 +50,8 @@
   const MAX_PER_SLOT = 3;          // three yearly objectives per year, three priorities per quarter
   const TITLE_MAX = 140, NOTES_MAX = 2000, UNIT_MAX = 16, MONEY_MAX = 1e12, TOMBSTONE_DAYS = 30;
   const HIRES_MAX = 10000;
+  const TEXT_MID = 500, MAX_HABITS = 10;
+  const STATUS_LABEL = { notstarted: "Not started", ontrack: "On track", atrisk: "At risk", completed: "Completed", paused: "Paused", dropped: "Dropped" };
 
   /* ---------------- dates ---------------- */
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -103,7 +105,7 @@
   function nextOrder(list) { return list.reduce(function (m, r) { return Math.max(m, Number(r.order) || 0); }, 0) + 1; }
 
   /* ---------------- settings ---------------- */
-  const DEFAULT_SETTINGS = { startYear: 0, vision: "", revenueMetric: "sales", dayStart: "06:00", dayEnd: "22:00", interval: 30, dailyLimitHours: 10, updatedAt: 0 };
+  const DEFAULT_SETTINGS = { themes: {}, onboardingDismissed: false, dismissed: {}, startYear: 0, vision: "", revenueMetric: "sales", dayStart: "06:00", dayEnd: "22:00", interval: 30, dailyLimitHours: 10, updatedAt: 0 };
   function isTime(t) { return typeof t === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(t); }
   function settings(raw, today) {
     const r = isObj(raw) ? raw : {};
@@ -111,6 +113,11 @@
     const y = intIn(r.startYear, 2000, 2100);
     s.startYear = y !== null ? y : (isDate(today) ? yearOf(today) : new Date().getFullYear());
     s.vision = text(r.vision, 600);
+    s.themes = {};
+    if (isObj(r.themes)) Object.keys(r.themes).slice(0, 12).forEach(function (y) { if (/^\d{4}$/.test(y)) { const t = oneLine(r.themes[y]).slice(0, 80); if (t) s.themes[y] = t; } });
+    s.onboardingDismissed = r.onboardingDismissed === true;
+    s.dismissed = {};
+    if (isObj(r.dismissed)) Object.keys(r.dismissed).slice(0, 200).forEach(function (k) { const v = Number(r.dismissed[k]); if (Number.isFinite(v) && v > 0) s.dismissed[String(k).slice(0, 80)] = v; });
     s.revenueMetric = r.revenueMetric === "mrr" ? "mrr" : "sales";
     if (isTime(r.dayStart) && isTime(r.dayEnd) && r.dayStart < r.dayEnd) { s.dayStart = r.dayStart; s.dayEnd = r.dayEnd; }
     s.interval = Number(r.interval) === 60 ? 60 : 30;
@@ -140,6 +147,11 @@
       n.target = amount(r.target) === undefined ? null : amount(r.target);
       n.current = amount(r.current) === undefined ? null : amount(r.current);
       n.order = Number(r.order) || 0;
+      n.description = text(r.description, TEXT_MID);
+      n.successMetric = oneLine(r.successMetric).slice(0, 140);
+      n.criteria = text(r.criteria, TEXT_MID);
+      n.weight = intIn(r.weight, 1, 5) || 1;
+      n.habitIds = (Array.isArray(r.habitIds) ? r.habitIds : []).filter(function (h, i, a) { return typeof h === "string" && h && a.indexOf(h) === i; }).slice(0, MAX_HABITS);
       const y = intIn(r.year, 2000, 2100), q = intIn(r.quarter, 1, 4);
       n.year = y; n.quarter = q;
       n.month = isMonth(r.month) ? r.month : "";
@@ -174,6 +186,15 @@
     node.title = title.slice(0, TITLE_MAX);
     node.notes = text(i.notes, NOTES_MAX + 1);
     if (node.notes.length > NOTES_MAX) errors.notes = "Keep the notes to " + NOTES_MAX + " characters or fewer.";
+    node.description = text(i.description, TEXT_MID + 1);
+    if (node.description.length > TEXT_MID) errors.description = "Keep the description to " + TEXT_MID + " characters or fewer.";
+    node.criteria = text(i.criteria, TEXT_MID + 1);
+    if (node.criteria.length > TEXT_MID) errors.criteria = "Keep the completion criteria to " + TEXT_MID + " characters or fewer.";
+    node.successMetric = oneLine(i.successMetric);
+    if (node.successMetric.length > 140) errors.successMetric = "Keep the success metric to 140 characters or fewer.";
+    const wt = i.weight === undefined || i.weight === "" || i.weight === null ? 1 : intIn(i.weight, 1, 5);
+    if (wt === null) errors.weight = "Weight is a whole number from 1 to 5."; else node.weight = wt;
+    node.habitIds = (Array.isArray(i.habitIds) ? i.habitIds : []).filter(function (h, k, a) { return typeof h === "string" && h && a.indexOf(h) === k; }).slice(0, MAX_HABITS);
     node.due = "";
     if (i.due !== undefined && i.due !== null && i.due !== "") { if (isDate(i.due)) node.due = i.due; else errors.due = "Pick a valid deadline."; }
 
@@ -401,7 +422,7 @@
       const rec = { id: taskId, nodeId: nodeId, estMin: 0, createdAt: c.now, updatedAt: c.now };
       return { ok: true, links: (links || []).concat([rec]), link: rec };
     }
-    if (!nodeId && !cur.estMin) {
+    if (!nodeId && !cur.estMin && !cur.archived) {
       if (cur.deletedAt) return { ok: true, links: links };
       return { ok: true, links: links.map(function (l) { return l === cur ? tombstone(l, c.now) : l; }) };
     }
@@ -417,15 +438,109 @@
       const rec = { id: taskId, nodeId: "", estMin: m, createdAt: c.now, updatedAt: c.now };
       return { ok: true, links: (links || []).concat([rec]), link: rec };
     }
-    if (!m && !cur.nodeId) return { ok: true, links: links.map(function (l) { return l === cur ? tombstone(l, c.now) : l; }) };
+    if (!m && !cur.nodeId && !cur.archived) return { ok: true, links: links.map(function (l) { return l === cur ? tombstone(l, c.now) : l; }) };
     const next = restoreRec(Object.assign({}, cur, { estMin: m }), c.now);
     return { ok: true, links: links.map(function (l) { return l === cur ? next : l; }), link: next };
   }
+  // Puts a task away from the inbox (or back). The task is never touched: this is a note in the plan's own record about it.
+  function setArchived(links, taskId, flag, ctx) {
+    const c = ctxOf(ctx);
+    if (typeof taskId !== "string" || !taskId) return { ok: false, links: links };
+    const cur = (links || []).filter(function (l) { return l && l.id === taskId; })[0] || null;
+    if (!cur) {
+      if (!flag) return { ok: true, links: links };
+      const rec = { id: taskId, nodeId: "", estMin: 0, archived: true, createdAt: c.now, updatedAt: c.now };
+      return { ok: true, links: (links || []).concat([rec]), link: rec };
+    }
+    const next = restoreRec(Object.assign({}, cur, { archived: !!flag }), c.now);
+    if (!flag) delete next.archived;
+    return { ok: true, links: links.map(function (l) { return l === cur ? next : l; }), link: next };
+  }
+  function isArchived(links, taskId) { const l = linkOf(links, taskId); return !!(l && l.archived); }
   // Links belonging to tasks that no longer exist are dropped once they are 30 days old (a task may simply not have synced yet).
   function purgeLinks(links, taskIds, now) {
     const have = {}; (taskIds || []).forEach(function (id) { have[id] = true; });
     const cutoff = now - TOMBSTONE_DAYS * 86400000;
     return purge(links, now).filter(function (l) { return !(isObj(l) && !have[l.id] && (Number(l.updatedAt) || 0) < cutoff); });
+  }
+
+  /* ---------------- goal templates: a ready-made breakdown you can reuse ---------------- */
+  // tree: { title, description, measure, target, priorities: [{ title, description, successMetric, criteria, weight, milestones: [{ title, criteria, weight, monthOffset 0-2 }] }] }
+  const BUILTIN_TEMPLATES = [
+    { id: "tpl_clothing_drop", builtin: true, name: "Launch a clothing drop", about: "From a yearly launch goal to the samples, the shoot and going live.",
+      tree: { title: "Launch Gratiel and establish consistent sales", description: "Get the first drops out and selling.", measure: "tasks", priorities: [
+        { title: "Prepare the first clothing drop", description: "Everything needed for the drop to go on sale.", successMetric: "First drop ready to sell", weight: 3, milestones: [
+          { title: "Finalize manufacturer and product samples", criteria: "A manufacturer is chosen and approved samples are in hand", monthOffset: 0 },
+          { title: "Photoshoot and product pages ready", criteria: "Photos taken and product pages written", monthOffset: 1 },
+          { title: "Drop goes live", criteria: "Store is open and the drop can be bought", monthOffset: 2 } ] },
+        { title: "Get the first customers", description: "Marketing that leads to the first sales.", successMetric: "First 25 orders", weight: 2, milestones: [
+          { title: "Launch content plan", criteria: "Posts scheduled for the launch month", monthOffset: 1 } ] } ] } },
+    { id: "tpl_stronger", builtin: true, name: "Get stronger this year", about: "A strength goal with a program and a regular schedule.",
+      tree: { title: "Get noticeably stronger and stay consistent", description: "Train regularly and track strength.", measure: "tasks", priorities: [
+        { title: "Build a consistent training habit", successMetric: "Train 3 times a week", weight: 2, milestones: [
+          { title: "Choose a program", criteria: "A program is picked and in Jarvis", monthOffset: 0 },
+          { title: "Four weeks without missing a planned session", monthOffset: 2 } ] } ] } },
+    { id: "tpl_semester", builtin: true, name: "Finish the semester strong", about: "Keep school on track while building the brand.",
+      tree: { title: "Finish the semester with strong grades", description: "Stay on top of classes and exams.", measure: "tasks", priorities: [
+        { title: "Stay ahead on assignments", successMetric: "Nothing handed in late", weight: 2, milestones: [
+          { title: "Put every due date in the calendar", monthOffset: 0 },
+          { title: "Midterm preparation done", criteria: "Study plan finished before the exam", monthOffset: 1 } ] } ] } }
+  ];
+  // Makes a reusable tree from one of your objectives (its priorities and the milestones under them; not tasks, money or dates).
+  function templateFromObjective(m, objectiveId, name, ctx) {
+    const c = ctxOf(ctx), o = m.node(objectiveId);
+    if (!o || o.type !== "objective") return null;
+    const pris = m.children(objectiveId).filter(function (p) { return p.type === "priority" && p.status !== "dropped"; });
+    return { id: c.makeId("tpl"), name: oneLine(name || o.title).slice(0, 60), about: "Saved from “" + o.title + "”.", createdAt: c.now, updatedAt: c.now, tree: {
+      title: o.title, description: o.description, measure: "tasks", priorities: pris.slice(0, MAX_PER_SLOT).map(function (p) {
+        const first = (p.quarter - 1) * 3 + 1;
+        return { title: p.title, description: p.description, successMetric: p.successMetric, criteria: p.criteria, weight: p.weight || 1,
+          milestones: m.milestonesOf(p.id).filter(function (k) { return k.status !== "dropped"; }).map(function (k) { return { title: k.title, criteria: k.criteria, weight: k.weight || 1, monthOffset: Math.max(0, Math.min(2, Number(k.month.slice(5)) - first)) }; }) };
+      }) } };
+  }
+  // Your own saved templates (jarvisPlanTemplates): add one, or take one away (kept as a marker for 30 days so Undo and sync work).
+  const MAX_TEMPLATES = 30;
+  function addTemplate(templates, tpl, ctx) {
+    const c = ctxOf(ctx), list = templates || [];
+    if (!tpl || !isObj(tpl.tree) || !oneLine(tpl.name)) return { ok: false, templates: list, error: "Give the template a name." };
+    if (live(list).length >= MAX_TEMPLATES) return { ok: false, templates: list, error: "You can keep " + MAX_TEMPLATES + " templates. Delete one first." };
+    if (live(list).some(function (t) { return oneLine(t.name).toLowerCase() === oneLine(tpl.name).toLowerCase(); })) return { ok: false, templates: list, error: "A template with that name already exists." };
+    const rec = Object.assign({}, tpl, { id: tpl.id || c.makeId("tpl"), name: oneLine(tpl.name).slice(0, 60), createdAt: tpl.createdAt || c.now, updatedAt: c.now });
+    return { ok: true, templates: list.concat([rec]), template: rec };
+  }
+  function removeTemplate(templates, id, ctx) {
+    const c = ctxOf(ctx), cur = live(templates).filter(function (t) { return t.id === id; })[0] || null;
+    if (!cur) return { ok: false, templates: templates };
+    return { ok: true, templates: templates.map(function (t) { return t.id === id ? tombstone(t, c.now) : t; }), template: cur };
+  }
+  function restoreTemplate(templates, id, ctx) {
+    const c = ctxOf(ctx);
+    return { ok: true, templates: templates.map(function (t) { return t.id === id && t.deletedAt ? restoreRec(t, c.now) : t; }) };
+  }
+  // Builds the nodes of a template into the plan: one objective in `year`, its priorities in `quarter`, and each milestone in its month.
+  // -> { ok, nodes, created: [ids], errors } ; nothing is added if anything would be refused.
+  function applyTemplate(nodes, tpl, opts, ctx) {
+    const c = ctxOf(ctx), o = opts || {};
+    if (!tpl || !isObj(tpl.tree)) return { ok: false, nodes: nodes, errors: { template: "That template can't be read." } };
+    const year = intIn(o.year, 2000, 2100), quarter = intIn(o.quarter, 1, 4);
+    if (year === null || quarter === null) return { ok: false, nodes: nodes, errors: { year: "Pick the year and quarter." } };
+    let cur = nodes, created = [];
+    const add = function (input) { const r = addNode(cur, input, c); if (!r.ok) return r; cur = r.nodes; created.push(r.node.id); return r; };
+    const t = tpl.tree;
+    const root = add({ type: "objective", title: t.title, description: t.description, year: year, measure: t.measure === "revenue" || t.measure === "budget" || t.measure === "number" ? "tasks" : "tasks", weight: t.weight || 3, status: "active" });
+    if (!root.ok) return { ok: false, nodes: nodes, errors: root.errors };
+    const first = (quarter - 1) * 3 + 1;
+    for (let i = 0; i < Math.min(MAX_PER_SLOT, (t.priorities || []).length); i++) {
+      const pr = t.priorities[i];
+      const rp = add({ type: "priority", title: pr.title, description: pr.description, successMetric: pr.successMetric, criteria: pr.criteria, weight: pr.weight || 1, year: year, quarter: quarter, parentId: root.node.id });
+      if (!rp.ok) return { ok: false, nodes: nodes, errors: rp.errors };
+      for (let j = 0; j < (pr.milestones || []).length; j++) {
+        const ms = pr.milestones[j], mo = Math.max(0, Math.min(2, Number(ms.monthOffset) || 0));
+        const rm = add({ type: "milestone", title: ms.title, criteria: ms.criteria, weight: ms.weight || 1, month: monthKey(year, first + mo), parentId: rp.node.id });
+        if (!rm.ok) return { ok: false, nodes: nodes, errors: rm.errors };
+      }
+    }
+    return { ok: true, nodes: cur, created: created, objective: root.node };
   }
 
   /* ---------------- the model: progress, health, roll-ups ---------------- */
@@ -456,28 +571,28 @@
     }
     function tasksDirect(id) { return (tasksAt[id] || []).slice(); }
 
-    // Every item that counts toward this node's task progress, each once: tasks, and milestones with no tasks of their own.
-    function units(id) {
-      const out = {}, seen = {};
+    // Every task linked to this node or anything under it (dropped branches excluded), each once.
+    function subtreeTasks(id) {
+      const out = [], seenTask = {}, seen = {};
+      (function walk(nid) {
+        if (seen[nid]) return;
+        seen[nid] = true;
+        (tasksAt[nid] || []).forEach(function (t) { if (!seenTask[t.id]) { seenTask[t.id] = true; out.push(t); } });
+        children(nid).forEach(function (k) { if (k.status !== "dropped") walk(k.id); });
+      })(id);
+      return out;
+    }
+    // Milestones under (or at) this node, for "2 of 3 milestones done".
+    function subtreeMilestones(id) {
+      const out = [], seen = {};
       (function walk(nid) {
         if (seen[nid]) return;
         seen[nid] = true;
         const n = nodeById[nid];
-        (tasksAt[nid] || []).forEach(function (t) { out["t:" + t.id] = !!t.completed; });
+        if (n && n.type === "milestone" && n.status !== "dropped" && nid !== id) out.push(n);
         children(nid).forEach(function (k) { if (k.status !== "dropped") walk(k.id); });
-        void n;
       })(id);
-      const hasTasks = Object.keys(out).length > 0;
-      const root = nodeById[id];
-      // a tick-off milestone: counted when there are no tasks under it, and it is measured by tasks
-      (function walkMs(nid, seenM) {
-        if (seenM[nid]) return;
-        seenM[nid] = true;
-        const n = nodeById[nid];
-        if (n.type === "milestone" && n.measure === "tasks" && n.status !== "dropped" && !(tasksAt[nid] || []).length) out["m:" + nid] = !!n.doneAt;
-        children(nid).forEach(function (k) { if (k.status !== "dropped") walkMs(k.id, seenM); });
-      })(id, {});
-      return { map: out, hasTasks: hasTasks, root: root };
+      return out;
     }
 
     function window(n) {
@@ -499,18 +614,38 @@
       const n = nodeById[id];
       if (!n) return null;
       const w = window(n);
-      const out = { id: id, measure: n.measure, pct: null, done: 0, total: 0, actual: null, target: n.target, unit: n.unit, complete: false, over: false, note: "", manual: false };
+      const out = { id: id, measure: n.measure, pct: null, done: 0, total: 0, actual: null, target: n.target, unit: n.unit, complete: false, over: false, note: "", manual: false, parts: [], milestones: { done: 0, total: 0 } };
+      memo[id] = out;          // set first, so a loop in the data (from a bad merge) can't recurse forever
       if (n.measure === "tasks") {
-        const u = units(id), keys = Object.keys(u.map);
-        out.total = keys.length;
-        out.done = keys.filter(function (k) { return u.map[k]; }).length;
-        const nTasks = keys.filter(function (k) { return k.charAt(0) === "t"; }).length, nMiles = out.total - nTasks;
-        if (out.total) out.pct = Math.round(100 * out.done / out.total);
-        else if (n.doneAt) { out.pct = 100; out.manual = true; }
+        // A parent is the WEIGHTED AVERAGE of its parts: each child (counting equally unless you gave it more weight) and the tasks
+        // linked straight to it as one more part. A part with nothing to measure yet is left out, never counted as 0%.
+        const direct = tasksDirect(id), comps = [];
+        children(id).forEach(function (k) {
+          if (k.status === "dropped" || k.measure !== "tasks") return;
+          const kp = progress(k.id);
+          if (kp && kp.pct !== null) comps.push({ kind: "node", id: k.id, label: k.title, type: k.type, weight: k.weight || 1, pct: Math.min(100, kp.pct) });
+        });
+        if (direct.length) {
+          const dn = direct.filter(function (t) { return t.completed; }).length;
+          comps.push({ kind: "tasks", label: direct.length === 1 ? "The task linked here" : "The " + direct.length + " tasks linked here", weight: 1, pct: Math.round(100 * dn / direct.length), done: dn, total: direct.length });
+        }
+        const all = subtreeTasks(id);
+        out.total = all.length; out.done = all.filter(function (t) { return t.completed; }).length;
+        const ms = subtreeMilestones(id), msDone = ms.filter(function (m) { const mp = progress(m.id); return mp && mp.pct === 100; }).length;
+        out.milestones = { done: msDone, total: ms.length };
+        out.parts = comps;
+        if (comps.length) {
+          const wsum = comps.reduce(function (sum, c) { return sum + c.weight; }, 0);
+          out.pct = Math.round(comps.reduce(function (sum, c) { return sum + c.weight * c.pct; }, 0) / wsum);
+        } else if (n.type === "milestone") out.pct = 0;           // a milestone with nothing under it is a tick-off item: not done yet
+        if (n.doneAt) { out.pct = 100; out.manual = true; }
         out.complete = out.pct === 100;
-        if (!out.total) out.note = n.doneAt ? "Marked done" : "No tasks yet";
-        else if (n.type === "milestone" && !nTasks) out.note = n.doneAt ? "Marked done" : "Not ticked off yet";
-        else out.note = out.done + " of " + out.total + (nMiles ? (nTasks ? " items" : (out.total === 1 ? " milestone" : " milestones")) : (out.total === 1 ? " task" : " tasks")) + " done";
+        const bits = [];
+        if (ms.length && n.type !== "milestone") bits.push(msDone + " of " + ms.length + (ms.length === 1 ? " milestone" : " milestones") + " done");
+        if (all.length) bits.push(out.done + " of " + out.total + (out.total === 1 ? " task" : " tasks") + " done");
+        if (n.doneAt) out.note = "Marked complete" + (all.length && out.done < out.total ? " (" + (out.total - out.done) + " linked " + (out.total - out.done === 1 ? "task" : "tasks") + " still open)" : "");
+        else if (bits.length) out.note = bits.join(" · ");
+        else out.note = n.type === "milestone" ? "Not ticked off yet" : "No tasks or milestones yet";
       } else if (n.measure === "revenue") {
         const t = monthTotals(d.periods, w.months, s.revenueMetric);
         out.actual = t.revenue; out.target = n.target;
@@ -556,16 +691,48 @@
       if (p.pct === null) return "nodata";
       const span = Math.max(1, diffDays(start, end));
       const elapsed = today ? Math.max(0, Math.min(1, diffDays(start, today) / span)) : 0, expected = elapsed * 100;
+      if (elapsed < 0.2 && p.pct === 0) return "ontrack";           // the first fifth of the time: nothing done yet is not "behind"
       if (n.measure === "budget") return p.pct <= expected + 10 ? "ontrack" : p.pct <= expected + 25 ? "atrisk" : "behind";
       return p.pct >= expected - 10 ? "ontrack" : p.pct >= expected - 25 ? "atrisk" : "behind";
     }
     function overdue(id) { return health(id) === "overdue"; }
-    // A node can be ticked off by hand only when there are no tasks that would say otherwise.
+    // Any item measured by tasks can be marked complete by hand once its completion criteria are met; money and numbers complete themselves.
     function canMarkDone(id) {
       const n = nodeById[id];
-      if (!n) return false;
-      if (n.measure !== "tasks") return false;
-      return !units(id).hasTasks && !children(id).some(function (k) { return k.status !== "dropped" && units(k.id).hasTasks; });
+      return !!n && n.measure === "tasks" && n.status !== "dropped";
+    }
+    // Why this item is "On track", "At risk", ... in the words used on screen: one of notstarted | ontrack | atrisk | completed | paused | dropped.
+    function statusOf(id) {
+      const n = nodeById[id];
+      if (!n) return "";
+      const h = health(id), p = progress(id);
+      if (h === "dropped" || h === "paused") return h;
+      if (h === "done") return "completed";
+      if (h === "atrisk" || h === "behind" || h === "overdue" || h === "over") return "atrisk";
+      if (p.pct === null || p.pct === 0) return "notstarted";
+      return "ontrack";
+    }
+    // Days until the deadline (negative once it has passed); null when today isn't known.
+    function daysLeft(id) {
+      const n = nodeById[id];
+      return n && today ? diffDays(today, deadline(n)) : null;
+    }
+    // Planned against actual: how much of the time has passed (the pace the plan asks for) next to how much is done.
+    // -> { expected, actual, gap, start, end, state } or null when there is nothing to compare (no date, paused, dropped).
+    //    gap = actual - expected, in points (negative = behind). state: before | during | after. actual is null when nothing is measurable yet.
+    function pace(id) {
+      const n = nodeById[id];
+      if (!n || !today || n.status !== "active") return null;
+      const p = progress(id), start = startOf(n), end = deadline(n), span = Math.max(1, diffDays(start, end));
+      const state = today < start ? "before" : today > end ? "after" : "during";
+      const expected = state === "before" ? 0 : state === "after" ? 100 : Math.round(Math.max(0, Math.min(1, diffDays(start, today) / span)) * 100);
+      const actual = p.pct === null ? null : Math.min(100, p.pct);
+      return { expected: expected, actual: actual, gap: actual === null ? null : actual - expected, start: start, end: end, state: state };
+    }
+    // The chain above a task, top first: [objective, priority, milestone] as far as they are linked.
+    function chainOfTask(taskId) {
+      const n = nodeOfTask(taskId);
+      return n ? ancestors(n.id).reverse().concat([n]) : [];
     }
 
     function all(type) { return sort(nodes.filter(function (n) { return !type || n.type === type; })); }
@@ -584,7 +751,7 @@
     return {
       settings: s, today: today, node: function (id) { return nodeById[id] || null; }, all: all, children: children, parentOf: parentOf,
       objectivesOf: objectivesOf, prioritiesOf: prioritiesOf, milestonesOf: milestonesOf, milestonesIn: milestonesIn, ancestors: ancestors,
-      nodeOfTask: nodeOfTask, tasksDirect: tasksDirect, units: units, progress: progress, health: health, overdue: overdue, deadline: deadline,
+      nodeOfTask: nodeOfTask, tasksDirect: tasksDirect, subtreeTasks: subtreeTasks, subtreeMilestones: subtreeMilestones, statusOf: statusOf, daysLeft: daysLeft, pace: pace, chainOfTask: chainOfTask, progress: progress, health: health, overdue: overdue, deadline: deadline,
       canMarkDone: canMarkDone, overdueMilestones: overdueMilestones, periods: periods, window: window, goalFor: goalFor, goalPct: goalPct,
       // the path from the top, e.g. "2026 objective > Q2 priority > Jun milestone"
       path: function (id) { return ancestors(id).reverse().map(function (n) { return n.title; }); }
@@ -605,7 +772,7 @@
     readNodes: readNodes, readLinks: readLinks, liveNodes: liveNodes, byId: byId,
     checkNode: checkNode, addNode: addNode, editNode: editNode, removeNode: removeNode, restoreNode: restoreNode, setDoneAt: setDoneAt, setCurrent: setCurrent, setStatus: setStatus, move: move,
     periodId: periodId, periodOf: periodOf, setPeriod: setPeriod, periodMonths: periodMonths, monthTotals: monthTotals, periodSummary: periodSummary, purgePeriods: purgePeriods,
-    linkOf: linkOf, setLink: setLink, setEstimate: setEstimate, purgeLinks: purgeLinks,
-    model: model
+    linkOf: linkOf, setLink: setLink, setEstimate: setEstimate, setArchived: setArchived, isArchived: isArchived, purgeLinks: purgeLinks, STATUS_LABEL: STATUS_LABEL,
+    model: model, BUILTIN_TEMPLATES: BUILTIN_TEMPLATES, templateFromObjective: templateFromObjective, applyTemplate: applyTemplate, addTemplate: addTemplate, removeTemplate: removeTemplate, restoreTemplate: restoreTemplate
   };
 });

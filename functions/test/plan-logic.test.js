@@ -326,9 +326,12 @@ test("task progress rolls up through the whole chain and counts each task once",
   const tasks = [task("t1", true), task("t2", false), task("t3", true), task("t4", false), task("t5", true)];   // t5 is not linked
   const md = model({ nodes, links, tasks });
   assert.deepEqual([md.progress(m.node.id).done, md.progress(m.node.id).total, md.progress(m.node.id).pct], [1, 2, 50]);
-  assert.deepEqual([md.progress(p.node.id).done, md.progress(p.node.id).total, md.progress(p.node.id).pct], [2, 3, 67]);
-  assert.deepEqual([md.progress(o.node.id).done, md.progress(o.node.id).total, md.progress(o.node.id).pct], [2, 4, 50]);
-  assert.equal(md.progress(o.node.id).note, "2 of 4 tasks done");
+  // the task COUNTS (done/total) are over every task under the item, each once; the PERCENTAGE is the weighted average of its parts:
+  // the priority = the milestone (50%) and its own linked task (100%), counted equally = 75%; the objective = the priority (75%) and its own task (0%) = 38%
+  assert.deepEqual([md.progress(p.node.id).done, md.progress(p.node.id).total, md.progress(p.node.id).pct], [2, 3, 75]);
+  assert.deepEqual([md.progress(o.node.id).done, md.progress(o.node.id).total, md.progress(o.node.id).pct], [2, 4, 38]);
+  assert.equal(md.progress(o.node.id).note, "0 of 1 milestone done · 2 of 4 tasks done");
+  assert.deepEqual(md.progress(p.node.id).parts.map((x) => [x.kind, x.weight, x.pct]), [["node", 1, 50], ["tasks", 1, 100]], "the parts are listed, so the figure can be explained");
   // completing the open ones moves every level
   const done = model({ nodes, links, tasks: tasks.map((t) => Object.assign({}, t, { completed: true })) });
   assert.equal(done.progress(m.node.id).pct, 100);
@@ -356,7 +359,7 @@ test("unlinked tasks and tasks of deleted nodes count nowhere, and the tasks the
   assert.equal(model({ nodes: o.nodes, links, tasks }).progress(o.node.id).pct, 100);
   links = P.setLink(links, "t1", "", ctx()).links;
   assert.equal(model({ nodes: o.nodes, links, tasks }).progress(o.node.id).pct, null, "no tasks: unknown, not 0");
-  assert.equal(model({ nodes: o.nodes, links, tasks }).progress(o.node.id).note, "No tasks yet");
+  assert.equal(model({ nodes: o.nodes, links, tasks }).progress(o.node.id).note, "No tasks or milestones yet");
   assert.equal(tasks[0].completed, true);
   // the node is deleted: the task is simply not linked to anything
   links = link(links, "t1", o.node.id);
@@ -386,28 +389,31 @@ test("deleting an objective leaves its priorities in place, just not linked to i
   assert.deepEqual(back.path(p.node.id), ["Reach $120k in sales"]);
 });
 
-test("a milestone with no tasks is a tick-off; it counts as one item toward its parents", () => {
+test("a milestone with no tasks is a tick-off; it is one part of its priority; a hand-marked milestone stays complete", () => {
   const o = add([], obj()), p = add(o.nodes, pri({ parentId: o.node.id })), m1 = add(p.nodes, mil({ parentId: p.node.id })), m2 = add(m1.nodes, mil({ title: "B", parentId: p.node.id }));
   const nodes = m2.nodes;
   let md = model({ nodes });
   assert.equal(md.progress(m1.node.id).pct, 0);
   assert.equal(md.progress(m1.node.id).note, "Not ticked off yet");
   assert.equal(md.canMarkDone(m1.node.id), true);
-  assert.equal(md.progress(p.node.id).total, 2);
+  assert.equal(md.progress(p.node.id).pct, 0, "two tick-off milestones, neither done");
   let ns = P.setDoneAt(nodes, m1.node.id, true, ctx()).nodes;
   md = model({ nodes: ns });
   assert.equal(md.progress(m1.node.id).pct, 100);
-  assert.equal(md.progress(m1.node.id).note, "Marked done");
+  assert.equal(md.progress(m1.node.id).note, "Marked complete");
   assert.equal(md.progress(p.node.id).pct, 50);
   assert.equal(md.progress(p.node.id).note, "1 of 2 milestones done");
   assert.equal(md.progress(o.node.id).pct, 50);
-  // a task under m1 now decides: the tick no longer counts and the box is not offered
+  // a linked task that is still open does not undo a milestone you marked complete (its criteria were met); it is mentioned, though
   const links = link([], "t1", m1.node.id);
   md = model({ nodes: ns, links, tasks: [task("t1", false)] });
-  assert.equal(md.canMarkDone(m1.node.id), false);
+  assert.equal(md.progress(m1.node.id).pct, 100);
+  assert.equal(md.progress(m1.node.id).note, "Marked complete (1 linked task still open)");
+  assert.equal(md.canMarkDone(m1.node.id), true);
+  // reopened, the tasks decide again
+  ns = P.setDoneAt(ns, m1.node.id, false, ctx()).nodes;
+  md = model({ nodes: ns, links, tasks: [task("t1", false)] });
   assert.equal(md.progress(m1.node.id).pct, 0);
-  assert.equal(md.progress(p.node.id).total, 2, "t1 and the still-empty second milestone");
-  assert.equal(md.progress(p.node.id).pct, 0);
 });
 
 test("dropped nodes leave their parents' progress; paused ones stay in", () => {
@@ -569,4 +575,237 @@ test("completing a task changes every level at once (the whole chain, one task)"
   md = model({ nodes, links, tasks: [task("t1", true)] });
   assert.deepEqual([ms.node, q.node, y1.node].map((n) => md.progress(n.id).pct), [100, 100, 100]);
   assert.equal(md.progress(y3.node.id).pct, null, "an unrelated objective is not touched");
+});
+
+test("weights: a milestone with more weight moves its priority more; equal weights are a plain average", () => {
+  const o = add([], obj()), p = add(o.nodes, pri({ parentId: o.node.id })), a = add(p.nodes, mil({ title: "Big", parentId: p.node.id, weight: 3 })), b = add(a.nodes, mil({ title: "Small", parentId: p.node.id }));
+  const nodes = P.setDoneAt(b.nodes, a.node.id, true, ctx()).nodes;           // Big is done (weight 3), Small is not (weight 1)
+  const md = model({ nodes });
+  assert.equal(md.progress(p.node.id).pct, 75, "(3 x 100 + 1 x 0) / 4");
+  assert.deepEqual(md.progress(p.node.id).parts.map((x) => [x.label, x.weight, x.pct]), [["Big", 3, 100], ["Small", 1, 0]]);
+  const equal = model({ nodes: P.editNode(nodes, a.node.id, { weight: 1 }, ctx()).nodes });
+  assert.equal(equal.progress(p.node.id).pct, 50);
+  assert.ok(P.checkNode(mil({ weight: 9 }), ctx()).errors.weight);
+  assert.ok(P.checkNode(mil({ weight: 0 }), ctx()).errors.weight);
+  assert.equal(P.checkNode(mil({}), ctx()).node.weight, 1, "weight 1 unless you choose");
+});
+
+test("a part with nothing to measure yet is left out of the average, never counted as 0%", () => {
+  const o = add([], obj()), p1 = add(o.nodes, pri({ parentId: o.node.id })), p2 = add(p1.nodes, pri({ title: "Empty one", parentId: o.node.id }));
+  const links = link([], "t1", p1.node.id);
+  const md = model({ nodes: p2.nodes, links, tasks: [task("t1", true)] });
+  assert.equal(md.progress(p2.node.id).pct, null, "a priority with no tasks and no milestones has no figure");
+  assert.equal(md.progress(o.node.id).pct, 100, "so the objective is the one priority that has something");
+  // money measures stay separate from task progress
+  const rev = add(p2.nodes, pri({ title: "Revenue", parentId: o.node.id, measure: "revenue", target: 1000 }));
+  assert.equal(model({ nodes: rev.nodes, links, tasks: [task("t1", true)] }).progress(o.node.id).pct, 100, "a revenue priority is not averaged into a task-based objective");
+});
+
+test("status in plain words: not started, on track, at risk, completed", () => {
+  const p = add([], pri()), nodes = p.nodes;
+  let links = [], tasks = [];
+  for (let i = 1; i <= 10; i++) { links = link(links, "t" + i, p.node.id); tasks.push(task("t" + i, false)); }
+  const at = (today, done) => P.model({ nodes, links, tasks: tasks.map((t, i) => Object.assign({}, t, { completed: i < done })), today }).statusOf(p.node.id);
+  assert.equal(at("2026-10-02", 0), "notstarted", "nothing done yet and the quarter has just begun");
+  assert.equal(at("2026-11-15", 5), "ontrack");
+  assert.equal(at("2026-12-10", 4), "atrisk");
+  assert.equal(at("2026-11-15", 10), "completed");
+  assert.equal(at("2027-01-05", 3), "atrisk", "overdue counts as at risk");
+  assert.equal(P.model({ nodes: P.setStatus(nodes, p.node.id, "paused", ctx()).nodes, today: "2026-11-15" }).statusOf(p.node.id), "paused");
+  assert.equal(P.STATUS_LABEL.atrisk, "At risk");
+});
+
+test("days left, the chain above a task, and counting a branch's tasks once", () => {
+  const o = add([], obj()), p = add(o.nodes, pri({ parentId: o.node.id, due: "2026-11-10" })), m = add(p.nodes, mil({ parentId: p.node.id }));
+  const links = link(link([], "t1", m.node.id), "t2", p.node.id);
+  const md = model({ nodes: m.nodes, links, tasks: [task("t1"), task("t2")] });
+  assert.equal(md.daysLeft(p.node.id), 6);
+  assert.equal(md.daysLeft(m.node.id), 26, "the end of November when no date was set");
+  assert.deepEqual(md.chainOfTask("t1").map((n) => n.type), ["objective", "priority", "milestone"]);
+  assert.deepEqual(md.chainOfTask("t2").map((n) => n.type), ["objective", "priority"]);
+  assert.deepEqual(md.chainOfTask("zzz"), []);
+  assert.deepEqual(md.subtreeTasks(o.node.id).map((t) => t.id).sort(), ["t1", "t2"]);
+  assert.deepEqual(md.subtreeMilestones(o.node.id).map((n) => n.id), [m.node.id]);
+});
+
+test("your own templates: add, refuse duplicates, remove, restore", () => {
+  const o = add([], obj({ title: "Year goal" })), p = add(o.nodes, pri({ title: "Q goal", parentId: o.node.id }));
+  const m = add(p.nodes, mil({ title: "Checkpoint", parentId: p.node.id }));
+  const md = model({ nodes: m.nodes, today: "2026-11-04" });
+  const tpl = P.templateFromObjective(md, o.node.id, "My year", ctx());
+  assert.equal(tpl.tree.priorities.length, 1);
+  assert.equal(tpl.tree.priorities[0].milestones.length, 1);
+  assert.ok(!JSON.stringify(tpl).includes("taskId"), "no tasks in a template");
+  const a = P.addTemplate([], tpl, ctx());
+  assert.equal(a.ok, true);
+  assert.equal(P.addTemplate(a.templates, Object.assign({}, tpl, { id: "x" , name: "my YEAR" }), ctx()).ok, false, "the same name again is refused, ignoring case");
+  assert.equal(P.addTemplate([], { name: "", tree: {} }, ctx()).ok, false, "a name is required");
+  const r = P.removeTemplate(a.templates, a.template.id, ctx());
+  assert.equal(r.ok, true);
+  assert.equal(r.templates.filter((t) => !t.deletedAt).length, 0, "removed (kept as a marker for sync)");
+  assert.equal(r.templates.length, 1);
+  const back = P.restoreTemplate(r.templates, a.template.id, ctx());
+  assert.equal(back.templates.filter((t) => !t.deletedAt).length, 1, "and Undo brings it back");
+  assert.equal(P.removeTemplate(a.templates, "nope", ctx()).ok, false);
+  // a saved template builds again in another year
+  const again = P.applyTemplate(m.nodes, a.template, { year: 2027, quarter: 2 }, Object.assign(ctx(), { nodes: m.nodes }));
+  assert.equal(again.ok, true);
+  assert.equal(again.created.length, 3);
+});
+
+test("planned against actual: how much time has passed next to how much is done", () => {
+  const p = add([], pri({ due: "2026-10-31" })), id = p.node.id;           // Q4 starts 2026-10-01: a 30-day window
+  let links = [], tasks = [];
+  for (let i = 1; i <= 4; i++) { links = link(links, "t" + i, id); tasks.push(task("t" + i, i <= 1)); }
+  const at = (today) => P.model({ nodes: p.nodes, links, tasks, today }).pace(id);
+  const mid = at("2026-10-16");
+  assert.deepEqual([mid.expected, mid.actual, mid.gap, mid.state], [50, 25, -25, "during"], "halfway through, a quarter done: 25 points behind the pace");
+  assert.deepEqual([at("2026-09-20").expected, at("2026-09-20").state], [0, "before"], "before it starts nothing is expected");
+  assert.deepEqual([at("2026-11-20").expected, at("2026-11-20").state], [100, "after"], "after the deadline everything is expected");
+  const none = P.model({ nodes: p.nodes, links: [], tasks: [], today: "2026-10-16" }).pace(id);
+  assert.deepEqual([none.actual, none.gap], [null, null], "no tasks yet: no figure, never 0");
+  assert.equal(P.model({ nodes: p.nodes, links, tasks }).pace(id), null, "no date known: nothing to compare");
+  assert.equal(P.model({ nodes: P.setStatus(p.nodes, id, "paused", ctx()).nodes, links, tasks, today: "2026-10-16" }).pace(id), null, "paused: nothing to compare");
+});
+
+test("the new fields: description, success metric, completion criteria, supporting habits", () => {
+  const r = P.checkNode(pri({ description: "  Get the first drop out  ", successMetric: "Sell 50 units", criteria: "Samples approved and pre-orders open", habitIds: ["h1", "h1", "h2", 5, ""] }), ctx());
+  assert.equal(r.ok, true);
+  assert.deepEqual([r.node.description, r.node.successMetric, r.node.criteria, r.node.habitIds], ["Get the first drop out", "Sell 50 units", "Samples approved and pre-orders open", ["h1", "h2"]]);
+  assert.ok(P.checkNode(pri({ description: "x".repeat(501) }), ctx()).errors.description);
+  assert.ok(P.checkNode(pri({ successMetric: "x".repeat(141) }), ctx()).errors.successMetric);
+  // old records without the fields read as before
+  const old = P.readNodes([{ id: "a", type: "objective", title: "Old", year: 2026 }]).items[0];
+  assert.deepEqual([old.description, old.successMetric, old.criteria, old.weight, old.habitIds], ["", "", "", 1, []]);
+});
+
+test("putting a task away (archiving) is a note in the plan, keeps its link and estimate, and is undone by the same call", () => {
+  const o = add([], obj());
+  let links = P.setLink([], "t1", o.node.id, ctx({ nodes: o.nodes })).links;
+  links = P.setArchived(links, "t1", true, ctx()).links;
+  assert.equal(P.isArchived(links, "t1"), true);
+  assert.equal(P.linkOf(links, "t1").nodeId, o.node.id, "still linked");
+  links = P.setArchived(links, "t1", false, ctx()).links;
+  assert.equal(P.isArchived(links, "t1"), false);
+  // an unlinked task can be archived too; unlinking an archived task does not lose the note
+  let l2 = P.setArchived([], "t2", true, ctx()).links;
+  assert.equal(l2.length, 1);
+  l2 = P.setLink(l2, "t2", "", ctx()).links;
+  assert.equal(P.isArchived(l2, "t2"), true, "the archive note survives an unlink");
+  l2 = P.setEstimate(l2, "t2", "", ctx()).links;
+  assert.equal(P.isArchived(l2, "t2"), true);
+  assert.equal(P.setArchived([], "t3", false, ctx()).links.length, 0, "nothing to un-archive: nothing is created");
+});
+
+test("settings carry a theme per year, the dismissed onboarding flag and dismissed suggestions", () => {
+  const s = P.settings({ themes: { "2026": " Launch ", "2027": "", bad: "x", "2028": "y".repeat(200) }, onboardingDismissed: true, dismissed: { "p:1": 123, "p:2": "no", "p:3": -5 } }, TODAY);
+  assert.deepEqual(s.themes, { "2026": "Launch", "2028": "y".repeat(80) });
+  assert.equal(s.onboardingDismissed, true);
+  assert.deepEqual(s.dismissed, { "p:1": 123 });
+  const d = P.settings(null, TODAY);
+  assert.deepEqual([d.themes, d.onboardingDismissed, d.dismissed], [{}, false, {}]);
+});
+
+
+/* ---------------- goal templates ---------------- */
+
+test("a built-in template builds a whole breakdown, linked, in the quarter you choose", () => {
+  const tpl = P.BUILTIN_TEMPLATES.find((t) => t.id === "tpl_clothing_drop");
+  const r = P.applyTemplate([], tpl, { year: 2026, quarter: 4 }, ctx());
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  const md = P.model({ nodes: r.nodes, today: TODAY });
+  assert.equal(r.objective.title, "Launch Gratiel and establish consistent sales");
+  const pris = md.prioritiesOf(2026, 4);
+  assert.deepEqual(pris.map((p) => p.title), ["Prepare the first clothing drop", "Get the first customers"]);
+  assert.ok(pris.every((p) => p.parentId === r.objective.id), "priorities are linked to the objective");
+  assert.deepEqual(md.milestonesOf(pris[0].id).map((m) => [m.title, m.month]), [["Finalize manufacturer and product samples", "2026-10"], ["Photoshoot and product pages ready", "2026-11"], ["Drop goes live", "2026-12"]]);
+  assert.equal(md.milestonesOf(pris[0].id)[0].criteria, "A manufacturer is chosen and approved samples are in hand");
+  assert.equal(pris[0].successMetric, "First drop ready to sell");
+  assert.equal(r.created.length, 7);
+  // in another quarter the months follow
+  const q1 = P.applyTemplate([], tpl, { year: 2027, quarter: 1 }, ctx());
+  assert.equal(P.model({ nodes: q1.nodes, today: TODAY }).milestonesOf(P.model({ nodes: q1.nodes, today: TODAY }).prioritiesOf(2027, 1)[0].id)[2].month, "2027-03");
+});
+
+test("applying a template is all-or-nothing and respects the three-to-a-slot rule", () => {
+  const tpl = P.BUILTIN_TEMPLATES[0];
+  let nodes = [];
+  for (let i = 0; i < 3; i++) nodes = add(nodes, obj({ title: "O" + i })).nodes;
+  const full = P.applyTemplate(nodes, tpl, { year: 2026, quarter: 4 }, ctx());
+  assert.equal(full.ok, false);
+  assert.match(full.errors.title, /holds 3 objectives/);
+  assert.equal(nodes.length, 3, "nothing was added");
+  // a quarter that already has two priorities cannot take a template with two more
+  const o1 = add([], obj({ year: 2027 })), p1 = add(o1.nodes, pri({ year: 2027, quarter: 2, title: "A" })), p2 = add(p1.nodes, pri({ year: 2027, quarter: 2, title: "B" }));
+  const tight = P.applyTemplate(p2.nodes, tpl, { year: 2027, quarter: 2 }, ctx());
+  assert.equal(tight.ok, false);
+  assert.equal(p2.nodes.length, 3);
+  assert.equal(P.applyTemplate([], tpl, { year: "x", quarter: 9 }, ctx()).ok, false);
+  assert.equal(P.applyTemplate([], null, { year: 2026, quarter: 1 }, ctx()).ok, false);
+});
+
+test("saving an objective as a template keeps its shape (priorities and milestones), not tasks, money or dates", () => {
+  const o = add([], obj({ title: "Launch", description: "d" })), p = add(o.nodes, pri({ parentId: o.node.id, quarter: 3, title: "Drop", successMetric: "50 units", weight: 2 }));
+  const m1 = add(p.nodes, mil({ title: "Samples", month: "2026-08", parentId: p.node.id, criteria: "Approved" })), m2 = add(m1.nodes, mil({ title: "Live", month: "2026-09", parentId: p.node.id }));
+  const md = P.model({ nodes: m2.nodes, today: TODAY });
+  const t = P.templateFromObjective(md, o.node.id, "My launch", ctx());
+  assert.equal(t.name, "My launch");
+  assert.deepEqual(t.tree.priorities[0].milestones.map((x) => [x.title, x.monthOffset, x.criteria]), [["Samples", 1, "Approved"], ["Live", 2, ""]], "August is the second month of Q3");
+  assert.equal(t.tree.priorities[0].successMetric, "50 units");
+  assert.equal(t.tree.priorities[0].weight, 2);
+  assert.equal(P.templateFromObjective(md, p.node.id, "x", ctx()), null, "only objectives");
+  // and it can be used again, in another year
+  const again = P.applyTemplate([], t, { year: 2028, quarter: 1 }, ctx());
+  assert.equal(again.ok, true);
+  assert.deepEqual(P.model({ nodes: again.nodes, today: TODAY }).all("milestone").map((n) => n.month), ["2028-02", "2028-03"]);
+});
+
+/* ---------------- progress checked against a plain re-implementation, on random plans ---------------- */
+// The rule, written out again here from the plain data (nodes, links, tasks) without using any of the model's helpers:
+//   a node done by hand is 100; otherwise it is the weighted average of its live children's figures (each child counts as heavy as its weight)
+//   and of ONE more part for the tasks linked straight to it (done / all); a part with nothing to measure is left out; a milestone with no
+//   parts is 0; anything else with no parts has no figure. Each task is counted once, at the node it is linked to.
+function reference(nodes, links, tasks, id, seen) {
+  seen = seen || {};
+  const n = nodes.find((x) => x.id === id);
+  if (seen[id]) return null;
+  seen = Object.assign({}, seen, { [id]: true });
+  if (n.doneAt) return 100;
+  const parts = [];
+  if (n.type !== "milestone") {
+    nodes.filter((k) => !k.deletedAt && k.parentId === id && k.status !== "dropped" && k.measure === "tasks").forEach((k) => {
+      const p = reference(nodes, links, tasks, k.id, seen);
+      if (p !== null) parts.push([k.weight || 1, Math.min(100, p)]);
+    });
+  }
+  const mine = links.filter((l) => !l.deletedAt && l.nodeId === id).map((l) => tasks.find((t) => t.id === l.id)).filter(Boolean);
+  if (mine.length) parts.push([1, Math.round(100 * mine.filter((t) => t.completed).length / mine.length)]);
+  if (!parts.length) return n.type === "milestone" ? 0 : null;
+  const w = parts.reduce((s, p) => s + p[0], 0);
+  return Math.round(parts.reduce((s, p) => s + p[0] * p[1], 0) / w);
+}
+
+test("progress equals an independent calculation on 300 random plans (weights, drops, hand-ticked items, shared and unlinked tasks)", () => {
+  let seed = 12345;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  let checked = 0, withFigure = 0;
+  for (let round = 0; round < 300; round++) {
+    let nodes = [], ids = { objective: [], priority: [], milestone: [] };
+    const addN = (input) => { const r = P.addNode(nodes, input, ctx()); if (r.ok) { nodes = r.nodes; ids[r.node.type].push(r.node.id); } return r.ok ? r.node : null; };
+    for (let i = 0, n = 1 + rnd(3); i < n; i++) addN(obj({ title: "O" + i, weight: 1 + rnd(5) }));
+    ids.objective.slice().forEach((o) => { for (let q = 1; q <= 4; q++) for (let i = 0, n = rnd(3); i < n; i++) addN(pri({ title: "P", quarter: q, parentId: rnd(4) ? o : "", weight: 1 + rnd(5) })); });
+    const pris = ids.priority.slice();
+    pris.forEach((p) => { const node = nodes.find((x) => x.id === p); for (let i = 0, n = rnd(4); i < n; i++) addN(mil({ title: "M", month: P.quarterMonths(2026, node.quarter)[rnd(3)], parentId: p, weight: 1 + rnd(5) })); });
+    ids.objective.forEach((o) => { if (!rnd(3)) addN(mil({ title: "M direct", month: "2026-" + String(1 + rnd(12)).padStart(2, "0"), parentId: o })); });
+    nodes = nodes.map((n) => rnd(9) === 0 ? Object.assign({}, n, { status: "dropped" }) : rnd(9) === 0 ? Object.assign({}, n, { doneAt: TODAY }) : n);
+    const tasks = [], lk = [];
+    for (let i = 0, n = rnd(25); i < n; i++) { tasks.push(task("t" + i, rnd(2))); const target = nodes[rnd(nodes.length + 1)]; if (target && rnd(5)) { const r = P.setLink(lk, "t" + i, target.id, { nodes, now: NOW }); lk.splice(0, lk.length, ...r.links); } }
+    const md = P.model({ nodes, links: lk, tasks, periods: [], settings: {}, goals: [], today: TODAY });
+    nodes.forEach((n) => {
+      const want = reference(nodes, lk, tasks, n.id), got = md.progress(n.id).pct;
+      assert.equal(got, want, "round " + round + ", " + n.type + " " + n.id + " (weight " + n.weight + ", " + n.status + (n.doneAt ? ", ticked" : "") + "): model " + got + ", reference " + want);
+      checked++; if (want !== null) withFigure++;
+    });
+  }
+  assert.ok(checked > 1500 && withFigure > 800, "the sample is big enough to mean something: " + checked + " nodes, " + withFigure + " with a figure");
 });

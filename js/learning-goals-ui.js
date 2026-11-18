@@ -165,17 +165,4 @@
     }
   });
   A.quickAdd.goal = function () { openGoalForm(null); };
-
-  /* ---------------- the Dashboard card ---------------- */
-
-  A.dashTop.push(function (S) {
-    const list = G.active(S.goals, S, today());
-    let h = '<section class="card ln-card" aria-labelledby="lnDashGoals"><div class="card-title-row"><h2 class="card-title" id="lnDashGoals">Learning goals</h2><button type="button" class="btn-icon" data-go="goals">' + (list.length ? "All goals" : "Set a goal") + '</button></div>';
-    if (!list.length) return h + '<p class="empty-state-compact">No goals yet. Set a target for pages, books, lessons reviewed or ideas implemented, and watch it fill in from your records.</p></section>';
-    h += '<div class="ln-list">' + list.slice(0, 4).map(function (s) {
-      return '<button type="button" class="ln-item ln-item-open ln-item-flat" data-go="goals"><span class="ln-item-main"><span class="ln-item-title">' + esc(s.goal.title || "") + '</span>' + barFor(s) +
-        '<span class="ln-item-sub">' + esc(amountLine(s) + (statusLine(s) ? " · " + statusLine(s) : "")) + '</span></span></button>';
-    }).join("") + '</div>' + (list.length > 4 ? '<p class="field-hint">Showing 4 of ' + list.length + ' active goals.</p>' : "");
-    return h + '</section>';
-  });
 })();

@@ -1,7 +1,7 @@
 /* ==========================================================================
    JARVIS — Strategic Planning Center: the Weekly view, a CEO time-blocking planner.
 
-   Monday to Sunday across the top, the hours down the side. Your "ingredients" (School, Gratiel, Workout ... with colours you
+   Monday to Sunday across the top, the hours down the side. Your time block categories (School, Gratiel, Workout ... with colours you
    choose) are the kinds of time you plan with: drag one onto the week to make a block. A block can hold one of your existing
    tasks; then the task takes that day and time, and ticking either one ticks both. Blocks can repeat, and snap to 30 minutes
    or an hour. Under the grid: your top three for the week, the tasks not yet in a block (and suggested times for them),
@@ -33,7 +33,7 @@
   function fmtTime(t) { return CL && CL.timeLabel ? CL.timeLabel(t) : t; }
   function hours(min) { return (Math.round(min / 6) / 10) + " h"; }
   function ingColor(c, id) { const i = id ? W.ingredientById(c.ingredients, id) : null; return i ? i.color : "#94a3b8"; }
-  function ingName(c, id) { const i = id ? W.ingredientById(c.ingredients, id) : null; return i ? i.name : "No ingredient"; }
+  function ingName(c, id) { const i = id ? W.ingredientById(c.ingredients, id) : null; return i ? i.name : "No category"; }
   function dayLabel(date) { return W.DAY_SHORT[W.weekday(date)] + " " + date.slice(5, 7).replace(/^0/, "") + "/" + date.slice(8).replace(/^0/, ""); }
   function weekTitle(ws) {
     const a = new Date(ws + "T12:00:00"), b = new Date(PL.addDays(ws, 6) + "T12:00:00");
@@ -99,10 +99,10 @@
     const past = o.date < c.today || (o.date === c.today && o.endMin <= c.nowMin);
     const len = o.endMin - o.startMin;
     const work = o.workedMin !== null ? o.workedMin + " of " + len + " min" : (past && !done ? "not logged" : "");
-    const label = title + ", " + W.DAY_NAMES[W.weekday(o.date)] + " " + fmtTime(o.start) + " to " + fmtTime(o.end) + ", " + ingName(c, o.ingredientId) + (t ? ", task" : "") + (done ? ", done" : "") + (o.recurring ? ", repeats" : "") + ". Opens the block.";
-    return '<div class="pw-block' + (done ? " is-done" : "") + (past && !done && o.workedMin === null ? " is-missed" : "") + '" data-drag="block" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '" data-len="' + len + '" ' +
+    const label = title + ", " + W.DAY_NAMES[W.weekday(o.date)] + " " + fmtTime(o.start) + " to " + fmtTime(o.end) + ", " + ingName(c, o.ingredientId) + (t ? ", holds a task" : "") + (o.clash === "block" ? ", overlaps another block" : o.clash === "event" ? ", overlaps a calendar event" : "") + (done ? ", done" : "") + (o.recurring ? ", repeats" : "") + ". Opens the block.";
+    return '<div class="pw-block' + (t ? " is-task" : "") + (o.clash ? " is-clash" : "") + (done ? " is-done" : "") + (past && !done && o.workedMin === null ? " is-missed" : "") + '" data-drag="block" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '" data-len="' + len + '" ' +
       'style="top:' + top + 'px;height:' + h + 'px;left:calc(' + (100 * seg.col / seg.cols) + '% + 2px);width:calc(' + (100 / seg.cols) + '% - 4px);--c:' + color + ';--bg:' + W.tint(color, 0.24) + '">' +
-      '<button type="button" class="pw-b-main" aria-label="' + esc(label) + '"><span class="pw-b-title">' + esc(title) + '</span>' + (h >= 40 ? '<span class="pw-b-time">' + esc(fmtTime(o.start)) + ' – ' + esc(fmtTime(o.end)) + (o.recurring ? " · repeats" : "") + '</span>' : "") + (h >= 58 && work ? '<span class="pw-b-work">' + esc(work) + '</span>' : "") + '</button>' +
+      '<button type="button" class="pw-b-main" aria-label="' + esc(label) + '"><span class="pw-b-title">' + esc(title) + '</span>' + (h >= 40 ? '<span class="pw-b-time">' + (t ? '<span class="pw-b-tag">Task</span> ' : "") + esc(fmtTime(o.start)) + ' – ' + esc(fmtTime(o.end)) + (o.recurring ? " · repeats" : "") + (o.clash ? ' · <span class="pw-b-clashtag">overlap</span>' : "") + '</span>' : "") + (h >= 58 && work ? '<span class="pw-b-work">' + esc(work) + '</span>' : "") + '</button>' +
       '<input type="checkbox" class="pw-b-check" data-act="block-done" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '"' + (t ? ' data-task="' + esc(t.id) + '"' : "") + (done ? " checked" : "") + ' aria-label="' + (t ? "Task done: " : "Done: ") + esc(title) + '">' +
       '<span class="pw-resize" data-drag="resize" aria-hidden="true"></span></div>';
   }
@@ -115,16 +115,17 @@
   function gridHtml(c, occ) {
     const dates = W.weekDates(c.weekStart), bounds = axisBounds(c, occ), height = (bounds.end - bounds.start) * PX;
     if (!state.day || dates.indexOf(state.day) === -1) state.day = dates.indexOf(c.today) !== -1 ? c.today : dates[0];
+    const clash = W.clashKeys(c, dates[0], dates[6]);
     let h = '<div class="pw-board" style="--hr:' + (bounds.interval * PX) + 'px"><div class="pw-heads"><div class="pw-corner" aria-hidden="true"></div>';
     dates.forEach(function (d) {
-      const n = occ.filter(function (o) { return o.date === d; }).length;
-      h += '<button type="button" class="pw-head' + (d === c.today ? " is-today" : "") + (d === state.day ? " is-sel" : "") + '" data-act="pick-day" data-date="' + d + '" aria-pressed="' + (d === state.day) + '"><span class="pw-head-day">' + W.DAY_SHORT[W.weekday(d)] + '</span><span class="pw-head-date">' + Number(d.slice(8)) + '</span><span class="pw-head-n">' + (n ? A.plural(n, "block") : "") + '</span></button>';
+      const mine = occ.filter(function (o) { return o.date === d; }), n = mine.length, mins = mine.reduce(function (sum, o) { return sum + (o.endMin - o.startMin); }, 0);
+      h += '<button type="button" class="pw-head' + (d === c.today ? " is-today" : "") + (d === state.day ? " is-sel" : "") + '" data-act="pick-day" data-date="' + d + '" aria-pressed="' + (d === state.day) + '"' + (n ? ' aria-label="' + W.DAY_NAMES[W.weekday(d)] + " " + Number(d.slice(8)) + ", " + A.plural(n, "block") + ", " + hours(mins) + ' planned"' : "") + '><span class="pw-head-day">' + W.DAY_SHORT[W.weekday(d)] + '</span><span class="pw-head-date">' + Number(d.slice(8)) + '</span><span class="pw-head-n" aria-hidden="true">' + (n ? esc(hours(mins).replace(" h", "h")) : "") + '</span></button>';
     });
     h += '</div><div class="pw-body" style="height:' + height + 'px"><div class="pw-axis" aria-hidden="true">';
     for (let m = Math.ceil(bounds.start / 60) * 60; m < bounds.end; m += 60) h += '<span style="top:' + ((m - bounds.start) * PX) + 'px">' + esc(CL && CL.hourLabel ? CL.hourLabel(m / 60) : fmtTime(W.toTime(m))) + '</span>';
     h += '</div>';
     dates.forEach(function (d) {
-      const items = occ.filter(function (o) { return o.date === d; }).map(function (o) { return Object.assign({}, o, { allDay: false, endDate: o.date }); });
+      const items = occ.filter(function (o) { return o.date === d; }).map(function (o) { return Object.assign({}, o, { allDay: false, endDate: o.date, clash: clash[o.blockId + "|" + o.date] || "" }); });
       const segs = CL.layoutDay(items, d, 15);
       h += '<div class="pw-col' + (d === c.today ? " is-today" : "") + (d === state.day ? " is-sel" : "") + '" data-col data-date="' + d + '" data-top="' + bounds.start + '" role="group" aria-label="' + W.DAY_NAMES[W.weekday(d)] + " " + d + '">' + busyHtml(d, c, bounds) + segs.map(function (s) { return blockHtml(s, c, bounds); }).join("");
       if (d === c.today && c.nowMin >= bounds.start && c.nowMin <= bounds.end) h += '<div class="pw-now" style="top:' + ((c.nowMin - bounds.start) * PX) + 'px" aria-hidden="true"></div>';
@@ -133,15 +134,15 @@
     return h + '</div></div>';
   }
 
-  /* ---- ingredients ---- */
+  /* ---- time block categories (stored as "ingredients": the old name of the same records) ---- */
   function ingredientsHtml(c) {
     const list = W.liveIngredients(c.ingredients);
-    let h = '<aside class="pw-side" aria-label="Ingredients"><h3 class="sp-h3">Ingredients</h3><p class="sp-dim pw-side-hint">Drag one onto the week to make a block, or tap it to add one to the day you are looking at.</p>';
-    if (!list.length) h += '<p class="sp-dim">Ingredients are the kinds of time you plan with.</p><button type="button" class="btn btn-primary" data-act="ing-starters">Add School, Gratiel, Workout, Studying, Personal and Rest</button>';
+    let h = '<aside class="pw-side" aria-label="Time Block Categories"><h3 class="sp-h3">Time Block Categories</h3><p class="sp-dim pw-side-hint">Drag one onto the week to make a block, or tap it to add one to the day you are looking at.</p>';
+    if (!list.length) h += '<p class="sp-dim">Time block categories are the kinds of time you plan with.</p><button type="button" class="btn btn-primary" data-act="ing-starters">Add School, Gratiel, Workout, Studying, Personal and Rest</button>';
     else h += '<ul class="pw-ings">' + list.map(function (i) {
       return '<li class="pw-ing" data-drag="ingredient" data-id="' + esc(i.id) + '" style="--c:' + i.color + '"><button type="button" class="pw-ing-add" data-act="ing-add-block" data-id="' + esc(i.id) + '" aria-label="Add a ' + esc(i.name) + ' block"><span class="pw-dot" aria-hidden="true"></span><span class="pw-ing-name">' + esc(i.name) + '</span></button><button type="button" class="btn btn-secondary pw-ing-edit" data-nodrag data-act="ing-edit" data-id="' + esc(i.id) + '" aria-label="Edit ' + esc(i.name) + '">Edit</button></li>';
     }).join("") + '</ul>';
-    h += '<div class="pw-side-actions"><button type="button" class="btn btn-secondary" data-act="ing-new">New ingredient</button>' + (list.length && list.length < W.STARTERS.length + 4 && W.STARTERS.some(function (s) { return !list.some(function (x) { return x.id === s.id; }); }) ? '<button type="button" class="btn btn-secondary" data-act="ing-starters">Add the starter set</button>' : "") + '</div>' + tasksHtml(c) + '</aside>';
+    h += '<div class="pw-side-actions"><button type="button" class="btn btn-secondary" data-act="ing-new">New category</button>' + (list.length && list.length < W.STARTERS.length + 4 && W.STARTERS.some(function (s) { return !list.some(function (x) { return x.id === s.id; }); }) ? '<button type="button" class="btn btn-secondary" data-act="ing-starters">Add the starter set</button>' : "") + '</div>' + tasksHtml(c) + '</aside>';
     return h;
   }
 
@@ -167,8 +168,8 @@
     const s = W.suggest(c);
     if (!s.length) return "";
     const ings = W.liveIngredients(c.ingredients);
-    let h = '<section class="sp-panel" aria-label="Suggested times"><h3 class="sp-h3">Suggested times</h3><p class="sp-dim">The first free time around your blocks, calendar events and timed tasks. Nothing is scheduled until you press Schedule.</p>';
-    if (ings.length) h += '<div class="sp-inline"><label for="pwSuggestIng">Plan them as</label><select id="pwSuggestIng" data-pw-suggest-ing>' + '<option value="">No ingredient</option>' + ings.map(function (i) { return '<option value="' + esc(i.id) + '"' + (i.id === lastIngredient ? " selected" : "") + '>' + esc(i.name) + '</option>'; }).join("") + '</select></div>';
+    let h = '<p class="sp-dim">The first free time around your blocks, calendar events and timed tasks. Nothing is scheduled until you press Schedule.</p>';
+    if (ings.length) h += '<div class="sp-inline"><label for="pwSuggestIng">Plan them as</label><select id="pwSuggestIng" data-pw-suggest-ing>' + '<option value="">No category</option>' + ings.map(function (i) { return '<option value="' + esc(i.id) + '"' + (i.id === lastIngredient ? " selected" : "") + '>' + esc(i.name) + '</option>'; }).join("") + '</select></div>';
     h += '<ul class="sp-sublist pw-suggest">';
     s.forEach(function (x) {
       h += '<li><span class="pw-sg-text"><strong>' + esc(x.text) + '</strong> ' + (x.none ? "" : '→ ' + esc(dayLabel(x.date)) + " " + esc(fmtTime(x.start)) + '–' + esc(fmtTime(x.end))) + '<span class="sp-dim pw-sg-why">' + esc(x.reason) + '</span></span>' +
@@ -177,6 +178,45 @@
     h += '</ul>';
     const ok = s.filter(function (x) { return !x.none; });
     if (ok.length > 1) h += '<button type="button" class="btn btn-secondary" data-act="suggest-all">Schedule all ' + ok.length + '</button>';
+    return A.section("wk-suggest", "Suggested times", h, { open: true, summary: A.plural(s.length, "suggestion") });
+  }
+
+  /* ---- the week at a glance ---- */
+  function segBar(rows, total) {
+    const parts = rows.filter(function (r) { return r.plannedMin > 0; });
+    if (!parts.length || !total) return "";
+    const label = parts.map(function (r) { return r.name + " " + hours(r.plannedMin) + " (" + Math.round(100 * r.plannedMin / total) + "%)"; }).join(", ");
+    return '<div class="pw-seg" role="img" aria-label="Planned time by category: ' + esc(label) + '">' + parts.map(function (r) {
+      const share = Math.round(100 * r.plannedMin / total);
+      return '<span class="pw-seg-part" style="flex:' + r.plannedMin + ' 1 0;background:' + r.color + '">' + (share >= 14 ? '<span class="pw-seg-n">' + share + '%</span>' : "") + '</span>';
+    }).join("") + '</div><ul class="pw-seg-legend">' + parts.map(function (r) {
+      return '<li><span class="pw-dot" style="--c:' + r.color + '" aria-hidden="true"></span>' + esc(r.name) + ' <span class="sp-dim">' + esc(hours(r.plannedMin)) + (r.loggedMin !== null ? ' planned · ' + esc(hours(r.loggedMin)) + ' worked' : "") + '</span></li>';
+    }).join("") + '</ul>';
+  }
+  function glanceHtml(c) {
+    const I = window.JarvisPlanInsights, ic = A.ictx(c.weekStart), wt = I.weekTotals(ic, c.weekStart), tm = I.timeByCategory(ic, c.weekStart, PL.addDays(c.weekStart, 6)), carry = W.carryForward(c);
+    const open = I.rankTasks(ic).filter(function (r) { return !r.task.completed && PL.isDate(r.task.date) && W.weekDates(c.weekStart).indexOf(r.task.date) !== -1; }).slice(0, 3);
+    const tile = function (l, v, sub, bar) { return '<div class="sp-tile"><span class="sp-tile-l">' + esc(l) + '</span><span class="sp-tile-v">' + v + '</span>' + (bar === undefined || bar === null ? "" : A.bar(bar, l, "ontrack")) + (sub ? '<span class="sp-tile-s">' + sub + '</span>' : "") + '</div>'; };
+    let h = '<div class="sp-tiles">' +
+      tile("Tasks done", wt.total ? wt.done + "/" + wt.total : '<span class="sp-dim">none</span>', wt.rate === null ? "none dated" : wt.rate + "%", wt.rate) +
+      tile("Planned", tm.plannedMin ? esc(hours(tm.plannedMin)) : '<span class="sp-dim">none</span>', "in blocks") +
+      tile("Worked", tm.loggedMin === null ? '<span class="sp-dim" aria-hidden="true">–</span><span class="visually-hidden">not logged</span>' : esc(hours(tm.loggedMin)), tm.loggedMin === null ? "none logged" : "logged") +
+      tile("Finished", tm.doneBlockMin ? esc(hours(tm.doneBlockMin)) : '<span class="sp-dim">–</span>', "blocks ticked off") + '</div>';
+    h += '<h4 class="sp-h4">Planned time by category</h4>' + (tm.plannedMin ? segBar(tm.rows, tm.plannedMin) : '<p class="sp-dim">No time is planned this week yet. Drag a category onto a day, or tap one to add a block.</p>');
+    h += '<h4 class="sp-h4">Most important still open</h4>' + (open.length ? '<ul class="pw-open">' + open.map(function (r) {
+      const best = r.parts.slice().sort(function (a, b) { return b.points - a.points; })[0];
+      return '<li><button type="button" class="sp-link" data-act="task-detail" data-id="' + esc(r.task.id) + '">' + esc(r.task.text) + '</button><span class="sp-dim">' + esc(best ? best.label : "") + '</span></li>';
+    }).join("") + '</ul>' : '<p class="sp-dim">Nothing is open this week.</p>');
+    if (carry.length) h += '<p class="sp-dim">' + esc(A.plural(carry.length, "task") + " from earlier days " + (carry.length === 1 ? "is" : "are") + " unfinished. You can carry them forward in the review below.") + '</p>';
+    return A.section("wk-glance", "This week at a glance", h, { open: true, summary: (wt.total ? wt.done + " of " + wt.total + " tasks" : "no tasks") + " · " + (tm.plannedMin ? hours(tm.plannedMin) + " planned" : "nothing planned") });
+  }
+  // The selected day: what is planned, by category, and how much of your day is still free.
+  function daySummaryHtml(c) {
+    const d = state.day, s = W.daySummary(d, c);
+    let h = '<section class="pw-day" aria-label="' + esc(W.DAY_NAMES[W.weekday(d)]) + ' at a glance"><h3 class="sp-h3">' + esc(W.DAY_NAMES[W.weekday(d)] + " " + dayLabel(d).replace(/^\w+ /, "")) + '</h3>';
+    h += '<p class="sp-dim">' + (s.plannedMin ? esc(hours(s.plannedMin)) + " planned in blocks. " : "Nothing planned in blocks. ") + esc(hours(s.freeMin)) + " free of your " + esc(hours(s.windowMin)) + " day.</p>";
+    if (s.rows.length) h += '<ul class="pw-day-rows">' + s.rows.map(function (r) { return '<li><span class="pw-dot" style="--c:' + r.color + '" aria-hidden="true"></span><span class="pw-alloc-name">' + esc(r.name) + '</span><span class="pw-alloc-n">' + esc(hours(r.min)) + '</span></li>'; }).join("") + '</ul>';
+    h += '<p class="sp-dim pw-key"><span class="pw-b-tag">Task</span> marks a block that holds one of your tasks (ticking it ticks the task). Other blocks are time you set aside. A red outline means two things overlap.</p>';
     return h + '</section>';
   }
 
@@ -192,10 +232,12 @@
       }).join("") + '</ol>';
       h += '<button type="button" class="btn btn-secondary" data-act="top-edit">Choose again</button>';
     } else {
-      const sug = W.topThree(c);
+      const I = window.JarvisPlanInsights, sug = I.topThreePicks(A.ictx(c.weekStart));
       if (!sug.length) return h + '<p class="sp-dim">You have no open tasks to rank. Add some under Monthly, or in Habits.</p><button type="button" class="btn btn-secondary" data-act="top-edit">Write my own</button></section>';
-      h += '<p class="sp-dim">A starting list from your open tasks: priority, what carried over, and what moves a plan item that is behind. It is a suggestion; you choose.</p><ol class="pw-top-list">' + sug.map(function (x) {
-        return '<li><span class="sp-task-text">' + esc(x.task.text) + '</span><span class="sp-dim pw-sg-why">' + esc(x.reasons.join(" · ")) + '</span></li>';
+      h += '<p class="sp-dim">A suggestion from fixed rules, not a guess. Each reason adds points (how much it moves your yearly objective, whether it is in this quarter\'s priorities, how close its milestone is, priority, overdue, the work involved, whether it fits the free time). Tap “Why?” to see the points. You choose.</p><ol class="pw-top-list pw-top-why">' + sug.map(function (x) {
+        const sorted = x.parts.slice().sort(function (a, b) { return b.points - a.points; });
+        return '<li><span class="sp-task-text">' + esc(x.task.text) + '</span>' + (x.chain.length ? '<span class="sp-dim pw-sg-why">' + esc(x.chain.map(function (n) { return n.title; }).join(" › ")) + '</span>' : '<span class="sp-dim pw-sg-why">Not tied to a goal</span>') +
+          '<details class="sp-why"><summary>Why? <span class="sp-dim">' + x.score + ' points</span></summary><ul class="sp-why-list">' + sorted.map(function (p) { return '<li><span class="sp-why-pts' + (p.points < 0 ? " is-neg" : "") + '">' + (p.points > 0 ? "+" : "") + p.points + '</span> ' + esc(p.label) + '</li>'; }).join("") + '</ul></details></li>';
       }).join("") + '</ol><div class="sp-card-actions"><button type="button" class="btn btn-primary" data-act="top-use">Use these three</button><button type="button" class="btn btn-secondary" data-act="top-edit">Choose my own</button></div>';
     }
     return h + '</section>';
@@ -203,7 +245,7 @@
 
   /* ---- the numbers and the review ---- */
   function statsHtml(c, st) {
-    let h = '<section class="sp-panel" aria-label="This week in numbers"><h3 class="sp-h3">This week in numbers</h3><dl class="sp-money">';
+    let h = '<dl class="sp-money">';
     const row = function (l, v) { return '<div class="sp-money-row"><dt>' + esc(l) + '</dt><dd>' + v + '</dd></div>'; };
     h += row("Planned in blocks", esc(hours(st.plannedMin)));
     h += row("Time you logged", st.loggedBlocks ? esc(hours(st.actualMin)) + ' <span class="sp-dim">(' + st.loggedBlocks + ' of ' + st.pastBlocks + ' finished blocks)</span>' : '<span class="sp-dim">' + (st.pastBlocks ? "none logged yet, 0 of " + st.pastBlocks + " finished blocks" : "nothing to log yet") + '</span>');
@@ -212,28 +254,35 @@
     h += row("Tasks that count toward the plan", st.tasksTotal ? esc(st.linkedTasks + " of " + st.tasksTotal) + ' <span class="sp-dim">(' + st.alignmentPct + '%)</span>' : '<span class="sp-dim">–</span>');
     h += '</dl>';
     if (st.allocation.length) {
-      h += '<h4 class="sp-h4">Time by ingredient</h4><ul class="pw-alloc">' + st.allocation.map(function (a) {
+      h += '<h4 class="sp-h4">Time by category</h4><ul class="pw-alloc">' + st.allocation.map(function (a) {
         return '<li><span class="pw-dot" style="--c:' + a.color + '" aria-hidden="true"></span><span class="pw-alloc-name">' + esc(a.name) + '</span><span class="pw-alloc-n">' + esc(hours(a.planned)) + ' planned' + (a.logged ? ', ' + esc(hours(a.actual)) + ' worked' : "") + ' · ' + a.share + '%</span><span class="sp-bar" style="--c:' + a.color + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + a.share + '" aria-label="' + esc(a.name) + ' share of planned time"><span style="width:' + a.share + '%;background:' + a.color + '"></span></span></li>';
       }).join("") + '</ul>';
     }
     if (st.byNode.length) h += '<h4 class="sp-h4">Where this week\'s tasks go</h4><ul class="sp-sublist">' + st.byNode.map(function (n) { return '<li>' + esc(n.title) + ' <span class="sp-dim">' + n.done + ' of ' + n.tasks + ' done</span></li>'; }).join("") + '</ul>';
-    return h + '</section>';
+    return A.section("wk-numbers", "This week in numbers", h, { open: false, summary: st.tasksTotal ? st.tasksDone + " of " + st.tasksTotal + " tasks done" : "no tasks dated this week" });
   }
+  // The weekly review: a summary counted from your own records (so you aren't staring at a blank page), then five prompts. Nothing here is
+  // written for you: "Start from the summary" fills only boxes you left empty, and you can change every word.
   function reviewHtml(c, st) {
+    const I = window.JarvisPlanInsights, ic = A.ictx(c.weekStart), rv = I.weekReview(ic);
     const wk = W.weekOf(c.weeks, c.weekStart), r = wk ? W.readWeek(wk) : W.readWeek({}), carry = W.carryForward(c), target = W.carryTarget(c);
-    let h = '<section class="sp-panel pw-review" aria-label="Weekly review"><h3 class="sp-h3">Weekly review</h3>';
-    h += '<p class="sp-dim">' + esc(st.plannedMin ? "You planned " + hours(st.plannedMin) + " and logged " + (st.loggedBlocks ? hours(st.actualMin) : "no time") + "; " : "") + (st.tasksTotal ? st.tasksDone + " of " + st.tasksTotal + " tasks are done." : "no tasks are dated this week.") + (wk && wk.reviewedAt ? " Reviewed " + esc(new Date(wk.reviewedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })) + "." : "") + '</p>';
-    h += '<form id="pwReviewForm" class="pw-review-form" novalidate>' +
-      '<div class="form-row"><label for="pwWins">What went well?</label><textarea id="pwWins" name="wins" rows="3" maxlength="2000">' + esc(r.wins) + '</textarea></div>' +
-      '<div class="form-row"><label for="pwLessons">What got in the way, or what would you change?</label><textarea id="pwLessons" name="lessons" rows="3" maxlength="2000">' + esc(r.lessons) + '</textarea></div>' +
-      '<div class="form-row"><label for="pwNext">What matters most next week?</label><textarea id="pwNext" name="nextFocus" rows="3" maxlength="2000">' + esc(r.nextFocus) + '</textarea></div>' +
-      '<div class="sp-card-actions"><button type="submit" class="btn btn-primary">Save review</button></div></form>';
+    const over = c.weekStart < W.mondayOf(c.today) || W.weekday(c.today) === 0 || W.weekday(c.today) === 6;     // the week has ended, or it is the weekend
+    const reviewed = !!(wk && wk.reviewedAt);
+    let h = '<h4 class="sp-h4">Your week, from your records</h4><ul class="sp-sublist pw-rv-sum">' + rv.sentences.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul>';
+    if (rv.accomplished.length) h += '<details class="sp-away"><summary>Finished this week (' + rv.accomplished.length + ')</summary><ul class="sp-sublist">' + rv.accomplished.slice(0, 12).map(function (t) { return '<li>' + esc(t.text) + ' <span class="sp-dim">' + esc(dayLabel(t.date)) + '</span></li>'; }).join("") + (rv.accomplished.length > 12 ? '<li class="sp-dim">and ' + (rv.accomplished.length - 12) + ' more</li>' : "") + '</ul></details>';
+    h += '<form id="pwReviewForm" class="pw-review-form" novalidate data-wins="' + esc(rv.accomplished.slice(0, 5).map(function (t) { return t.text; }).join("; ")) + '" data-unfinished="' + esc(rv.unfinished.slice(0, 3).map(function (x) { return x.task.text; }).join("; ")) + '" data-prio="' + esc(rv.linkedDone + " of " + rv.tasksDone + " finished tasks counted toward your plan.") + '">' +
+      '<div class="form-row"><label for="pwWins">What did you accomplish?</label><textarea id="pwWins" name="wins" rows="3" maxlength="2000">' + esc(r.wins) + '</textarea></div>' +
+      '<div class="form-row"><label for="pwLessons">What got in the way?</label><textarea id="pwLessons" name="lessons" rows="3" maxlength="2000">' + esc(r.lessons) + '</textarea></div>' +
+      '<div class="form-row"><label for="pwUnfin">Which unfinished tasks matter most?</label><textarea id="pwUnfin" name="unfinished" rows="2" maxlength="2000">' + esc(r.unfinished) + '</textarea></div>' +
+      '<div class="form-row"><label for="pwPrio">Did your time go to your priorities?</label><textarea id="pwPrio" name="onPriorities" rows="2" maxlength="2000">' + esc(r.onPriorities) + '</textarea><p class="field-hint">' + esc((rv.tasksDone ? rv.linkedDone + " of " + rv.tasksDone + " finished tasks counted toward your plan. " : "") + (rv.gratielPlannedMin ? "Gratiel: " + (Math.round(rv.gratielPlannedMin / 6) / 10) + " h planned" + (rv.gratielLoggedMin !== null && rv.gratielLoggedMin !== undefined ? ", " + (Math.round(rv.gratielLoggedMin / 6) / 10) + " h logged." : ", none logged.") : "")) + '</p></div>' +
+      '<div class="form-row"><label for="pwNext">What will you change next week?</label><textarea id="pwNext" name="nextFocus" rows="3" maxlength="2000">' + esc(r.nextFocus) + '</textarea></div>' +
+      '<div class="sp-card-actions"><button type="submit" class="btn btn-primary">Save review</button><button type="button" class="btn btn-secondary" data-act="review-prefill">Start from the summary</button></div></form>';
     if (carry.length) {
       h += '<h4 class="sp-h4">Unfinished from days that have passed</h4><p class="sp-dim">Tick the ones to carry forward. They move to ' + esc(dayLabel(target)) + ' as plain tasks; nothing moves until you press the button.</p><ul class="sp-tasks pw-carry">' +
         carry.map(function (t) { return '<li class="sp-task"><label class="sp-task-check"><input type="checkbox" name="carry" value="' + esc(t.id) + '" checked><span class="sp-task-text">' + esc(t.text) + '</span></label><span class="sp-task-meta">' + esc(dayLabel(t.date)) + '</span></li>'; }).join("") +
         '</ul><button type="button" class="btn btn-secondary" data-act="carry-apply">Move the ticked tasks to ' + esc(dayLabel(target)) + '</button>';
     } else h += '<p class="sp-dim">Nothing unfinished from the days that have passed.</p>';
-    return h + '</section>';
+    return A.section("wk-review", "Weekly review", h, { open: over && !reviewed, summary: reviewed ? "reviewed" : over ? "ready to write" : carry.length ? A.plural(carry.length, "unfinished task") : "not written yet" });
   }
 
   A.register("weekly", {
@@ -241,9 +290,9 @@
       store.init();
       const c = wctx(); cachedCtx = c;
       const occ = W.occurrences(c.blocks, c.weekStart, PL.addDays(c.weekStart, 6)), st = W.weekStats(c);
-      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + alertsHtml(c) + topHtml(c);
-      h += '<div class="pw-layout">' + ingredientsHtml(c) + gridHtml(c, occ) + '</div>';
-      if (!occ.length && W.liveIngredients(c.ingredients).length) h += '<p class="sp-dim pw-empty">Nothing is planned this week yet. Drag an ingredient or a task onto a day.</p>';
+      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + alertsHtml(c) + glanceHtml(c) + topHtml(c);
+      h += '<div class="pw-layout">' + ingredientsHtml(c) + gridHtml(c, occ) + '</div>' + daySummaryHtml(c);
+      if (!occ.length && W.liveIngredients(c.ingredients).length) h += '<p class="sp-dim pw-empty">Nothing is planned this week yet. Drag a category or a task onto a day.</p>';
       h += '<div class="pw-panels">' + suggestHtml(c) + statsHtml(c, st) + reviewHtml(c, st) + '</div>';
       return h;
     },
@@ -254,7 +303,7 @@
     submit: function () {}
   });
 
-  /* ---------------- sheets: a block, an ingredient ---------------- */
+  /* ---------------- sheets: a block, a category ---------------- */
 
   function timeOptions(c, extra, forEnd) {
     const w = W.winOf(c.settings), out = [], seen = {};
@@ -279,16 +328,17 @@
     const start = cur ? cur.start : (o.start || "09:00"), end = cur ? cur.end : (o.end || W.toTime(Math.min(W.toMin(start) + 60, 1439)));
     const ing = cur ? cur.ingredientId : (o.ingredientId !== undefined ? o.ingredientId : lastIngredient), taskId = cur ? cur.taskId : (o.taskId || "");
     const title = cur ? (blk.taskId ? "" : blk.title) : (o.title || "");
-    const ingOpts = [["", "No ingredient"]].concat(W.liveIngredients(c.ingredients).map(function (i) { return [i.id, i.name]; }));
+    const ingOpts = [["", "No category"]].concat(W.liveIngredients(c.ingredients).map(function (i) { return [i.id, i.name]; }));
     const t = taskId ? c.tasks.filter(function (x) { return x.id === taskId; })[0] : null;
     const repeats = blk && blk.repeat;
-    let body = A.fText("title", "Title", title, { max: 140, placeholder: "Defaults to the task or ingredient name" });
-    body += A.fSelect("ingredientId", "Ingredient", ingOpts, ing || "");
+    let body = A.fText("title", "Title", title, { max: 140, placeholder: "Defaults to the task or category name" });
+    body += A.fSelect("ingredientId", "Category", ingOpts, ing || "");
     body += A.fSelect("taskId", "Task in this block", [["", "No task"]].concat(openTaskChoices(c, taskId)), taskId, { hint: "The task takes this day and time. A block with a task can't repeat." });
     const link = taskId ? PL.linkOf(c.links, taskId) : null;
     body += '<div data-for-task>' + A.fText("estMin", "Time you expect the task to take (minutes, optional)", link && link.estMin ? link.estMin : "", { mode: "numeric", placeholder: "e.g. 90", hint: "Used for suggested times. The block's length is what you planned; this is your estimate for the task itself." }) + '</div>';
     body += A.fText("date", "Day", date, { type: "date" });
     body += '<div class="form-row two-col"><div><label for="spf_start">Start</label><select id="spf_start" name="start">' + A.optionsHtml(timeOptions(c, [start], false), start) + '</select><p class="sp-err hidden" data-err="start" role="alert"></p></div><div><label for="spf_end">End</label><select id="spf_end" name="end">' + A.optionsHtml(timeOptions(c, [end], true), end) + '</select><p class="sp-err hidden" data-err="end" role="alert"></p></div></div>';
+    body += A.fText("lengthMin", "Or set the length in minutes (optional)", "", { mode: "numeric", placeholder: "e.g. 45, 90 or 135", hint: "Overrides the end time above, counted from the start." });
     if (repeats) body += '<fieldset class="pw-scope"><legend>Apply changes to</legend><label><input type="radio" name="scope" value="this" checked> This day only</label><label><input type="radio" name="scope" value="all"> Every time it repeats</label></fieldset>';
     const days = repeats ? repeats.byDay : [W.weekday(date)];
     body += '<div data-for-repeat>' + A.fSelect("repeatFreq", "Repeat", [["", "Does not repeat"], ["weekly", "Weekly"], ["daily", "Every day"]], repeats ? repeats.freq : "") +
@@ -322,6 +372,12 @@
   function saveBlockForm(v, o, cur, blk, c) {
     const patches = [], tasks = c.tasks, cc = { ingredients: c.ingredients, tasks: tasks };
     let blocks = store.all("blocks"), message = "", saved = null;
+    if (v.lengthMin !== undefined && String(v.lengthMin).trim() !== "") {
+      const n = Number(String(v.lengthMin).trim());
+      if (!Number.isInteger(n) || n < W.MIN_LEN || n > 960) return { ok: false, errors: { lengthMin: "Enter whole minutes, from " + W.MIN_LEN + " to 960." } };
+      if (W.toMin(v.start) + n > 1439) return { ok: false, errors: { lengthMin: "That would run past midnight. Start earlier or make it shorter." } };
+      v.end = W.toTime(W.toMin(v.start) + n);
+    }
     const fields = { title: v.title, ingredientId: v.ingredientId, notes: v.notes, start: v.start, end: v.end };
     const days = Array.isArray(v.repeatDays) ? v.repeatDays : [];
     lastIngredient = v.ingredientId || lastIngredient;
@@ -416,9 +472,9 @@
       return '<label class="pw-swatch" style="--c:' + x.hex + '"><input type="radio" name="color" value="' + x.hex + '"' + (x.hex === color ? " checked" : "") + '><span class="pw-swatch-dot" aria-hidden="true"></span><span class="visually-hidden">' + esc(x.label) + '</span></label>';
     }).join("") + '</fieldset><p class="sp-err hidden" data-err="color" role="alert"></p>';
     body += '<div class="form-row"><label class="pw-check"><input type="checkbox" name="rest"' + (cur && cur.rest ? " checked" : "") + '> This is rest time (it doesn\'t count toward your daily workload)</label></div>';
-    if (cur) body += '<div class="form-row"><button type="button" class="btn btn-danger" data-sheet-act="delete">Delete this ingredient</button><p class="field-hint">Blocks that use it are kept and shown as “No ingredient”.</p></div>';
+    if (cur) body += '<div class="form-row"><button type="button" class="btn btn-danger" data-sheet-act="delete">Delete this category</button><p class="field-hint">Blocks that use it are kept and shown as “No category”.</p></div>';
     A.openSheet({
-      title: cur ? "Edit ingredient" : "New ingredient", body: body, submit: cur ? "Save" : "Add ingredient",
+      title: cur ? "Edit category" : "New category", body: body, submit: cur ? "Save" : "Add category",
       onAct: function (act) {
         if (act !== "delete") return;
         A.closeSheet(true);
@@ -481,7 +537,7 @@
   A.acts["ing-starters"] = function () {
     const r = W.addStarters(store.all("ingredients"), {});
     if (!store.replace("ingredients", r.ingredients)) { A.saveFailed(); return; }
-    A.say(r.added + " ingredients added");
+    A.say(r.added + " categories added");
     A.render();
   };
   A.acts["task-schedule"] = function (el) {
@@ -516,12 +572,22 @@
     A.render();
   };
   A.acts["top-use"] = function () {
-    const c = wctx(), top = W.topThree(c).map(function (x) { return { taskId: x.task.id, text: "" }; });
-    const r = W.setWeek(store.all("weeks"), c.weekStart, { top: top }, {});
-    if (!store.replace("weeks", r.weeks)) { A.saveFailed(); return; }
+    const c = wctx();
+    if (!A.useTopThree(c.weekStart)) return;
+    A.say("Top three saved");
     A.render();
   };
   A.acts["top-edit"] = function () { openTopSheet(); };
+  // Fills only the boxes that are still empty, with text counted from the week. It is a starting point you edit.
+  A.acts["review-prefill"] = function () {
+    const f = document.getElementById("pwReviewForm");
+    if (!f) return;
+    const put = function (name, value) { if (value && !String(f[name].value).trim()) f[name].value = value; };
+    put("wins", f.getAttribute("data-wins") ? "Finished: " + f.getAttribute("data-wins") + "." : "");
+    put("unfinished", f.getAttribute("data-unfinished"));
+    put("onPriorities", f.getAttribute("data-prio"));
+    A.say("Filled the empty boxes from your records. Edit them as you like.");
+  };
   A.acts["top-remove"] = function (el) {
     const c = wctx(), wk = W.weekOf(c.weeks, c.weekStart), top = (wk ? W.readWeek(wk).top : []).filter(function (x, i) { return i !== Number(el.getAttribute("data-i")); });
     const r = W.setWeek(store.all("weeks"), c.weekStart, { top: top }, {});
@@ -545,7 +611,7 @@
     if (e.target && e.target.id === "pwReviewForm") {
       e.preventDefault();
       const f = e.target, c = wctx();
-      const r = W.setWeek(store.all("weeks"), c.weekStart, { wins: f.wins.value, lessons: f.lessons.value, nextFocus: f.nextFocus.value, reviewedAt: Date.now() }, {});
+      const r = W.setWeek(store.all("weeks"), c.weekStart, { wins: f.wins.value, lessons: f.lessons.value, unfinished: f.unfinished.value, onPriorities: f.onPriorities.value, nextFocus: f.nextFocus.value, reviewedAt: Date.now() }, {});
       if (!r.ok || !store.replace("weeks", r.weeks)) { A.saveFailed(); return; }
       A.notice("Review saved.", "");
       A.render();
