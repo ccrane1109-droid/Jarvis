@@ -523,3 +523,39 @@ test("calendar items: plain blocks appear once, a block that holds a task is lef
   assert.equal(items.find((i) => i.title === "Gym").color, ING.find((i) => i.id === "ing_workout").color, "drawn in its category colour");
   assert.deepEqual(W.calendarItems({ blocks, ingredients: ING }, "2026-12-01", "2026-12-07").filter((i) => i.title === "Brand"), [], "outside the range: nothing");
 });
+
+test("calendar items for editing in the Calendar: a block that holds a task is listed in place of the task, with the task's words and state", () => {
+  let blocks = block([], { title: "Brand", ingredientId: "ing_gratiel", date: TODAY, start: "09:00", end: "10:30" }).blocks;
+  const t = task("t1", { text: "Write the lookbook intro", priority: "high" });
+  blocks = W.placeTask(blocks, "t1", { date: TODAY, start: "13:00", end: "14:00", ingredientId: "ing_gratiel" }, [t], ctx({ ingredients: ING })).blocks;
+  const items = W.calendarItems({ blocks, ingredients: ING, tasks: [t], editable: true }, MON, "2026-11-08");
+  assert.equal(items.length, 2, "both blocks are listed");
+  const held = items.find((i) => i.taskId === "t1");
+  assert.equal(held.title, "Write the lookbook intro", "a block that holds a task shows the task's words");
+  assert.equal(held.readOnly, false, "and can be changed");
+  assert.equal(held.priority, "high");
+  assert.equal(held.completed, false);
+  assert.equal(held.id, blocks.find((b) => b.taskId === "t1").id, "the item is the block (move it, and the task follows)");
+  // ticking the task shows on the block
+  const done = W.calendarItems({ blocks, ingredients: ING, tasks: [Object.assign({}, t, { completed: true })], editable: true }, MON, "2026-11-08").find((i) => i.taskId === "t1");
+  assert.equal(done.completed, true, "the block is done when its task is");
+  // a plain block is done by its own tick for that day
+  const plain = blocks.find((b) => !b.taskId);
+  const ticked = W.setBlockDone(blocks, plain.id, TODAY, true, ctx()).blocks;
+  assert.equal(W.calendarItems({ blocks: ticked, ingredients: ING, tasks: [t], editable: true }, MON, "2026-11-08").find((i) => i.title === "Brand").completed, true);
+  // without editable the old rules still hold
+  assert.equal(W.calendarItems({ blocks, ingredients: ING, tasks: [t] }, MON, "2026-11-08").length, 1);
+});
+
+test("a day's 15-minute free stretches: a block moved to a quarter hour keeps its length and the task follows", () => {
+  const t = task("t1");
+  let blocks = W.placeTask([], "t1", { date: TODAY, start: "13:00", end: "14:00", ingredientId: "ing_gratiel" }, [t], ctx({ ingredients: ING })).blocks;
+  const id = blocks[0].id;
+  const r = W.moveOccurrence(blocks, id, TODAY, { date: TODAY, start: "13:15", end: "14:15" }, ctx({ ingredients: ING, tasks: [t] }));
+  assert.equal(r.ok, true);
+  assert.deepEqual([r.blocks[0].start, r.blocks[0].end], ["13:15", "14:15"]);
+  assert.deepEqual(r.taskPatch, { date: TODAY, time: "13:15" }, "the task's time follows the block");
+  const shorter = W.resizeOccurrence(r.blocks, id, TODAY, "13:45", ctx({ ingredients: ING, tasks: [t] }));
+  assert.equal(shorter.ok, true);
+  assert.deepEqual([shorter.blocks[0].start, shorter.blocks[0].end], ["13:15", "13:45"]);
+});

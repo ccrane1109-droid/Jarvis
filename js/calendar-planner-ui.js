@@ -128,7 +128,7 @@
     const n = r.top.length + r.doItems.length + r.stopItems.length;
     let html = '<div class="cdp-sec cdp-ref"><button type="button" class="cdp-ref-h" data-cdp="ref-toggle" aria-expanded="' + ui.ref + '"><span>From your weekly plan</span><span class="cdp-plan-sum">' + n + (n === 1 ? " item" : " items") + ' \u00b7 optional</span><span class="cdp-chev" aria-hidden="true"></span></button>';
     if (ui.ref) {
-      const list = function (title, arr, fn) { return arr.length ? '<h5 class="cdp-ref-t">' + title + '</h5><ul class="cdp-ref-list">' + arr.map(fn).join("") + '</ul>' : ""; };
+      const list = function (title, arr, fn) { return arr.length ? '<h4 class="cdp-ref-t">' + title + '</h4><ul class="cdp-ref-list">' + arr.map(fn).join("") + '</ul>' : ""; };
       html += '<div class="cdp-ref-body">' + list("Top three this week", r.top, function (x) { return '<li class="' + (x.done ? "is-done" : "") + '">' + (x.done ? "&#10003; " : "") + esc(x.text) + '</li>'; }) +
         list("Things to do this week", r.doItems, function (x) { return '<li class="' + (x.done ? "is-done" : "") + '">' + (x.done ? "&#10003; " : "") + esc(x.text) + '</li>'; }) +
         list("Things to stop doing", r.stopItems, function (x) { return '<li>' + esc(x.text) + '</li>'; }) +
@@ -205,14 +205,24 @@
           '<span class="cdp-habit-count">' + esc(x.name) + ' ' + x.count + '/' + x.target + '</span>') + '</span>';
       }).join("") + '</div>' : "") + '</section>';
   }
+  // The weekly plan's own workload rule: blocks and events in one day over your daily limit (Rest blocks don't count). -> the message, or "".
+  function overbooked(date) {
+    try {
+      const S = store(), h = habits(), C = window.JarvisCalendar;
+      if (!S || !C || !C.getEvents) return "";
+      const cap = W.capacity({ weekStart: W.mondayOf(date), today: host.today(), blocks: S.all("blocks"), ingredients: S.all("ingredients"), tasks: h ? h.getTasks() : [], links: S.all("links"), settings: S.settings(), events: C.getEvents(), zone: C.zone() });
+      const w = cap.warnings.filter(function (x) { return x.kind === "overbooked" && x.date === date; })[0];
+      return w ? w.message : "";
+    } catch (e) { return ""; }
+  }
   function summaryHtml(date, tl, items) {
     const t = host.today(), past = date < t;
     const timed = tl.rows.filter(function (r) { return r.type === "item"; }).length;
     const bits = [];
     bits.push(timed + (timed === 1 ? " thing scheduled" : " things scheduled"));
     if (!past) bits.push(D.hm(tl.freeMin) === "0 min" ? "no free time" : D.hm(tl.freeMin) + " free");
-    let warn = "";
-    try { const w = W.winOf(store().settings()); if (w.limitMin && tl.busyMin > w.limitMin) warn = ' <span class="cdp-warn">Over your ' + esc(D.hm(w.limitMin)) + ' daily limit</span>'; } catch (e) { /* no limit shown */ }
+    const over = overbooked(date);
+    const warn = over ? ' <span class="cdp-warn">' + esc(over) + '</span>' : "";
     return '<p class="cdp-sum" role="status">' + esc(bits.join(" · ")) + warn + '</p>';
   }
 
@@ -229,7 +239,7 @@
     if (allDay.length) html += '<div class="cdp-allday" role="group" aria-label="All day">' + allDay.map(host.chipHtml).join("") + '</div>';
     html += habitsHtml(date);
     const rows = timelineHtml(date, tl);
-    html += rows ? '<div class="cdp-timeline" role="list" aria-label="Schedule">' + rows + '</div>' :
+    html += rows ? '<div class="cdp-timeline" role="group" aria-label="Schedule">' + rows + '</div>' :
       '<div class="cal-empty"><p>' + (date < t ? "Nothing was scheduled." : "Nothing scheduled yet.") + '</p><button type="button" class="btn btn-primary" data-cdp="add" data-date="' + date + '">+ Add</button></div>';
     html += '</div></div>';
     return html;
@@ -265,7 +275,7 @@
     let html = '<div class="cdw">' + strip + '<section class="cdw-panel" data-date="' + sel + '" aria-label="' + esc(host.dayName(sel)) + '"><div class="cdw-head"><h3>' + esc((sel === t ? "Today \u00b7 " : "") + host.dayName(sel, { weekday: "long", month: "short", day: "numeric" })) + '</h3>' +
       '<button type="button" class="cal-more" data-cal="goto-day" data-date="' + sel + '">Open day</button></div>' + topMiniHtml(sel) + summaryHtml(sel, tl, dayItems) + weekUnschedHtml(sel) + refHtml(sel);
     if (allDay.length) html += '<div class="cdp-allday" role="group" aria-label="All day">' + allDay.map(host.chipHtml).join("") + '</div>';
-    html += rows ? '<div class="cdp-timeline" role="list" aria-label="Schedule">' + rows + '</div>' : '<div class="cal-empty"><p>Nothing scheduled.</p><button type="button" class="btn btn-primary" data-cdp="add" data-date="' + sel + '">+ Add</button></div>';
+    html += rows ? '<div class="cdp-timeline" role="group" aria-label="Schedule">' + rows + '</div>' : '<div class="cal-empty"><p>Nothing scheduled.</p><button type="button" class="btn btn-primary" data-cdp="add" data-date="' + sel + '">+ Add</button></div>';
     return html + '</section></div>';
   }
   // Week on a wide screen: under the day names, each day's top three.

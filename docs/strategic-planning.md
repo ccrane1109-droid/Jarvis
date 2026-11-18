@@ -48,16 +48,21 @@ Health ("On track", "At risk", "Behind", "Overdue") compares progress with how m
 of the time elapsed, at risk = within 25, otherwise behind. An item is overdue when its deadline (or the end of its month, quarter or year)
 has passed and it isn't done. Paused items raise no warnings; dropped items leave their parents' progress.
 
-## The weekly planner
+## The weekly planner (now in the Calendar)
+
+**Strategy › Weekly** is for the week's direction: Weekly Intentions, the week at a glance, the week's top three, the numbers, and the end-of-week
+review with carry-forward. The time-blocking itself (the Monday-to-Sunday grid, the category palette, suggested times, the Add block button) was
+moved to **Calendar › Day and Week**, so there is one planner, not two; see [calendar-planner.md](calendar-planner.md). **Nothing was copied and
+nothing was lost**: the Calendar reads and writes the very same blocks (`jarvisPlanBlocks`) and categories (`jarvisPlanIngredients`).
 
 * **Time Block Categories** (version 1 called them ingredients; the saved data is the same) are the kinds of time you plan with. The starter set (School, Gratiel, Workout, Studying, Personal, Rest) is added only when you
-  press the button; you can rename, recolour, add and delete them. Rest time doesn't count toward your daily workload. Calendar and Home label these blocks “Time block”.
-* **Blocks** snap to 30 minutes or an hour, can repeat (daily, or weekly on days you choose), and can be dragged (mouse) or press-and-held then
-  dragged (touch). On a phone the week shows one day at a time.
+  press the button; you can rename, recolour, add and delete them from the Calendar's ⋯ menu. Rest time doesn't count toward your daily workload. Calendar and Home label these blocks “Time block”.
+* **Blocks** start and end on any quarter hour, can repeat (daily, or weekly on days you choose), and can be dragged and resized in the Calendar's hour-by-hour views.
 * A block can hold one existing task. The task takes the block's day and time (the same task you see in Habits and the Calendar), follows the
   block if it moves, and the block follows the task if you move it elsewhere. Ticking either ticks both. A block with a task can't repeat.
 * **Time worked** is only what you log on a block. Unlogged blocks aren't counted as worked, and the numbers say how many were logged.
-* Suggested times use the free time left after your blocks, calendar events and timed tasks. They are proposals; you press Schedule.
+* The planner's hours (when the day starts and ends, and the daily workload limit) are set from the Calendar's ⋯ menu › *Planner hours*; they
+  are still saved in `jarvisPlanSettings`. The old "Time blocks snap to 30 minutes / 1 hour" setting is no longer used (blocks use quarter hours); its saved value is left alone.
 * Carry-forward lists unfinished tasks from days that have passed; nothing moves until you press the button (and it can be undone).
 
 ## Version 2.0: what was added

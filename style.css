@@ -3546,7 +3546,7 @@ button.hs-day:hover { background: var(--card-hover); }
 .cal-col.is-drop { background-color: rgba(79, 140, 255, 0.12); }
 .cal-ev { position: absolute; left: calc(var(--col, 0) / var(--cols, 1) * 100% + 1px); width: calc(100% / var(--cols, 1) - 3px); z-index: calc(1 + var(--col, 0)); padding: 2px 5px; border: 0; border-left: 3px solid var(--cc, var(--accent)); border-radius: 7px; background: rgba(255, 255, 255, 0.08); background: color-mix(in srgb, var(--cc, var(--accent)) 24%, var(--bg-elevated)); color: var(--text); font: inherit; font-size: 12px; line-height: 1.25; text-align: left; overflow: hidden; cursor: pointer; z-index: 1; touch-action: manipulation; }
 .cal-ev .t { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cal-ev .m { display: block; color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-ev .m { display: block; color: #b4bccd; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-ev.is-conflict { box-shadow: 0 0 0 1px var(--yellow); }
 .cal-ev.is-dragging, .cal-chip.is-dragging { opacity: 0.35; }
 .cal-ev:focus-visible, .cal-chip:focus-visible, .cal-num:focus-visible, .cal-more:focus-visible, .cal-wk-daybtn:focus-visible, .cal-chip-btn:focus-visible, .cal-view-btn:focus-visible, 
@@ -5237,12 +5237,12 @@ span.sp-trow-t { cursor: default; }
 /* the timeline: things in time order, with the free stretches between them */
 .cdp-timeline { border-top: 1px solid var(--card-border); }
 .cdp-timeline .cal-ag-row { border-top: 1px solid var(--card-border); }
-.cdp-timeline .cal-ag-time small { display: block; font-size: 12px; color: var(--text-faint); }
+.cal-ag-time small { display: block; font-size: 12px; color: var(--text-dim); }
 .cdp-free { border-top: 1px solid var(--card-border); }
 .cdp-free-btn { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 2px; border: 0; background: transparent; color: var(--text-dim); font: inherit; text-align: left; cursor: pointer; }
 .cdp-free-btn:hover { background: var(--card-hover); }
 .cdp-free-time { flex: none; width: 74px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.cdp-free-time small { display: block; font-size: 12px; color: var(--text-faint); }
+.cdp-free-time small { display: block; font-size: 12px; color: var(--text-dim); }
 .cdp-free-bar { flex: none; width: 4px; align-self: stretch; border-radius: 2px; background: repeating-linear-gradient(to bottom, var(--accent-dim) 0, var(--accent-dim) 4px, transparent 4px, transparent 8px); }
 .cdp-free-main { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
 .cdp-free-main em { font-style: normal; font-weight: 600; color: var(--accent-hover); }
@@ -5311,3 +5311,6 @@ span.sp-trow-t { cursor: default; }
 .cdw-unsched { margin: 4px 0 8px; }
 .cdp-warn { color: var(--yellow); font-weight: 600; }
 .pw-moved { margin: 4px 2px 10px; font-size: 13px; }
+.cdw-day.is-sel .cdw-dow { color: var(--text); }
+.cdw-n { font-size: 12px; }
+@media (max-width: 380px) { .cal-view-btn { min-width: 56px; padding: 0 8px; } }

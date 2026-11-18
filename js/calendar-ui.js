@@ -113,6 +113,13 @@
     const items = C.expand(events, from, to, zone()).concat(tasks, S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : [], blocks);
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
+    // time blocks overlapping each other, or a timed event on the same day (the event rules above only know events)
+    const bl = blocks.filter(function (b) { return !b.completed; }), evs = items.filter(function (e) { return e.source === "event" && !e.allDay && !e.point && e.date === e.endDate && !e.completed && typeof e.startMin === "number"; });
+    const clash = function (x, y) { return x.date === y.date && x.startMin < y.endMin && y.startMin < x.endMin; };
+    bl.forEach(function (b) {
+      bl.forEach(function (o) { if (o !== b && clash(b, o)) mark[b.key] = true; });
+      evs.forEach(function (e) { if (clash(b, e)) { mark[b.key] = true; mark[e.key] = true; } });
+    });
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
     return items;
   }
