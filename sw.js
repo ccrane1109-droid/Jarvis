@@ -117,9 +117,11 @@ const APP_SHELL = [
   "./js/plan-breakdown-ui.js?v=85",
   "./js/plan-week-logic.js?v=85",
   "./js/intentions-logic.js?v=85",
+  "./js/day-planner-logic.js?v=85",
   "./js/plan-insights-logic.js?v=85",
   "./js/plan-week-ui.js?v=85",
   "./js/plan-intentions-ui.js?v=85",
+  "./js/calendar-planner-ui.js?v=85",
   "./js/health-overview-ui.js?v=85",
   "./js/planning-overview-ui.js?v=85"
 ];

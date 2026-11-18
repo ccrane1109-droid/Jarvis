@@ -31,7 +31,7 @@
   let modal = null;          // the open popup: { kind: "event" | "task" | "settings", ... }
   let undo = null;           // { timer, fn }
   let itemMap = {};          // key -> item, for what is on screen
-  let wantScroll = true, ready = false, drag = null, suppressClickUntil = 0, searchTimer = null, nowTimer = null, lastDay = "";
+  let lastNowStep = 0, wantScroll = true, ready = false, drag = null, suppressClickUntil = 0, searchTimer = null, nowTimer = null, lastDay = "";
 
   function $(id) { return document.getElementById(id); }
   function core() { return window.JarvisCore; }
@@ -116,6 +116,14 @@
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
     return items;
   }
+  function planner() { return window.JarvisCalPlanner || null; }
+  // The day a new thing goes on: the day you are looking at.
+  function addDate() { return view === "day" ? anchor : (selected && C.isDate(selected) ? selected : anchor); }
+  // One Add for everything: a task, a time block or an event. Falls back to the event form when the planner is not there.
+  function openAdd(o) {
+    const op = o || {};
+    if (planner()) planner().openAdd({ date: op.date || addDate(), time: op.time, end: op.end, opener: op.opener }); else { openNew({ date: op.date, time: op.time }); focusSoon("#calF_title"); }
+  }
   function visibleItems(from, to) {
     const all = allItems(from, to), shown = C.filterItems(all, filters);
     itemMap = {}; shown.forEach(function (it) { itemMap[it.key] = it; });
@@ -132,6 +140,9 @@
 
   function renderToolbar() {
     $("calTitle").textContent = view === "day" && dayStyle === "list" ? (anchor === today() ? "Today \u00b7 " : "") + dayName(anchor, { weekday: "short", month: "short", day: "numeric" }) : C.viewTitle(view, anchor, settings.weekStart);
+    const sb = $("calStyle");
+    if (sb) { sb.hidden = view !== "day"; sb.textContent = dayStyle === "list" ? "Hours" : "List"; sb.setAttribute("aria-label", dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list"); }
+    const tb = $("calToday"); if (tb) tb.hidden = !(view === "day" && anchor !== today());
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.classList.toggle("hidden", false); });
     const tools = $("calTools"); if (tools) tools.classList.toggle("hidden", !(toolsOpen || filters.q || filters.categories.length || filters.hideDone));
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === view)); });
@@ -260,6 +271,7 @@
     if (strips.some(function (s) { return s.length; })) {
       head += '<div class="cal-wk-allday" style="--cols:' + cols + '"><div class="cal-gutter-label">All day</div>' + strips.map(function (s) { return '<div>' + s.map(chipHtml).join("") + '</div>'; }).join("") + '</div>';
     }
+    if (cols > 1 && planner()) head += planner().weekPrioHtml(dates);
     let gutter = ''; for (let h = 0; h < 24; h++) gutter += '<div class="cal-hr"><span>' + esc(C.hourLabel(h)) + '</span></div>';
     const colsHtml = dates.map(function (d) {
       const segs = C.layoutDay(items, d);
@@ -276,10 +288,15 @@
     const scroller = $("calScroll"), keep = scroller ? scroller.scrollTop : 0;
     if (loadError) { stage.innerHTML = '<div class="cal-empty"><p>' + esc(loadError) + '</p></div>'; return; }
     const r = C.rangeFor(view, anchor, settings.weekStart), items = visibleItems(r.from, r.to).shown;
+    if (view === "week" && !(selected >= r.from && selected <= r.to)) selected = today() >= r.from && today() <= r.to ? today() : r.from;   // the day a new thing goes on
     if (view === "month") stage.innerHTML = monthHtml(items);
     else if (view === "agenda") stage.innerHTML = agendaHtml(items);
-    else if (view === "day" && dayStyle === "list") stage.innerHTML = dayListHtml(items);
-    else if (view === "week" && isPhone()) { const wd = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) wd.push(d); stage.innerHTML = weekListHtml(items, wd); }
+    else if (view === "day" && dayStyle === "list") stage.innerHTML = planner() ? planner().dayHtml(anchor, dayItems(items, anchor)) : dayListHtml(items);
+    else if (view === "week" && isPhone()) {
+      const wd = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) wd.push(d);
+      if (wd.indexOf(selected) === -1) selected = wd.indexOf(today()) !== -1 ? today() : wd[0];
+      stage.innerHTML = planner() ? planner().weekHtml(wd, items, selected) : weekListHtml(items, wd);
+    }
     else {
       const dates = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) dates.push(d);
       stage.innerHTML = gridHtml(dates, items);
@@ -288,7 +305,7 @@
         if (wantScroll) { s.scrollTop = scrollTarget(items, dates) ; wantScroll = false; } else s.scrollTop = keep;
       }
     }
-    lastDay = today();
+    lastDay = today(); lastNowStep = Math.floor(nowMin() / 5);
   }
   function scrollTarget(items, dates) {
     const s = $("calScroll"), col = s && s.querySelector(".cal-col");
@@ -767,17 +784,17 @@
       return;
     }
     if (act === "goto-day") { gotoDay(el.getAttribute("data-date")); return; }
-    if (act === "new-on") { openNew({ date: el.getAttribute("data-date") }); return; }
-    if (act === "new") { openNew({}); return; }
+    if (act === "new-on") { openAdd({ date: el.getAttribute("data-date"), opener: el }); return; }
+    if (act === "new") { openAdd({ opener: el }); return; }
     if (act === "clear") { clearFilters(); return; }
     if (act === "slot" && e.target === el) {
       const date = el.getAttribute("data-date"), min = snapMinute(el, e.clientY, 0);
-      openNew({ date: date, time: C.timeOf(Math.min(min, 1380)) }); return;
+      openAdd({ date: date, time: C.timeOf(Math.min(min, 1380)), opener: el }); return;
     }
     const cell = e.target.closest(".cal-cell");
     if (cell && !el) {
       const d = cell.getAttribute("data-date");
-      if (isPhone()) { selected = d; anchor = d; render(); } else { selected = d; openNew({ date: d }); }
+      if (isPhone()) { selected = d; anchor = d; render(); } else { selected = d; openAdd({ date: d }); }
     }
   }
   function openItem(it) {
@@ -799,7 +816,7 @@
     else if (act === "dismiss") { saveError = ""; renderStatus(); }
   }
   // The keys the calendar answers to (when you are not typing in a box). Kept in one list so this screen can't drift from onKey.
-  const SHORTCUTS = [["t", "Go to today"], ["m", "Month view"], ["w", "Week view"], ["d", "Day view"], ["a", "Agenda view"], ["n", "New event"], ["p", "Planning assistant"], ["/", "Search"],
+  const SHORTCUTS = [["t", "Go to today"], ["m", "Month view"], ["w", "Week view"], ["d", "Day view"], ["a", "Agenda view"], ["n", "Add a task, time block or event"], ["p", "Planning assistant"], ["/", "Search"],
     ["\u2190  \u2192  or  k  j", "Previous / next"], ["?", "This list"], ["Esc", "Close what is open"]];
   function keysHtml() {
     return '<p class="field-hint">These work on the Calendar screen when you are not typing in a box.</p><dl class="cal-keys">' + SHORTCUTS.map(function (x) { return '<div class="cal-key-row"><dt><kbd>' + esc(x[0]) + '</kbd></dt><dd>' + esc(x[1]) + '</dd></div>'; }).join("") + '</dl>' +
@@ -813,7 +830,9 @@
       rows: [
         { key: "search", label: "Search and filters", sub: "Find an event or task, or show only some kinds" },
         { key: "assist", label: "Planning assistant", sub: "Find time, plan a week, catch up" },
-        { key: "style", label: dayStyle === "list" ? "Show Today hour by hour" : "Show Today as a list" },
+        { key: "style", label: dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list" },
+        { key: "cats", label: "Time block categories", sub: "What your time blocks are for" },
+        { key: "hours", label: "Planner hours", sub: "When your day starts and ends, and the daily limit" },
         { key: "agenda", label: "Next 30 days", sub: "Everything coming up, as a list" },
         { key: "settings", label: "Calendar settings", sub: "Time zone, reminders, files" },
         { key: "keys", label: "Keyboard shortcuts", minor: true }
@@ -821,7 +840,9 @@
       onPick: function (key) {
         if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
         else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
-        else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "Today as a list." : "Today hour by hour."); }
+        else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour."); }
+        else if (key === "cats") { if (planner()) planner().openCategories(); }
+        else if (key === "hours") { if (planner()) planner().openHours(); }
         else if (key === "agenda") setView("agenda");
         else if (key === "settings") openSettings();
         else if (key === "keys") openKeys();
@@ -899,7 +920,7 @@
     if (tag === "input" || tag === "textarea" || tag === "select" || (tg && tg.isContentEditable)) { if (e.key === "Escape" && tg.id === "calSearch") { tg.blur(); } return; }
     const k = e.key;
     if (k === "t") goToday(); else if (k === "m") setView("month"); else if (k === "w") setView("week"); else if (k === "d") setView("day"); else if (k === "a") setView("agenda"); else if (k === "p" && window.JarvisAssistant) window.JarvisAssistant.open($("calAssist")); else if (k === "?") { e.preventDefault(); openKeys(); }
-    else if (k === "n") { e.preventDefault(); openNew({}); focusSoon("#calF_title"); } else if (k === "/") { e.preventDefault(); if (!toolsOpen) { toolsOpen = true; render(); } $("calSearch").focus(); }
+    else if (k === "n") { e.preventDefault(); openAdd({}); } else if (k === "/") { e.preventDefault(); if (!toolsOpen) { toolsOpen = true; render(); } $("calSearch").focus(); }
     else if (k === "ArrowLeft" && tag !== "button") go(-1); else if (k === "ArrowRight" && tag !== "button") go(1);
     else if (k === "j") go(1); else if (k === "k") go(-1);
     else return;
@@ -908,6 +929,11 @@
   function tickNow() {
     if (!ready || !panelActive() || modal || drag) return;
     if (today() !== lastDay) { render(); return; }
+    if (view === "day" && dayStyle === "list" && planner()) {
+      const a = document.activeElement, typing = a && a.closest && a.closest("#calStage") && /^(input|textarea|select)$/i.test(a.tagName);
+      if (!typing && !document.body.classList.contains("sp-sheet-open") && !document.querySelector(".sm-overlay") && Math.floor(nowMin() / 5) !== lastNowStep) render();
+      return;
+    }
     const line = document.querySelector("#calStage .cal-now");
     if (line) line.style.top = (nowMin() / 14.4).toFixed(3) + "%";
   }
@@ -927,7 +953,9 @@
     $("calPrev").addEventListener("click", function () { go(-1); });
     $("calNext").addEventListener("click", function () { go(1); });
     $("calToday").addEventListener("click", goToday);
-    $("calNew").addEventListener("click", function () { openNew({}); focusSoon("#calF_title"); });
+    $("calNew").addEventListener("click", function (e) { openAdd({ opener: e.currentTarget }); });
+    const fab = $("calFab"); if (fab) fab.addEventListener("click", function (e) { openAdd({ opener: e.currentTarget }); });
+    const sbtn = $("calStyle"); if (sbtn) sbtn.addEventListener("click", function () { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour."); });
     $("calMenuBtn").addEventListener("click", openCalMenu);
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view")); }); });
     $("calFilterBtn").addEventListener("click", function () { filtersOpen = !filtersOpen; renderToolbar(); });
@@ -952,10 +980,17 @@
     document.addEventListener("keydown", onKey);
     document.addEventListener("jarvis-habits-day-changed", function () { if (panelActive()) render(); });
     document.addEventListener("jarvis-tasks-changed", function () { if (panelActive() && !drag) render(); });
-    try { const P = window.JarvisPlanStore; if (P && P.subscribe) P.subscribe(function (kind) { if (panelActive() && !drag && (kind === "blocks" || kind === "ingredients" || kind === "days" || kind === "weeks")) render(); }); } catch (e) { /* the plan is optional here */ }
+    try { const P = window.JarvisPlanStore; if (P && P.subscribe) P.subscribe(function (kind) { if (panelActive() && !drag && (kind === "blocks" || kind === "ingredients" || kind === "weeks")) render(); }); } catch (e) { /* the plan is optional here */ }
     nowTimer = window.setInterval(tickNow, 30000);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) tickNow(); });
     ready = true;
+    if (planner()) planner().attach({
+      date: function () { return anchor; }, today: today, nowMin: nowMin, rowHtml: rowHtml, chipHtml: chipHtml, dayName: dayName, dayItems: dayItems,
+      select: function (d) { selected = d; render(); announce(dayName(d) + "."); },
+      render: render, changed: function () { render(); notify(); }, notify: notify, say: announce,
+      notice: function (text, lab, fn) { window.JarvisCalendar.notice(text, lab, fn); },
+      openEvent: function (o) { openNew({ date: o.date, time: o.time }); focusSoon("#calF_title"); }
+    });
     renderStatus(); render();
   }
 

@@ -2611,13 +2611,15 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <div class="cal-toolbar">
         <h2 class="cal-title" id="calTitle" aria-live="polite"></h2>
         <span class="cal-head-btns">
+          <button type="button" class="cal-jump" id="calToday" hidden>Today</button>
+          <button type="button" class="cal-jump" id="calStyle" hidden aria-label="Show the day hour by hour">Hours</button>
           <button type="button" class="btn btn-primary cal-new" id="calNew">+ Add</button>
           <button type="button" class="btn-icon sm-more" id="calMenuBtn" aria-haspopup="dialog" aria-label="More calendar options"><span aria-hidden="true">&#8943;</span></button>
         </span>
       </div>
       <div class="cal-views-row">
         <div class="cal-views" role="group" aria-label="Calendar view">
-          <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Today</button>
+          <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Day</button>
           <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
           <button type="button" class="cal-view-btn" data-view="month" aria-pressed="false">Month</button>
         </div>
@@ -2625,7 +2627,6 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <button type="button" class="btn-icon cal-step" id="calPrev" aria-label="Previous">&larr;</button>
           <button type="button" class="btn-icon cal-step" id="calNext" aria-label="Next">&rarr;</button>
         </div>
-        <button type="button" class="cal-jump" id="calToday" hidden>Today</button>
       </div>
       <div class="cal-tools hidden" id="calTools">
         <input type="search" id="calSearch" class="cal-search" placeholder="Search events and tasks" aria-label="Search events and tasks" autocomplete="off">
@@ -2636,6 +2637,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
     </div>
     <div id="calStatus" class="cal-status hidden" role="status"></div>
     <div id="calStage" class="cal-stage" aria-live="off"></div>
+    <button type="button" class="cal-fab" id="calFab" aria-haspopup="dialog" aria-label="Add a task, time block or event"><span aria-hidden="true">+</span></button>
     <div id="calUndo" class="cal-undo hidden" role="status"></div>
     <p id="calLive" class="visually-hidden" role="status" aria-live="polite"></p>
     <p class="field-hint cal-foot" id="calFoot" hidden></p>
@@ -3223,6 +3225,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/plan-store.js?v=85"></script>
 <script src="js/plan-week-logic.js?v=85"></script>
 <script src="js/intentions-logic.js?v=85"></script>
+<script src="js/day-planner-logic.js?v=85"></script>
 <script src="js/plan-insights-logic.js?v=85"></script>
 <script src="js/plan-charts.js?v=85"></script>
 <script src="js/plan-ui.js?v=85"></script>
@@ -3232,6 +3235,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/plan-breakdown-ui.js?v=85"></script>
 <script src="js/plan-week-ui.js?v=85"></script>
 <script src="js/plan-intentions-ui.js?v=85"></script>
+<script src="js/calendar-planner-ui.js?v=85"></script>
 <script src="js/plan-insights-ui.js?v=85"></script>
 <script src="js/plan-home-ui.js?v=85"></script>
 <script src="js/health-overview-ui.js?v=85"></script>

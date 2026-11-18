@@ -1,14 +1,13 @@
 /* ==========================================================================
-   JARVIS — Strategic Planning Center: the Weekly view, a CEO time-blocking planner.
+   JARVIS — Strategic Planning Center: the Weekly view.
 
-   Monday to Sunday across the top, the hours down the side. Your time block categories (School, Gratiel, Workout ... with colours you
-   choose) are the kinds of time you plan with: drag one onto the week to make a block. A block can hold one of your existing
-   tasks; then the task takes that day and time, and ticking either one ticks both. Blocks can repeat, and snap to 30 minutes
-   or an hour. Under the grid: your top three for the week, the tasks not yet in a block (and suggested times for them),
-   planned vs worked time, and an end-of-week review with carry-forward of what you didn't finish.
+   What the week is for: Weekly Intentions, the week at a glance, your top three for the week, planned vs worked time, and the end-of-week review
+   with carry-forward of what you didn't finish. Time blocks themselves (making, moving, repeating and ticking them, and the daily plan)
+   are planned in the Calendar (Day and Week), which reads and writes the very same blocks (jarvisPlanBlocks) and categories
+   (jarvisPlanIngredients): nothing was copied or lost when the planning moved there.
 
-   The rules and every figure are in plan-week-logic.js. This file draws them and turns drags and taps into those rules.
-   Phones show one day at a time (pick it in the row of days); dragging works with a mouse, and by pressing and holding on touch.
+   This file still holds the forms that the Calendar and the other Strategy screens open (a block, a time block category, "choose my top three")
+   and exports them on JarvisPlanApp. The rules and every figure are in plan-week-logic.js.
    ========================================================================== */
 
 (function () {
@@ -16,8 +15,7 @@
 
   const A = window.JarvisPlanApp, PL = A.PL, W = window.JarvisPlanWeekLogic, store = A.store, esc = A.esc, state = A.state;
   const CL = window.JarvisCalendarLogic;
-  const PX = 1.2;                              // pixels per minute: an hour is 72 px
-  let drag = null, dragMoved = false, lastIngredient = "", cachedCtx = null;
+  let lastIngredient = "", cachedCtx = null;
 
   /* ---------------- what the screens read ---------------- */
 
@@ -71,114 +69,8 @@
     const ws = c.weekStart, isThis = ws === W.mondayOf(c.today);
     return '<div class="sp-head"><div class="sp-stepper"><button type="button" class="btn btn-secondary" data-act="week-nav" data-dir="-1" aria-label="Previous week">‹</button><span class="sp-stepper-label pw-week-label" data-focus-top>' + esc(weekTitle(ws)) + '</span><button type="button" class="btn btn-secondary" data-act="week-nav" data-dir="1" aria-label="Next week">›</button></div>' +
       '<div class="sp-head-btns">' + (isThis ? "" : '<button type="button" class="btn btn-secondary" data-act="week-today">This week</button>') +
-      '<button type="button" class="btn btn-secondary" data-act="week-interval" aria-pressed="' + (c.settings.interval === 60) + '">' + (c.settings.interval === 60 ? "Hourly blocks" : "30-minute blocks") + '</button>' +
-      '<button type="button" class="btn btn-primary" data-act="block-new">Add block</button></div></div>';
-  }
-
-  function alertsHtml(c) {
-    const cap = W.capacity(c), late = W.unscheduledHigh(c);
-    if (!cap.warnings.length && !late.length) return "";
-    let h = '<section class="sp-alert pw-alerts" role="region" aria-label="Heads up for this week"><h3 class="sp-h3">Heads up</h3><ul class="sp-sublist">';
-    cap.warnings.forEach(function (w) { h += '<li>' + esc(w.message) + '</li>'; });
-    late.forEach(function (t) { h += '<li>High priority and not scheduled: “' + esc(t.text) + '” (' + esc(dayLabel(t.date)) + ') <button type="button" class="btn btn-secondary" data-act="task-schedule" data-id="' + esc(t.id) + '" aria-label="Schedule ' + esc(t.text) + '">Schedule</button></li>'; });
-    return h + '</ul></section>';
-  }
-
-  /* ---- the grid ---- */
-  function axisBounds(c, occ) {
-    const w = W.winOf(c.settings);
-    let s = w.start, e = w.end;
-    occ.forEach(function (o) { s = Math.min(s, Math.floor(o.startMin / 60) * 60); e = Math.max(e, Math.ceil(o.endMin / 60) * 60); });
-    return { start: s, end: Math.min(1440, e), interval: w.interval };
-  }
-  function blockHtml(seg, c, bounds) {
-    const o = seg.item, t = o.taskId ? c.tasks.filter(function (x) { return x.id === o.taskId; })[0] : null;
-    const title = t ? t.text : o.title, color = ingColor(c, o.ingredientId);
-    const done = t ? !!t.completed : o.done;
-    const top = (seg.startMin - bounds.start) * PX, h = Math.max(18, (seg.endMin - seg.startMin) * PX - 2);
-    const past = o.date < c.today || (o.date === c.today && o.endMin <= c.nowMin);
-    const len = o.endMin - o.startMin;
-    const work = o.workedMin !== null ? o.workedMin + " of " + len + " min" : (past && !done ? "not logged" : "");
-    const label = title + ", " + W.DAY_NAMES[W.weekday(o.date)] + " " + fmtTime(o.start) + " to " + fmtTime(o.end) + ", " + ingName(c, o.ingredientId) + (t ? ", holds a task" : "") + (o.clash === "block" ? ", overlaps another block" : o.clash === "event" ? ", overlaps a calendar event" : "") + (done ? ", done" : "") + (o.recurring ? ", repeats" : "") + ". Opens the block.";
-    return '<div class="pw-block' + (t ? " is-task" : "") + (o.clash ? " is-clash" : "") + (done ? " is-done" : "") + (past && !done && o.workedMin === null ? " is-missed" : "") + '" data-drag="block" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '" data-len="' + len + '" ' +
-      'style="top:' + top + 'px;height:' + h + 'px;left:calc(' + (100 * seg.col / seg.cols) + '% + 2px);width:calc(' + (100 / seg.cols) + '% - 4px);--c:' + color + ';--bg:' + W.tint(color, 0.24) + '">' +
-      '<button type="button" class="pw-b-main" aria-label="' + esc(label) + '"><span class="pw-b-title">' + esc(title) + '</span>' + (h >= 40 ? '<span class="pw-b-time">' + (t ? '<span class="pw-b-tag">Task</span> ' : "") + esc(fmtTime(o.start)) + ' – ' + esc(fmtTime(o.end)) + (o.recurring ? " · repeats" : "") + (o.clash ? ' · <span class="pw-b-clashtag">overlap</span>' : "") + '</span>' : "") + (h >= 58 && work ? '<span class="pw-b-work">' + esc(work) + '</span>' : "") + '</button>' +
-      '<input type="checkbox" class="pw-b-check" data-act="block-done" data-block="' + esc(o.blockId) + '" data-date="' + o.date + '"' + (t ? ' data-task="' + esc(t.id) + '"' : "") + (done ? " checked" : "") + ' aria-label="' + (t ? "Task done: " : "Done: ") + esc(title) + '">' +
-      '<span class="pw-resize" data-drag="resize" aria-hidden="true"></span></div>';
-  }
-  function busyHtml(date, c, bounds) {
-    return W.busyOn(date, c).filter(function (b) { return b.kind !== "block"; }).map(function (b) {
-      const top = (Math.max(b.start, bounds.start) - bounds.start) * PX, h = Math.max(14, (Math.min(b.end, bounds.end) - Math.max(b.start, bounds.start)) * PX - 1);
-      return '<div class="pw-busy" style="top:' + top + 'px;height:' + h + 'px" title="' + esc((b.kind === "event" ? "Calendar: " : "Task at " + W.toTime(b.start) + ": ") + b.title) + '"><span>' + esc(b.title) + '</span></div>';
-    }).join("");
-  }
-  function gridHtml(c, occ) {
-    const dates = W.weekDates(c.weekStart), bounds = axisBounds(c, occ), height = (bounds.end - bounds.start) * PX;
-    if (!state.day || dates.indexOf(state.day) === -1) state.day = dates.indexOf(c.today) !== -1 ? c.today : dates[0];
-    const clash = W.clashKeys(c, dates[0], dates[6]);
-    let h = '<div class="pw-board" style="--hr:' + (bounds.interval * PX) + 'px"><div class="pw-heads"><div class="pw-corner" aria-hidden="true"></div>';
-    dates.forEach(function (d) {
-      const mine = occ.filter(function (o) { return o.date === d; }), n = mine.length, mins = mine.reduce(function (sum, o) { return sum + (o.endMin - o.startMin); }, 0);
-      h += '<button type="button" class="pw-head' + (d === c.today ? " is-today" : "") + (d === state.day ? " is-sel" : "") + '" data-act="pick-day" data-date="' + d + '" aria-pressed="' + (d === state.day) + '"' + (n ? ' aria-label="' + W.DAY_NAMES[W.weekday(d)] + " " + Number(d.slice(8)) + ", " + A.plural(n, "block") + ", " + hours(mins) + ' planned"' : "") + '><span class="pw-head-day">' + W.DAY_SHORT[W.weekday(d)] + '</span><span class="pw-head-date">' + Number(d.slice(8)) + '</span><span class="pw-head-n" aria-hidden="true">' + (n ? esc(hours(mins).replace(" h", "h")) : "") + '</span></button>';
-    });
-    h += '</div><div class="pw-body" style="height:' + height + 'px"><div class="pw-axis" aria-hidden="true">';
-    for (let m = Math.ceil(bounds.start / 60) * 60; m < bounds.end; m += 60) h += '<span style="top:' + ((m - bounds.start) * PX) + 'px">' + esc(CL && CL.hourLabel ? CL.hourLabel(m / 60) : fmtTime(W.toTime(m))) + '</span>';
-    h += '</div>';
-    dates.forEach(function (d) {
-      const items = occ.filter(function (o) { return o.date === d; }).map(function (o) { return Object.assign({}, o, { allDay: false, endDate: o.date, clash: clash[o.blockId + "|" + o.date] || "" }); });
-      const segs = CL.layoutDay(items, d, 15);
-      h += '<div class="pw-col' + (d === c.today ? " is-today" : "") + (d === state.day ? " is-sel" : "") + '" data-col data-date="' + d + '" data-top="' + bounds.start + '" role="group" aria-label="' + W.DAY_NAMES[W.weekday(d)] + " " + d + '">' + busyHtml(d, c, bounds) + segs.map(function (s) { return blockHtml(s, c, bounds); }).join("");
-      if (d === c.today && c.nowMin >= bounds.start && c.nowMin <= bounds.end) h += '<div class="pw-now" style="top:' + ((c.nowMin - bounds.start) * PX) + 'px" aria-hidden="true"></div>';
-      h += '</div>';
-    });
-    return h + '</div></div>';
-  }
-
-  /* ---- time block categories (stored as "ingredients": the old name of the same records) ---- */
-  function ingredientsHtml(c) {
-    const list = W.liveIngredients(c.ingredients);
-    let h = '<aside class="pw-side" aria-label="Time Block Categories"><h3 class="sp-h3">Time Block Categories</h3><p class="sp-dim pw-side-hint">Drag one onto the week to make a block, or tap it to add one to the day you are looking at.</p>';
-    if (!list.length) h += '<p class="sp-dim">Time block categories are the kinds of time you plan with.</p><button type="button" class="btn btn-primary" data-act="ing-starters">Add School, Gratiel, Workout, Studying, Personal and Rest</button>';
-    else h += '<ul class="pw-ings">' + list.map(function (i) {
-      return '<li class="pw-ing" data-drag="ingredient" data-id="' + esc(i.id) + '" style="--c:' + i.color + '"><button type="button" class="pw-ing-add" data-act="ing-add-block" data-id="' + esc(i.id) + '" aria-label="Add a ' + esc(i.name) + ' block"><span class="pw-dot" aria-hidden="true"></span><span class="pw-ing-name">' + esc(i.name) + '</span></button><button type="button" class="btn btn-secondary pw-ing-edit" data-nodrag data-act="ing-edit" data-id="' + esc(i.id) + '" aria-label="Edit ' + esc(i.name) + '">Edit</button></li>';
-    }).join("") + '</ul>';
-    h += '<div class="pw-side-actions"><button type="button" class="btn btn-secondary" data-act="ing-new">New category</button>' + (list.length && list.length < W.STARTERS.length + 4 && W.STARTERS.some(function (s) { return !list.some(function (x) { return x.id === s.id; }); }) ? '<button type="button" class="btn btn-secondary" data-act="ing-starters">Add the starter set</button>' : "") + '</div>' + tasksHtml(c) + '</aside>';
-    return h;
-  }
-
-  /* ---- tasks that are not in a block yet ---- */
-  function unscheduledTasks(c) {
-    const dates = W.weekDates(c.weekStart);
-    return c.tasks.filter(function (t) { return t && !t.completed && dates.indexOf(t.date) !== -1 && !W.scheduledBlock(c.blocks, t); })
-      .sort(function (a, b) { return (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) || ({ high: 0, medium: 1, low: 2 }[a.priority] || 1) - ({ high: 0, medium: 1, low: 2 }[b.priority] || 1) || (a.order || 0) - (b.order || 0); });
-  }
-  function tasksHtml(c) {
-    const list = unscheduledTasks(c);
-    let h = '<section class="pw-side-tasks" aria-label="Tasks not yet in a block"><h3 class="sp-h3">Tasks to schedule <span class="sp-dim">(' + list.length + ')</span></h3>';
-    if (!list.length) return h + '<p class="sp-dim pw-side-hint">Every open task dated this week is in a block, or you have none. Tasks come from Habits; add them under Monthly or on any plan item.</p></section>';
-    h += '<p class="sp-dim pw-side-hint">Drag a task onto the week, or tap Schedule. The task takes that day and time.</p><ul class="pw-tasks">';
-    list.slice(0, 40).forEach(function (t) {
-      const l = PL.linkOf(c.links, t.id), n = c.model.nodeOfTask(t.id);
-      h += '<li class="pw-task" data-drag="task" data-id="' + esc(t.id) + '"><span class="pw-task-text">' + esc(t.text) + '</span><span class="pw-task-meta">' + esc(dayLabel(t.date)) + (t.priority === "high" ? " · high" : "") + (l && l.estMin ? " · " + l.estMin + " min" : "") + (n ? " · " + esc(n.title) : "") + '</span>' +
-        '<button type="button" class="btn btn-secondary pw-task-btn" data-nodrag data-act="task-schedule" data-id="' + esc(t.id) + '" aria-label="Schedule ' + esc(t.text) + '">Schedule</button></li>';
-    });
-    return h + '</ul>' + (list.length > 40 ? '<p class="sp-dim">Showing the first 40.</p>' : "") + '</section>';
-  }
-  function suggestHtml(c) {
-    const s = W.suggest(c);
-    if (!s.length) return "";
-    const ings = W.liveIngredients(c.ingredients);
-    let h = '<p class="sp-dim">The first free time around your blocks, calendar events and timed tasks. Nothing is scheduled until you press Schedule.</p>';
-    if (ings.length) h += '<div class="sp-inline"><label for="pwSuggestIng">Plan them as</label><select id="pwSuggestIng" data-pw-suggest-ing>' + '<option value="">No category</option>' + ings.map(function (i) { return '<option value="' + esc(i.id) + '"' + (i.id === lastIngredient ? " selected" : "") + '>' + esc(i.name) + '</option>'; }).join("") + '</select></div>';
-    h += '<ul class="sp-sublist pw-suggest">';
-    s.forEach(function (x) {
-      h += '<li><span class="pw-sg-text"><strong>' + esc(x.text) + '</strong> ' + (x.none ? "" : '→ ' + esc(dayLabel(x.date)) + " " + esc(fmtTime(x.start)) + '–' + esc(fmtTime(x.end))) + '<span class="sp-dim pw-sg-why">' + esc(x.reason) + '</span></span>' +
-        (x.none ? "" : '<button type="button" class="btn btn-secondary" data-act="suggest-apply" data-id="' + esc(x.taskId) + '" data-date="' + x.date + '" data-start="' + x.start + '" data-end="' + x.end + '" aria-label="Schedule ' + esc(x.text) + ' on ' + esc(dayLabel(x.date)) + '">Schedule</button>') + '</li>';
-    });
-    h += '</ul>';
-    const ok = s.filter(function (x) { return !x.none; });
-    if (ok.length > 1) h += '<button type="button" class="btn btn-secondary" data-act="suggest-all">Schedule all ' + ok.length + '</button>';
-    return A.section("wk-suggest", "Suggested times", h, { open: true, summary: A.plural(s.length, "suggestion") });
+      '<button type="button" class="btn btn-primary" data-act="open-calendar">Plan time in Calendar</button></div></div>' +
+      '<p class="sp-dim pw-moved">Time blocks and the daily plan are in Calendar (Day and Week). Your blocks and categories are all still there.</p>';
   }
 
   /* ---- the week at a glance ---- */
@@ -202,7 +94,7 @@
       tile("Planned", tm.plannedMin ? esc(hours(tm.plannedMin)) : '<span class="sp-dim">none</span>', "in blocks") +
       tile("Worked", tm.loggedMin === null ? '<span class="sp-dim" aria-hidden="true">–</span><span class="visually-hidden">not logged</span>' : esc(hours(tm.loggedMin)), tm.loggedMin === null ? "none logged" : "logged") +
       tile("Finished", tm.doneBlockMin ? esc(hours(tm.doneBlockMin)) : '<span class="sp-dim">–</span>', "blocks ticked off") + '</div>';
-    h += '<h4 class="sp-h4">Planned time by category</h4>' + (tm.plannedMin ? segBar(tm.rows, tm.plannedMin) : '<p class="sp-dim">No time is planned this week yet. Drag a category onto a day, or tap one to add a block.</p>');
+    h += '<h4 class="sp-h4">Planned time by category</h4>' + (tm.plannedMin ? segBar(tm.rows, tm.plannedMin) : '<p class="sp-dim">No time is planned this week yet. You can plan it in Calendar.</p>');
     h += '<h4 class="sp-h4">Most important still open</h4>' + (open.length ? '<ul class="pw-open">' + open.map(function (r) {
       const best = r.parts.slice().sort(function (a, b) { return b.points - a.points; })[0];
       return '<li><button type="button" class="sp-link" data-act="task-detail" data-id="' + esc(r.task.id) + '">' + esc(r.task.text) + '</button><span class="sp-dim">' + esc(best ? best.label : "") + '</span></li>';
@@ -210,16 +102,6 @@
     if (carry.length) h += '<p class="sp-dim">' + esc(A.plural(carry.length, "task") + " from earlier days " + (carry.length === 1 ? "is" : "are") + " unfinished. You can carry them forward in the review below.") + '</p>';
     return A.section("wk-glance", "This week at a glance", h, { open: true, summary: (wt.total ? wt.done + " of " + wt.total + " tasks" : "no tasks") + " · " + (tm.plannedMin ? hours(tm.plannedMin) + " planned" : "nothing planned") });
   }
-  // The selected day: what is planned, by category, and how much of your day is still free.
-  function daySummaryHtml(c) {
-    const d = state.day, s = W.daySummary(d, c);
-    let h = '<section class="pw-day" aria-label="' + esc(W.DAY_NAMES[W.weekday(d)]) + ' at a glance"><h3 class="sp-h3">' + esc(W.DAY_NAMES[W.weekday(d)] + " " + dayLabel(d).replace(/^\w+ /, "")) + '</h3>';
-    h += '<p class="sp-dim">' + (s.plannedMin ? esc(hours(s.plannedMin)) + " planned in blocks. " : "Nothing planned in blocks. ") + esc(hours(s.freeMin)) + " free of your " + esc(hours(s.windowMin)) + " day.</p>";
-    if (s.rows.length) h += '<ul class="pw-day-rows">' + s.rows.map(function (r) { return '<li><span class="pw-dot" style="--c:' + r.color + '" aria-hidden="true"></span><span class="pw-alloc-name">' + esc(r.name) + '</span><span class="pw-alloc-n">' + esc(hours(r.min)) + '</span></li>'; }).join("") + '</ul>';
-    h += '<p class="sp-dim pw-key"><span class="pw-b-tag">Task</span> marks a block that holds one of your tasks (ticking it ticks the task). Other blocks are time you set aside. A red outline means two things overlap.</p>';
-    return h + '</section>';
-  }
-
   /* ---- top three ---- */
   function topHtml(c) {
     const wk = W.weekOf(c.weeks, c.weekStart), saved = wk ? W.readWeek(wk).top : [];
@@ -289,17 +171,13 @@
     html: function () {
       store.init();
       const c = wctx(); cachedCtx = c;
-      const occ = W.occurrences(c.blocks, c.weekStart, PL.addDays(c.weekStart, 6)), st = W.weekStats(c);
-      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + (window.JarvisIntentionsUI ? window.JarvisIntentionsUI.html(c.weekStart) : "") + alertsHtml(c) + glanceHtml(c) + topHtml(c);
-      h += '<div class="pw-layout">' + ingredientsHtml(c) + gridHtml(c, occ) + '</div>' + daySummaryHtml(c);
-      if (!occ.length && W.liveIngredients(c.ingredients).length) h += '<p class="sp-dim pw-empty">Nothing is planned this week yet. Drag a category or a task onto a day.</p>';
-      h += '<div class="pw-panels">' + suggestHtml(c) + statsHtml(c, st) + reviewHtml(c, st) + '</div>';
+      const st = W.weekStats(c);
+      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + (window.JarvisIntentionsUI ? window.JarvisIntentionsUI.html(c.weekStart) : "") + glanceHtml(c) + topHtml(c);
+      h += '<div class="pw-panels">' + statsHtml(c, st) + reviewHtml(c, st) + '</div>';
       return h;
     },
-    after: function () { if (window.JarvisIntentionsUI) window.JarvisIntentionsUI.after(); },   // (the drag handlers are attached once, to the page)
-    change: function (el) {
-      if (el.matches && el.matches("[data-pw-suggest-ing]")) lastIngredient = el.value;
-    },
+    after: function () { if (window.JarvisIntentionsUI) window.JarvisIntentionsUI.after(); },
+    change: function () {},
     submit: function () {}
   });
 
@@ -535,52 +413,17 @@
 
   A.acts["week-nav"] = function (el) { state.week = PL.addDays(weekStart(), 7 * Number(el.getAttribute("data-dir"))); state.day = ""; A.render(); };
   A.acts["week-today"] = function () { state.week = W.mondayOf(store.today()); state.day = ""; A.render(); };
-  A.acts["week-interval"] = function () { if (!store.setSettings({ interval: store.settings().interval === 60 ? 30 : 60 })) A.saveFailed(); A.render(); };
-  A.acts["pick-day"] = function (el) { state.day = el.getAttribute("data-date"); A.render(); };
-  A.acts["block-new"] = function () { const c = wctx(); openBlockSheet({ date: state.day && W.weekDates(c.weekStart).indexOf(state.day) !== -1 ? state.day : c.today }); };
-  A.acts["ing-new"] = function () { openIngredientSheet(""); };
-  A.acts["ing-edit"] = function (el) { openIngredientSheet(el.getAttribute("data-id")); };
-  A.acts["ing-add-block"] = function (el) {
-    if (dragMoved) return;
-    const c = wctx();
-    openBlockSheet({ date: state.day && W.weekDates(c.weekStart).indexOf(state.day) !== -1 ? state.day : c.today, ingredientId: el.getAttribute("data-id") });
-  };
+  A.acts["block-new"] = function () { openBlockSheet({ date: store.today() }); };
   A.acts["ing-starters"] = function () {
     const r = W.addStarters(store.all("ingredients"), {});
     if (!store.replace("ingredients", r.ingredients)) { A.saveFailed(); return; }
     A.say(r.added + " categories added");
     A.render();
   };
-  A.acts["task-schedule"] = function (el) {
-    const c = wctx(), t = A.taskById(el.getAttribute("data-id"));
-    if (!t) return;
-    const day = W.weekDates(c.weekStart).indexOf(t.date) !== -1 && t.date >= c.today ? t.date : (state.day || c.today);
-    const l = PL.linkOf(c.links, t.id), len = l && l.estMin ? Math.max(W.MIN_LEN, l.estMin) : 60;
-    const free = W.freeSlots(day, c, len, [])[0];
-    openBlockSheet({ date: day, taskId: t.id, start: free ? W.toTime(free.start) : undefined, end: free ? W.toTime(Math.min(free.start + len, 1439)) : undefined });
-  };
-  A.acts["suggest-apply"] = function (el) {
-    const id = el.getAttribute("data-id");
-    if (placeAt(id, { date: el.getAttribute("data-date"), start: el.getAttribute("data-start"), end: el.getAttribute("data-end"), ingredientId: lastIngredient })) { A.say("Scheduled"); A.render(); }
-  };
-  A.acts["suggest-all"] = function () {
-    const c = wctx(), list = W.suggest(c).filter(function (x) { return !x.none; });
-    let blocks = c.blocks; const patches = [];
-    list.forEach(function (x) {
-      const r = W.placeTask(blocks, x.taskId, { date: x.date, start: x.start, end: x.end, ingredientId: lastIngredient }, c.tasks, { ingredients: c.ingredients });
-      if (r.ok) { blocks = r.blocks; patches.push(Object.assign({ taskId: x.taskId }, r.taskPatch)); }
-    });
-    if (saveBlocks(blocks, patches)) { A.notice(A.plural(patches.length, "task") + " scheduled.", "Undo", function () {
-      const undone = c.blocks; const restore = patches.map(function (p) { const t = c.tasks.filter(function (k) { return k.id === p.taskId; })[0]; return t ? { taskId: p.taskId, date: t.date, time: t.time || "" } : null; }).filter(Boolean);
-      saveBlocks(undone, restore); A.render();
-    }); A.render(); }
-  };
-  A.acts["block-done"] = function (el) {
-    const id = el.getAttribute("data-block"), date = el.getAttribute("data-date"), taskId = el.getAttribute("data-task");
-    if (taskId) { A.toggleTask(taskId); return; }
-    const r = W.setBlockDone(store.all("blocks"), id, date, el.checked, {});
-    if (!store.replace("blocks", r.blocks)) A.saveFailed();
-    A.render();
+  A.acts["task-schedule"] = function (el) { A.scheduleTask(el.getAttribute("data-id")); };
+  A.acts["open-calendar"] = function () {
+    const b = document.getElementById("navBtnCalendar"); if (b) b.click();
+    window.setTimeout(function () { if (window.JarvisCalendar && window.JarvisCalendar.goTo) window.JarvisCalendar.goTo(store.today() >= weekStart() && store.today() <= PL.addDays(weekStart(), 6) ? store.today() : weekStart(), "week"); }, 0);
   };
   A.acts["top-use"] = function () {
     const c = wctx();
@@ -629,175 +472,6 @@
     }
   });
 
-  // Tap on a block opens it; tap on an empty stretch of a day starts a block there.
-  function minuteAt(col, clientY, snap) {
-    const rect = col.getBoundingClientRect(), top = Number(col.getAttribute("data-top"));
-    return top + Math.round(((clientY - rect.top) / PX) / snap) * snap;
-  }
-  function onViewClick(e) {
-    if (state.view !== "weekly") return;
-    if (dragMoved) { dragMoved = false; e.stopPropagation(); e.preventDefault(); return; }
-    const blk = e.target.closest(".pw-block");
-    if (blk) {
-      if (e.target.closest(".pw-b-check")) return;
-      openBlockSheet({ id: blk.getAttribute("data-block"), date: blk.getAttribute("data-date") });
-      return;
-    }
-    const col = e.target.closest(".pw-col");
-    if (col && e.target === col) {
-      const c = wctx(), w = W.winOf(c.settings), m = Math.min(Math.max(minuteAt(col, e.clientY, w.interval), w.start), w.end - w.interval);
-      openBlockSheet({ date: col.getAttribute("data-date"), start: W.toTime(m), end: W.toTime(Math.min(m + 60, 1439)) });
-    }
-  }
-  /* ---------------- dragging (mouse, and press-and-hold on touch) ---------------- */
-
-  function visibleCols() { return Array.prototype.filter.call(document.querySelectorAll("#spView .pw-col"), function (c) { return c.offsetParent !== null; }); }
-  function targetAt(x, y, len, grab) {
-    const c = wctx(), w = W.winOf(c.settings), cols = visibleCols();
-    for (let i = 0; i < cols.length; i++) {
-      const r = cols[i].getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top - 20 && y <= r.bottom + 20) {
-        const top = Number(cols[i].getAttribute("data-top")), bottom = top + (r.height / PX);
-        let m = minuteAt(cols[i], y - grab * PX, w.interval);
-        m = Math.max(top, Math.min(m, Math.floor(bottom / w.interval) * w.interval - len));
-        m = Math.max(0, Math.min(m, 1439 - Math.min(len, 1439)));
-        return { col: cols[i], date: cols[i].getAttribute("data-date"), start: m, end: Math.min(m + len, 1439) };
-      }
-    }
-    return null;
-  }
-  function showDrop(t, color) {
-    let d = document.querySelector("#spView .pw-drop");
-    if (!t) { if (d) d.remove(); return; }
-    if (!d || d.parentNode !== t.col) { if (d) d.remove(); d = document.createElement("div"); d.className = "pw-drop"; d.setAttribute("aria-hidden", "true"); t.col.appendChild(d); }
-    const top = Number(t.col.getAttribute("data-top"));
-    d.style.top = ((t.start - top) * PX) + "px"; d.style.height = Math.max(10, (t.end - t.start) * PX - 2) + "px"; d.style.setProperty("--c", color || "#4f8cff");
-    d.textContent = W.toTime(t.start) + " – " + W.toTime(t.end);
-  }
-  function ghostFor(label, color) {
-    const g = document.createElement("div");
-    g.className = "pw-ghost"; g.textContent = label; g.style.setProperty("--c", color); g.setAttribute("aria-hidden", "true");
-    document.body.appendChild(g);
-    return g;
-  }
-  let scrollTimer = null, lastY = 0;
-  function autoScroll() {
-    if (!drag || !drag.started) { window.clearInterval(scrollTimer); scrollTimer = null; return; }
-    const h = window.innerHeight, edge = 70;
-    if (lastY < edge + 70) window.scrollBy(0, -Math.ceil((edge + 70 - lastY) / 6));       // the sticky header covers the top
-    else if (lastY > h - edge) window.scrollBy(0, Math.ceil((lastY - (h - edge)) / 6));
-  }
-  function endDrag() {
-    if (!drag) return;
-    window.clearInterval(scrollTimer); scrollTimer = null;
-    window.clearTimeout(drag.timer);
-    if (drag.ghost) drag.ghost.remove();
-    if (drag.src) drag.src.classList.remove("is-dragging");
-    showDrop(null);
-    document.body.classList.remove("pw-dragging");
-    drag = null;
-  }
-  function beginDrag() {
-    if (!drag || drag.started) return;
-    drag.started = true; dragMoved = true;
-    if (!scrollTimer) scrollTimer = window.setInterval(autoScroll, 30);
-    document.body.classList.add("pw-dragging");
-    const c = wctx();
-    if (drag.kind === "block") { drag.src.classList.add("is-dragging"); drag.ghost = ghostFor(drag.label, drag.color); }
-    else if (drag.kind === "ingredient" || drag.kind === "task") drag.ghost = ghostFor(drag.label, drag.color);
-    void c;
-  }
-  function onDown(e) {
-    if (state.view !== "weekly" || drag || (e.pointerType === "mouse" && e.button !== 0)) return;
-    if (e.target.closest("input, select, textarea, a")) return;
-    const src = e.target.closest("[data-drag]");
-    if (!src) return;
-    const c = wctx(), kind = src.getAttribute("data-drag");
-    if (e.target.closest("[data-nodrag]")) return;
-    const blockEl = kind === "resize" ? src.closest(".pw-block") : src;
-    const d = { kind: kind, src: blockEl, x: e.clientX, y: e.clientY, touch: e.pointerType !== "mouse", started: false, id: blockEl.getAttribute("data-id") || blockEl.getAttribute("data-block"), date: blockEl.getAttribute("data-date"), len: 60, grab: 0, color: "#4f8cff", label: "" };
-    if (kind === "block" || kind === "resize") {
-      const o = W.occurrence(c.blocks, blockEl.getAttribute("data-block"), blockEl.getAttribute("data-date"));
-      if (!o) return;
-      d.id = o.blockId; d.occ = o; d.len = o.endMin - o.startMin; d.color = ingColor(c, o.ingredientId); d.label = o.title + " · " + o.start;
-      d.grab = Math.max(0, Math.min(d.len - 5, (e.clientY - blockEl.getBoundingClientRect().top) / PX));
-      if (kind === "resize") d.grab = d.len;
-    } else if (kind === "ingredient") {
-      const ing = W.ingredientById(c.ingredients, d.id);
-      if (!ing) return;
-      d.color = ing.color; d.label = ing.name; d.len = Math.max(c.settings.interval, 60);
-    } else if (kind === "task") {
-      const t = A.taskById(d.id);
-      if (!t) return;
-      const l = PL.linkOf(c.links, t.id);
-      d.label = t.text; d.len = Math.max(c.settings.interval, Math.ceil(((l && l.estMin) || 60) / c.settings.interval) * c.settings.interval);
-    }
-    drag = d;
-    if (d.touch) { d.timer = window.setTimeout(function () { if (drag === d) beginDrag(); }, 380); }
-  }
-  function onMove(e) {
-    if (!drag) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (!drag.started) {
-      if (drag.touch) { if (Math.abs(dx) + Math.abs(dy) > 10) { window.clearTimeout(drag.timer); drag = null; } return; }
-      if (Math.abs(dx) + Math.abs(dy) < 5) return;
-      beginDrag();
-    }
-    e.preventDefault();
-    lastY = e.clientY;
-    if (drag.ghost) { drag.ghost.style.left = (e.clientX + 12) + "px"; drag.ghost.style.top = (e.clientY + 12) + "px"; }
-    if (drag.kind === "resize") {
-      const col = drag.src.closest(".pw-col"), w = W.winOf(wctx().settings), occ = drag.occ;
-      const m = Math.max(occ.startMin + w.interval, minuteAt(col, e.clientY, w.interval));
-      drag.target = { col: col, date: occ.date, start: occ.startMin, end: Math.min(m, 1439) };
-      showDrop(drag.target, drag.color);
-      return;
-    }
-    drag.target = targetAt(e.clientX, e.clientY, drag.len, drag.grab);
-    showDrop(drag.target, drag.color);
-  }
-  function onUp() {
-    if (!drag) return;
-    const d = drag, t = d.target;
-    const started = d.started;
-    endDrag();
-    if (!started || !t) { if (started) window.setTimeout(function () { dragMoved = false; }, 0); return; }
-    const c = wctx(), to = { date: t.date, start: W.toTime(t.start), end: W.toTime(t.end) };
-    if (d.kind === "block") {
-      if (to.date === d.occ.date && to.start === d.occ.start) { window.setTimeout(function () { dragMoved = false; }, 0); return; }
-      const r = W.moveOccurrence(c.blocks, d.id, d.occ.date, to, {});
-      if (!r.ok) A.notice(r.error || "That can't be moved there.", ""); else if (saveBlocks(r.blocks, r.taskPatch ? [Object.assign({ taskId: d.occ.taskId }, r.taskPatch)] : [])) { A.say("Moved to " + dayLabel(to.date) + " " + to.start); }
-    } else if (d.kind === "resize") {
-      const r = W.resizeOccurrence(c.blocks, d.id, d.occ.date, to.end, {});
-      if (!r.ok) A.notice(r.error || "That can't be resized.", ""); else saveBlocks(r.blocks, []);
-    } else if (d.kind === "ingredient") {
-      lastIngredient = d.id;
-      const r = W.addBlock(c.blocks, { title: d.label, ingredientId: d.id, date: to.date, start: to.start, end: to.end }, { ingredients: c.ingredients });
-      if (!r.ok) A.notice(r.errors.end || r.errors.date || "That couldn't be added.", ""); else if (saveBlocks(r.blocks, [])) A.notice("Added a " + d.label + " block, " + dayLabel(to.date) + " " + to.start + "–" + to.end + ".", "Undo", function () { store.replace("blocks", W.removeBlock(store.all("blocks"), r.block.id, {}).blocks); A.render(); });
-    } else if (d.kind === "task") {
-      if (placeAt(d.id, { date: to.date, start: to.start, end: to.end, ingredientId: lastIngredient })) A.say("Scheduled for " + dayLabel(to.date) + " " + to.start);
-    }
-    A.render();
-    window.setTimeout(function () { dragMoved = false; }, 0);
-  }
-  function onKeyDrag(e) { if (drag && e.key === "Escape") { e.preventDefault(); endDrag(); window.setTimeout(function () { dragMoved = false; }, 0); } }
-  function stopTouchScroll(e) { if (drag && drag.started) e.preventDefault(); }
-
-  function wire() {
-    const host = document.getElementById("spView");
-    if (!host || host.getAttribute("data-pw-wired")) return;
-    host.setAttribute("data-pw-wired", "1");
-    host.addEventListener("click", onViewClick, true);
-    host.addEventListener("pointerdown", onDown);
-    document.addEventListener("pointermove", onMove, { passive: false });
-    document.addEventListener("pointerup", onUp);
-    document.addEventListener("pointercancel", function () { endDrag(); window.setTimeout(function () { dragMoved = false; }, 0); });
-    document.addEventListener("keydown", onKeyDrag);
-    document.addEventListener("touchmove", stopTouchScroll, { passive: false });
-  }
-  document.addEventListener("DOMContentLoaded", wire);
-  if (document.readyState !== "loading") wire();
-
   A.weekReconcile = reconcile;
   A.openBlockSheet = openBlockSheet;
   // What the Calendar (where time blocks are made and changed) uses.
@@ -808,7 +482,7 @@
   A.scheduleTask = function (taskId, day) {
     const c = wctx(), t = A.taskById(taskId);
     if (!t) return;
-    const d = day || t.date || c.today, l = PL.linkOf(c.links, t.id), len = l && l.estMin ? Math.max(W.MIN_LEN, l.estMin) : 60;
+    const d = day || (t.date && t.date >= c.today ? t.date : c.today), l = PL.linkOf(c.links, t.id), len = l && l.estMin ? Math.max(W.MIN_LEN, l.estMin) : 60;
     const free = W.freeSlots(d, c, len, [])[0];
     openBlockSheet({ date: d, taskId: t.id, start: free ? W.toTime(free.start) : undefined, end: free ? W.toTime(Math.min(free.start + len, 1439)) : undefined });
   };

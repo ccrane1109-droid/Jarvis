@@ -24,6 +24,7 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisRetiredState",
   "jarvisLearnTimer",       // a reading timer that is running right now: this phone only (a timer on two devices at once would be wrong)
   "jarvisLiveHandled", "jarvisLiveRefreshedAt", "jarvisLiveTab",
+  "jarvisCalPlannerUi",    // which of the Day planner's folds (Daily plan, Habits, weekly reference) are open: a per-device viewing choice
   "jarvisSyncedFp"]    // the fingerprint of each whole-value key the last time it matched the cloud (this device only)   // session-only bookkeeping of the "refresh when the other device saved" feature; // which kind Quick Capture was last used for: a convenience on this phone    // whether the leftovers of the removed sections have been erased on this device
 
 test("every storage key the app uses is synced, backed up, or deliberately device-only", () => {

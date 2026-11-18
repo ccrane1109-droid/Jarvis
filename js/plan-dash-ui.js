@@ -290,7 +290,7 @@
         if (act === "toggle") { A.toggleTask(taskId); A.openTaskSheet(taskId); return; }
         A.closeSheet(true);
         if (act === "link") A.openTaskLinkSheet(taskId);
-        else if (act === "schedule") { A.go("weekly"); window.setTimeout(function () { if (A.acts["task-schedule"]) A.acts["task-schedule"]({ getAttribute: function () { return taskId; } }); }, 60); }
+        else if (act === "schedule") A.scheduleTask(taskId);
         else if (act === "today" && window.JarvisHabits) window.JarvisHabits.commitTasks(A.tasks().map(function (x) { return x.id === taskId ? Object.assign({}, x, { date: store.today() }) : x; }));
       }
     });
@@ -313,7 +313,7 @@
         else if (act === "objective") A.openNodeSheet({ type: "objective", year: y });
         else if (act === "priority") A.openNodeSheet({ type: "priority", year: y, quarter: PL.quarterOfDate(now) });
         else if (act === "milestone") A.openNodeSheet({ type: "milestone", year: y, month: PL.monthOfDate(now) });
-        else if (act === "block") { A.go("weekly"); window.setTimeout(function () { if (A.acts["block-new"]) A.acts["block-new"](); }, 60); }
+        else if (act === "block") A.openBlockSheet({ date: store.today() });
         else if (act === "breakdown" && A.openBreakdown) A.openBreakdown({});
         else if (act === "template" && A.openTemplates) A.openTemplates();
       }

@@ -618,25 +618,17 @@
     });
   };
 
-  // The roadmap's own settings: the vision, where it starts, how revenue is measured, and the weekly planner's hours.
+  // The roadmap's own settings: the vision, where it starts, and how revenue is measured. (The planner's hours are in Calendar.)
   A.openSettingsSheet = function () {
     const s = store.settings(), y = new Date().getFullYear();
     const years = []; for (let i = y - 2; i <= y + 3; i++) years.push([String(i), String(i)]);
-    const times = function (name, label, value) {
-      const opts = []; for (let h = 0; h < 24; h++) { const t = (h < 10 ? "0" : "") + h + ":00"; opts.push([t, t]); }
-      return A.fSelect(name, label, opts, value);
-    };
     const body = A.fArea("vision", "Your three-year vision", s.vision, { rows: 4, max: 600, placeholder: "Where do you want Gratiel — and your life — to be three years from now?" }) +
       A.fSelect("startYear", "Year 1 of the roadmap", years, String(s.startYear), { hint: "The roadmap shows this year and the next two." }) +
-      A.fSelect("revenueMetric", "How revenue is measured", [["sales", "Monthly sales revenue (default)"], ["mrr", "MRR (monthly recurring revenue)"]], s.revenueMetric, { hint: "Sales revenue adds months up. MRR is a snapshot, so a quarter or year shows its latest month. Only choose MRR if your business has subscriptions." }) +
-      '<h3 class="sp-h4">Weekly planner</h3><div class="form-row two-col"><div>' + times("dayStart", "Day starts", s.dayStart) + '</div><div>' + times("dayEnd", "Day ends", s.dayEnd) + '</div></div>' +
-      A.fSelect("interval", "Time blocks snap to", [["30", "30 minutes"], ["60", "1 hour"]], String(s.interval)) +
-      A.fSelect("dailyLimitHours", "Daily workload limit", [6, 7, 8, 9, 10, 11, 12, 14].map(function (h) { return [String(h), h + " hours"]; }), String(s.dailyLimitHours), { hint: "Blocks and calendar events above this on one day get a warning. Rest blocks don't count." });
+      A.fSelect("revenueMetric", "How revenue is measured", [["sales", "Monthly sales revenue (default)"], ["mrr", "MRR (monthly recurring revenue)"]], s.revenueMetric, { hint: "Sales revenue adds months up. MRR is a snapshot, so a quarter or year shows its latest month. Only choose MRR if your business has subscriptions." });
     A.openSheet({
       title: "Plan settings", body: body, submit: "Save",
       onSubmit: function (v) {
-        if (v.dayStart >= v.dayEnd) return { ok: false, errors: { dayEnd: "The day has to end after it starts." } };
-        if (!store.setSettings({ vision: v.vision, startYear: Number(v.startYear), revenueMetric: v.revenueMetric, dayStart: v.dayStart, dayEnd: v.dayEnd, interval: Number(v.interval), dailyLimitHours: Number(v.dailyLimitHours) })) return { ok: false, message: store.error() };
+        if (!store.setSettings({ vision: v.vision, startYear: Number(v.startYear), revenueMetric: v.revenueMetric })) return { ok: false, message: store.error() };
         A.say("Saved");
         return { ok: true };
       }
