@@ -2,6 +2,7 @@
 
 Six sections were reorganised so that the daily thing is on the first screen and the rest is one tap away.
 **Discipline is now part of Habits**, so there are five tabs in the app for these six sections.
+*(Since this was written, Workout and Nutrition sit under **Health**, and Calendar, Habits and Strategy under **Planning**; see [navigation.md](navigation.md). The screens themselves are as described here.)*
 No stored data was changed or removed, and no storage key was added (see "Your data" at the end).
 
 ```

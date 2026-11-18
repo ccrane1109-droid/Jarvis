@@ -61,7 +61,9 @@
     host.innerHTML = h;
   }
 
-  function refresh() { try { renderHome(); renderBusiness(); } catch (e) { if (window.console) console.error(e); } }
+  // A.bump() first: the plan's progress is kept until something changes, and the first one is worked out at page load,
+  // before the tasks it counts have loaded, so Home used to start with lower numbers than the Strategy tab shows.
+  function refresh() { try { A.bump(); renderHome(); renderBusiness(); } catch (e) { if (window.console) console.error(e); } }
 
   document.addEventListener("change", function (e) {
     const el = e.target;
