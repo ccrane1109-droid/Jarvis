@@ -22,6 +22,7 @@ holds **links** to them.
 | Weekly top three and review | `jarvisPlanWeeks` | merged by record |
 | Your own goal templates | `jarvisPlanTemplates` | merged by record (deletions kept so Undo works) |
 | Monthly reviews (`mo_YYYY-MM`) | `jarvisPlanReviews` | merged by record |
+| The Calendar's daily plan (`pd_<date>`: the day's top three as references to tasks, notes, end-of-day reflection) | `jarvisPlanDays` | merged by record |
 | Weekly Intentions (`wi_<Monday>`: three things to do, three to stop with a daily tracker, a two-question reflection) | `jarvisPlanIntentions` | merged by record |
 | Which sections you folded, last tab, hidden hints | `jarvisPlanUi` | **this device only** (a preference, not data) |
 

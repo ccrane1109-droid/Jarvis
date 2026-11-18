@@ -124,9 +124,12 @@
 
   /* ---------------- messages ---------------- */
 
-  A.say = function (text) { const e = $("spLive"); if (e) { e.textContent = ""; window.setTimeout(function () { e.textContent = text || ""; }, 30); } };
+  // The time-block and category sheets are also opened from the Calendar. Messages go where you are looking: when Strategy isn't on screen, to the Calendar's own bar.
+  function fromCalendar() { const p = $("panel-strategy"); return !(p && p.classList.contains("active")) && !!(window.JarvisCalendar && window.JarvisCalendar.notice); }
+  A.say = function (text) { if (fromCalendar()) { window.JarvisCalendar.say(text); return; } const e = $("spLive"); if (e) { e.textContent = ""; window.setTimeout(function () { e.textContent = text || ""; }, 30); } };
   // A bar at the bottom with a message and (optionally) one button, for undoing a delete or following up.
   A.notice = function (text, label, fn) {
+    if (fromCalendar()) { window.JarvisCalendar.notice(text, label, fn); return; }
     const bar = $("spUndo");
     if (!bar) return;
     window.clearTimeout(undoTimer);

@@ -314,7 +314,7 @@ test("learning hub: books, research, notes, actions and reviews are backed up an
 
 
 test("strategic planning: nodes, money, links, ingredients, blocks and weeks merge by record; the settings by newest", () => {
-  const keys = ["jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks", "jarvisPlanTemplates", "jarvisPlanReviews", "jarvisPlanIntentions"];
+  const keys = ["jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks", "jarvisPlanTemplates", "jarvisPlanReviews", "jarvisPlanIntentions", "jarvisPlanDays"];
   ["jarvisPlanSettings"].concat(keys).forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k + " is in the backup list"));
   const rec = (o) => Object.assign({ id: "r1", title: "Launch", createdAt: 100, updatedAt: 100 }, o);
   keys.forEach((k) => {

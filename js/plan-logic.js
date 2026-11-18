@@ -35,7 +35,7 @@
 
   const KEYS = {
     nodes: "jarvisPlanNodes", periods: "jarvisPlanPeriods", links: "jarvisPlanLinks", settings: "jarvisPlanSettings",
-    ingredients: "jarvisPlanIngredients", blocks: "jarvisPlanBlocks", weeks: "jarvisPlanWeeks", templates: "jarvisPlanTemplates", reviews: "jarvisPlanReviews", intentions: "jarvisPlanIntentions"
+    ingredients: "jarvisPlanIngredients", blocks: "jarvisPlanBlocks", weeks: "jarvisPlanWeeks", templates: "jarvisPlanTemplates", reviews: "jarvisPlanReviews", intentions: "jarvisPlanIntentions", days: "jarvisPlanDays"
   };
   const TYPES = ["objective", "priority", "milestone"];
   const TYPE_LABEL = { objective: "Yearly objective", priority: "Quarterly priority", milestone: "Monthly milestone" };

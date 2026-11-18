@@ -99,15 +99,18 @@
   /* ---------------- what is on screen ---------------- */
 
   function sortItems(a, b) { return (a.allDay ? 0 : 1) - (b.allDay ? 0 : 1) || (a.startMin || 0) - (b.startMin || 0) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); }
-  // Time blocks from Strategy > Weekly, read-only. A block that holds a task is not listed (the task already is).
+  // Time blocks (the plan's jarvisPlanBlocks), changed here in the Calendar. A block that holds a task stands in for that task's bare time:
+  // it shows the task's words and its start and end, and ticking it ticks the task.
   function planItems(from, to) {
     const P = window.JarvisPlanStore, PW = window.JarvisPlanWeekLogic;
     if (!P || !PW || !PW.calendarItems) return [];
-    try { P.init(); return PW.calendarItems({ blocks: P.all("blocks"), ingredients: P.all("ingredients") }, from, to); } catch (e) { return []; }
+    try { P.init(); const h = habits(); return PW.calendarItems({ blocks: P.all("blocks"), ingredients: P.all("ingredients"), tasks: h ? h.getTasks() : [], editable: true }, from, to); } catch (e) { return []; }
   }
   function allItems(from, to) {
-    const h = habits();
-    const items = C.expand(events, from, to, zone()).concat(h ? C.taskItems(h.getTasks(), from, to) : [], S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : [], planItems(from, to));
+    const h = habits(), blocks = planItems(from, to), inBlock = {};
+    blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
+    const tasks = h ? C.taskItems(h.getTasks(), from, to).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
+    const items = C.expand(events, from, to, zone()).concat(tasks, S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : [], blocks);
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     items.forEach(function (it) { it.conflict = !!mark[it.key]; });
@@ -185,18 +188,18 @@
   function rowHtml(it) {
     const sub = [];
     if (it.source === "task") sub.push("Task");
-    else if (it.source === "plan") sub.push("Time block" + (it.categoryName ? " \u00b7 " + it.categoryName : ""));
+    else if (it.source === "plan") sub.push((it.taskId ? "Task" : "Time block") + (it.categoryName ? " \u00b7 " + it.categoryName : ""));
     else {
       const kind = C.kindInfo(it.kind).label, cat = C.categoryInfo(it.category).label;
       if (it.kind !== "event" && kind !== cat) sub.push(kind);
       sub.push(cat);
     }
     if (it.recurring) sub.push("Repeats");
-    const tickable = it.source === "task" || (it.source === "event" && C.isPoint(it.kind));
+    const tickable = it.source === "task" || it.source === "plan" || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
-        '<span class="cal-ag-time">' + esc(time) + '</span><span class="cal-ag-bar"></span>' +
+        '<span class="cal-ag-time">' + esc(time) + (!it.allDay && !it.point && it.endTime ? '<small>' + esc(C.timeLabel(it.endTime)) + '</small>' : "") + '</span><span class="cal-ag-bar"></span>' +
         '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + esc(it.title) + '</span><span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
         (it.conflict ? '<span class="cal-ag-flag">Overlaps</span>' : "") +
       '</button>' +
@@ -242,7 +245,7 @@
 
   function evBlockHtml(seg, cols) {
     const it = seg.item, top = seg.startMin / 14.4, height = (seg.endMin - seg.startMin) / 14.4;
-    const resizable = it.source === "event" && !it.point && !it.recurring && it.date === it.endDate;
+    const resizable = (it.source === "event" && !it.point && !it.recurring && it.date === it.endDate) || it.source === "plan";
     const when = it.allDay ? "" : C.timeLabel(it.time) + (it.point ? "" : " – " + C.timeLabel(it.endTime));
     return '<button type="button" class="cal-ev' + (it.completed ? " cal-item-done" : "") + (it.conflict ? " is-conflict" : "") + (seg.endMin - seg.startMin < 50 ? " is-short" : "") + '" style="--cc:' + colorOf(it) + ';--col:' + seg.col + ';--cols:' + seg.cols + ';top:' + top.toFixed(3) + '%;height:' + height.toFixed(3) + '%" data-cal="open" data-drag="1" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
       '<span class="t">' + esc(it.title) + '</span><span class="m">' + esc(when) + '</span>' + (resizable ? '<span class="cal-resize" data-resize="1" data-key="' + esc(it.key) + '"></span>' : "") + '</button>';
@@ -356,7 +359,7 @@
     let h = '';
     if (m.error) h += '<div class="cal-banner" role="alert">' + esc(m.error) + '</div>';
     h += '<div class="cal-field"><label for="calF_title">Title</label><input type="text" id="calF_title" maxlength="' + C.TITLE_MAX + '" autocomplete="off" value="' + esc(f.title) + '" placeholder="e.g. Film product drop teaser" aria-describedby="calErr_title"' + (m.errors.title ? ' aria-invalid="true"' : "") + '>' + err(m, "title") + '</div>';
-    h += '<div class="cal-row"><div class="cal-field"><label for="calF_kind">Type</label><select id="calF_kind">' + selOpts(C.KINDS, f.kind) + '</select></div>' +
+    h += '<div class="cal-row"><div class="cal-field"><label for="calF_kind">Type</label><select id="calF_kind">' + selOpts(editing ? C.KINDS : C.KINDS.filter(function (k) { return k.value !== "task"; }), f.kind) + '</select></div>' +
       '<div class="cal-field"><label for="calF_category">Category</label><select id="calF_category">' + selOpts(C.CATEGORIES, f.category) + '</select></div></div>';
     if (recurring) h += '<div class="cal-field"><span class="cal-lab" id="calF_scope_l">This event repeats. Change</span><div class="cal-chips" role="group" aria-labelledby="calF_scope_l">' +
       '<button type="button" class="cal-chip-btn" aria-pressed="' + (f.scope === "this") + '" data-cal="scope" data-v="this">Just ' + esc(dayName(m.occDate, { month: "short", day: "numeric" })) + '</button>' +
@@ -574,9 +577,23 @@
       h.commitTasks(h.getTasks().map(function (t) { return t.id === it.id ? Object.assign({}, t, { completed: !t.completed }) : t; }));
       render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); return;
     }
+    if (it.source === "plan") { tickBlock(it); return; }
     if (it.readOnly) return;
     const res = C.setDone(events, it.id, it.occDate, !it.completed, ctx());
     if (res.ok && commit(res.events)) { render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
+  }
+  // A time block: if it holds a task, ticking it ticks that task (the same task the To-Do list shows); otherwise it marks that showing of the block done.
+  function tickBlock(it) {
+    const h = habits(), P = window.JarvisPlanStore, PW = window.JarvisPlanWeekLogic;
+    if (it.taskId) {
+      if (!h) return;
+      h.commitTasks(h.getTasks().map(function (t) { return t.id === it.taskId ? Object.assign({}, t, { completed: !t.completed }) : t; }));
+    } else {
+      if (!P || !PW) return;
+      const r = PW.setBlockDone(P.all("blocks"), it.id, it.occDate, !it.completed, {});
+      if (!r.ok || !P.replace("blocks", r.blocks)) { core().showToast("That couldn't be saved."); render(); return; }
+    }
+    render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + ".");
   }
 
 
@@ -589,6 +606,7 @@
       h.commitTasks(h.getTasks().map(function (t) { return t.id === it.id ? Object.assign({}, t, { date: target.date, time: keepTime ? t.time : target.time }) : t; }));
       render(); notify(); announce("Moved " + it.title + " to " + dayName(target.date) + (keepTime ? "" : " at " + C.timeLabel(target.time)) + "."); return;
     }
+    if (it.source === "plan") { moveBlock(it, target); return; }
     if (it.readOnly) return;
     const ev = C.byId(events, it.id);
     if (!ev) return;
@@ -602,7 +620,35 @@
     if (!ev.repeat) go("all");
     else chooseScope("Move a repeating event", "Move just " + dayName(it.occDate, { month: "short", day: "numeric" }) + ", or every time it repeats?").then(function (s) { if (s) go(s); else render(); });
   }
+  // Time blocks keep their length when they move; a block that holds a task takes the task along (the task's day and time follow it).
+  function moveBlock(it, target) {
+    const P = window.JarvisPlanStore, PW = window.JarvisPlanWeekLogic;
+    if (!P || !PW) return;
+    const len = it.endMin - it.startMin, start = target.time === undefined ? it.time : target.time, sm = C.minutesOf(start);
+    if (sm + len > 1439) { core().showToast("That would run past midnight."); render(); return; }
+    applyBlockMove(it, PW.moveOccurrence(P.all("blocks"), it.id, it.occDate, { date: target.date, start: start, end: C.timeOf(sm + len) }, {}), "Moved");
+  }
+  function resizeBlock(it, end) {
+    const P = window.JarvisPlanStore, PW = window.JarvisPlanWeekLogic;
+    if (!P || !PW) return;
+    applyBlockMove(it, PW.resizeOccurrence(P.all("blocks"), it.id, it.occDate, end.time, {}), "Changed the end of");
+  }
+  function applyBlockMove(it, r, verb) {
+    const P = window.JarvisPlanStore, h = habits(), prev = P.all("blocks");
+    if (!r.ok) { core().showToast(r.error || "That can't be moved there."); render(); return; }
+    if (!P.replace("blocks", r.blocks)) { core().showToast("That couldn't be saved."); render(); return; }
+    const patch = r.taskPatch && it.taskId ? r.taskPatch : null;
+    const oldTask = patch && h ? h.getTasks().filter(function (t) { return t.id === it.taskId; })[0] : null;
+    if (patch && h) h.commitTasks(h.getTasks().map(function (t) { return t.id === it.taskId ? Object.assign({}, t, { date: patch.date, time: patch.time }) : t; }));
+    render(); notify();
+    showUndo(verb + " \u201c" + it.title + "\u201d.", function () {
+      P.replace("blocks", prev);
+      if (patch && oldTask && h) h.commitTasks(h.getTasks().map(function (t) { return t.id === it.taskId ? Object.assign({}, t, { date: oldTask.date, time: oldTask.time || "" }) : t; }));
+      render(); notify(); announce("Undone.");
+    });
+  }
   function resizeItem(it, end) {
+    if (it.source === "plan") { resizeBlock(it, end); return; }
     const prev = events, res = C.resizeTo(events, it.id, it.occDate, end, ctx());
     if (!res.ok) { core().showToast(res.error); render(); return; }
     if (!commit(res.events)) return;
@@ -735,6 +781,7 @@
     }
   }
   function openItem(it) {
+    if (it.source === "plan" && window.JarvisPlanApp && window.JarvisPlanApp.openBlockSheet) { window.JarvisPlanApp.openBlockSheet({ id: it.id, date: it.occDate }); return; }
     if (it.source === "goal" || it.source === "plan") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
     if (it.source === "task") { modal = { kind: "task", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="task-toggle"]'); return; }
     openEdit(it); focusSoon("#calF_title");
@@ -904,6 +951,8 @@
     $("calModal").addEventListener("click", function (e) { if (e.target === $("calModal")) closeModal(); });
     document.addEventListener("keydown", onKey);
     document.addEventListener("jarvis-habits-day-changed", function () { if (panelActive()) render(); });
+    document.addEventListener("jarvis-tasks-changed", function () { if (panelActive() && !drag) render(); });
+    try { const P = window.JarvisPlanStore; if (P && P.subscribe) P.subscribe(function (kind) { if (panelActive() && !drag && (kind === "blocks" || kind === "ingredients" || kind === "days" || kind === "weeks")) render(); }); } catch (e) { /* the plan is optional here */ }
     nowTimer = window.setInterval(tickNow, 30000);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) tickNow(); });
     ready = true;
@@ -938,6 +987,17 @@
     refresh: function () { render(); notify(); },
     // For the reminders screen (calendar-reminders-ui.js): open an event from a reminder, wherever you are in JARVIS.
     showEvent: function (id, occDate) { const b = $("navBtnCalendar"); if (b) b.click(); if (!C.byId(events, id)) return false; anchor = occDate && C.isDate(occDate) ? occDate : anchor; selected = anchor; wantScroll = true; render(); openEdit({ id: id, occDate: occDate }); return true; },
-    ctx: ctx, today: today, nowMin: nowMin
+    ctx: ctx, today: today, nowMin: nowMin,
+    // A message with an optional button (Undo...), in the Calendar's own bar. The Strategy sheets use it when they are opened from here.
+    notice: function (text, label, fn) {
+      hideUndo();
+      const bar = $("calUndo");
+      if (!bar) return;
+      bar.innerHTML = '<span>' + esc(text) + '</span>' + (label ? '<button type="button" class="btn btn-secondary" data-cal="undo">' + esc(label) + '</button>' : "");
+      bar.classList.remove("hidden");
+      undo = { fn: fn || function () {}, timer: window.setTimeout(hideUndo, UNDO_MS) };
+      announce(text);
+    },
+    say: announce
   };
 })();

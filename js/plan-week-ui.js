@@ -308,7 +308,8 @@
   function timeOptions(c, extra, forEnd) {
     const w = W.winOf(c.settings), out = [], seen = {};
     const push = function (m) { const t = W.toTime(m); if (!seen[t]) { seen[t] = true; out.push([t, fmtTime(t)]); } };
-    for (let m = w.start + (forEnd ? w.interval : 0); m <= w.end - (forEnd ? 0 : w.interval); m += w.interval) push(m);
+    const STEP = 15;   // blocks can start and end on any quarter hour (the planner's 30/60 minute setting only used to size the old grid)
+    for (let m = w.start + (forEnd ? STEP : 0); m <= w.end - (forEnd ? 0 : STEP); m += STEP) push(m);
     (extra || []).forEach(function (t) { if (W.isTime(t)) push(W.toMin(t)); });
     out.sort(function (a, b) { return a[0] < b[0] ? -1 : 1; });
     return out;
@@ -338,6 +339,7 @@
     body += '<div data-for-task>' + A.fText("estMin", "Time you expect the task to take (minutes, optional)", link && link.estMin ? link.estMin : "", { mode: "numeric", placeholder: "e.g. 90", hint: "Used for suggested times. The block's length is what you planned; this is your estimate for the task itself." }) + '</div>';
     body += A.fText("date", "Day", date, { type: "date" });
     body += '<div class="form-row two-col"><div><label for="spf_start">Start</label><select id="spf_start" name="start">' + A.optionsHtml(timeOptions(c, [start], false), start) + '</select><p class="sp-err hidden" data-err="start" role="alert"></p></div><div><label for="spf_end">End</label><select id="spf_end" name="end">' + A.optionsHtml(timeOptions(c, [end], true), end) + '</select><p class="sp-err hidden" data-err="end" role="alert"></p></div></div>';
+    body += '<div class="form-row"><span class="pw-days-label" id="pwLenL">Length</span><div class="pw-len-row" role="group" aria-labelledby="pwLenL">' + [15, 30, 45, 60, 90, 120].map(function (n) { return '<button type="button" class="btn btn-secondary pw-len" data-sheet-act="len-' + n + '">' + (n >= 60 ? (n / 60) + " h" : n + " min") + '</button>'; }).join("") + '</div></div>';
     body += A.fText("lengthMin", "Or set the length in minutes (optional)", "", { mode: "numeric", placeholder: "e.g. 45, 90 or 135", hint: "Overrides the end time above, counted from the start." });
     if (repeats) body += '<fieldset class="pw-scope"><legend>Apply changes to</legend><label><input type="radio" name="scope" value="this" checked> This day only</label><label><input type="radio" name="scope" value="all"> Every time it repeats</label></fieldset>';
     const days = repeats ? repeats.byDay : [W.weekday(date)];
@@ -364,7 +366,16 @@
       title: cur ? "Edit block" : "New block", body: body, submit: cur ? "Save" : "Add block", focus: '[name="title"]',
       onOpen: sync,
       onChange: function (el, root) { sync(root); },
-      onAct: function (act, el, root) { if (act === "delete") { const sc = root.querySelector('[name="scope"]:checked'); A.closeSheet(true); deleteBlock(o.id, o.date, sc ? sc.value : "all"); } },
+      onAct: function (act, el, root) {
+        if (act === "delete") { const sc = root.querySelector('[name="scope"]:checked'); A.closeSheet(true); deleteBlock(o.id, o.date, sc ? sc.value : "all"); return; }
+        const m = /^len-(\d+)$/.exec(act);
+        if (m) {      // a length chip sets the end from the start (and clears the free-typed length)
+          const st = root.querySelector('[name="start"]'), en = root.querySelector('[name="end"]'), len = root.querySelector('[name="lengthMin"]');
+          const to = W.toTime(Math.min(1439, W.toMin(st.value) + Number(m[1])));
+          if (!Array.from(en.options).some(function (op) { return op.value === to; })) { const op = document.createElement("option"); op.value = to; op.textContent = fmtTime(to); en.appendChild(op); }
+          en.value = to; if (len) len.value = "";
+        }
+      },
       onSubmit: function (v) { return saveBlockForm(v, o, cur, blk, c); }
     });
   }
@@ -789,5 +800,18 @@
 
   A.weekReconcile = reconcile;
   A.openBlockSheet = openBlockSheet;
+  // What the Calendar (where time blocks are made and changed) uses.
+  A.openIngredientSheet = openIngredientSheet;
+  A.deleteBlock = deleteBlock;
+  A.placeTaskAt = placeAt;
+  // Opens the block form for a task on a day (the first free stretch long enough for it is filled in).
+  A.scheduleTask = function (taskId, day) {
+    const c = wctx(), t = A.taskById(taskId);
+    if (!t) return;
+    const d = day || t.date || c.today, l = PL.linkOf(c.links, t.id), len = l && l.estMin ? Math.max(W.MIN_LEN, l.estMin) : 60;
+    const free = W.freeSlots(d, c, len, [])[0];
+    openBlockSheet({ date: d, taskId: t.id, start: free ? W.toTime(free.start) : undefined, end: free ? W.toTime(Math.min(free.start + len, 1439)) : undefined });
+  };
+  A.addStarterCategories = function () { A.acts["ing-starters"](); };
   void cachedCtx;
 })();
