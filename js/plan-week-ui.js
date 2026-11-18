@@ -290,13 +290,13 @@
       store.init();
       const c = wctx(); cachedCtx = c;
       const occ = W.occurrences(c.blocks, c.weekStart, PL.addDays(c.weekStart, 6)), st = W.weekStats(c);
-      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + alertsHtml(c) + glanceHtml(c) + topHtml(c);
+      let h = '<h2 class="visually-hidden" data-focus-top>Weekly plan</h2>' + headHtml(c) + (window.JarvisIntentionsUI ? window.JarvisIntentionsUI.html(c.weekStart) : "") + alertsHtml(c) + glanceHtml(c) + topHtml(c);
       h += '<div class="pw-layout">' + ingredientsHtml(c) + gridHtml(c, occ) + '</div>' + daySummaryHtml(c);
       if (!occ.length && W.liveIngredients(c.ingredients).length) h += '<p class="sp-dim pw-empty">Nothing is planned this week yet. Drag a category or a task onto a day.</p>';
       h += '<div class="pw-panels">' + suggestHtml(c) + statsHtml(c, st) + reviewHtml(c, st) + '</div>';
       return h;
     },
-    after: function () { /* the drag handlers are attached once, to the page */ },
+    after: function () { if (window.JarvisIntentionsUI) window.JarvisIntentionsUI.after(); },   // (the drag handlers are attached once, to the page)
     change: function (el) {
       if (el.matches && el.matches("[data-pw-suggest-ing]")) lastIngredient = el.value;
     },

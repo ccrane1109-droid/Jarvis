@@ -22,6 +22,7 @@ holds **links** to them.
 | Weekly top three and review | `jarvisPlanWeeks` | merged by record |
 | Your own goal templates | `jarvisPlanTemplates` | merged by record (deletions kept so Undo works) |
 | Monthly reviews (`mo_YYYY-MM`) | `jarvisPlanReviews` | merged by record |
+| Weekly Intentions (`wi_<Monday>`: three things to do, three to stop with a daily tracker, a two-question reflection) | `jarvisPlanIntentions` | merged by record |
 | Which sections you folded, last tab, hidden hints | `jarvisPlanUi` | **this device only** (a preference, not data) |
 
 Tasks stay in `jarvisTasks` and goals in `jarvisGoals` (Habits). A task is linked to **at most one** plan item, so it can never be counted twice.
