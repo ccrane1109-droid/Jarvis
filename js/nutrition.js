@@ -2611,6 +2611,17 @@
     };
   }
 
+  // For the Health overview: today's totals and targets exactly as the Today screen works them out (read only).
+  function getToday() {
+    const today = window.JarvisCore.todayISODate();
+    const t = getDayTotals(today), g = getActiveTargets();
+    return {
+      date: today, entries: getAllEntries(today).length,
+      calories: Math.round(t.calories), protein: Math.round(t.protein), carbs: Math.round(t.carbs), fat: Math.round(t.fat), water: t.water,
+      targets: { calories: g.calories || 0, protein: g.protein || 0, carbs: g.carbs || 0, fat: g.fat || 0, water: g.water || 0 }
+    };
+  }
+
   // Food can be added/edited/removed from several different tabs (Food Log
   // directly, or "Add to Today" from Saved Foods/Recipes) — rather than
   // having every single mutation handler know about every other tab's
@@ -2743,5 +2754,5 @@
     renderHistoryList();
   }
 
-  window.JarvisNutrition = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange };
+  window.JarvisNutrition = { init: init, getSummary: getSummary, getToday: getToday, onSubTabChange: onSubTabChange };
 })();

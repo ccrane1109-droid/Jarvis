@@ -300,9 +300,82 @@
   // matching one there, and follow it whenever anything else switches section (other modules do, e.g. opening a
   // reminder from a notification), so the bar always shows where you are. When the open section is one of the ones
   // behind "More", that button takes its name so the current section is still named on screen.
-  const PRIMARY_NAV = ["navBtnHome", "navBtnWorkout", "navBtnNutrition", "navBtnHabits", "navBtnCalendar"];
+  const PRIMARY_NAV = ["navBtnHome", "navBtnHealth", "navBtnPlanning", "navBtnBusiness"];
   const SHORT_NAV_LABELS = {};
   const TEXT_FIELD = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=range]):not([type=file]), textarea, select";
+
+  // Two sections hold several screens each. Every screen is still its own panel with its own header button (the ones
+  // for Workout, Nutrition, Calendar, Habits and Strategy are hidden, and keep their old ids); the section's tab bar,
+  // drawn at the top of each of its panels, presses them. A tab is [header button id, label, panel id]; the first
+  // one is the section's Overview, and it is also what the section's button in the bottom bar opens.
+  const SECTIONS = [
+    { name: "Health", tabs: [["navBtnHealth", "Overview", "panel-health"], ["navBtnWorkout", "Workout", "panel-workout"], ["navBtnNutrition", "Nutrition", "panel-nutrition"]] },
+    { name: "Planning", tabs: [["navBtnPlanning", "Overview", "panel-planning"], ["navBtnCalendar", "Calendar", "panel-calendar"], ["navBtnHabits", "Habits", "panel-habits"], ["navBtnStrategy", "Strategy", "panel-strategy"]] }
+  ];
+  // Which bottom-bar / header button a panel belongs to (the bar highlights the section, not the screen inside it).
+  const NAV_OF_PANEL = { "panel-home": "navBtnHome", "panel-business": "navBtnBusiness", "panel-learning": "navBtnLearning" };
+  SECTIONS.forEach(function (sec) { sec.tabs.forEach(function (t) { NAV_OF_PANEL[t[2]] = sec.tabs[0][0]; }); });
+
+  function currentPanelId() {
+    const p = document.querySelector(".tab-panel.active");
+    return p ? p.id : "";
+  }
+
+  // Open a screen from anywhere (the two Overviews use it): press the section's header button, then the screen's own tab
+  // inside it. Keyboard focus lands on the section's tab in the new screen instead of staying on a button that is now hidden.
+  function openScreen(mainBtnId, subBtnId) {
+    const main = document.getElementById(mainBtnId);
+    if (!main) return false;
+    main.click();
+    const sub = subBtnId ? document.getElementById(subBtnId) : null;
+    if (sub) sub.click();
+    window.scrollTo(0, 0);
+    const tab = document.querySelector(".tab-panel.active .sect-tab.active");
+    if (tab && tab.focus) tab.focus({ preventScroll: true });
+    return true;
+  }
+  window.JarvisCore.openScreen = openScreen;
+
+  function initSectionTabs() {
+    const bars = [];
+    SECTIONS.forEach(function (sec) {
+      sec.tabs.forEach(function (own) {
+        const panel = document.getElementById(own[2]);
+        if (!panel) return;
+        const bar = document.createElement("nav");
+        bar.className = "sect-tabs sect-tabs-" + sec.tabs.length;
+        bar.setAttribute("aria-label", sec.name + " tabs");
+        bar.innerHTML = sec.tabs.map(function (t) {
+          return '<button type="button" class="sect-tab" data-go="' + t[0] + '" data-panel="' + t[2] + '">' + t[1] + "</button>";
+        }).join("");
+        panel.classList.add("has-sect-tabs");
+        panel.insertBefore(bar, panel.firstChild);
+        bars.push(bar);
+      });
+    });
+    document.addEventListener("click", function (e) {
+      const tab = e.target.closest ? e.target.closest(".sect-tab") : null;
+      if (!tab) return;
+      const target = document.getElementById(tab.getAttribute("data-go"));
+      if (!target) return;
+      const same = tab.classList.contains("active");
+      if (!same) target.click();
+      window.scrollTo(0, 0);
+      // The tab that was pressed is in a panel that has just been hidden; keep the keyboard on the same tab in the new one.
+      const again = document.querySelector("#" + tab.getAttribute("data-panel") + " .sect-tab[data-go=\"" + tab.getAttribute("data-go") + "\"]");
+      if (again && again !== tab && tab === document.activeElement) again.focus({ preventScroll: true });
+    });
+    return function sync() {
+      const id = currentPanelId();
+      bars.forEach(function (bar) {
+        Array.prototype.forEach.call(bar.querySelectorAll(".sect-tab"), function (b) {
+          const on = b.getAttribute("data-panel") === id;
+          b.classList.toggle("active", on);
+          if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+        });
+      });
+    };
+  }
 
   function initBottomNav() {
     const bar = document.getElementById("bottomNav");
@@ -317,16 +390,16 @@
       if (on) btn.setAttribute("aria-current", "page"); else btn.removeAttribute("aria-current");
     }
     function sync() {
-      const current = document.querySelector(".main-nav-btn.active");
-      const id = current ? current.id : "";
+      const id = NAV_OF_PANEL[currentPanelId()] || "";
+      const current = id ? document.getElementById(id) : null;
       const inMore = !!id && PRIMARY_NAV.indexOf(id) === -1;
       Array.prototype.forEach.call(document.querySelectorAll("#bottomNav [data-nav], #moreSheet [data-nav]"), function (b) {
         markActive(b, b.getAttribute("data-nav") === id);
       });
       markActive(moreBtn, inMore);
-      const name = inMore ? (SHORT_NAV_LABELS[id] || current.textContent.trim()) : "More";
+      const name = inMore && current ? (SHORT_NAV_LABELS[id] || current.textContent.trim()) : "More";
       moreLabel.textContent = name;
-      moreBtn.setAttribute("aria-label", inMore ? current.textContent.trim() + ", more sections" : "More sections");
+      moreBtn.setAttribute("aria-label", inMore && current ? current.textContent.trim() + ", more sections" : "More sections");
     }
 
     function openSheet() {
@@ -345,7 +418,9 @@
     function go(id) {
       const tab = document.getElementById(id);
       if (!tab) return;
-      const same = tab.classList.contains("active");
+      // A section button opens the section's Overview. Pressed again while its Overview is already showing it only goes
+      // back to the top; pressed from Workout, Calendar... (screens inside the section) it goes back to the Overview.
+      const same = currentPanelId() === tab.getAttribute("data-target");
       if (!same) tab.click();
       const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.scrollTo({ top: 0, behavior: same && !reduce ? "smooth" : "auto" }); // tapping the open section again goes back to its top
@@ -393,12 +468,16 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     let syncBottomNav = function () {};
+    let syncSectionTabs = function () {};
     const mainNavBtns = Array.prototype.slice.call(document.querySelectorAll(".main-nav-btn"));
     const mainPanels = Array.prototype.slice.call(document.querySelectorAll(".tab-panel"));
     setupTabGroup(mainNavBtns, mainPanels, function (targetId) {
       syncBottomNav();
+      syncSectionTabs();
       if (targetId === "panel-calendar" && window.JarvisCalendar && typeof window.JarvisCalendar.onShow === "function") window.JarvisCalendar.onShow();
       if (targetId === "panel-home" && window.JarvisHome && typeof window.JarvisHome.onShow === "function") window.JarvisHome.onShow();
+      if (targetId === "panel-health" && window.JarvisHealthOverview && typeof window.JarvisHealthOverview.onShow === "function") window.JarvisHealthOverview.onShow();
+      if (targetId === "panel-planning" && window.JarvisPlanningOverview && typeof window.JarvisPlanningOverview.onShow === "function") window.JarvisPlanningOverview.onShow();
       if (targetId === "panel-business" && window.JarvisShopify && typeof window.JarvisShopify.onShow === "function") window.JarvisShopify.onShow();
       if (window.JarvisPlan) {
         if (targetId === "panel-strategy" && typeof window.JarvisPlan.onShow === "function") window.JarvisPlan.onShow();
@@ -409,6 +488,8 @@
         else if (typeof window.JarvisLearning.onHide === "function") window.JarvisLearning.onHide();
       }
     });
+    syncSectionTabs = initSectionTabs();
+    syncSectionTabs();
     syncBottomNav = initBottomNav();
 
     const workoutSubNavBtns = Array.prototype.slice.call(document.querySelectorAll(".workout-sub-nav-btn"));
@@ -592,6 +673,17 @@
         if (window.JarvisLearning && typeof window.JarvisLearning.init === "function") window.JarvisLearning.init();
       } catch (err) {
         if (window.console) console.error("The Learning hub failed to start; the rest of the app is unaffected", err);
+      }
+      // The two Overviews only read what the screens above already hold, so they start after all of them.
+      try {
+        if (window.JarvisHealthOverview && typeof window.JarvisHealthOverview.init === "function") window.JarvisHealthOverview.init();
+      } catch (err) {
+        if (window.console) console.error("The Health overview failed to start; Workout and Nutrition are unaffected", err);
+      }
+      try {
+        if (window.JarvisPlanningOverview && typeof window.JarvisPlanningOverview.init === "function") window.JarvisPlanningOverview.init();
+      } catch (err) {
+        if (window.console) console.error("The Planning overview failed to start; Calendar, Habits and Strategy are unaffected", err);
       }
       try {
         if (window.JarvisRetiredUI && typeof window.JarvisRetiredUI.init === "function") window.JarvisRetiredUI.init();

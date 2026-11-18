@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=83">
+<link rel="stylesheet" href="style.css?v=84">
 </head>
 <body>
 
@@ -116,13 +116,17 @@
     </div>
     <nav class="main-nav" role="tablist" aria-label="Main sections">
       <button type="button" class="main-nav-btn active" data-target="panel-home" role="tab" aria-selected="true" aria-controls="panel-home" id="navBtnHome">Home</button>
-      <button type="button" class="main-nav-btn" data-target="panel-workout" role="tab" aria-selected="false" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
-      <button type="button" class="main-nav-btn" data-target="panel-nutrition" role="tab" aria-selected="false" aria-controls="panel-nutrition" id="navBtnNutrition">Nutrition</button>
-      <button type="button" class="main-nav-btn" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
-      <button type="button" class="main-nav-btn" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
+      <button type="button" class="main-nav-btn" data-target="panel-health" role="tab" aria-selected="false" aria-controls="panel-health" id="navBtnHealth">Health</button>
+      <button type="button" class="main-nav-btn" data-target="panel-planning" role="tab" aria-selected="false" aria-controls="panel-planning" id="navBtnPlanning">Planning</button>
       <button type="button" class="main-nav-btn" data-target="panel-business" role="tab" aria-selected="false" aria-controls="panel-business" id="navBtnBusiness">Business</button>
       <button type="button" class="main-nav-btn" data-target="panel-learning" role="tab" aria-selected="false" aria-controls="panel-learning" id="navBtnLearning">Learning</button>
-      <button type="button" class="main-nav-btn" data-target="panel-strategy" role="tab" aria-selected="false" aria-controls="panel-strategy" id="navBtnStrategy">Strategy</button>
+      <!-- Reached from the Health and Planning tab bars, not from this row. They keep their old ids so every link and
+           shortcut that presses them still works; data-parent names the visible tab that stays highlighted. -->
+      <button type="button" class="main-nav-btn" hidden data-parent="panel-health" data-target="panel-workout" role="tab" aria-selected="false" aria-controls="panel-workout" id="navBtnWorkout">Workout</button>
+      <button type="button" class="main-nav-btn" hidden data-parent="panel-health" data-target="panel-nutrition" role="tab" aria-selected="false" aria-controls="panel-nutrition" id="navBtnNutrition">Nutrition</button>
+      <button type="button" class="main-nav-btn" hidden data-parent="panel-planning" data-target="panel-calendar" role="tab" aria-selected="false" aria-controls="panel-calendar" id="navBtnCalendar">Calendar</button>
+      <button type="button" class="main-nav-btn" hidden data-parent="panel-planning" data-target="panel-habits" role="tab" aria-selected="false" aria-controls="panel-habits" id="navBtnHabits">Habits</button>
+      <button type="button" class="main-nav-btn" hidden data-parent="panel-planning" data-target="panel-strategy" role="tab" aria-selected="false" aria-controls="panel-strategy" id="navBtnStrategy">Strategy</button>
     </nav>
     <div class="profile-menu-wrap">
       <button type="button" class="profile-menu-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -173,6 +177,18 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <div class="hm-glance" id="hmGlance"></div>
     </div>
     <p id="hmLive" class="visually-hidden" role="status" aria-live="polite"></p>
+  </section>
+
+  <!-- ===================== HEALTH (Overview; Workout and Nutrition are the two panels below) ===================== -->
+  <section id="panel-health" class="tab-panel ov-scope" role="tabpanel" aria-labelledby="navBtnHealth">
+    <div class="panel-header"><h1>Health</h1></div>
+    <div id="hoRoot" class="ov-root"></div>
+  </section>
+
+  <!-- ===================== PLANNING (Overview; Calendar, Habits and Strategy are the three panels below) ===================== -->
+  <section id="panel-planning" class="tab-panel ov-scope" role="tabpanel" aria-labelledby="navBtnPlanning">
+    <div class="panel-header"><h1>Planning</h1></div>
+    <div id="poRoot" class="ov-root"></div>
   </section>
 
   <!-- ===================== WORKOUT ===================== -->
@@ -2664,7 +2680,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
     </div>
     <p id="spLive" class="visually-hidden" role="status" aria-live="polite"></p>
     <div id="spDash"></div>
-    <nav class="sub-nav sp-sub-nav" aria-label="Planning sections">
+    <nav class="sub-nav sp-sub-nav" aria-label="Strategy views">
       <button type="button" class="sub-nav-btn active" data-sp="overview" aria-current="page">Overview</button>
       <button type="button" class="sub-nav-btn" data-sp="goals">Goals</button>
       <button type="button" class="sub-nav-btn" data-sp="weekly">Weekly</button>
@@ -3040,23 +3056,21 @@ npx firebase-tools deploy --only firestore:rules</pre>
   </div>
 </div>
 
-<!-- Phone navigation: the four sections used every day, plus a sheet for the rest. The header's tab row (.main-nav)
-     stays the source of truth: these buttons press the matching tab there, and follow it when anything else switches tabs. -->
+<!-- Phone navigation: Home, Health, Planning and Business, plus a sheet for the rest (Learning). The header's tab row
+     (.main-nav) stays the source of truth: these buttons press the matching tab there, and follow it when anything else
+     switches tabs. Workout and Nutrition belong to Health; Calendar, Habits and Strategy belong to Planning. -->
 <nav class="bottom-nav" id="bottomNav" aria-label="Main sections">
   <button type="button" class="bottom-nav-btn" data-nav="navBtnHome">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5L12 4l8 7.5V20a1 1 0 01-1 1h-4.5v-6h-5v6H5a1 1 0 01-1-1z"/></svg><span>Home</span>
   </button>
-  <button type="button" class="bottom-nav-btn" data-nav="navBtnWorkout">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg><span>Workout</span>
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnHealth">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5S3.5 15.4 3.5 9.2A4.7 4.7 0 0112 6.6a4.7 4.7 0 018.5 2.6c0 6.2-8.5 11.3-8.5 11.3z"/></svg><span>Health</span>
   </button>
-  <button type="button" class="bottom-nav-btn" data-nav="navBtnNutrition">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8c-2-2.2-6-1.6-6 3.2 0 3.6 2.4 8.3 5 8.3.8 0 .9-.3 1-.3s.2.3 1 .3c2.6 0 5-4.7 5-8.3 0-4.8-4-5.4-6-3.2zM12 8c0-2 1-3.5 2.5-4.5"/></svg><span>Nutrition</span>
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnPlanning">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15l2 2 4-4"/></svg><span>Planning</span>
   </button>
-  <button type="button" class="bottom-nav-btn" data-nav="navBtnHabits">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg><span>Habits</span>
-  </button>
-  <button type="button" class="bottom-nav-btn" data-nav="navBtnCalendar">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Calendar</span>
+  <button type="button" class="bottom-nav-btn" data-nav="navBtnBusiness">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5l1.4-4.6a1 1 0 01.96-.7h12.28a1 1 0 01.96.7l1.4 4.6"/><path d="M4.5 9.5v9.8a1 1 0 001 1h13a1 1 0 001-1V9.5"/><path d="M3.5 9.5a2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0"/></svg><span>Business</span>
   </button>
   <button type="button" class="bottom-nav-btn" id="bottomNavMore" aria-haspopup="dialog" aria-expanded="false" aria-controls="moreSheet" aria-label="More sections">
     <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-fill"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg><span id="bottomNavMoreLabel">More</span>
@@ -3067,14 +3081,8 @@ npx firebase-tools deploy --only firestore:rules</pre>
   <div class="modal-box sheet-box more-sheet-box">
     <div class="sheet-handle" aria-hidden="true"></div>
     <div class="more-list">
-      <button type="button" class="more-item" data-nav="navBtnBusiness">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5l1.4-4.6a1 1 0 01.96-.7h12.28a1 1 0 01.96.7l1.4 4.6"/><path d="M4.5 9.5v9.8a1 1 0 001 1h13a1 1 0 001-1V9.5"/><path d="M3.5 9.5a2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0 2.8 2.8 0 005.5 0"/></svg><span>Business</span>
-      </button>
       <button type="button" class="more-item" data-nav="navBtnLearning">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v15.5H6.5A2.5 2.5 0 004 21z"/><path d="M4 21a2.5 2.5 0 012.5-2.5H20"/><path d="M9 7.5h6"/></svg><span>Learning</span>
-      </button>
-      <button type="button" class="more-item" data-nav="navBtnStrategy">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="M4 7l6-3 6 5 5-4"/></svg><span>Strategy</span>
       </button>
     </div>
   </div>
@@ -3131,98 +3139,100 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=83"></script>
-<script src="js/backup-logic.js?v=83"></script>
-<script src="js/live-refresh.js?v=83"></script>
-<script src="js/cloud-backup.js?v=83"></script>
-<script type="module" src="js/auth.js?v=83"></script>
-<script src="js/app.js?v=83"></script>
-<script src="js/menu-ui.js?v=83"></script>
-<script src="js/exercises.js?v=83"></script>
-<script src="js/workout-logic.js?v=83"></script>
-<script src="js/exercise-logic.js?v=83"></script>
-<script src="js/exercise-guides.js?v=83"></script>
-<script src="js/routine-logic.js?v=83"></script>
-<script src="js/workout.js?v=83"></script>
-<script src="js/workout-ui.js?v=83"></script>
-<script src="js/routines-ui.js?v=83"></script>
-<script src="js/progress-logic.js?v=83"></script>
-<script src="js/insights-logic.js?v=83"></script>
-<script src="js/charts.js?v=83"></script>
-<script src="js/history-ui.js?v=83"></script>
-<script src="js/insights-ui.js?v=83"></script>
-<script src="js/library-ui.js?v=83"></script>
-<script src="js/progress-ui.js?v=83"></script>
-<script src="js/nutrition.js?v=83"></script>
-<script src="js/nutrition-label-parse.js?v=83"></script>
-<script src="js/nutrition-label-scan.js?v=83"></script>
-<script src="js/groceries.js?v=83"></script>
-<script src="js/habit-logic.js?v=83"></script>
-<script src="js/dayplan-logic.js?v=83"></script>
-<script src="js/habits.js?v=83"></script>
-<script src="js/dayplan-ui.js?v=83"></script>
-<script src="js/calendar-logic.js?v=83"></script>
-<script src="js/schedule-logic.js?v=83"></script>
-<script src="js/ics-logic.js?v=83"></script>
-<script src="js/assistant-logic.js?v=83"></script>
-<script src="js/calendar-ui.js?v=83"></script>
-<script src="js/assistant-ui.js?v=83"></script>
-<script src="js/calendar-reminders-logic.js?v=83"></script>
-<script src="js/calendar-reminders-ui.js?v=83"></script>
-<script src="js/ics-ui.js?v=83"></script>
-<script src="js/home-ui.js?v=83"></script>
-<script src="js/discipline-logic.js?v=83"></script>
-<script src="js/discipline-program.js?v=83"></script>
-<script src="js/discipline-habits.js?v=83"></script>
-<script src="js/discipline-insights.js?v=83"></script>
-<script src="js/discipline-charts.js?v=83"></script>
-<script src="js/discipline-delivery.js?v=83"></script>
-<script src="js/discipline.js?v=83"></script>
-<script src="js/wakecheck-logic.js?v=83"></script>
-<script src="js/wakecheck.js?v=83"></script>
-<script src="functions/lib/reminder-spec.js?v=83"></script>
-<script src="functions/lib/reminder-events.js?v=83"></script>
-<script src="js/reminders.js?v=83"></script>
-<script src="js/video-api-client.js?v=83"></script>
-<script src="js/video-connections.js?v=83"></script>
-<script src="js/formcheck-logic.js?v=83"></script>
-<script src="js/form-check.js?v=83"></script>
-<script src="js/retired-data.js?v=83"></script>
-<script src="js/retired-ui.js?v=83"></script>
-<script src="js/shopify-ui.js?v=83"></script>
-<script src="js/learning-srs.js?v=83"></script>
-<script src="js/learning-logic.js?v=83"></script>
-<script src="js/learning-cards-logic.js?v=83"></script>
-<script src="js/learning-goals-logic.js?v=83"></script>
-<script src="js/learning-links-logic.js?v=83"></script>
-<script src="js/learning-reading-logic.js?v=83"></script>
-<script src="js/learning-weekly-logic.js?v=83"></script>
-<script src="js/learning-overview-logic.js?v=83"></script>
-<script src="js/learning-store.js?v=83"></script>
-<script src="js/learning-ui.js?v=83"></script>
-<script src="js/learning-books-ui.js?v=83"></script>
-<script src="js/learning-research-ui.js?v=83"></script>
-<script src="js/learning-library-ui.js?v=83"></script>
-<script src="js/learning-actions-ui.js?v=83"></script>
-<script src="js/learning-review-ui.js?v=83"></script>
-<script src="js/learning-study-ui.js?v=83"></script>
-<script src="js/learning-topics-ui.js?v=83"></script>
-<script src="js/learning-goals-ui.js?v=83"></script>
-<script src="js/learning-reading-ui.js?v=83"></script>
-<script src="js/learning-capture-ui.js?v=83"></script>
-<script src="js/learning-overview-ui.js?v=83"></script>
-<script src="js/plan-logic.js?v=83"></script>
-<script src="js/plan-store.js?v=83"></script>
-<script src="js/plan-week-logic.js?v=83"></script>
-<script src="js/plan-insights-logic.js?v=83"></script>
-<script src="js/plan-charts.js?v=83"></script>
-<script src="js/plan-ui.js?v=83"></script>
-<script src="js/plan-yearly-ui.js?v=83"></script>
-<script src="js/plan-quarterly-ui.js?v=83"></script>
-<script src="js/plan-dash-ui.js?v=83"></script>
-<script src="js/plan-breakdown-ui.js?v=83"></script>
-<script src="js/plan-week-ui.js?v=83"></script>
-<script src="js/plan-insights-ui.js?v=83"></script>
-<script src="js/plan-home-ui.js?v=83"></script>
+<script src="js/firebase-config.js?v=84"></script>
+<script src="js/backup-logic.js?v=84"></script>
+<script src="js/live-refresh.js?v=84"></script>
+<script src="js/cloud-backup.js?v=84"></script>
+<script type="module" src="js/auth.js?v=84"></script>
+<script src="js/app.js?v=84"></script>
+<script src="js/menu-ui.js?v=84"></script>
+<script src="js/exercises.js?v=84"></script>
+<script src="js/workout-logic.js?v=84"></script>
+<script src="js/exercise-logic.js?v=84"></script>
+<script src="js/exercise-guides.js?v=84"></script>
+<script src="js/routine-logic.js?v=84"></script>
+<script src="js/workout.js?v=84"></script>
+<script src="js/workout-ui.js?v=84"></script>
+<script src="js/routines-ui.js?v=84"></script>
+<script src="js/progress-logic.js?v=84"></script>
+<script src="js/insights-logic.js?v=84"></script>
+<script src="js/charts.js?v=84"></script>
+<script src="js/history-ui.js?v=84"></script>
+<script src="js/insights-ui.js?v=84"></script>
+<script src="js/library-ui.js?v=84"></script>
+<script src="js/progress-ui.js?v=84"></script>
+<script src="js/nutrition.js?v=84"></script>
+<script src="js/nutrition-label-parse.js?v=84"></script>
+<script src="js/nutrition-label-scan.js?v=84"></script>
+<script src="js/groceries.js?v=84"></script>
+<script src="js/habit-logic.js?v=84"></script>
+<script src="js/dayplan-logic.js?v=84"></script>
+<script src="js/habits.js?v=84"></script>
+<script src="js/dayplan-ui.js?v=84"></script>
+<script src="js/calendar-logic.js?v=84"></script>
+<script src="js/schedule-logic.js?v=84"></script>
+<script src="js/ics-logic.js?v=84"></script>
+<script src="js/assistant-logic.js?v=84"></script>
+<script src="js/calendar-ui.js?v=84"></script>
+<script src="js/assistant-ui.js?v=84"></script>
+<script src="js/calendar-reminders-logic.js?v=84"></script>
+<script src="js/calendar-reminders-ui.js?v=84"></script>
+<script src="js/ics-ui.js?v=84"></script>
+<script src="js/home-ui.js?v=84"></script>
+<script src="js/discipline-logic.js?v=84"></script>
+<script src="js/discipline-program.js?v=84"></script>
+<script src="js/discipline-habits.js?v=84"></script>
+<script src="js/discipline-insights.js?v=84"></script>
+<script src="js/discipline-charts.js?v=84"></script>
+<script src="js/discipline-delivery.js?v=84"></script>
+<script src="js/discipline.js?v=84"></script>
+<script src="js/wakecheck-logic.js?v=84"></script>
+<script src="js/wakecheck.js?v=84"></script>
+<script src="functions/lib/reminder-spec.js?v=84"></script>
+<script src="functions/lib/reminder-events.js?v=84"></script>
+<script src="js/reminders.js?v=84"></script>
+<script src="js/video-api-client.js?v=84"></script>
+<script src="js/video-connections.js?v=84"></script>
+<script src="js/formcheck-logic.js?v=84"></script>
+<script src="js/form-check.js?v=84"></script>
+<script src="js/retired-data.js?v=84"></script>
+<script src="js/retired-ui.js?v=84"></script>
+<script src="js/shopify-ui.js?v=84"></script>
+<script src="js/learning-srs.js?v=84"></script>
+<script src="js/learning-logic.js?v=84"></script>
+<script src="js/learning-cards-logic.js?v=84"></script>
+<script src="js/learning-goals-logic.js?v=84"></script>
+<script src="js/learning-links-logic.js?v=84"></script>
+<script src="js/learning-reading-logic.js?v=84"></script>
+<script src="js/learning-weekly-logic.js?v=84"></script>
+<script src="js/learning-overview-logic.js?v=84"></script>
+<script src="js/learning-store.js?v=84"></script>
+<script src="js/learning-ui.js?v=84"></script>
+<script src="js/learning-books-ui.js?v=84"></script>
+<script src="js/learning-research-ui.js?v=84"></script>
+<script src="js/learning-library-ui.js?v=84"></script>
+<script src="js/learning-actions-ui.js?v=84"></script>
+<script src="js/learning-review-ui.js?v=84"></script>
+<script src="js/learning-study-ui.js?v=84"></script>
+<script src="js/learning-topics-ui.js?v=84"></script>
+<script src="js/learning-goals-ui.js?v=84"></script>
+<script src="js/learning-reading-ui.js?v=84"></script>
+<script src="js/learning-capture-ui.js?v=84"></script>
+<script src="js/learning-overview-ui.js?v=84"></script>
+<script src="js/plan-logic.js?v=84"></script>
+<script src="js/plan-store.js?v=84"></script>
+<script src="js/plan-week-logic.js?v=84"></script>
+<script src="js/plan-insights-logic.js?v=84"></script>
+<script src="js/plan-charts.js?v=84"></script>
+<script src="js/plan-ui.js?v=84"></script>
+<script src="js/plan-yearly-ui.js?v=84"></script>
+<script src="js/plan-quarterly-ui.js?v=84"></script>
+<script src="js/plan-dash-ui.js?v=84"></script>
+<script src="js/plan-breakdown-ui.js?v=84"></script>
+<script src="js/plan-week-ui.js?v=84"></script>
+<script src="js/plan-insights-ui.js?v=84"></script>
+<script src="js/plan-home-ui.js?v=84"></script>
+<script src="js/health-overview-ui.js?v=84"></script>
+<script src="js/planning-overview-ui.js?v=84"></script>
 </body>
 </html>

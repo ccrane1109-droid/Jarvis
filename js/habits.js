@@ -1214,5 +1214,20 @@
     renderAll();
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; } };
+  // For the Planning overview: today's habits as the Today screen shows them, and the same tick (through the same
+  // code path, so every other habit screen and Discipline's "Next up" follow it). Nothing is copied or stored here.
+  function getToday() {
+    const today = window.JarvisCore.todayISODate();
+    return { date: today, habits: habits.map(function (h) { return { id: h.id, name: h.name, done: isHabitDoneOnDate(h, today), count: habitCountOn(h, today), target: habitDailyTarget(h) }; }) };
+  }
+  function toggleToday(id) {
+    const today = window.JarvisCore.todayISODate();
+    const h = habits.find(function (x) { return x.id === id; });
+    if (!h) return false;
+    if (habitDailyTarget(h) > 1) return false;   // a habit with a daily count is stepped up and down on the Habits screen, not ticked
+    const wasDone = isHabitDoneOnDate(h, today);
+    return applyHabitChange(id, function (list, t) { return HL.setDone(list, id, today, !wasDone, t); });
+  }
+
+  window.JarvisHabits = { init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; } };
 })();

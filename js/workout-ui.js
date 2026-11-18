@@ -1014,5 +1014,15 @@
     openSheet: openSheet, closeSheet: closeSheet, isSheetOpen: function () { return !!sheet; },
     openPicker: openPicker, pushUndo: pushUndo, announce: announce, focusSoon: focusSoon, goTo: goTo
   };
-  window.JarvisWorkoutUI = { init: init, render: renderAll, startRoutine: startRoutine, startProgram: startProgram, kit: kit };
+  // For the Health overview: is a workout in progress, and how far along is it (read only; Resume goes to the live screen).
+  function activeInfo() {
+    if (!WL || !window.JarvisWorkout || !window.JarvisWorkout.api) return null;
+    try {
+      if (!isActive()) return null;
+      const d = draft(), p = WL.pendingSets(d);
+      return { title: workoutTitle(d), elapsed: elapsedText(d), done: p.done, total: p.total };
+    } catch (e) { return null; }
+  }
+  function resume() { goTo("wk-session"); }
+  window.JarvisWorkoutUI = { init: init, render: renderAll, startRoutine: startRoutine, startProgram: startProgram, kit: kit, activeInfo: activeInfo, resume: resume };
 })();
