@@ -267,7 +267,11 @@
       else if (act === "note-show") { A.state.filters.knowledge = Object.assign({}, A.state.filters.knowledge, { show: el.getAttribute("data-v") }); A.render(); }
     }
   });
-  A.quickAdd.note = function () { editNote(null, Object.assign({ type: "takeaway" }, A.contextPreset())); };
+  // On a book's own page the new note goes into that book's notebook (one place for everything about the book).
+  A.quickAdd.note = function () {
+    if (A.state.tab === "books" && A.state.id && A.notebook) { A.notebook.openEditor(A.state.id); return; }
+    editNote(null, Object.assign({ type: "takeaway" }, A.contextPreset()));
+  };
   A.noteCard = noteCard;
   A.checks = checks;
   A.typeLabel = typeLabel;

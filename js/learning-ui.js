@@ -247,7 +247,7 @@
     el.innerHTML = '<div class="modal-box sheet-box ln-sheet"><div class="sheet-handle" aria-hidden="true"></div><h2 id="lnSheetTitle" class="ln-sheet-title" tabindex="-1">' + esc(o.title) + '</h2>' +
       '<form id="lnSheetForm" novalidate>' + (o.body || "") + '<p class="ln-err hidden" data-err-general role="alert" tabindex="-1"></p>' +
       '<div class="form-actions ln-sheet-actions">' + (o.submit ? '<button type="submit" class="btn ' + (o.danger ? "btn-danger" : "btn-primary") + '">' + esc(o.submit) + '</button>' : "") +
-      '<button type="button" class="btn btn-secondary" data-ln-cancel>' + (o.submit ? "Cancel" : "Close") + '</button></div></form></div>';
+      (o.noCancel ? "" : '<button type="button" class="btn btn-secondary" data-ln-cancel>' + (o.submit ? "Cancel" : "Close") + '</button>') + '</div></form></div>';
     sheet = { el: el, opener: document.activeElement, sig: selectorFor(document.activeElement), o: o };
     document.body.appendChild(el);
     document.body.classList.add("ln-sheet-open");

@@ -293,7 +293,7 @@ test("calendar events: a deletion on one device reaches the other, and an undo w
 });
 
 test("learning hub: books, research, notes, actions and reviews are backed up and merged by record", () => {
-  const keys = ["jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews", "jarvisLearnCards", "jarvisLearnGoals", "jarvisLearnSessions", "jarvisLearnCollections"];
+  const keys = ["jarvisLearnBooks", "jarvisLearnResearch", "jarvisLearnNotes", "jarvisLearnActions", "jarvisLearnReviews", "jarvisLearnCards", "jarvisLearnGoals", "jarvisLearnSessions", "jarvisLearnCollections", "jarvisLearnBookNotes"];
   keys.forEach((k) => assert.ok(B.BACKUP_KEYS.includes(k), k + " is in the backup list"));
   const rec = (o) => Object.assign({ id: "r1", title: "Atomic Habits", createdAt: 100, updatedAt: 100 }, o);
   keys.forEach((k) => {

@@ -39,8 +39,50 @@ page is counted once however it is entered.
 - **History**: pages read today / this week / this month, day streak, the reading-history chart, the time list
   (with "Add time for another day") and the calendar. "More numbers" holds books finished, pages per session and the
   timed session.
-- **A book's page**: status menu, progress, Log reading, reading time and the optional timer, its notes (+ Note) and
-  actions (+ Action), and a folded reading log. Edit and Delete are in the ⋯ menu on the page.
+- **A book's page**: status menu, progress, **Add notes** and Log reading, reading time and the optional timer, the
+  book's **notebook** (below), and a folded reading log. Edit and Delete are in the ⋯ menu on the page.
+
+#### A book's notebook (one permanent notebook per book)
+
+Every book has one notebook, made of **reading sessions**. You never create a notebook: open the book and tap **Add
+notes** (also on the Overview's *Currently reading* card, and under **+ Add › Note** while a book is open).
+
+* **A session** has the date you read (filled in, changeable), pages read, chapter or section (both optional), main
+  notes, key takeaways, actionable lessons and, tucked under *Quotes*, quotes. Takeaways, lessons and quotes are one per
+  line.
+* **It saves by itself** about a second after you stop typing, and also when you close the form, switch apps or refresh,
+  so closing never loses what you wrote. The form says *Saved.*; if the browser refuses to save it says so and nothing is
+  shown as saved. Nothing is stored until something is written (the date alone is not a session). Clearing a saved
+  session completely and closing removes it, with Undo.
+* **Each session is its own record**, so **Add notes** always starts a new one underneath the earlier ones and can never
+  overwrite them. An earlier session changes only when you open it (**Edit**).
+* **The notebook** lists sessions oldest first, as a notebook is read, grouped **By date** or **By chapter** (chapters in
+  natural order, *Chapter 2* before *Chapter 10*, sessions with no chapter last). Each session folds out (**Expand
+  all** / **Collapse all**) and has Edit, **Pin** (pinned sessions sit first, in *Pinned*) and Delete (it asks, then
+  offers Undo).
+* **One search box** for the book filters the notebook, Lessons, Quotes and Actions together (every word typed must
+  appear). The tab counts follow the search; the book's total sessions do not.
+* **Lessons / Quotes / Actions** gather the same notes by kind: every key takeaway, every quote, and the actionable
+  lessons as *Ideas to apply* (each with **Add to my actions**, which opens the normal action form; a lesson that is
+  already one of the book's actions is not listed twice). Each line says which session it came from and opens it.
+* **The book's header** shows its progress, its total reading sessions and when you last read (the later of the last
+  session and the last page update).
+
+**Notes you already had** are not moved or changed. A note linked to a book (`bookIds`) simply appears in that book's
+notebook on its date, with all its own buttons (Edit, Star, Remember…); a starred one counts as pinned, a *Key takeaway*
+note appears under Lessons, a *Quote* under Quotes, and a *Page or chapter* that has words in it (*Chapter 3*) is used
+for By chapter. They stay in the Notes list too. Notes not linked to a book stay where they were.
+
+**Where it is stored.** Sessions are a new list, `jarvisLearnBookNotes`, in the Learning store: one record per session,
+`{ id, bookId, day, pages, chapter, notes, takeaways, lessons, quotes, pinned, createdAt, updatedAt, deletedAt? }`, linked
+to its book by `bookId`. It is backed up and merged by record like every other Learning list (the newer edit wins,
+deletions are kept for 30 days). A list that cannot be read is shown as such and never written over. **Pages read** in a
+session is only text for you: it does not change the book's current page or the page log, and the reading charts still
+count pages from page updates only, so nothing is counted twice. Deleting a book deletes its sessions with it (the
+question says how many, and Undo brings both back); its older notes stay in Notes, unlinked, as before.
+
+Code: `js/learning-notebook-logic.js` (the rules, pure; `functions/test/learning-notebook-logic.test.js`) and
+`js/learning-notebook-ui.js` (the screen and the form).
 
 ### Research
 - Topics as a flat list with status chips (All, Active, Planned, Completed), search, and Filters (priority, category,
