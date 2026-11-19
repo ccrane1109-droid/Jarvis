@@ -62,7 +62,7 @@
     if (N.items(e.quotes).length) body += '<p class="ln-h4">Quotes</p>' + quoteList(e.quotes);
     if (!body) body = '<p class="ln-quiet">Nothing written in this session yet.</p>';
     return '<details class="ln-note bnb-s' + (e.pinned ? " is-pinned" : "") + '" id="' + key + '" data-keep="' + key + '"' + (isOpen(key) ? " open" : "") + '>' +
-      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", "Session") + (e.pinned ? A.badge("yellow", "★ Pinned") : "") + '</span>' +
+      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", "Session") + (e.pinned ? A.badge("yellow", "Pinned") : "") + '</span>' +
       '<span class="ln-note-title">' + esc(title) + '</span><span class="ln-item-sub">' + esc(sub.join(" · ")) + '</span></summary>' +
       '<div class="ln-note-body">' + body + '<div class="ln-item-btns ln-note-btns">' +
       '<button type="button" class="btn btn-secondary" data-act="bnb-edit" data-id="' + esc(e.id) + '">Edit</button>' +
