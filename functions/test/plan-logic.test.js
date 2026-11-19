@@ -809,3 +809,20 @@ test("progress equals an independent calculation on 300 random plans (weights, d
   }
   assert.ok(checked > 1500 && withFigure > 800, "the sample is big enough to mean something: " + checked + " nodes, " + withFigure + " with a figure");
 });
+
+test("a Strategy item that follows a goal reads the goal's progress with the Goals screen's rules", () => {
+  const o = add([], obj({ measure: "goal", goalId: "g1" }), { goals: [{ id: "g1" }, { id: "g2" }, { id: "g3" }, { id: "g4" }] });
+  const prog = (g, tasks) => model({ nodes: o.nodes, goals: [g], tasks: tasks || [] }).progress(o.node.id);
+  const ms = (done) => ({ id: "g1", name: "Launch", trackMode: "milestones", milestones: [{ id: "a", text: "A", done: done[0] }, { id: "b", text: "B", done: done[1] }, { id: "c", text: "C", done: done[2] }, { id: "d", text: "D", done: done[3] }] });
+  assert.equal(prog(ms([true, false, false, false])).pct, 25, "milestones done / milestones");
+  // a milestone with a task is done exactly when the task is
+  const withTask = ms([false, false, false, false]); withTask.milestones[0].taskId = "t1"; withTask.milestones[1].taskId = "t2";
+  assert.equal(prog(withTask, [{ id: "t1", completed: true }, { id: "t2", completed: false }]).pct, 25);
+  // a number that started above zero is measured from where it started
+  assert.equal(prog({ id: "g1", name: "Read", trackMode: "numeric", hasNumericTarget: true, startValue: 20, currentValue: 30, targetValue: 40 }).pct, 50);
+  // goals saved before the Goals screen existed read as they always did
+  assert.equal(prog({ id: "g1", name: "Old number", hasNumericTarget: true, currentValue: 1800, targetValue: 5000 }).pct, 36);
+  assert.equal(prog({ id: "g1", name: "Old percent", manualProgressPct: 20 }).pct, 20);
+  assert.equal(prog({ id: "g1", name: "Done", completed: true, manualProgressPct: 10 }).pct, 100);
+  assert.equal(prog({ id: "g1", name: "No progress ever set" }).pct, null, "still says no progress was set");
+});

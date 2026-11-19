@@ -293,7 +293,7 @@
     A.render();
   });
   A.acts["inbox-page"] = function (el) { mf.page = Math.max(1, (mf.page || 1) + Number(el.getAttribute("data-dir"))); redrawLists(); };
-  A.acts["task-schedule-go"] = function (el) { const id = el.getAttribute("data-id"); A.go("weekly"); window.setTimeout(function () { if (A.acts["task-schedule"]) A.acts["task-schedule"]({ getAttribute: function () { return id; } }); }, 60); };
+  A.acts["task-schedule-go"] = function (el) { A.scheduleTask(el.getAttribute("data-id")); };
   A.acts["task-archive"] = function (el) {
     const id = el.getAttribute("data-id"), t = A.taskById(id);
     if (!t) return;

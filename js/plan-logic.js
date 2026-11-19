@@ -28,14 +28,14 @@
    ========================================================================== */
 
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.JarvisPlanLogic = factory();
-})(typeof self !== "undefined" ? self : this, function () {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./goals-logic.js"));
+  else root.JarvisPlanLogic = factory(root.JarvisGoalsLogic || null);
+})(typeof self !== "undefined" ? self : this, function (GL) {
   "use strict";
 
   const KEYS = {
     nodes: "jarvisPlanNodes", periods: "jarvisPlanPeriods", links: "jarvisPlanLinks", settings: "jarvisPlanSettings",
-    ingredients: "jarvisPlanIngredients", blocks: "jarvisPlanBlocks", weeks: "jarvisPlanWeeks", templates: "jarvisPlanTemplates", reviews: "jarvisPlanReviews", intentions: "jarvisPlanIntentions"
+    ingredients: "jarvisPlanIngredients", blocks: "jarvisPlanBlocks", weeks: "jarvisPlanWeeks", templates: "jarvisPlanTemplates", reviews: "jarvisPlanReviews", intentions: "jarvisPlanIntentions", days: "jarvisPlanDays"
   };
   const TYPES = ["objective", "priority", "milestone"];
   const TYPE_LABEL = { objective: "Yearly objective", priority: "Quarterly priority", milestone: "Monthly milestone" };
@@ -603,6 +603,11 @@
     function goalFor(id) { return goals.filter(function (g) { return g && g.id === id; })[0] || null; }
     function goalPct(g) {
       if (!g) return null;
+      // One rule for "how far along is this goal", shared with the Goals screen: milestones, a number or a percentage you set.
+      if (GL && GL.progress) {
+        if (!g.completed && GL.mode(g) === "manual" && !Number.isFinite(Number(g.manualProgressPct))) return null;
+        return GL.progress(g, tasks).pct;
+      }
       if (g.completed) return 100;
       if (g.hasNumericTarget && Number(g.targetValue) > 0) return Math.max(0, Math.min(100, Math.round(100 * (Number(g.currentValue) || 0) / Number(g.targetValue))));
       const m = Number(g.manualProgressPct);

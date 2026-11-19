@@ -506,17 +506,21 @@
 
   // Warnings about too much in too little time. Every one comes with the figures behind it.
   /* ---------------- what the Calendar shows from the plan ---------------- */
-  // Time blocks as read-only calendar items. A block that holds a task is left out on purpose: that task is already in the Calendar as itself
-  // (at the day and time the block gave it), so showing the block too would list it twice. ctx: { blocks, ingredients }.
+  // Time blocks as calendar items. By default they are read-only, and a block that holds a task is left out on purpose: that task is
+  // already in the Calendar as itself (at the day and time the block gave it), so showing the block too would list it twice.
+  // With ctx.editable the Calendar is where blocks are changed: they come back editable, and a block that holds a task comes back too,
+  // as the task's own stretch of time (taskId, the task's words, ticked when the task is), so the caller shows it instead of the task's
+  // bare time. ctx: { blocks, ingredients, tasks?, editable? }.
   function calendarItems(ctx, from, to) {
-    const out = [];
+    const out = [], editable = !!ctx.editable;
     occurrences(ctx.blocks, from, to).forEach(function (o) {
-      if (o.taskId) return;
+      if (o.taskId && !editable) return;
       const ing = o.ingredientId ? ingredientById(ctx.ingredients, o.ingredientId) : null;
+      const t = o.taskId ? (ctx.tasks || []).filter(function (x) { return x && x.id === o.taskId; })[0] : null;
       out.push({
-        key: "block:" + o.blockId + "@" + o.date, id: o.blockId, occDate: o.date, source: "plan", title: o.title, description: o.notes || "", kind: "event", category: "other", priority: "medium",
-        recurring: !!o.recurring, linked: null, status: "", reminders: [], completed: !!o.done, point: false, tz: "", allDay: false, date: o.date, endDate: o.date, time: o.start, endTime: o.end,
-        startMin: o.startMin, endMin: o.endMin, startMs: null, endMs: null, readOnly: true, conflict: false, color: ing ? ing.color : "#94a3b8", categoryName: ing ? ing.name : ""
+        key: "block:" + o.blockId + "@" + o.date, id: o.blockId, occDate: o.date, source: "plan", taskId: o.taskId || "", title: t ? String(t.text || o.title) : o.title, description: o.notes || "", kind: "event", category: "other", priority: t && t.priority ? t.priority : "medium",
+        recurring: !!o.recurring, linked: null, status: "", reminders: [], completed: t ? !!t.completed : !!o.done, point: false, tz: "", allDay: false, date: o.date, endDate: o.date, time: o.start, endTime: o.end,
+        startMin: o.startMin, endMin: o.endMin, startMs: null, endMs: null, readOnly: !editable, conflict: false, color: ing ? ing.color : "#94a3b8", categoryName: ing ? ing.name : ""
       });
     });
     return out;

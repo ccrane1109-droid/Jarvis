@@ -14,9 +14,11 @@
                       (see migrateHabit), so nothing already tracked is lost.
      jarvisGoals  — [ {id, name, description, category, targetDate,
                         hasNumericTarget, currentValue, targetValue, unit,
-                        manualProgressPct, completed, milestones, createdAt} ]
+                        manualProgressPct, completed, milestones, createdAt,
+                        + optional: trackMode, startValue, priority, completedAt, updatedAt} ]
                       These are the personal/habit goals; tasks link here via
-                      task.goalId.
+                      task.goalId. The Goals dashboard (goals-ui.js, rules in
+                      goals-logic.js) owns the screen and the milestone fields.
 
    All reads/writes to localStorage go through the small Storage object
    below — nothing else in this file calls window.JarvisCore.loadJSON/
@@ -43,7 +45,7 @@
     loadHabits: function () { return window.JarvisCore.loadJSON(LS_HABITS, []); },
     saveHabits: function (v) { window.JarvisCore.saveJSON(LS_HABITS, v); },
     loadGoals: function () { return window.JarvisCore.loadJSON(LS_GOALS, []); },
-    saveGoals: function (v) { window.JarvisCore.saveJSON(LS_GOALS, v); }
+    saveGoals: function (v) { return window.JarvisCore.saveJSON(LS_GOALS, v); }
   };
 
   let tasks = [];
@@ -56,7 +58,6 @@
   let historyWeekOffset = 0;
   let taskFormEditId = null;
   let habitFormEditId = null;
-  let goalFormEditId = null;
   let taskMenuOpenId = null;
   let taskDuplicateSubmenuOpenId = null;
 
@@ -135,7 +136,8 @@
     habits = (Array.isArray(loadedHabits) ? loadedHabits : []).map(migrateHabit);
 
     const loadedGoals = Storage.loadGoals();
-    goals = Array.isArray(loadedGoals) ? loadedGoals : [];
+    // Only things that can be a goal (a damaged list may hold a null or a number); the rest of each record is read defensively by the Goals screen.
+    goals = (Array.isArray(loadedGoals) ? loadedGoals : []).filter(function (g) { return g && typeof g === "object" && !Array.isArray(g); });
 
     selectedDate = window.JarvisCore.todayISODate();
   }
@@ -212,7 +214,7 @@
     const core = window.JarvisCore;
     const sel = $("taskGoalSelect");
     const current = sel.value;
-    sel.innerHTML = '<option value="">None</option>' + goals.map(function (g) {
+    sel.innerHTML = '<option value="">None</option>' + goals.filter(function (g) { return typeof g.id === "string" && g.id; }).map(function (g) {
       return '<option value="' + core.escapeHtml(g.id) + '">' + core.escapeHtml(g.name) + '</option>';
     }).join("");
     if (goals.some(function (g) { return g.id === current; })) sel.value = current;
@@ -700,244 +702,24 @@
   }
 
   /* ==================== GOALS ==================== */
+  // The Goals dashboard (goals-ui.js) draws and edits goals; its rules are in goals-logic.js. This file only keeps the list and saves it.
 
-  function goalProgressPct(g) {
-    if (g.completed) return 100;
-    if (g.hasNumericTarget && isFinite(g.targetValue) && g.targetValue !== 0) {
-      return Math.min(100, Math.max(0, Math.round((g.currentValue / g.targetValue) * 100)));
-    }
-    return Math.min(100, Math.max(0, Math.round(g.manualProgressPct || 0)));
+  function renderGoalsList() { if (window.JarvisGoals && window.JarvisGoals.render) window.JarvisGoals.render(); }
+  // Saves a new goals list (false if the browser refused; nothing changes then) and brings the places that list goals up to date.
+  function commitGoals(next) {
+    if (!Array.isArray(next)) return false;
+    if (Storage.saveGoals(next) === false) return false;
+    goals = next;
+    renderTaskGoalSelectOptions(); renderStats();
+    try { document.dispatchEvent(new CustomEvent("jarvis-goals-changed")); } catch (e) { /* nothing is listening on an old browser */ }
+    return true;
   }
-
-  function updateGoalFormNumericVisibility() {
-    const hasNumeric = $("habitsGoalHasNumeric").checked;
-    $("habitsGoalNumericRow").classList.toggle("hidden", !hasNumeric);
-    $("habitsGoalUnitRow").classList.toggle("hidden", !hasNumeric);
-    $("habitsGoalManualProgressRow").classList.toggle("hidden", hasNumeric);
-  }
-
-  function resetGoalForm() {
-    goalFormEditId = null;
-    $("habitsGoalName").value = "";
-    $("habitsGoalDescription").value = "";
-    $("habitsGoalCategory").value = "";
-    $("habitsGoalTargetDate").value = "";
-    $("habitsGoalHasNumeric").checked = false;
-    $("habitsGoalCurrentValue").value = "";
-    $("habitsGoalTargetValue").value = "";
-    $("habitsGoalUnit").value = "";
-    $("habitsGoalManualProgress").value = "0";
-    $("habitsGoalFormTitle").textContent = "Create a Goal";
-    $("habitsGoalSubmitBtn").textContent = "Save Goal";
-    $("habitsGoalCancelBtn").classList.add("hidden");
-    updateGoalFormNumericVisibility();
-  }
-
-  function handleGoalFormSubmit(e) {
-    e.preventDefault();
-    const core = window.JarvisCore;
-    const name = $("habitsGoalName").value.trim();
-    if (!name) { core.showToast("Give the goal a name."); return; }
-    const hasNumeric = $("habitsGoalHasNumeric").checked;
-    if (hasNumeric && !isNonNegativeNumber($("habitsGoalTargetValue").value)) {
-      core.showToast("Enter a valid target value."); return;
-    }
-    const raw = {
-      name: name,
-      description: $("habitsGoalDescription").value.trim(),
-      category: $("habitsGoalCategory").value.trim(),
-      targetDate: $("habitsGoalTargetDate").value,
-      hasNumericTarget: hasNumeric,
-      currentValue: hasNumeric ? Number($("habitsGoalCurrentValue").value) || 0 : 0,
-      targetValue: hasNumeric ? Number($("habitsGoalTargetValue").value) || 0 : 0,
-      unit: hasNumeric ? $("habitsGoalUnit").value.trim() : "",
-      manualProgressPct: hasNumeric ? 0 : clampInt($("habitsGoalManualProgress").value, 0, 100, 0)
-    };
-    if (goalFormEditId) {
-      const g = goals.find(function (gg) { return gg.id === goalFormEditId; });
-      if (g) Object.assign(g, raw);
-    } else {
-      goals.push(Object.assign({}, raw, { id: core.uid("goal"), completed: false, milestones: [], createdAt: Date.now() }));
-    }
-    saveGoalsData();
-    resetGoalForm();
-    renderGoalsList();
-    renderTaskGoalSelectOptions();
-    core.showToast(goalFormEditId ? "Goal updated." : "Goal created.");
-  }
-
-  function goalCardHtml(g) {
-    const core = window.JarvisCore;
-    const pct = goalProgressPct(g);
-    const linkedTasks = tasks.filter(function (t) { return t.goalId === g.id; });
-    const metaParts = [];
-    if (g.category) metaParts.push(core.escapeHtml(g.category));
-    if (g.targetDate) metaParts.push("Target: " + core.formatDate(g.targetDate));
-    const unitSuffix = g.unit ? (" " + core.escapeHtml(g.unit)) : "";
-    const valueLine = g.hasNumericTarget ? (g.currentValue + unitSuffix + " / " + g.targetValue + unitSuffix) : (pct + "%");
-
-    const milestonesHtml = (g.milestones || []).map(function (m) {
-      return (
-        '<div class="checklist-item">' +
-          '<input type="checkbox" class="goal-milestone-toggle" data-goal-id="' + core.escapeHtml(g.id) + '" data-milestone-id="' + core.escapeHtml(m.id) + '"' + (m.done ? " checked" : "") + '>' +
-          '<label>' + core.escapeHtml(m.text) + '</label>' +
-          '<button type="button" class="btn-icon danger goal-milestone-delete-btn" data-goal-id="' + core.escapeHtml(g.id) + '" data-milestone-id="' + core.escapeHtml(m.id) + '" style="margin-left:auto;" aria-label="Delete milestone">&times;</button>' +
-        '</div>'
-      );
-    }).join("");
-
-    return (
-      '<div class="list-item" data-id="' + core.escapeHtml(g.id) + '">' +
-        '<div class="list-item-main">' +
-          '<span class="list-item-title">' + core.escapeHtml(g.name) + (g.completed ? ' <span class="badge badge-green">Complete</span>' : "") + '</span>' +
-          (metaParts.length ? '<span class="list-item-meta">' + metaParts.join(" &middot; ") + '</span>' : "") +
-          (g.description ? '<span class="list-item-meta">' + core.escapeHtml(g.description) + '</span>' : "") +
-          '<div class="nutri-bar-row" style="margin-top:8px;">' +
-            '<div class="nutri-bar-label"><span>Progress</span><span class="nutri-bar-value">' + valueLine + '</span></div>' +
-            '<div class="nutri-bar-track"><div class="nutri-bar-fill" style="width:' + pct + '%"></div></div>' +
-          '</div>' +
-        '</div>' +
-        (g.hasNumericTarget
-          ? '<div class="form-row two-col" style="margin-top:10px;">' +
-              '<input type="number" class="goal-progress-input" data-id="' + core.escapeHtml(g.id) + '" value="' + g.currentValue + '" step="any">' +
-              '<button type="button" class="btn-icon goal-update-progress-btn" data-id="' + core.escapeHtml(g.id) + '">Update Progress</button>' +
-            '</div>'
-          : '<div class="stepper-row" style="grid-template-columns:auto auto auto;justify-content:start;margin-top:10px;">' +
-              '<button type="button" class="stepper-btn goal-progress-minus-btn" data-id="' + core.escapeHtml(g.id) + '" aria-label="Decrease progress">&minus;</button>' +
-              '<span class="habit-card-count-value">' + pct + '%</span>' +
-              '<button type="button" class="stepper-btn goal-progress-plus-btn" data-id="' + core.escapeHtml(g.id) + '" aria-label="Increase progress">+</button>' +
-            '</div>'
-        ) +
-        (linkedTasks.length
-          ? '<div style="margin-top:10px;"><h4 class="checklist-title" style="font-size:12px;">Linked Tasks</h4><ul class="plain-list">' +
-              linkedTasks.map(function (t) { return "<li>" + (t.completed ? "&#10003; " : "&#9675; ") + core.escapeHtml(t.text) + "</li>"; }).join("") +
-            "</ul></div>"
-          : "") +
-        '<div style="margin-top:10px;">' +
-          '<h4 class="checklist-title" style="font-size:12px;">Milestones</h4>' +
-          milestonesHtml +
-          '<div class="form-row two-col" style="margin-top:6px;">' +
-            '<input type="text" class="goal-milestone-input" data-id="' + core.escapeHtml(g.id) + '" placeholder="Add a milestone" maxlength="80">' +
-            '<button type="button" class="btn-icon goal-milestone-add-btn" data-id="' + core.escapeHtml(g.id) + '">+ Add</button>' +
-          '</div>' +
-        '</div>' +
-        '<div class="list-item-actions" style="margin-top:10px;">' +
-          '<button type="button" class="btn-icon goal-complete-btn" data-id="' + core.escapeHtml(g.id) + '">' + (g.completed ? "Mark Incomplete" : "Mark Complete") + '</button>' +
-          '<button type="button" class="btn-icon goal-edit-btn" data-id="' + core.escapeHtml(g.id) + '">Edit</button>' +
-          '<button type="button" class="btn-icon danger goal-delete-btn" data-id="' + core.escapeHtml(g.id) + '">Delete</button>' +
-        '</div>' +
-      '</div>'
-    );
-  }
-
-  function renderGoalsList() {
-    const container = $("habitsGoalsList");
-    if (goals.length === 0) {
-      container.innerHTML = '<div class="empty-state">No goals yet. Create one above.</div>';
-      return;
-    }
-    container.innerHTML = goals.map(goalCardHtml).join("");
-  }
-
-  function startEditGoal(g) {
-    goalFormEditId = g.id;
-    $("habitsGoalName").value = g.name;
-    $("habitsGoalDescription").value = g.description || "";
-    $("habitsGoalCategory").value = g.category || "";
-    $("habitsGoalTargetDate").value = g.targetDate || "";
-    $("habitsGoalHasNumeric").checked = !!g.hasNumericTarget;
-    $("habitsGoalCurrentValue").value = g.hasNumericTarget ? g.currentValue : "";
-    $("habitsGoalTargetValue").value = g.hasNumericTarget ? g.targetValue : "";
-    $("habitsGoalUnit").value = g.unit || "";
-    $("habitsGoalManualProgress").value = g.hasNumericTarget ? "0" : (g.manualProgressPct || 0);
-    updateGoalFormNumericVisibility();
-    $("habitsGoalFormTitle").textContent = "Edit Goal";
-    $("habitsGoalSubmitBtn").textContent = "Save Changes";
-    $("habitsGoalCancelBtn").classList.remove("hidden");
-    $("habitsGoalName").scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  function handleGoalsListClick(e) {
-    const core = window.JarvisCore;
-
-    const updateBtn = e.target.closest(".goal-update-progress-btn");
-    if (updateBtn) {
-      const id = updateBtn.getAttribute("data-id");
-      const g = goals.find(function (gg) { return gg.id === id; });
-      const input = updateBtn.closest(".list-item").querySelector(".goal-progress-input");
-      if (g && input && isNonNegativeNumber(input.value)) {
-        g.currentValue = Number(input.value);
-        if (g.targetValue > 0 && g.currentValue >= g.targetValue) g.completed = true;
-        saveGoalsData(); renderGoalsList(); core.showToast("Progress updated.");
-      }
-      return;
-    }
-    const plusBtn = e.target.closest(".goal-progress-plus-btn");
-    if (plusBtn) {
-      const g = goals.find(function (gg) { return gg.id === plusBtn.getAttribute("data-id"); });
-      if (g) { g.manualProgressPct = clampInt((g.manualProgressPct || 0) + 5, 0, 100, 0); if (g.manualProgressPct >= 100) g.completed = true; saveGoalsData(); renderGoalsList(); }
-      return;
-    }
-    const minusBtn = e.target.closest(".goal-progress-minus-btn");
-    if (minusBtn) {
-      const g = goals.find(function (gg) { return gg.id === minusBtn.getAttribute("data-id"); });
-      if (g) { g.manualProgressPct = clampInt((g.manualProgressPct || 0) - 5, 0, 100, 0); saveGoalsData(); renderGoalsList(); }
-      return;
-    }
-    const milestoneAddBtn = e.target.closest(".goal-milestone-add-btn");
-    if (milestoneAddBtn) {
-      const id = milestoneAddBtn.getAttribute("data-id");
-      const g = goals.find(function (gg) { return gg.id === id; });
-      const input = milestoneAddBtn.closest(".list-item").querySelector(".goal-milestone-input");
-      const text = input ? input.value.trim() : "";
-      if (g && text) {
-        g.milestones = g.milestones || [];
-        g.milestones.push({ id: core.uid("milestone"), text: text, done: false });
-        saveGoalsData(); renderGoalsList();
-      }
-      return;
-    }
-    const milestoneDelBtn = e.target.closest(".goal-milestone-delete-btn");
-    if (milestoneDelBtn) {
-      const g = goals.find(function (gg) { return gg.id === milestoneDelBtn.getAttribute("data-goal-id"); });
-      const mid = milestoneDelBtn.getAttribute("data-milestone-id");
-      if (g) { g.milestones = (g.milestones || []).filter(function (m) { return m.id !== mid; }); saveGoalsData(); renderGoalsList(); }
-      return;
-    }
-    const completeBtn = e.target.closest(".goal-complete-btn");
-    if (completeBtn) {
-      const g = goals.find(function (gg) { return gg.id === completeBtn.getAttribute("data-id"); });
-      if (g) { g.completed = !g.completed; saveGoalsData(); renderGoalsList(); renderStats(); }
-      return;
-    }
-    const editBtn = e.target.closest(".goal-edit-btn");
-    if (editBtn) {
-      const g = goals.find(function (gg) { return gg.id === editBtn.getAttribute("data-id"); });
-      if (g) startEditGoal(g);
-      return;
-    }
-    const delBtn = e.target.closest(".goal-delete-btn");
-    if (delBtn) {
-      const g = goals.find(function (gg) { return gg.id === delBtn.getAttribute("data-id"); });
-      if (!g) return;
-      if (!window.confirm('Delete goal "' + g.name + '"? This can\'t be undone.')) return;
-      goals = goals.filter(function (gg) { return gg.id !== g.id; });
-      // Un-link, never silently delete, any tasks that pointed at this goal.
-      tasks.forEach(function (t) { if (t.goalId === g.id) t.goalId = null; });
-      saveGoalsData(); saveTasks();
-      renderGoalsList(); renderTaskGoalSelectOptions(); renderTaskList();
-      core.showToast("Goal deleted.");
-    }
-  }
-
-  function handleGoalsListChange(e) {
-    const toggle = e.target.closest(".goal-milestone-toggle");
-    if (!toggle) return;
-    const g = goals.find(function (gg) { return gg.id === toggle.getAttribute("data-goal-id"); });
-    const mid = toggle.getAttribute("data-milestone-id");
-    if (!g) return;
-    const m = (g.milestones || []).find(function (mm) { return mm.id === mid; });
-    if (m) { m.done = toggle.checked; saveGoalsData(); }
+  // Unlinks the tasks that pointed at a goal (the goal is gone or about to be); tasks are never deleted by this.
+  function releaseGoalTasks(goalId) {
+    // New task objects, not edits in place: a caller that kept the old list (to undo a delete) must still see the old links.
+    let changed = false;
+    tasks = tasks.map(function (t) { if (t.goalId === goalId) { changed = true; return Object.assign({}, t, { goalId: null }); } return t; });
+    if (changed) { saveTasks(); renderTaskList(); }
   }
 
   /* ==================== STATS ==================== */
@@ -1202,15 +984,9 @@
     $("historyPrevWeekBtn").addEventListener("click", function () { handleHistoryWeekNav(-1); });
     $("historyNextWeekBtn").addEventListener("click", function () { handleHistoryWeekNav(1); });
 
-    $("habitsGoalHasNumeric").addEventListener("change", updateGoalFormNumericVisibility);
-    $("habitsGoalForm").addEventListener("submit", handleGoalFormSubmit);
-    $("habitsGoalCancelBtn").addEventListener("click", resetGoalForm);
-    $("habitsGoalsList").addEventListener("click", handleGoalsListClick);
-    $("habitsGoalsList").addEventListener("change", handleGoalsListChange);
 
     resetTaskForm();
     resetHabitForm();
-    resetGoalForm();
     renderAll();
   }
 
@@ -1229,5 +1005,5 @@
     return applyHabitChange(id, function (list, t) { return HL.setDone(list, id, today, !wasDone, t); });
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; } };
+  window.JarvisHabits = { init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
 })();

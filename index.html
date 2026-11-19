@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=85">
+<link rel="stylesheet" href="style.css?v=87">
 </head>
 <body>
 
@@ -2208,6 +2208,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
         </div>
         <p class="dp-summary" id="dpSummary"></p>
         <button type="button" class="btn-icon hidden" id="dpToday">Jump to today</button>
+        <button type="button" class="btn btn-secondary dp-opencal" id="dpOpenCal">Plan this day in Calendar</button>
       </div>
 
       <div class="card dp-pool hidden" id="dpPoolCard" aria-labelledby="dpPoolTitle">
@@ -2223,68 +2224,11 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <div id="dpUndo" class="dp-undo hidden" role="status"></div>
       <p id="dpLive" class="visually-hidden" role="status" aria-live="polite"></p>
     </div>
-<div id="habits-goals" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavGoals">
+<div id="habits-goals" class="habits-sub-panel gd-scope" role="tabpanel" aria-labelledby="habitsSubNavGoals">
       <div class="sm-pills" role="group" aria-label="Progress views"><button type="button" class="sm-pill" data-subgo="habits-progress" aria-pressed="false">Consistency</button><button type="button" class="sm-pill is-on" data-subgo="habits-goals" aria-pressed="true">Goals</button></div>
-      <div class="card strategy-hint">
-        <p>Planning bigger than personal goals? The Strategy tab links a three-year vision to yearly objectives, quarterly priorities, monthly milestones and your tasks. These goals stay exactly as they are, and you can follow any of them from there.</p>
-        <button type="button" class="btn btn-secondary" data-open-strategy>Open Strategy</button>
-      </div>
-      <div class="card">
-        <h2 class="card-title" id="habitsGoalFormTitle">Create a Goal</h2>
-        <form id="habitsGoalForm" class="stacked-form" novalidate>
-          <div class="form-row">
-            <label for="habitsGoalName">Goal name</label>
-            <input type="text" id="habitsGoalName" maxlength="80" placeholder="e.g. Launch Clothing Brand">
-          </div>
-          <div class="form-row">
-            <label for="habitsGoalDescription">Description (optional)</label>
-            <textarea id="habitsGoalDescription" rows="2" placeholder="Optional details"></textarea>
-          </div>
-          <div class="form-row two-col">
-            <div>
-              <label for="habitsGoalCategory">Category (optional)</label>
-              <input type="text" id="habitsGoalCategory" maxlength="40" placeholder="e.g. Business">
-            </div>
-            <div>
-              <label for="habitsGoalTargetDate">Target date (optional)</label>
-              <input type="date" id="habitsGoalTargetDate">
-            </div>
-          </div>
-          <div class="checklist-item">
-            <input type="checkbox" id="habitsGoalHasNumeric">
-            <label for="habitsGoalHasNumeric">Track with a numeric target (e.g. dollars saved, pounds lifted)</label>
-          </div>
-          <div class="form-row two-col hidden" id="habitsGoalNumericRow">
-            <div>
-              <label for="habitsGoalCurrentValue">Current value</label>
-              <input type="number" id="habitsGoalCurrentValue" step="any" placeholder="e.g. 1800">
-            </div>
-            <div>
-              <label for="habitsGoalTargetValue">Target value</label>
-              <input type="number" id="habitsGoalTargetValue" step="any" placeholder="e.g. 5000">
-            </div>
-          </div>
-          <div class="form-row hidden" id="habitsGoalUnitRow">
-            <label for="habitsGoalUnit">Unit (optional)</label>
-            <input type="text" id="habitsGoalUnit" maxlength="20" placeholder="e.g. $ or lb">
-          </div>
-          <div class="form-row" id="habitsGoalManualProgressRow">
-            <label for="habitsGoalManualProgress">Progress (%)</label>
-            <input type="number" id="habitsGoalManualProgress" min="0" max="100" step="1" value="0">
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="habitsGoalSubmitBtn">Save Goal</button>
-            <button type="button" class="btn btn-secondary hidden" id="habitsGoalCancelBtn">Cancel</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Your Goals</h2>
-        <div id="habitsGoalsList" class="item-list">
-          <div class="empty-state">No goals yet. Create one above.</div>
-        </div>
-      </div>
+      <div id="gdRoot"></div>
+      <div id="gdUndo" class="cal-undo hidden" role="status"></div>
+      <p id="gdLive" class="visually-hidden" role="status" aria-live="polite"></p>
     </div>
 <div id="habits-reminders" class="habits-sub-panel nr-scope rm-scope" role="tabpanel" aria-labelledby="habitsSubNavReminders">
       <section class="nr-hero rm-hero" aria-labelledby="rmHeroTitle">
@@ -2611,13 +2555,15 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <div class="cal-toolbar">
         <h2 class="cal-title" id="calTitle" aria-live="polite"></h2>
         <span class="cal-head-btns">
+          <button type="button" class="cal-jump" id="calToday" hidden>Today</button>
+          <button type="button" class="cal-jump" id="calStyle" hidden aria-label="Show the day hour by hour">Hours</button>
           <button type="button" class="btn btn-primary cal-new" id="calNew">+ Add</button>
           <button type="button" class="btn-icon sm-more" id="calMenuBtn" aria-haspopup="dialog" aria-label="More calendar options"><span aria-hidden="true">&#8943;</span></button>
         </span>
       </div>
       <div class="cal-views-row">
         <div class="cal-views" role="group" aria-label="Calendar view">
-          <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Today</button>
+          <button type="button" class="cal-view-btn" data-view="day" aria-pressed="false">Day</button>
           <button type="button" class="cal-view-btn" data-view="week" aria-pressed="false">Week</button>
           <button type="button" class="cal-view-btn" data-view="month" aria-pressed="false">Month</button>
         </div>
@@ -2625,7 +2571,6 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <button type="button" class="btn-icon cal-step" id="calPrev" aria-label="Previous">&larr;</button>
           <button type="button" class="btn-icon cal-step" id="calNext" aria-label="Next">&rarr;</button>
         </div>
-        <button type="button" class="cal-jump" id="calToday" hidden>Today</button>
       </div>
       <div class="cal-tools hidden" id="calTools">
         <input type="search" id="calSearch" class="cal-search" placeholder="Search events and tasks" aria-label="Search events and tasks" autocomplete="off">
@@ -2636,6 +2581,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
     </div>
     <div id="calStatus" class="cal-status hidden" role="status"></div>
     <div id="calStage" class="cal-stage" aria-live="off"></div>
+    <button type="button" class="cal-fab" id="calFab" aria-haspopup="dialog" aria-label="Add a task, time block or event"><span aria-hidden="true">+</span></button>
     <div id="calUndo" class="cal-undo hidden" role="status"></div>
     <p id="calLive" class="visually-hidden" role="status" aria-live="polite"></p>
     <p class="field-hint cal-foot" id="calFoot" hidden></p>
@@ -3139,102 +3085,106 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=85"></script>
-<script src="js/backup-logic.js?v=85"></script>
-<script src="js/live-refresh.js?v=85"></script>
-<script src="js/cloud-backup.js?v=85"></script>
-<script type="module" src="js/auth.js?v=85"></script>
-<script src="js/app.js?v=85"></script>
-<script src="js/menu-ui.js?v=85"></script>
-<script src="js/exercises.js?v=85"></script>
-<script src="js/workout-logic.js?v=85"></script>
-<script src="js/exercise-logic.js?v=85"></script>
-<script src="js/exercise-guides.js?v=85"></script>
-<script src="js/routine-logic.js?v=85"></script>
-<script src="js/workout.js?v=85"></script>
-<script src="js/workout-ui.js?v=85"></script>
-<script src="js/routines-ui.js?v=85"></script>
-<script src="js/progress-logic.js?v=85"></script>
-<script src="js/insights-logic.js?v=85"></script>
-<script src="js/charts.js?v=85"></script>
-<script src="js/history-ui.js?v=85"></script>
-<script src="js/insights-ui.js?v=85"></script>
-<script src="js/library-ui.js?v=85"></script>
-<script src="js/progress-ui.js?v=85"></script>
-<script src="js/nutrition.js?v=85"></script>
-<script src="js/nutrition-label-parse.js?v=85"></script>
-<script src="js/nutrition-label-scan.js?v=85"></script>
-<script src="js/groceries.js?v=85"></script>
-<script src="js/habit-logic.js?v=85"></script>
-<script src="js/dayplan-logic.js?v=85"></script>
-<script src="js/habits.js?v=85"></script>
-<script src="js/dayplan-ui.js?v=85"></script>
-<script src="js/calendar-logic.js?v=85"></script>
-<script src="js/schedule-logic.js?v=85"></script>
-<script src="js/ics-logic.js?v=85"></script>
-<script src="js/assistant-logic.js?v=85"></script>
-<script src="js/calendar-ui.js?v=85"></script>
-<script src="js/assistant-ui.js?v=85"></script>
-<script src="js/calendar-reminders-logic.js?v=85"></script>
-<script src="js/calendar-reminders-ui.js?v=85"></script>
-<script src="js/ics-ui.js?v=85"></script>
-<script src="js/home-ui.js?v=85"></script>
-<script src="js/discipline-logic.js?v=85"></script>
-<script src="js/discipline-program.js?v=85"></script>
-<script src="js/discipline-habits.js?v=85"></script>
-<script src="js/discipline-insights.js?v=85"></script>
-<script src="js/discipline-charts.js?v=85"></script>
-<script src="js/discipline-delivery.js?v=85"></script>
-<script src="js/discipline.js?v=85"></script>
-<script src="js/wakecheck-logic.js?v=85"></script>
-<script src="js/wakecheck.js?v=85"></script>
-<script src="functions/lib/reminder-spec.js?v=85"></script>
-<script src="functions/lib/reminder-events.js?v=85"></script>
-<script src="js/reminders.js?v=85"></script>
-<script src="js/video-api-client.js?v=85"></script>
-<script src="js/video-connections.js?v=85"></script>
-<script src="js/formcheck-logic.js?v=85"></script>
-<script src="js/form-check.js?v=85"></script>
-<script src="js/retired-data.js?v=85"></script>
-<script src="js/retired-ui.js?v=85"></script>
-<script src="js/shopify-ui.js?v=85"></script>
-<script src="js/learning-srs.js?v=85"></script>
-<script src="js/learning-logic.js?v=85"></script>
-<script src="js/learning-cards-logic.js?v=85"></script>
-<script src="js/learning-goals-logic.js?v=85"></script>
-<script src="js/learning-links-logic.js?v=85"></script>
-<script src="js/learning-reading-logic.js?v=85"></script>
-<script src="js/learning-weekly-logic.js?v=85"></script>
-<script src="js/learning-overview-logic.js?v=85"></script>
-<script src="js/learning-store.js?v=85"></script>
-<script src="js/learning-ui.js?v=85"></script>
-<script src="js/learning-books-ui.js?v=85"></script>
-<script src="js/learning-research-ui.js?v=85"></script>
-<script src="js/learning-library-ui.js?v=85"></script>
-<script src="js/learning-actions-ui.js?v=85"></script>
-<script src="js/learning-review-ui.js?v=85"></script>
-<script src="js/learning-study-ui.js?v=85"></script>
-<script src="js/learning-topics-ui.js?v=85"></script>
-<script src="js/learning-goals-ui.js?v=85"></script>
-<script src="js/learning-reading-ui.js?v=85"></script>
-<script src="js/learning-capture-ui.js?v=85"></script>
-<script src="js/learning-overview-ui.js?v=85"></script>
-<script src="js/plan-logic.js?v=85"></script>
-<script src="js/plan-store.js?v=85"></script>
-<script src="js/plan-week-logic.js?v=85"></script>
-<script src="js/intentions-logic.js?v=85"></script>
-<script src="js/plan-insights-logic.js?v=85"></script>
-<script src="js/plan-charts.js?v=85"></script>
-<script src="js/plan-ui.js?v=85"></script>
-<script src="js/plan-yearly-ui.js?v=85"></script>
-<script src="js/plan-quarterly-ui.js?v=85"></script>
-<script src="js/plan-dash-ui.js?v=85"></script>
-<script src="js/plan-breakdown-ui.js?v=85"></script>
-<script src="js/plan-week-ui.js?v=85"></script>
-<script src="js/plan-intentions-ui.js?v=85"></script>
-<script src="js/plan-insights-ui.js?v=85"></script>
-<script src="js/plan-home-ui.js?v=85"></script>
-<script src="js/health-overview-ui.js?v=85"></script>
-<script src="js/planning-overview-ui.js?v=85"></script>
+<script src="js/firebase-config.js?v=87"></script>
+<script src="js/backup-logic.js?v=87"></script>
+<script src="js/live-refresh.js?v=87"></script>
+<script src="js/cloud-backup.js?v=87"></script>
+<script type="module" src="js/auth.js?v=87"></script>
+<script src="js/app.js?v=87"></script>
+<script src="js/menu-ui.js?v=87"></script>
+<script src="js/exercises.js?v=87"></script>
+<script src="js/workout-logic.js?v=87"></script>
+<script src="js/exercise-logic.js?v=87"></script>
+<script src="js/exercise-guides.js?v=87"></script>
+<script src="js/routine-logic.js?v=87"></script>
+<script src="js/workout.js?v=87"></script>
+<script src="js/workout-ui.js?v=87"></script>
+<script src="js/routines-ui.js?v=87"></script>
+<script src="js/progress-logic.js?v=87"></script>
+<script src="js/insights-logic.js?v=87"></script>
+<script src="js/charts.js?v=87"></script>
+<script src="js/history-ui.js?v=87"></script>
+<script src="js/insights-ui.js?v=87"></script>
+<script src="js/library-ui.js?v=87"></script>
+<script src="js/progress-ui.js?v=87"></script>
+<script src="js/nutrition.js?v=87"></script>
+<script src="js/nutrition-label-parse.js?v=87"></script>
+<script src="js/nutrition-label-scan.js?v=87"></script>
+<script src="js/groceries.js?v=87"></script>
+<script src="js/habit-logic.js?v=87"></script>
+<script src="js/goals-logic.js?v=87"></script>
+<script src="js/dayplan-logic.js?v=87"></script>
+<script src="js/habits.js?v=87"></script>
+<script src="js/dayplan-ui.js?v=87"></script>
+<script src="js/calendar-logic.js?v=87"></script>
+<script src="js/schedule-logic.js?v=87"></script>
+<script src="js/ics-logic.js?v=87"></script>
+<script src="js/assistant-logic.js?v=87"></script>
+<script src="js/calendar-ui.js?v=87"></script>
+<script src="js/assistant-ui.js?v=87"></script>
+<script src="js/calendar-reminders-logic.js?v=87"></script>
+<script src="js/calendar-reminders-ui.js?v=87"></script>
+<script src="js/ics-ui.js?v=87"></script>
+<script src="js/home-ui.js?v=87"></script>
+<script src="js/discipline-logic.js?v=87"></script>
+<script src="js/discipline-program.js?v=87"></script>
+<script src="js/discipline-habits.js?v=87"></script>
+<script src="js/discipline-insights.js?v=87"></script>
+<script src="js/discipline-charts.js?v=87"></script>
+<script src="js/discipline-delivery.js?v=87"></script>
+<script src="js/discipline.js?v=87"></script>
+<script src="js/wakecheck-logic.js?v=87"></script>
+<script src="js/wakecheck.js?v=87"></script>
+<script src="functions/lib/reminder-spec.js?v=87"></script>
+<script src="functions/lib/reminder-events.js?v=87"></script>
+<script src="js/reminders.js?v=87"></script>
+<script src="js/video-api-client.js?v=87"></script>
+<script src="js/video-connections.js?v=87"></script>
+<script src="js/formcheck-logic.js?v=87"></script>
+<script src="js/form-check.js?v=87"></script>
+<script src="js/retired-data.js?v=87"></script>
+<script src="js/retired-ui.js?v=87"></script>
+<script src="js/shopify-ui.js?v=87"></script>
+<script src="js/learning-srs.js?v=87"></script>
+<script src="js/learning-logic.js?v=87"></script>
+<script src="js/learning-cards-logic.js?v=87"></script>
+<script src="js/learning-goals-logic.js?v=87"></script>
+<script src="js/learning-links-logic.js?v=87"></script>
+<script src="js/learning-reading-logic.js?v=87"></script>
+<script src="js/learning-weekly-logic.js?v=87"></script>
+<script src="js/learning-overview-logic.js?v=87"></script>
+<script src="js/learning-store.js?v=87"></script>
+<script src="js/learning-ui.js?v=87"></script>
+<script src="js/learning-books-ui.js?v=87"></script>
+<script src="js/learning-research-ui.js?v=87"></script>
+<script src="js/learning-library-ui.js?v=87"></script>
+<script src="js/learning-actions-ui.js?v=87"></script>
+<script src="js/learning-review-ui.js?v=87"></script>
+<script src="js/learning-study-ui.js?v=87"></script>
+<script src="js/learning-topics-ui.js?v=87"></script>
+<script src="js/learning-goals-ui.js?v=87"></script>
+<script src="js/learning-reading-ui.js?v=87"></script>
+<script src="js/learning-capture-ui.js?v=87"></script>
+<script src="js/learning-overview-ui.js?v=87"></script>
+<script src="js/plan-logic.js?v=87"></script>
+<script src="js/plan-store.js?v=87"></script>
+<script src="js/plan-week-logic.js?v=87"></script>
+<script src="js/intentions-logic.js?v=87"></script>
+<script src="js/day-planner-logic.js?v=87"></script>
+<script src="js/plan-insights-logic.js?v=87"></script>
+<script src="js/plan-charts.js?v=87"></script>
+<script src="js/plan-ui.js?v=87"></script>
+<script src="js/plan-yearly-ui.js?v=87"></script>
+<script src="js/plan-quarterly-ui.js?v=87"></script>
+<script src="js/plan-dash-ui.js?v=87"></script>
+<script src="js/plan-breakdown-ui.js?v=87"></script>
+<script src="js/plan-week-ui.js?v=87"></script>
+<script src="js/plan-intentions-ui.js?v=87"></script>
+<script src="js/calendar-planner-ui.js?v=87"></script>
+<script src="js/goals-ui.js?v=87"></script>
+<script src="js/plan-insights-ui.js?v=87"></script>
+<script src="js/plan-home-ui.js?v=87"></script>
+<script src="js/health-overview-ui.js?v=87"></script>
+<script src="js/planning-overview-ui.js?v=87"></script>
 </body>
 </html>
