@@ -5439,3 +5439,5 @@ span.sp-trow-t { cursor: default; }
 .cdp-gs-t { overflow-wrap: anywhere; }
 .cdp-gs-s { color: var(--text-dim); font-size: 13px; overflow-wrap: anywhere; }
 .cdp-gs.is-overdue .cdp-gs-s { color: #f0a35e; }
+.gd-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; margin: 8px 0 0; color: var(--text-dim); font-size: 13px; }
+.gd-foot .gd-link { padding-left: 0; }

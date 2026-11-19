@@ -193,6 +193,7 @@
       } else h += '<p class="gd-none">Nothing to do yet. Add milestones or tasks to your goals and the most urgent ones show up here.</p>';
       h += '<p class="gd-hint">Ordered by how soon they are due, then by the priority you gave the goal. Nothing here changes a goal until you do.</p></section>';
     }
+    h += '<p class="gd-foot"><button type="button" class="gd-link" data-open-strategy>Open Strategy</button> to see the bigger plan your goals support.</p>';
     root.innerHTML = h;
     if (keep) refocus(keep);
   }
