@@ -29,8 +29,9 @@
   function esc(s) { return core().escapeHtml(s); }
   function H() { return window.JarvisHabits && window.JarvisHabits.getGoals ? window.JarvisHabits : null; }
   function A() { return window.JarvisPlanApp || null; }
-  function goals() { const h = H(); return h ? h.getGoals() : []; }
-  function tasks() { const h = H(); return h && h.getTasks ? h.getTasks() : []; }
+  // Copies of the lists, so a list kept for Undo is not changed by the add or remove that comes after it.
+  function goals() { const h = H(); return h ? h.getGoals().slice() : []; }
+  function tasks() { const h = H(); return h && h.getTasks ? h.getTasks().slice() : []; }
   function today() { return core().todayISODate(); }
   function panelActive() { const p = $("habits-goals"); return !!(p && p.classList.contains("active") && p.offsetParent !== null); }
   function say(t) { const el = $("gdLive"); if (el) { el.textContent = ""; window.setTimeout(function () { el.textContent = t; }, 30); } }
@@ -133,8 +134,8 @@
     const sup = supports(g.id), loose = looseTasks(g);
     let h = '<div class="gd-more" id="gdMore_' + esc(g.id) + '">';
     if (g.description) h += '<p class="gd-desc">' + esc(g.description) + '</p>';
-    h += '<h4 class="gd-h4">Milestones</h4>' + msListHtml(g, p);
-    h += '<h4 class="gd-h4">Tasks</h4>';
+    h += '<h3 class="gd-h4">Milestones</h3>' + msListHtml(g, p);
+    h += '<h3 class="gd-h4">Tasks</h3>';
     h += loose.length ? '<ul class="gd-tasks">' + loose.slice(0, 6).map(function (t) {
       return '<li class="gd-task' + (t.completed ? " is-done" : "") + '"><button type="button" class="cal-tick' + (t.completed ? " done" : "") + '" data-gd="task-tick" data-task="' + esc(t.id) + '" aria-pressed="' + !!t.completed + '" aria-label="' + (t.completed ? "Done: " : "Mark done: ") + esc(t.text) + '">' + (t.completed ? "&#10003;" : "") + '</button><span class="gd-task-t">' + esc(t.text) + '</span><span class="gd-task-d">' + esc(fmtDate(t.date)) + '</span></li>';
     }).join("") + '</ul>' : '<p class="gd-none">No tasks yet.</p>';
@@ -160,8 +161,8 @@
   function stepRowHtml(s) {
     const due = s.due ? GL.dueInfo(s.due, today()) : null;
     return '<li class="gd-step-row' + (s.overdue ? " is-overdue" : "") + '"><button type="button" class="cal-tick" data-gd="step-tick" data-key="' + esc(s.key) + '" aria-pressed="false" aria-label="' + esc("Mark done: " + s.title) + '"></button>' +
-      '<div class="gd-step-main"><span class="gd-step-t">' + esc(s.title) + '</span><span class="gd-step-s"><button type="button" class="gd-link" data-gd="step-goal" data-id="' + esc(s.goalId) + '">' + esc(s.goalName) + '</button>' +
-      (due ? ' · <span class="gd-due is-' + due.tone + '">' + esc(s.overdue ? due.text : fmtDate(s.due)) + '</span>' : "") + '</span></div>' +
+      '<button type="button" class="gd-step-main" data-gd="step-goal" data-id="' + esc(s.goalId) + '"><span class="gd-step-t">' + esc(s.title) + '</span><span class="gd-step-s"><span>' + esc(s.goalName) + '</span>' +
+      (due ? ' · <span class="gd-due is-' + due.tone + '">' + esc(s.overdue ? due.text : fmtDate(s.due)) + '</span>' : "") + '</span></button>' +
       (s.onToday ? '<span class="gd-ontoday">On today</span>' : '<button type="button" class="btn btn-secondary gd-today" data-gd="step-today" data-key="' + esc(s.key) + '" aria-label="' + esc("Add to today: " + s.title) + '">+ Today</button>') + '</li>';
   }
 
@@ -226,16 +227,21 @@
     if (r.ok && save(r.goals)) { render(); say(GL.progress(r.goal, tasks()).pct + " percent."); }
   }
   // Ticks a milestone. With a task, the task is what changes (so the Calendar, the To-Do list and the milestone all agree).
-  function toggleMilestone(goalId, msId) {
-    const g = goalById(goalId); if (!g) return false;
-    const m = GL.milestones(g).filter(function (x) { return x.id === msId; })[0]; if (!m) return false;
+  // Ticks or unticks a milestone, and its task when it has one. Says nothing on screen: whoever asked (this screen or the Calendar) tells the person.
+  function tickMilestone(goalId, msId) {
+    const g = goalById(goalId); if (!g) return { ok: false };
+    const m = GL.milestones(g).filter(function (x) { return x.id === msId; })[0]; if (!m) return { ok: false };
     const prevGoals = goals(), prevTasks = tasks(), done = !GL.milestoneDone(m, prevTasks);
     const r = GL.setMilestoneDone(prevGoals, goalId, msId, done, prevTasks, ctx());
-    if (!r.ok) return false;
+    if (!r.ok) return { ok: false };
     if (r.taskPatch) saveTasks(prevTasks.map(function (t) { return t.id === r.taskPatch.taskId ? Object.assign({}, t, { completed: r.taskPatch.completed }) : t; }));
-    if (!save(r.goals)) { if (r.taskPatch) saveTasks(prevTasks); return false; }
+    if (!save(r.goals)) { if (r.taskPatch) saveTasks(prevTasks); return { ok: false }; }
+    return { ok: true, done: done, text: m.text, undo: function () { saveTasks(prevTasks); return save(prevGoals); } };
+  }
+  function toggleMilestone(goalId, msId) {
+    const r = tickMilestone(goalId, msId); if (!r.ok) return false;
     render();
-    notice((done ? "Done: " : "Not done: ") + m.text + ".", "Undo", function () { saveTasks(prevTasks); if (save(prevGoals)) { render(); say("Undone."); } });
+    notice((r.done ? "Done: " : "Not done: ") + r.text + ".", "Undo", function () { if (r.undo()) { render(); say("Undone."); } });
     return true;
   }
   function addMilestones(goalId, text) {
@@ -266,20 +272,38 @@
     }
     return { ok: true, task: made, undo: function () { saveTasks(prevTasks); h.commitGoals(prevGoals); } };
   }
-  // + Today: the step's task goes on today's calendar (a milestone with no task gets one).
-  function addToToday(key) {
-    const st = GL.steps(goals(), tasks(), today()).filter(function (s) { return s.key === key; })[0]; if (!st) return;
-    const td = today();
+  // Puts a step on a day: a milestone with no task gets one, a task that is already there is moved. Says nothing on screen; the caller tells the person.
+  function putStepOnDay(key, date) {
+    const st = GL.steps(goals(), tasks(), today()).filter(function (s) { return s.key === key; })[0];
+    if (!st) return { ok: false, error: "That step isn't there any more." };
     if (st.taskId) {
-      const tl = tasks(), t = tl.filter(function (x) { return x.id === st.taskId; })[0]; if (!t) return;
-      if (t.date === td) { notice("“" + st.title + "” is already on today's calendar.", ""); return; }
-      saveTasks(tl.map(function (x) { return x.id === t.id ? Object.assign({}, x, { date: td }) : x; }));
-      render(); notice("Moved “" + st.title + "” to today.", "Undo", function () { saveTasks(tl); render(); say("Undone."); });
-      return;
+      const tl = tasks(), t = tl.filter(function (x) { return x.id === st.taskId; })[0];
+      if (!t) return { ok: false, error: "That task isn't there any more." };
+      if (t.date === date) return { ok: true, same: true, title: st.title };
+      saveTasks(tl.map(function (x) { return x.id === t.id ? Object.assign({}, x, { date: date }) : x; }));
+      return { ok: true, moved: true, title: st.title, undo: function () { saveTasks(tl); } };
     }
-    const r = makeTask(st.goalId, st.milestoneId, { date: td });
+    const r = makeTask(st.goalId, st.milestoneId, { date: date });
+    if (!r.ok) return r;
+    return { ok: true, made: true, title: st.title, undo: r.undo };
+  }
+  // + Today: the step's task goes on today's calendar.
+  function addToToday(key) {
+    const r = putStepOnDay(key, today());
     if (!r.ok) { notice(r.error, ""); return; }
-    render(); notice("Added “" + st.title + "” to today's calendar.", "Undo", function () { r.undo(); render(); say("Undone."); });
+    if (r.same) { notice("\u201c" + r.title + "\u201d is already on today's calendar.", ""); return; }
+    render(); notice((r.moved ? "Moved \u201c" + r.title + "\u201d to today." : "Added \u201c" + r.title + "\u201d to today's calendar."), "Undo", function () { r.undo(); render(); say("Undone."); });
+  }
+  // For the Day planner: the next steps of active goals that are not already on that day, most important first.
+  function stepsForDay(date, limit) {
+    return GL.steps(goals(), tasks(), today()).filter(function (s) { return s.scheduled !== date; }).slice(0, limit || 3).map(function (s) {
+      return { key: s.key, title: s.title, goalName: s.goalName, due: s.due, overdue: !!s.overdue };
+    });
+  }
+  function addStepToDay(key, date) {
+    const r = putStepOnDay(key, date);
+    if (r.ok && !r.same) render();
+    return r;
   }
   function tickStep(key) {
     const st = GL.steps(goals(), tasks(), today()).filter(function (s) { return s.key === key; })[0]; if (!st) return;
@@ -351,7 +375,8 @@
         else if (act === "ms-del") { const row = el.closest("[data-ms-row]"); if (row) { const box = row.parentNode; if (box.querySelectorAll("[data-ms-row]").length > 1) row.parentNode.removeChild(row); else row.querySelectorAll("input").forEach(function (i) { if (i.type !== "hidden") i.value = ""; }); } }
       },
       onSubmit: function (v) {
-        const cat = v.category === "__other" ? String(v.categoryOther || "").trim() : (v.category ? GL.CATEGORIES.filter(function (c) { return c[0] === v.category; })[0][1] : "");
+        let cat = v.category === "__other" ? String(v.categoryOther || "").trim() : (v.category ? GL.CATEGORIES.filter(function (c) { return c[0] === v.category; })[0][1] : "");
+        if (g && v.category && v.category !== "__other" && GL.categoryKey(g.category) === v.category) cat = g.category;   // same category as before: keep the words you typed (e.g. "business")
         const input = { name: v.name, description: v.description, category: cat, targetDate: v.targetDate, priority: v.priority, trackMode: v.trackMode, startValue: v.startValue, currentValue: v.currentValue, targetValue: v.targetValue, unit: v.unit, manualProgressPct: v.manualProgressPct, milestones: readMilestoneRows(v) };
         const prev = goals(), r = g ? GL.update(prev, g.id, input, ctx()) : GL.create(prev, input, ctx());
         if (!r.ok) return { ok: false, errors: r.errors };
@@ -555,7 +580,7 @@
   }
 
   window.JarvisGoals = {
-    init: init, render: render, toggleMilestone: toggleMilestone,
+    init: init, render: render, toggleMilestone: toggleMilestone, tickMilestone: tickMilestone, stepsForDay: stepsForDay, addStepToDay: addStepToDay,
     // Opens the Goals screen with one goal's card open (from the Calendar, Home and the like).
     show: function (goalId) {
       const b = $("navBtnHabits"); if (b) b.click();

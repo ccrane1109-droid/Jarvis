@@ -36,7 +36,7 @@ Open the Calendar and pick **Day**. From the top:
    * **From your weekly plan** (only if you have something there): the week's top three and your Weekly Intentions, read-only and optional.
 2. **One line of numbers**: how many things are scheduled and how much free time is left (for today, from now). A day that holds more than
    your daily limit says so.
-3. **All-day items** (events and goal dates) and, for today, a **Habits** row (done of total; tap it to open the day's habit chips). Habits have
+3. **All-day items** (events and goal dates) and, for today, a **Habits** row (done of total; tap it to open the day's habit chips). Habits have Goal dates are each goal's target date and its milestones' dates (a milestone that has its own task shows as that task); the Daily plan also lists a few **next steps from your goals** with *Add to day*. See [goals-dashboard.md](goals-dashboard.md).
    no time of day in JARVIS, so they are not placed on the timeline. A habit with a daily count is stepped on the Habits screen.
 4. **The timeline**, in time order, each row with start time, end time, title, category and a tick. Between rows, **Free · 1 h 30 min**:
    tap it to add a task, a time block or an event starting right there. A red *Now* line sits where you are (today).

@@ -169,6 +169,17 @@
         (t.completed ? "" : '<button type="button" class="btn btn-secondary cdp-sched" data-cdp="schedule" data-id="' + esc(t.id) + '" aria-label="' + esc("Give a time to: " + t.text) + '">Schedule</button>') + '</li>';
     }).join("") + '</ul>' + (list.length > SHOW_TASKS ? '<button type="button" class="cal-more" data-cdp="all-tasks" aria-expanded="' + ui.allTasks + '">' + (ui.allTasks ? "Show fewer" : "Show all " + list.length) + '</button>' : "");
   }
+  // The next steps of your goals that are not on this day yet, each with a button that puts it on the day.
+  function goalStepsHtml(date) {
+    const G = window.JarvisGoals;
+    if (!G || !G.stepsForDay || date < host.today()) return "";
+    const list = G.stepsForDay(date, 3);
+    if (!list.length) return "";
+    return '<div class="cdp-sec"><h4 class="cdp-h">From your goals</h4><ul class="cdp-gsteps">' + list.map(function (s) {
+      return '<li class="cdp-gs' + (s.overdue ? " is-overdue" : "") + '"><span class="cdp-gs-main"><span class="cdp-gs-t">' + esc(s.title) + '</span><span class="cdp-gs-s">' + esc(s.goalName + (s.due ? " \u00b7 " + host.dayName(s.due, { month: "short", day: "numeric" }) : "")) + '</span></span>' +
+        '<button type="button" class="btn btn-secondary cdp-sched" data-cdp="goal-step" data-key="' + esc(s.key) + '" aria-label="' + esc("Add to this day: " + s.title) + '">Add to day</button></li>';
+    }).join("") + '</ul></div>';
+  }
   function planSummary(top, unsched) {
     const set = top.filter(function (s) { return !s.empty; }), done = set.filter(function (s) { return s.done; }).length, open = unsched.filter(function (t) { return !t.completed; }).length;
     const a = set.length ? "Top 3: " + done + " of " + set.length + " done" : "Set your top 3";
@@ -182,6 +193,7 @@
       html += '<div class="cdp-plan-body" id="cdpPlanBody">' +
         '<div class="cdp-sec"><h4 class="cdp-h">Top 3 ' + (isToday ? "today" : "for this day") + '</h4>' + topHtml(date, top) + '</div>' +
         '<div class="cdp-sec"><div class="cdp-h-row"><h4 class="cdp-h">Still to schedule</h4><button type="button" class="cal-more" data-cdp="add-task">+ Add task</button></div>' + unschedHtml(date, unsched) + '</div>' +
+        goalStepsHtml(date) +
         refHtml(date) +
         '<div class="cdp-sec"><label class="cdp-h" for="cdpNotes">Notes for the day</label><textarea id="cdpNotes" class="cdp-area" data-note="notes" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="Anything to remember today">' + esc(view.notes) + '</textarea></div>' +
         '<div class="cdp-sec"><label class="cdp-h" for="cdpRefl">End-of-day reflection</label><textarea id="cdpRefl" class="cdp-area" data-note="reflection" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="What went well? What will you change tomorrow?">' + esc(view.reflection) + '</textarea></div>' +
@@ -507,6 +519,15 @@
     }
     if (act === "task-tick") { toggleTask(el.getAttribute("data-id")); return; }
     if (act === "task-open") { openTaskSheet({ id: el.getAttribute("data-id") }); return; }
+    if (act === "goal-step") {
+      const G = window.JarvisGoals; if (!G || !G.addStepToDay) return;
+      const r = G.addStepToDay(el.getAttribute("data-key"), date);
+      if (!r.ok) { tell(r.error || "That couldn't be added.", ""); return; }
+      if (r.same) { tell("\u201c" + r.title + "\u201d is already on this day.", ""); return; }
+      if (host.changed) host.changed(); else host.render();
+      tell((r.moved ? "Moved \u201c" : "Added \u201c") + r.title + "\u201d to " + (date === host.today() ? "today" : host.dayName(date, { month: "short", day: "numeric" })) + ".", "Undo", function () { r.undo(); if (host.changed) host.changed(); else host.render(); say("Undone."); });
+      return;
+    }
     if (act === "schedule") { const A = app(); if (A && A.scheduleTask) A.scheduleTask(el.getAttribute("data-id"), date); return; }
     if (act === "habit") { const h = habits(); if (h && h.toggleToday && h.toggleToday(el.getAttribute("data-id"))) { if (host.changed) host.changed(); } return; }
   }

@@ -136,7 +136,8 @@
     habits = (Array.isArray(loadedHabits) ? loadedHabits : []).map(migrateHabit);
 
     const loadedGoals = Storage.loadGoals();
-    goals = Array.isArray(loadedGoals) ? loadedGoals : [];
+    // Only things that can be a goal (a damaged list may hold a null or a number); the rest of each record is read defensively by the Goals screen.
+    goals = (Array.isArray(loadedGoals) ? loadedGoals : []).filter(function (g) { return g && typeof g === "object" && !Array.isArray(g); });
 
     selectedDate = window.JarvisCore.todayISODate();
   }
@@ -213,7 +214,7 @@
     const core = window.JarvisCore;
     const sel = $("taskGoalSelect");
     const current = sel.value;
-    sel.innerHTML = '<option value="">None</option>' + goals.map(function (g) {
+    sel.innerHTML = '<option value="">None</option>' + goals.filter(function (g) { return typeof g.id === "string" && g.id; }).map(function (g) {
       return '<option value="' + core.escapeHtml(g.id) + '">' + core.escapeHtml(g.name) + '</option>';
     }).join("");
     if (goals.some(function (g) { return g.id === current; })) sel.value = current;

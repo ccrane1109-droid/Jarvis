@@ -106,11 +106,17 @@
     if (!P || !PW || !PW.calendarItems) return [];
     try { P.init(); const h = habits(); return PW.calendarItems({ blocks: P.all("blocks"), ingredients: P.all("ingredients"), tasks: h ? h.getTasks() : [], editable: true }, from, to); } catch (e) { return []; }
   }
+  // Goal deadlines and milestone dates. A milestone that has its own task is left out here, because that task is already on the calendar.
+  function goalItems(h, from, to) {
+    const GLg = window.JarvisGoalsLogic, goals = h && h.getGoals ? h.getGoals() : [];
+    if (GLg && GLg.calendarItems && h) return GLg.calendarItems(goals, h.getTasks(), from, to);
+    return S ? S.goalItems(goals, from, to) : [];
+  }
   function allItems(from, to) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
     const tasks = h ? C.taskItems(h.getTasks(), from, to).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
-    const items = C.expand(events, from, to, zone()).concat(tasks, S ? S.goalItems(h && h.getGoals ? h.getGoals() : [], from, to) : [], blocks);
+    const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks);
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     // time blocks overlapping each other, or a timed event on the same day (the event rules above only know events)
@@ -177,7 +183,7 @@
   }
 
   function chipHtml(it) {
-    const draggable = it.source === "task" || !it.readOnly;
+    const draggable = it.source === "task" || (!it.readOnly && it.source !== "goal");   // a goal date is changed in Goals, not by dragging
     return '<button type="button" class="cal-chip' + (it.completed ? " cal-item-done" : "") + '" style="--cc:' + colorOf(it) + '" data-cal="open" data-key="' + esc(it.key) + '"' + (draggable ? ' data-drag="1"' : "") + ' aria-label="' + esc(itemLabel(it)) + '">' +
       (it.allDay ? "" : esc(shortTime(it.time)) + " ") + esc(it.title) + '</button>';
   }
@@ -206,6 +212,7 @@
   function rowHtml(it) {
     const sub = [];
     if (it.source === "task") sub.push("Task");
+    else if (it.source === "goal") sub.push(it.milestoneId ? "Milestone \u00b7 " + (it.goalName || "Goal") : "Goal deadline");
     else if (it.source === "plan") sub.push((it.taskId ? "Task" : "Time block") + (it.categoryName ? " \u00b7 " + it.categoryName : ""));
     else {
       const kind = C.kindInfo(it.kind).label, cat = C.categoryInfo(it.category).label;
@@ -213,7 +220,7 @@
       sub.push(cat);
     }
     if (it.recurring) sub.push("Repeats");
-    const tickable = it.source === "task" || it.source === "plan" || (it.source === "event" && C.isPoint(it.kind));
+    const tickable = it.source === "task" || it.source === "plan" || (it.source === "goal" && !it.readOnly) || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
@@ -435,15 +442,15 @@
 
   const EXT = {
     plan: { title: "Time block", where: "Strategy \u203a Weekly", nav: "navBtnStrategy", after: function () { const b = document.querySelector('#panel-strategy .sp-sub-nav [data-sp="weekly"]'); if (b) b.click(); }, note: "This is a time block from your weekly plan. Change or move it in Strategy, on the Weekly tab." },
-    goal: { title: "Goal", where: "Habits \u203a Goals", nav: "navBtnHabits", sub: "habitsSubNavGoals", note: "This date comes from one of your personal goals. Change it in Habits." }
+    goal: { title: "Goal", where: "Goals", open: "Open goal", nav: "navBtnHabits", sub: "habitsSubNavGoals", after: function (it) { const G = window.JarvisGoals; if (G && G.show && it && it.goalId) G.show(it.goalId); }, note: "This date comes from one of your goals. Change it, or its milestones, in Goals." }
   };
   function externalTitle(it) { return (EXT[it.source] || EXT.goal).title; }
   function externalSheetHtml(m) {
-    const it = m.item, x = EXT[it.source] || EXT.goal, canTick = false;
+    const it = m.item, x = EXT[it.source] || EXT.goal, canTick = it.source === "goal" && !it.readOnly && !!it.milestoneId;
     return '<div class="cal-field"><span class="cal-lab">' + esc(x.title) + '</span><p><strong>' + esc(it.title) + '</strong></p><p class="field-hint">' + esc(dayName(it.date)) + (it.source === "plan" ? " \u00b7 " + esc(C.timeLabel(it.time) + " \u2013 " + C.timeLabel(it.endTime)) + (it.categoryName ? " \u00b7 " + esc(it.categoryName) : "") : "") + (it.completed ? " \u00b7 done" : "") + '</p></div>' +
       '<p class="field-hint">' + esc(x.note) + '</p>' +
       '<div class="cal-actions">' + (canTick ? '<button type="button" class="btn btn-primary" data-cal="ext-toggle">' + (it.completed ? "Mark not done" : "Mark done") + '</button>' : "") +
-      '<button type="button" class="btn ' + (canTick ? "btn-secondary" : "btn-primary") + '" data-cal="ext-open">Open in ' + esc(x.where.split(" \u203a ")[0]) + '</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
+      '<button type="button" class="btn ' + (canTick ? "btn-secondary" : "btn-primary") + '" data-cal="ext-open">' + esc(x.open || "Open in " + x.where.split(" \u203a ")[0]) + '</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
   }
   // Takes you to where the item lives: the Habits tab and the sub-tab it is on.
   function goToSource(it) {
@@ -451,7 +458,7 @@
     if (!x) return;
     const b = $(x.nav); if (b) b.click();
     const sub = x.sub ? $(x.sub) : null; if (sub) sub.click();
-    if (x.after) x.after();
+    if (x.after) x.after(it);
   }
 
   function settingsFormHtml() {
@@ -602,6 +609,12 @@
       render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); return;
     }
     if (it.source === "plan") { tickBlock(it); return; }
+    if (it.source === "goal") {
+      const G = window.JarvisGoals; if (!G || !it.milestoneId || !G.tickMilestone) return;
+      const r = G.tickMilestone(it.goalId, it.milestoneId);
+      if (r.ok) { render(); notify(); announce((r.done ? "Done: " : "Not done: ") + r.text + "."); } else { core().showToast("That couldn't be saved."); render(); }
+      return;
+    }
     if (it.readOnly) return;
     const res = C.setDone(events, it.id, it.occDate, !it.completed, ctx());
     if (res.ok && commit(res.events)) { render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
@@ -987,6 +1000,7 @@
     document.addEventListener("keydown", onKey);
     document.addEventListener("jarvis-habits-day-changed", function () { if (panelActive()) render(); });
     document.addEventListener("jarvis-tasks-changed", function () { if (panelActive() && !drag) render(); });
+    document.addEventListener("jarvis-goals-changed", function () { if (panelActive() && !drag) render(); });
     try { const P = window.JarvisPlanStore; if (P && P.subscribe) P.subscribe(function (kind) { if (panelActive() && !drag && (kind === "blocks" || kind === "ingredients" || kind === "weeks")) render(); }); } catch (e) { /* the plan is optional here */ }
     nowTimer = window.setInterval(tickNow, 30000);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) tickNow(); });

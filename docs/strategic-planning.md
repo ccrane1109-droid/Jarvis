@@ -39,7 +39,7 @@ Nothing is guessed. Each plan item is measured one of five ways:
   If you choose MRR in *Plan settings*, a quarter or year shows its latest month instead, because MRR is a snapshot, not a total.
 * **Spending limit**: what you entered as spent ÷ the limit. Over the limit is flagged.
 * **A number you track**: current ÷ target (for example hires made).
-* **One of your Goals**: read from the goal as it is now.
+* **One of your Goals**: read from the goal as it is now, with the Goals screen's own rules (milestones done, a number, or the percentage you set). Link or unlink it from the goal's card; see [goals-dashboard.md](goals-dashboard.md).
 
 Revenue and budget never use task completion; task progress never uses money. Where nothing has been entered, the screen says so instead of
 showing 0%.
