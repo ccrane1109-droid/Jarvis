@@ -53,6 +53,7 @@ const APP_SHELL = [
   "./js/nutrition-label-scan.js?v=86",
   "./js/groceries.js?v=86",
   "./js/habit-logic.js?v=86",
+  "./js/goals-logic.js?v=86",
   "./js/dayplan-logic.js?v=86",
   "./js/habits.js?v=86",
   "./js/dayplan-ui.js?v=86",
@@ -124,6 +125,7 @@ const APP_SHELL = [
   "./js/plan-insights-ui.js?v=86",
   "./js/plan-home-ui.js?v=86",
   "./js/calendar-planner-ui.js?v=86",
+  "./js/goals-ui.js?v=86",
   "./js/health-overview-ui.js?v=86",
   "./js/planning-overview-ui.js?v=86"
 ];
