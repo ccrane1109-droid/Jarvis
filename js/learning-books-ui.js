@@ -129,16 +129,17 @@
   function deleteBook(id) {
     const b = store.get("books", id);
     if (!b) return;
-    const linked = L.notesFor(store.list("notes"), "book", id).length;
+    const linked = L.notesFor(store.list("notes"), "book", id).length, sessions = A.notebook ? A.notebook.countFor(id) : 0;
     A.confirmSheet({
       title: "Delete this book?",
-      text: "“" + b.title + "” will be removed." + (linked ? " Its " + A.plural(linked, "note") + " stay in your Notes, no longer linked to the book." : "") + " You can undo for a few seconds afterwards.",
+      text: "“" + b.title + "” will be removed" + (sessions ? ", and so will its notebook (" + A.plural(sessions, "reading session") + ")" : "") + "." + (linked ? " Its " + A.plural(linked, "note") + " stay in your Notes, no longer linked to the book." : "") + " You can undo for a few seconds afterwards.",
       yes: "Delete book",
       onYes: function () {
         if (!store.remove("books", id)) { A.saveFailed(); return; }
         const changes = store.unlinkFrom("book", id, b.title);
+        const sessionIds = A.notebook ? A.notebook.removeFor(id) : [];
         if (A.state.tab === "books" && A.state.id === id) A.go("books", "", { noScroll: true });
-        A.notice("Deleted “" + b.title + "”.", "Undo", function () { store.undoRemove("books", id); store.relink(changes); });
+        A.notice("Deleted “" + b.title + "”.", "Undo", function () { store.undoRemove("books", id); store.relink(changes); if (A.notebook) A.notebook.restoreFor(sessionIds); });
       }
     });
   }
@@ -223,22 +224,17 @@
       (p !== null ? A.barHtml(p, "Progress: " + p + "% read") : "") +
       '<p class="ln-big">' + (A.progressText(b) ? esc(A.progressText(b)) : "No page logged yet") + (p === null ? ' <span class="ln-item-sub">Add the total pages (Edit) to see a progress bar.</span>' : "") + '</p>' +
       (facts.length ? '<p class="ln-item-sub">' + esc(facts.join(" · ")) + '</p>' : "") +
-      (b.status !== "completed" ? '<button type="button" class="btn btn-primary" data-act="log-reading" data-id="' + esc(b.id) + '">Log reading</button>' : "") +
+      (A.notebook ? A.notebook.factsHtml(b) : "") +
+      '<div class="ln-book-btns"><button type="button" class="btn btn-primary" data-act="bnb-add" data-id="' + esc(b.id) + '">Add notes</button>' +
+      (b.status !== "completed" ? '<button type="button" class="btn btn-secondary" data-act="log-reading" data-id="' + esc(b.id) + '">Log reading</button>' : "") + '</div>' +
       (A.readingBookHtml ? A.readingBookHtml(b) : "") +
       (b.status === "completed" ? '<div class="ln-rate-quick" role="group" aria-label="Your rating">' + [1, 2, 3, 4, 5].map(function (n) {
         return '<button type="button" class="ln-star-btn' + (b.rating >= n ? " on" : "") + '" data-act="rate" data-id="' + esc(b.id) + '" data-v="' + n + '" aria-pressed="' + (b.rating === n) + '" aria-label="' + n + ' star' + (n > 1 ? "s" : "") + '">★</button>';
       }).join("") + '<span class="ln-item-sub">' + (b.rating ? b.rating + " out of 5" : "Tap a star to rate it") + '</span></div>' : "") +
       '</section>';
 
-    // Notes about this book, newest first.
-    const notes = L.filterNotes(S.notes, S, { bookId: b.id, sort: "newest" });
-    h += '<section class="ln-sec" aria-labelledby="lnBkNotes"><div class="ln-sec-head"><h2 class="ln-label" id="lnBkNotes">Notes (' + notes.length + ')</h2><button type="button" class="ln-link-btn" data-act="add-note" data-id="' + esc(b.id) + '">+ Note</button></div>' +
-      (notes.length ? '<div class="ln-list">' + notes.map(function (n) { return A.noteCard(n); }).join("") + '</div>' : '<p class="ln-quiet">No notes for this book yet.</p>') + '</section>';
-
-    // What you will do because of it.
-    const acts = L.actionsFor(S.actions, "book", b.id);
-    h += '<section class="ln-sec" aria-labelledby="lnBkActs"><div class="ln-sec-head"><h2 class="ln-label" id="lnBkActs">Actions (' + acts.length + ')</h2><button type="button" class="ln-link-btn" data-act="add-action" data-id="' + esc(b.id) + '">+ Action</button></div>' +
-      (acts.length ? '<div class="ln-list">' + acts.map(function (a) { return A.actionRow(a); }).join("") + '</div>' : '<p class="ln-quiet">What will you do differently because of this book?</p>') + '</section>';
+    // The book's own notebook: reading sessions, with lessons, quotes and actions gathered from them.
+    h += A.notebook ? A.notebook.sectionHtml(b) : "";
 
     // The page updates that progress and the weekly pages-read figure are counted from.
     const log = (b.log || []).slice(-8).reverse();
@@ -252,6 +248,7 @@
 
   A.register("books", {
     html: function () { return A.state.id ? detail(A.state.id) : list(); },
+    input: function (target) { if (A.notebook) A.notebook.input(target); },
     results: listResults,
     count: listCount,
     click: function (act, el) {

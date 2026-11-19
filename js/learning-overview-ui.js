@@ -142,6 +142,7 @@
     }
     if (timer) h += '<div class="ln-now-timer">' + timer + '</div>';
     if (target) h += '<div class="ln-now-btns"><button type="button" class="btn btn-primary" data-act="log-reading" data-id="' + esc((cur[0] || target).id) + '">Log reading</button>' +
+      (A.notebook ? '<button type="button" class="btn btn-secondary" data-act="bnb-add" data-id="' + esc((cur[0] || target).id) + '">Add notes</button>' : "") +
       (cur.length > 1 ? '<button type="button" class="ln-link-btn" data-go="books" data-filters=\'{"status":"reading"}\'>' + (cur.length - 1) + ' more in progress</button>' : "") + '</div>';
     return h + '</section>';
   }

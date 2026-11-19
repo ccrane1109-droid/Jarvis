@@ -5441,3 +5441,34 @@ span.sp-trow-t { cursor: default; }
 .cdp-gs.is-overdue .cdp-gs-s { color: #f0a35e; }
 .gd-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; margin: 8px 0 0; color: var(--text-dim); font-size: 13px; }
 .gd-foot .gd-link { padding-left: 0; }
+
+/* A book's notebook: reading sessions under Notebook, the same notes gathered under Lessons, Quotes and Actions */
+.ln-book-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.bnb { margin-top: 16px; }
+.bnb .ln-toolbar { margin-bottom: 4px; }
+.bnb-tabs { margin: 0 0 8px; gap: 2px; }
+.bnb-tabs .ln-pill { padding: 0 10px; font-size: 14px; gap: 4px; }
+.bnb-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; margin-bottom: 4px; }
+.bnb-tools .ln-pills { margin: 0; }
+.bnb-group { margin: 0 0 12px; }
+.bnb-gh { display: flex; align-items: center; gap: 6px; margin: 14px 0 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em; color: var(--text-dim); }
+.bnb-s.is-pinned > .ln-note-sum { box-shadow: inset 3px 0 0 #e6b84a; padding-left: 10px; }
+.bnb-list { margin: 0 0 8px; padding-left: 20px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.bnb-list li { margin: 0 0 4px; }
+.bnb-lines { list-style: none; margin: 0 0 8px; padding: 0; }
+.bnb-line { padding: 10px 0; border-top: 1px solid var(--card-border); }
+.bnb-lines > .bnb-line:first-child { border-top: 0; }
+.bnb-line .ln-text { margin-bottom: 2px; }
+.bnb-line .ln-item-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin: 0; }
+.bnb-line .ln-quote { margin-bottom: 2px; }
+.bnb-line > .btn { margin-top: 4px; }
+.bnb-add-end { width: 100%; margin: 6px 0 0; }
+.bnb-empty { padding: 4px 0 8px; }
+.bnb-ed-book { margin: 0 0 8px; }
+.ln-save { margin: 4px 0 0; font-size: 13px; color: var(--text-dim); }
+.ln-save.is-bad { color: #f0a35e; }
+.ln-sheet .ln-sheet-actions .btn-primary:only-child { width: 100%; }
+.bnb-two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0 12px; }
+@media (max-width: 359px) { .bnb-two { grid-template-columns: minmax(0, 1fr); } }
+.bnb-ed-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin: 0 0 10px; }
+.bnb-ed-book { margin: 0; }

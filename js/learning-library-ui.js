@@ -43,7 +43,7 @@
       '<button type="button" class="btn btn-secondary" data-act="note-flashcard" data-id="' + esc(n.id) + '">Make a flashcard</button>' +
       '<button type="button" class="btn btn-secondary ln-danger" data-act="note-delete" data-id="' + esc(n.id) + '">Delete</button>';
     return '<details class="ln-note' + (n.title ? "" : " ln-note-plain") + '" id="lnnote_' + esc(n.id) + '" data-keep="' + esc(key) + '"' + (isOpen ? " open" : "") + '>' +
-      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", typeLabel(n.type)) + (n.important ? A.badge("yellow", "★ Starred") : "") + (n.type === "finding" && !n.evidence ? A.badge("neutral", "No evidence yet") : "") + (due ? A.badge("red", "Review due") : "") + (n.inbox ? A.badge("neutral", "To organize") : "") + '</span>' +
+      '<summary class="ln-note-sum"><span class="ln-badges">' + A.badge("accent", typeLabel(n.type)) + (n.important ? A.badge("yellow", "Starred") : "") + (n.type === "finding" && !n.evidence ? A.badge("neutral", "No evidence yet") : "") + (due ? A.badge("red", "Review due") : "") + (n.inbox ? A.badge("neutral", "To organize") : "") + '</span>' +
       '<span class="ln-note-title">' + esc(title) + '</span><span class="ln-item-sub">' + esc([day ? A.fmtShort(day) : "", A.noteSource(n)].filter(Boolean).join(" · ")) + '</span></summary>' +
       '<div class="ln-note-body">' +
       (n.type === "quote" ? '<blockquote class="ln-quote">' + esc(n.text) + '</blockquote>' : '<p class="ln-text">' + esc(n.text) + '</p>') +
@@ -267,7 +267,11 @@
       else if (act === "note-show") { A.state.filters.knowledge = Object.assign({}, A.state.filters.knowledge, { show: el.getAttribute("data-v") }); A.render(); }
     }
   });
-  A.quickAdd.note = function () { editNote(null, Object.assign({ type: "takeaway" }, A.contextPreset())); };
+  // On a book's own page the new note goes into that book's notebook (one place for everything about the book).
+  A.quickAdd.note = function () {
+    if (A.state.tab === "books" && A.state.id && A.notebook) { A.notebook.openEditor(A.state.id); return; }
+    editNote(null, Object.assign({ type: "takeaway" }, A.contextPreset()));
+  };
   A.noteCard = noteCard;
   A.checks = checks;
   A.typeLabel = typeLabel;
