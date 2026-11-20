@@ -265,7 +265,7 @@
     const d = GL.taskDraft(g, m, Object.assign({ today: today() }, fields || {}));
     if (!d.text) return { ok: false, error: "Write what needs to be done." };
     if (!GL.isDate(d.date)) return { ok: false, error: "Choose a day." };
-    const prevGoals = goals(), prevTasks = tasks(), made = h.addTask({ text: d.text, date: d.date, time: d.time, priority: d.priority, goalId: g.id });
+    const prevGoals = goals(), prevTasks = tasks(), made = h.addTask({ text: d.text, date: d.date, time: d.time, priority: d.priority, goalId: g.id, kind: "scheduled" });
     if (!made) return { ok: false, error: "That task couldn't be added." };
     if (m) {
       const r = GL.linkTask(prevGoals, goalId, msId, made.id, ctx());

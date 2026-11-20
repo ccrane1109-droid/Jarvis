@@ -144,7 +144,7 @@
     let links = prev.links, weeks = prev.weeks;
     const made = [], today = store.today();
     function task(text, date, est) {
-      const t = H.addTask({ text: text.trim(), date: date, priority: "medium" });
+      const t = H.addTask({ text: text.trim(), date: date, priority: "medium", kind: "deadline" });
       if (!t) return null;
       made.push(t.id);
       const l = PL.setLink(links, t.id, b.ms.id, { nodes: b.nodes }); if (l.ok) links = l.links;

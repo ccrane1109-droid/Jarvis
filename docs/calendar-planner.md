@@ -11,6 +11,10 @@ Planning > Calendar      [ Day | Week | Month ]        + Add  (a floating + on a
 Planning > Strategy > Weekly   long-term direction: Weekly Intentions, top three for the week, review (no time-blocking grid)
 ```
 
+> **Overdue.** A task planned in the Day Planner is a scheduled activity: it is never overdue, it stays on its own day (not
+> done) and is not carried into the next day's planner. Only deadline tasks (made in the Tasks section or Strategy) are
+> overdue. See [overdue-tasks.md](overdue-tasks.md).
+
 ## One system, no copies
 
 | What you see | Where it lives | Notes |

@@ -566,3 +566,22 @@ test("proposals: last week's review is offered only if last week had something i
   const done = Object.assign({}, withTask, { weeks: [{ id: "wk_2026-10-26", weekStart: "2026-10-26", reviewedAt: 5, createdAt: 1, updatedAt: 1 }] });
   assert.ok(!I.proposals(done).some((p) => p.kind === "review"), "once reviewed it is not offered again");
 });
+
+test("overdue in Strategy means a deadline task: planned-activity tasks from earlier days are history, not overdue and not suggestions", () => {
+  const pl = plan();
+  const tasks = [
+    task("p", { date: MON, kind: "scheduled", text: "Planned Monday" }),             // a Day Planner task nobody finished
+    task("d", { date: MON, kind: "deadline", text: "Send the invoice" }),            // made in the Tasks section
+    task("o", { date: MON, text: "Saved before kinds existed" }),                    // an older task, not tied to anything
+    task("l", { date: MON, text: "Older but tied to the plan" }),                    // an older task tied to a milestone
+    task("t", { date: TODAY, kind: "scheduled", text: "Planned today" })
+  ];
+  const lk = links([["l", pl.ms.id]], pl.get());
+  const ctx = context({ tasks, nodes: pl.get(), links: lk });
+  assert.equal(I.overdueCount(ctx), 2, "only the deadline task and the older task tied to Strategy");
+  const names = I.rankTasks(ctx).map((r) => r.task.id).sort();
+  assert.deepEqual(names, ["d", "l", "t"], "the suggestions leave out unfinished planned tasks from earlier days");
+  const d = I.rankTasks(ctx).find((r) => r.task.id === "d");
+  assert.ok(d.parts.some((p) => /Overdue by 2 days/.test(p.label || p.text || p.why || JSON.stringify(p))), "and a deadline task still earns its overdue points");
+  assert.ok(!I.rankTasks(ctx).some((r) => r.task.id === "t" && r.parts.some((p) => /Overdue/.test(JSON.stringify(p)))), "a task planned for today is not overdue");
+});

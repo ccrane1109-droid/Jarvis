@@ -80,7 +80,7 @@
     const c = check(input && input.text, input && input.hour, input && input.minute);
     if (!c.ok) return { ok: false, tasks: tasks, error: c.error };
     if (!input.date || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { ok: false, tasks: tasks, error: "Pick a day." };
-    const task = { id: ctx.makeId(), date: input.date, text: c.text, priority: "medium", category: "", time: c.time, completed: false, goalId: null, order: nextOrder(tasks, input.date), createdAt: ctx.now };
+    const task = { id: ctx.makeId(), date: input.date, text: c.text, priority: "medium", category: "", time: c.time, completed: false, goalId: null, kind: "scheduled", order: nextOrder(tasks, input.date), createdAt: ctx.now };
     return { ok: true, tasks: (tasks || []).concat([task]), task: task };
   }
 
