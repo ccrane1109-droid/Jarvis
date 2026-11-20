@@ -336,7 +336,7 @@
         if (!String(v.text || "").trim()) return { ok: false, errors: { text: "Enter a task." } };
         const est = PL.setEstimate(store.all("links"), "probe", v.estMin, {});
         if (!est.ok) return { ok: false, errors: { estMin: est.error } };
-        const t = window.JarvisHabits && window.JarvisHabits.addTask ? window.JarvisHabits.addTask({ text: v.text, date: v.date, priority: v.priority }) : null;
+        const t = window.JarvisHabits && window.JarvisHabits.addTask ? window.JarvisHabits.addTask({ text: v.text, date: v.date, priority: v.priority, kind: "deadline" }) : null;
         if (!t) return { ok: false, errors: { text: "That task couldn't be added." } };
         let links = store.all("links");
         if (v.estMin) links = PL.setEstimate(links, t.id, v.estMin, {}).links;

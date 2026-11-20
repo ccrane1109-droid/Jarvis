@@ -33,6 +33,7 @@
 (function () {
   "use strict";
 
+  const TK = window.JarvisTaskKind;
   const HL = window.JarvisHabitLogic;   // counting, streaks and checking a habit off on any day (habit-logic.js)
 
   const LS_TASKS = "jarvisTasks";
@@ -194,6 +195,7 @@
     $("taskTime").value = "";
     $("taskCategory").value = "";
     $("taskGoalSelect").value = "";
+    if ($("taskDeadline")) $("taskDeadline").checked = true;
     renderTaskPlanSelect("");
     $("taskFormTitle").textContent = "Add Task";
     $("taskFormSubmitBtn").textContent = "Add Task";
@@ -231,6 +233,9 @@
     }
   }
 
+  // An older task with no saved kind counts as a deadline only when it is tied to a Strategy item.
+  function taskKindOpts() { return { linked: function (id) { const p = planApi(); return !!(p && p.nodeIdOfTask && p.nodeIdOfTask(id)); } }; }
+
   function handleTaskFormSubmit(e) {
     e.preventDefault();
     const core = window.JarvisCore;
@@ -243,11 +248,18 @@
       category: $("taskCategory").value.trim(),
       goalId: $("taskGoalSelect").value || null
     };
+    const wantDeadline = !$("taskDeadline") || $("taskDeadline").checked;
     const madeIds = [];
     if (taskFormEditId) {
       const t = tasks.find(function (tt) { return tt.id === taskFormEditId; });
-      if (t) { Object.assign(t, raw); madeIds.push(t.id); }
+      if (t) {
+        Object.assign(t, raw);
+        // only written when the box was changed, so editing an older task leaves how it is read as it was
+        if (TK && TK.isDeadline(t, taskKindOpts()) !== wantDeadline) t.kind = wantDeadline ? "deadline" : "scheduled";
+        madeIds.push(t.id);
+      }
     } else {
+      if (TK) raw.kind = wantDeadline ? "deadline" : "scheduled";
       const repeatDates = Array.prototype.slice.call($("taskRepeatDaysRow").querySelectorAll(".day-picker-btn.selected"))
         .map(function (b) { return b.getAttribute("data-date"); });
       const datesToCreate = [selectedDate].concat(repeatDates.filter(function (d) { return d !== selectedDate; }));
@@ -351,6 +363,7 @@
     $("taskCategory").value = t.category || "";
     renderTaskGoalSelectOptions();
     $("taskGoalSelect").value = t.goalId || "";
+    if ($("taskDeadline")) $("taskDeadline").checked = !TK || TK.isDeadline(t, taskKindOpts());
     renderTaskPlanSelect(planApi() ? planApi().nodeIdOfTask(t.id) : "");
     $("taskFormTitle").textContent = "Edit Task";
     $("taskFormSubmitBtn").textContent = "Save Changes";
@@ -932,6 +945,8 @@
       time: /^([01]\d|2[0-3]):[0-5]\d$/.test(f.time || "") ? f.time : "", category: String(f.category || "").trim(), goalId: f.goalId || null,
       id: window.JarvisCore.uid("task"), date: date, completed: false, order: nextOrderForDate(date), createdAt: Date.now()
     };
+    // "scheduled" (an activity planned for that day, never overdue) or "deadline" (see task-kind-logic.js); a caller that does not say leaves it unmarked
+    if (TK && TK.KINDS.indexOf(f.kind) !== -1) t.kind = f.kind;
     tasks.push(t);
     saveTasks();
     renderTaskList(); renderDaySelectorPills(); renderTodayOverview();

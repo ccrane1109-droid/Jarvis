@@ -378,7 +378,7 @@
     if (t) {
       h.commitTasks(h.getTasks().map(function (x) { return x.id === t.id ? Object.assign({}, x, { text: text, date: v.date, time: time, priority: priority }) : x; }));
     } else {
-      const made = h.addTask({ text: text, date: v.date, time: time, priority: priority });
+      const made = h.addTask({ text: text, date: v.date, time: time, priority: priority, kind: "scheduled" });
       if (!made) return { ok: false, message: "That task couldn't be added." };
       id = made.id;
     }
@@ -481,7 +481,7 @@
     if (!text) return;
     const h = habits();
     let taskId = "";
-    if (h) { const made = h.addTask({ text: text, date: date }); if (made) taskId = made.id; }
+    if (h) { const made = h.addTask({ text: text, date: date, kind: "scheduled" }); if (made) taskId = made.id; }
     const r = saveDay(date, { type: "top", index: i, taskId: taskId, text: text });
     if (!r.ok) {
       // the priority could not be saved, so the task made for it is taken back out: nothing half done

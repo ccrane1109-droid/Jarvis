@@ -578,7 +578,7 @@
         picks.forEach(function (id) { const r = PL.setLink(links, id, nodeId, { nodes: store.all("nodes") }); if (r.ok) { links = r.links; count++; } });
         if (text) {
           const h = habits();
-          const t = h && h.addTask ? h.addTask({ text: text, date: v.newDate, priority: v.newPriority }) : null;
+          const t = h && h.addTask ? h.addTask({ text: text, date: v.newDate, priority: v.newPriority, kind: "deadline" }) : null;
           if (!t) return { ok: false, errors: { newText: "That task couldn't be added." } };
           const r = PL.setLink(links, t.id, nodeId, { nodes: store.all("nodes") });
           if (r.ok) { links = r.links; count++; }

@@ -71,7 +71,7 @@ test("overdue: things with a date that passed and were not ticked, not events, n
     { title: "Later today", kind: "task", time: "15:00" },
     { title: "Ancient", kind: "task", date: "2026-07-01", time: "" }
   ]);
-  const tasks = [{ id: "k1", date: "2026-11-02", text: "Yesterday-ish task", priority: "medium" }, { id: "k2", date: "2026-11-02", text: "Ticked", completed: true }];
+  const tasks = [{ id: "k1", date: "2026-11-02", text: "Yesterday-ish task", priority: "medium", kind: "deadline" }, { id: "k2", date: "2026-11-02", text: "Ticked", completed: true, kind: "deadline" }];
   const s = sum(items(ev, tasks));
   assert.deepEqual(titles(s.overdue), ["Old milestone", "Old task", "Yesterday-ish task", "Earlier today"]);
   assert.equal(s.counts.overdue, 4);
@@ -172,4 +172,29 @@ test("an item that began on an earlier day sits at midnight today", () => {
   assert.equal(today.length, 1);
   const d = S.daySlots(today, { today: TODAY, nowHour: 8, showEarlier: true });
   assert.equal(d.slots.find((s) => s.hour === 0).items[0].title, "Overnight");
+});
+
+test("a task you scheduled for a day is never overdue; only a deadline task is, and an older task counts as a deadline only when tied to Strategy", () => {
+  const tasks = [
+    { id: "p1", date: "2026-11-02", text: "Planned in the Day Planner", kind: "scheduled" },
+    { id: "p2", date: "2026-11-03", text: "Planned, with a time", time: "09:00", kind: "scheduled" },
+    { id: "d1", date: "2026-11-02", text: "Send the invoice", kind: "deadline" },
+    { id: "o1", date: "2026-11-02", text: "Saved before kinds existed" },
+    { id: "o2", date: "2026-11-02", text: "Older, tied to a Strategy item" },
+    { id: "d2", date: "2026-11-02", text: "Deadline, done", kind: "deadline", completed: true }
+  ];
+  const linked = (id) => id === "o2";
+  const it = C.taskItems(tasks, "2026-06-01", "2026-12-31", { linked });
+  assert.deepEqual(it.map((i) => [i.id, i.scheduled]), [["p1", true], ["p2", true], ["d1", false], ["o1", true], ["o2", false], ["d2", false]]);
+  assert.deepEqual(titles(sum(it).overdue), ["Older, tied to a Strategy item", "Send the invoice"]);
+  assert.equal(sum(it).counts.overdue, 2);
+  // with no Strategy links known, the older task is a scheduled activity as well
+  assert.deepEqual(titles(sum(C.taskItems(tasks, "2026-06-01", "2026-12-31")).overdue), ["Send the invoice"]);
+  // a scheduled task stays on its own day, and is still an item there, so the calendar keeps showing it
+  assert.deepEqual(it.filter((i) => i.date === "2026-11-02").map((i) => i.id).sort(), ["d1", "d2", "o1", "o2", "p1"]);
+  // the item of a deadline task made today at an earlier hour is late as before; a scheduled one is not
+  const today = C.taskItems([{ id: "a", date: TODAY, time: "08:00", text: "Deadline earlier", kind: "deadline" }, { id: "b", date: TODAY, time: "08:00", text: "Scheduled earlier", kind: "scheduled" }], TODAY, TODAY);
+  assert.deepEqual(titles(sum(today).overdue), ["Deadline earlier"]);
+  assert.equal(S.isOverdue({ point: true, completed: false, date: "2026-11-01", allDay: true, scheduled: true }, TODAY, NOW), false);
+  assert.equal(S.isOverdue({ point: true, completed: false, date: "2026-11-01", allDay: true }, TODAY, NOW), true, "an item that does not say it is scheduled (an event of the Task kind) is judged as before");
 });

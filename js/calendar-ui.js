@@ -106,6 +106,12 @@
     if (!P || !PW || !PW.calendarItems) return [];
     try { P.init(); const h = habits(); return PW.calendarItems({ blocks: P.all("blocks"), ingredients: P.all("ingredients"), tasks: h ? h.getTasks() : [], editable: true }, from, to); } catch (e) { return []; }
   }
+  // Which older tasks (no saved kind) are tied to a Strategy item and so keep their deadline; see task-kind-logic.js.
+  function planLinked() {
+    const P = window.JarvisPlanStore, TKm = window.JarvisTaskKind;
+    try { if (P && TKm) { P.init(); return TKm.linkedTo(P.all("links")); } } catch (e) { /* Strategy can't be read: older tasks are then scheduled */ }
+    return null;
+  }
   // Goal deadlines and milestone dates. A milestone that has its own task is left out here, because that task is already on the calendar.
   function goalItems(h, from, to) {
     const GLg = window.JarvisGoalsLogic, goals = h && h.getGoals ? h.getGoals() : [];
@@ -115,7 +121,7 @@
   function allItems(from, to) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
-    const tasks = h ? C.taskItems(h.getTasks(), from, to).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
+    const tasks = h ? C.taskItems(h.getTasks(), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
     const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks);
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });

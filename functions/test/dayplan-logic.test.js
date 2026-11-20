@@ -61,7 +61,8 @@ test("planning something in an hour creates an ordinary task", () => {
   const r = D.add(list, { date: DAY, text: "  Study   for English ", hour: 15, minute: 30 }, ctx());
   assert.equal(r.ok, true);
   assert.equal(r.tasks.length, 2);
-  assert.deepEqual(Object.keys(r.task).sort(), ["category", "completed", "createdAt", "date", "goalId", "id", "order", "priority", "text", "time"], "the same fields as a task from the To-Do form");
+  assert.deepEqual(Object.keys(r.task).sort(), ["category", "completed", "createdAt", "date", "goalId", "id", "kind", "order", "priority", "text", "time"], "the same fields as a task from the To-Do form, plus its kind");
+  assert.equal(r.task.kind, "scheduled", "a task planned in an hour is a scheduled activity, never overdue");
   assert.deepEqual([r.task.text, r.task.time, r.task.date, r.task.completed, r.task.priority, r.task.order, r.task.createdAt], ["Study for English", "15:30", DAY, false, "medium", 5, 1000]);
   assert.equal(D.slots(r.tasks, DAY)[15].items[0].text, "Study for English");
   assert.equal(list.length, 1, "the original list is not changed");

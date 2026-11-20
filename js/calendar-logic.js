@@ -18,9 +18,9 @@
    ========================================================================== */
 
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory();
-  else root.JarvisCalendarLogic = factory();
-})(typeof self !== "undefined" ? self : this, function () {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./task-kind-logic.js"));
+  else root.JarvisCalendarLogic = factory(root.JarvisTaskKind);
+})(typeof self !== "undefined" ? self : this, function (TK) {
   "use strict";
 
   const TITLE_MAX = 140, DESC_MAX = 2000, NOTES_MAX = 4000;
@@ -368,14 +368,17 @@
 
   // Your ordinary tasks (the To-Do list and the Habits planner) as calendar items. A task has no length, so
   // a timed one is drawn as a half hour; that is only how it looks.
-  function taskItems(tasks, from, to) {
+  // opts.linked(id): is this (older) task tied to a Strategy item? Such a task keeps its deadline (see task-kind-logic.js).
+  // An item for a scheduled task says so (scheduled: true), which is how the schedule knows never to call it overdue.
+  function taskItems(tasks, from, to, opts) {
     return (Array.isArray(tasks) ? tasks : []).filter(function (t) { return t && typeof t.id === "string" && isDate(t.date) && t.date >= from && t.date <= to && t.text; }).map(function (t) {
       const timed = isTime(t.time), startMin = timed ? minutesOf(t.time) : null;
       return {
         key: "task:" + t.id, id: t.id, occDate: t.date, source: "task", title: String(t.text), description: "", kind: "task", category: "other", priority: PRIORITIES.indexOf(t.priority) !== -1 ? t.priority : "medium",
         recurring: false, linked: null, status: "", reminders: [], completed: !!t.completed, point: true, tz: "",
         allDay: !timed, date: t.date, endDate: t.date, time: timed ? t.time : "", endTime: timed ? timeOf(Math.min(1439, startMin + 30)) : "",
-        startMin: startMin, endMin: timed ? Math.min(1439, startMin + 30) : null, startMs: null, endMs: null, readOnly: false
+        startMin: startMin, endMin: timed ? Math.min(1439, startMin + 30) : null, startMs: null, endMs: null, readOnly: false,
+        scheduled: !(TK && TK.isDeadline(t, opts))
       };
     });
   }

@@ -49,8 +49,9 @@
   }
   function overlapsDay(it, d) { return it.date <= d && it.endDate >= d; }
   // A task or milestone with a date that nobody has ticked, and whose day (or time, today) has passed.
+  // A task you scheduled for a day (made in the Day Planner and so on) is an activity, not a deadline: it is never overdue (see task-kind-logic.js).
   function isOverdue(it, today, nowMin) {
-    if (!it.point || it.completed) return false;
+    if (!it.point || it.completed || it.scheduled) return false;
     if (it.date < today) return C.diffDays(it.date, today) <= LOOKBACK_DAYS;
     return it.date === today && !it.allDay && it.startMin < nowMin;
   }

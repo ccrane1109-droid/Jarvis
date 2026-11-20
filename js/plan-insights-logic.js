@@ -16,9 +16,9 @@
    ========================================================================== */
 
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("./plan-logic"), require("./plan-week-logic"));
-  else root.JarvisPlanInsights = factory(root.JarvisPlanLogic, root.JarvisPlanWeekLogic);
-})(typeof self !== "undefined" ? self : this, function (PL, W) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./plan-logic"), require("./plan-week-logic"), require("./task-kind-logic"));
+  else root.JarvisPlanInsights = factory(root.JarvisPlanLogic, root.JarvisPlanWeekLogic, root.JarvisTaskKind);
+})(typeof self !== "undefined" ? self : this, function (PL, W, TK) {
   "use strict";
 
   /* ---------------- small helpers ---------------- */
@@ -27,6 +27,13 @@
   function pct(n, d) { return d > 0 ? Math.round(100 * n / d) : null; }
   function hours(min) { return min === null || min === undefined ? null : Math.round(min / 6) / 10; }
   function arr(v) { return Array.isArray(v) ? v : []; }
+
+  // Overdue means a DEADLINE task (made in the Tasks section or in Strategy, or an older one tied to a Strategy item) whose day has passed.
+  // A task you scheduled for a day in the Day Planner is an activity, so it is never overdue (task-kind-logic.js).
+  function lateTask(t, ctx) {
+    if (!ctx._linked) ctx._linked = TK.linkedTo(ctx.links);
+    return TK.isOverdue(t, ctx.today, { linked: ctx._linked });
+  }
   function dateOf(ms) { return new Date(ms).toISOString().slice(0, 10); }
   const PRIO = { high: 3, medium: 2, low: 1 };
 
@@ -149,7 +156,7 @@
       if (ms.status === "paused" || (pri && pri.status === "paused") || (obj && obj.status === "paused")) add("It belongs to a paused item", -15);
     }
     if (task.priority === "high") add("High priority", 14); else if (task.priority !== "low") add("Medium priority", 6);
-    if (PL.isDate(task.date) && task.date < today) {
+    if (lateTask(task, ctx)) {
       const late = PL.diffDays(task.date, today);
       add("Overdue by " + late + " day" + (late === 1 ? "" : "s"), Math.min(12, 3 + 2 * late));
     }
@@ -161,7 +168,7 @@
 
   function candidates(ctx) {
     const dates = W.weekDates(ctx.weekStart), end = dates[6];
-    return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date <= end && t.text && !PL.isArchived(ctx.links, t.id) && !(ctx.model && ctx.model.nodeOfTask(t.id) && ctx.model.nodeOfTask(t.id).status === "dropped"); });
+    return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date <= end && (t.date >= ctx.today || lateTask(t, ctx)) && t.text && !PL.isArchived(ctx.links, t.id) && !(ctx.model && ctx.model.nodeOfTask(t.id) && ctx.model.nodeOfTask(t.id).status === "dropped"); });
   }
   // Every candidate, best first, each with its reasons.
   function rankTasks(ctx) {
@@ -241,7 +248,7 @@
     const todayOpen = tasks.filter(function (t) { return t && !t.completed && t.date === today && !PL.isArchived(ctx.links, t.id); });
     const order = {}; rank.forEach(function (r, i) { order[r.task.id] = i; });
     todayOpen.sort(function (a, b) { return (order[a.id] === undefined ? 1e6 : order[a.id]) - (order[b.id] === undefined ? 1e6 : order[b.id]) || (a.order || 0) - (b.order || 0); });
-    const overdueTasks = tasks.filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date < today && !PL.isArchived(ctx.links, t.id); });
+    const overdueTasks = tasks.filter(function (t) { return lateTask(t, ctx) && !PL.isArchived(ctx.links, t.id); });
     return {
       year: y, quarter: q, month: mk, weekStart: ws,
       overall: { year: avgPct(m, objectives), threeYear: avgPct(m, [].concat.apply([], yearNodes)) },
@@ -306,7 +313,7 @@
     const live = function (l) { return l.filter(function (n) { return n.status !== "dropped"; }); };
     return { objectives: live(m.objectivesOf(y)).map(row), priorities: live(m.prioritiesOf(y, q)).map(row), milestones: live(m.milestonesIn(mk)).map(row) };
   }
-  function overdueCount(ctx) { return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date < ctx.today && !PL.isArchived(ctx.links, t.id); }).length; }
+  function overdueCount(ctx) { return arr(ctx.tasks).filter(function (t) { return lateTask(t, ctx) && !PL.isArchived(ctx.links, t.id); }).length; }
 
   /* ---------------- reviews ---------------- */
   function hrs(min) { return (Math.round(min / 6) / 10) + " h"; }
@@ -462,7 +469,7 @@
       month: mk, outcomes: monthOutcomes(ctx, mk),
       milestones: { done: ms.filter(function (n) { return m.progress(n.id).pct === 100; }).length, total: ms.length },
       tasks: { total: tasks.length, done: done(tasks), open: tasks.length - done(tasks), linkedDone: done(linked), linkedOpen: linked.length - done(linked), looseDone: done(loose), looseOpen: loose.length - done(loose),
-        overdue: tasks.filter(function (t) { return !t.completed && t.date < today; }).length },
+        overdue: tasks.filter(function (t) { return lateTask(t, ctx); }).length },
       deadlines: deadlines
     };
   }
@@ -502,7 +509,7 @@
       return a.title < b.title ? -1 : a.title > b.title ? 1 : 0;
     });
     // the inbox: overdue first, then higher priority, then the date
-    loose.sort(function (a, b) { const la = !a.completed && a.date < today ? 0 : 1, lb = !b.completed && b.date < today ? 0 : 1; return la - lb || order(a, b); });
+    loose.sort(function (a, b) { const la = lateTask(a, ctx) ? 0 : 1, lb = lateTask(b, ctx) ? 0 : 1; return la - lb || order(a, b); });
     const pages = Math.max(1, Math.ceil(loose.length / size)), page = Math.max(1, Math.min(pages, Number(f.page) || 1));
     const cats = {}; all.forEach(function (t) { if (t.category) cats[t.category] = true; });
     const archived = arr(ctx.tasks).filter(function (t) { return t && typeof t.date === "string" && t.date.slice(0, 7) === mk && PL.isArchived(ctx.links, t.id); });
@@ -518,7 +525,7 @@
       const nextEnd = PL.addDays(today, 14);
       push({ key: "ms-late:" + n.id, kind: "move-deadline", id: n.id, title: "“" + n.title + "” is overdue", detail: "It was due " + m.deadline(n) + ". Move its deadline to " + nextEnd + "?", apply: { op: "set-due", id: n.id, due: nextEnd } });
     });
-    const late = arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date < today && m.nodeOfTask(t.id) && !PL.isArchived(ctx.links, t.id); });
+    const late = arr(ctx.tasks).filter(function (t) { return lateTask(t, ctx) && m.nodeOfTask(t.id) && !PL.isArchived(ctx.links, t.id); });
     if (late.length) push({ key: "tasks-late:" + today.slice(0, 7) + ":" + late.length, kind: "move-tasks", title: late.length + " overdue task" + (late.length === 1 ? "" : "s") + " linked to your plan", detail: "Move " + (late.length === 1 ? "it" : "them") + " to today so " + (late.length === 1 ? "it" : "they") + " show on your list again?", apply: { op: "move-tasks", ids: late.map(function (t) { return t.id; }), date: today } });
     const ws = ctx.weekStart, dates = W.weekDates(ws);
     m.prioritiesOf(Number(today.slice(0, 4)), PL.quarterOfDate(today)).forEach(function (p) {
