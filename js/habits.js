@@ -35,6 +35,7 @@
 
   const TK = window.JarvisTaskKind;
   const HL = window.JarvisHabitLogic;   // counting, streaks and checking a habit off on any day (habit-logic.js)
+  const HP = window.JarvisHabitPlan;    // a habit's place on the Day planner and Calendar: time, days, one-day moves (habit-plan-logic.js)
 
   const LS_TASKS = "jarvisTasks";
   const LS_HABITS = "jarvisHabits";
@@ -44,7 +45,7 @@
     loadTasks: function () { return window.JarvisCore.loadJSON(LS_TASKS, []); },
     saveTasks: function (v) { window.JarvisCore.saveJSON(LS_TASKS, v); },
     loadHabits: function () { return window.JarvisCore.loadJSON(LS_HABITS, []); },
-    saveHabits: function (v) { window.JarvisCore.saveJSON(LS_HABITS, v); },
+    saveHabits: function (v) { return window.JarvisCore.saveJSON(LS_HABITS, v); },
     loadGoals: function () { return window.JarvisCore.loadJSON(LS_GOALS, []); },
     saveGoals: function (v) { return window.JarvisCore.saveJSON(LS_GOALS, v); }
   };
@@ -118,6 +119,7 @@
       completions: {},
       createdAt: raw.createdAt || Date.now()
     };
+    if (HP) Object.assign(h, HP.fields(raw));   // where it sits on the planner (optional; a habit made before this has none of it)
     if (raw.completions && typeof raw.completions === "object" && !Array.isArray(raw.completions)) {
       Object.keys(raw.completions).forEach(function (d) {
         const n = Number(raw.completions[d]);
@@ -148,7 +150,12 @@
     Storage.saveTasks(tasks);
     try { document.dispatchEvent(new CustomEvent("jarvis-tasks-changed")); } catch (e) { /* an old browser without CustomEvent: nothing listens anyway */ }
   }
-  function saveHabits() { Storage.saveHabits(habits); }
+  // Saves the habits (false if the browser refused) and tells the page, so the Day planner and Calendar follow a tick made on the Habits screen.
+  function saveHabits() {
+    const ok = Storage.saveHabits(habits);
+    if (ok) { try { document.dispatchEvent(new CustomEvent("jarvis-habits-changed")); } catch (e) { /* an old browser without CustomEvent: nothing listens anyway */ } }
+    return ok;
+  }
   function saveGoalsData() { Storage.saveGoals(goals); }
 
   /* ==================== TASKS ==================== */
@@ -468,6 +475,7 @@
     $("habitName").value = "";
     $("habitTargetDays").value = "7";
     $("habitDailyTarget").value = "1";
+    setPlanForm(null);
     $("habitFormTitle").textContent = "Add a Habit";
     $("habitSubmitBtn").textContent = "Add Habit";
     $("habitFormCancelBtn").classList.add("hidden");
@@ -481,6 +489,48 @@
     if (btn) { btn.setAttribute("aria-expanded", on ? "true" : "false"); btn.textContent = on ? "Close" : "+ Add habit"; }
   }
 
+  /* ---- the habit's place on the Day planner (time and days; see habit-plan-logic.js) ---- */
+
+  function dayChipsHtml(days) {
+    return [1, 2, 3, 4, 5, 6, 0].map(function (d) {
+      return '<label class="cal-chip-btn hb-daychip"><input type="checkbox" value="' + d + '"' + (days.indexOf(d) !== -1 ? " checked" : "") + '> ' + HP.DAY_SHORT[d] + '</label>';
+    }).join("");
+  }
+  function planFormDays() {
+    return Array.prototype.filter.call($("habitPlanDays").querySelectorAll("input"), function (i) { return i.checked; }).map(function (i) { return Number(i.value); });
+  }
+  // Shows the time and days a habit already has on the planner (null: none). The days appear once there is a time.
+  function setPlanForm(h) {
+    const p = h && HP ? HP.plan(h) : null;
+    $("habitPlanTime").value = p ? p.time : "";
+    $("habitPlanDays").innerHTML = dayChipsHtml(p ? p.days : []);
+    syncPlanForm();
+  }
+  function syncPlanForm() {
+    const has = !!$("habitPlanTime").value, sevenADay = clampInt($("habitTargetDays").value, 1, 7, 7) === 7;
+    $("habitPlanDaysWrap").classList.toggle("hidden", !has);
+    if (has && !planFormDays().length && sevenADay) Array.prototype.forEach.call($("habitPlanDays").querySelectorAll("input"), function (i) { i.checked = true; });
+    $("habitPlanDaysHint").textContent = sevenADay ? "" : "This habit's goal is " + clampInt($("habitTargetDays").value, 1, 7, 7) + " days a week. Choose the days you plan to do it.";
+  }
+  // -> { ok, time, days, from } | { ok: false, error }. A habit with no time is off the planner.
+  function readPlanForm(existing) {
+    const time = $("habitPlanTime").value;
+    if (!time) return { ok: true, time: "" };
+    if (!HP || !HP.isTime(time)) return { ok: false, error: "Choose a time for the planner." };
+    const days = planFormDays();
+    if (!days.length) return { ok: false, error: "Choose at least one day for the planner." };
+    const cur = existing && HP.plan(existing);
+    return { ok: true, time: time, days: days, from: cur && cur.from ? cur.from : window.JarvisCore.todayISODate() };
+  }
+  // Puts the form's choice on the habit record (the same fields the planner's Add Habit writes).
+  function applyPlanToHabit(h, plan) {
+    if (!HP) return;
+    const r = plan.time ? HP.setPlan([h], h.id, plan) : HP.clearPlan([h], h.id);
+    if (!r.ok) return;
+    ["planTime", "planDays", "planFrom", "planMoves"].forEach(function (k) { delete h[k]; });
+    Object.assign(h, HP.fields(r.habits[0]));
+  }
+
   function handleHabitFormSubmit(e) {
     e.preventDefault();
     const core = window.JarvisCore;
@@ -488,11 +538,16 @@
     if (!name) { core.showToast("Please enter a habit name."); return; }
     const targetDays = clampInt($("habitTargetDays").value, 1, 7, 7);
     const dailyTarget = clampInt($("habitDailyTarget").value, 1, 50, 1);
+    const existing = habitFormEditId ? habits.find(function (hh) { return hh.id === habitFormEditId; }) : null;
+    const plan = readPlanForm(existing);
+    if (!plan.ok) { core.showToast(plan.error); return; }
     if (habitFormEditId) {
-      const h = habits.find(function (hh) { return hh.id === habitFormEditId; });
-      if (h) { h.name = name; h.targetDays = targetDays; h.dailyTarget = dailyTarget; }
+      const h = existing;
+      if (h) { h.name = name; h.targetDays = targetDays; h.dailyTarget = dailyTarget; applyPlanToHabit(h, plan); }
     } else {
-      habits.push({ id: core.uid("habit"), name: name, targetDays: targetDays, dailyTarget: dailyTarget, completions: {}, createdAt: Date.now() });
+      const made = { id: core.uid("habit"), name: name, targetDays: targetDays, dailyTarget: dailyTarget, completions: {}, createdAt: Date.now() };
+      applyPlanToHabit(made, plan);
+      habits.push(made);
     }
     saveHabits();
     resetHabitForm();
@@ -566,8 +621,14 @@
     const today = window.JarvisCore.todayISODate();
     const res = fn(habits, today);
     if (!res.ok) { window.JarvisCore.showToast(res.error || "That can't be changed."); return false; }
+    const prev = habits;
     habits = res.habits;
-    saveHabits();
+    if (!saveHabits()) {      // nothing is shown as done unless it was saved
+      habits = prev;
+      renderAllHabitViews();
+      window.JarvisCore.showToast("That couldn't be saved. The browser may be full or blocking storage.");
+      return false;
+    }
     renderAllHabitViews();
     return true;
   }
@@ -614,7 +675,7 @@
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
               '<span class="list-item-title">' + core.escapeHtml(h.name) + '</span>' +
-              '<span class="list-item-meta">Target ' + h.targetDays + 'x/week' + (h.dailyTarget > 1 ? " &middot; " + h.dailyTarget + "/day" : "") + " &middot; " + streak + ' day streak</span>' +
+              '<span class="list-item-meta">Target ' + h.targetDays + 'x/week' + (h.dailyTarget > 1 ? " &middot; " + h.dailyTarget + "/day" : "") + " &middot; " + streak + ' day streak' + plannerMeta(h) + '</span>' +
             '</div>' +
             '<div class="list-item-actions">' +
               '<button type="button" class="btn-icon habit-edit-btn" data-id="' + core.escapeHtml(h.id) + '">Edit</button>' +
@@ -626,6 +687,14 @@
     }).join("");
   }
 
+  function plannerMeta(h) {
+    const p = HP ? HP.plan(h) : null;
+    if (!p) return "";
+    const hr = Number(p.time.slice(0, 2));
+    return " &middot; Planner " + ((hr + 11) % 12 + 1) + ":" + p.time.slice(3) + (hr < 12 ? " AM" : " PM") + ", " + escText(HP.daysLabel(p.days));
+  }
+  function escText(s) { return window.JarvisCore.escapeHtml(s); }
+
   function handleHabitManageListClick(e) {
     const editBtn = e.target.closest(".habit-edit-btn");
     if (editBtn) {
@@ -635,6 +704,7 @@
       $("habitName").value = h.name;
       $("habitTargetDays").value = h.targetDays;
       $("habitDailyTarget").value = h.dailyTarget;
+      setPlanForm(h);
       $("habitFormTitle").textContent = "Edit Habit";
       $("habitSubmitBtn").textContent = "Save Changes";
       $("habitFormCancelBtn").classList.remove("hidden");
@@ -989,6 +1059,8 @@
     $("habitsDayNote").addEventListener("click", handleHabitsDayNoteClick);
     $("habitHistoryGrid").addEventListener("click", handleHabitGridClick);
     $("habitForm").addEventListener("submit", handleHabitFormSubmit);
+    $("habitPlanTime").addEventListener("input", syncPlanForm);
+    $("habitTargetDays").addEventListener("input", syncPlanForm);
     $("habitFormCancelBtn").addEventListener("click", resetHabitForm);
     $("habitAddToggleBtn").addEventListener("click", function () {
       const open = !$("habitFormWrap").hidden;
@@ -1020,5 +1092,33 @@
     return applyHabitChange(id, function (list, t) { return HL.setDone(list, id, today, !wasDone, t); });
   }
 
-  window.JarvisHabits = { init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
+  /* ---- for the Day planner and the Calendar (calendar-ui.js, calendar-planner-ui.js) ----
+     They never write the habits themselves: everything goes through here, so it is the same record, the same rules and the same save as
+     the Habits screen. A change is only reported as made if it was saved; if the browser refuses, the list goes back as it was. */
+
+  function getHabits() { return habits.slice(); }
+  const REFUSED = "That couldn't be saved. The browser may be full or blocking storage.";
+  // fn(list) -> { ok, habits, error }
+  function changeHabits(fn) {
+    const res = fn(habits);
+    if (!res || !res.ok) return { ok: false, errors: (res && res.errors) || {}, error: (res && res.error) || "That can't be changed." };
+    const prev = habits;
+    habits = res.habits;
+    if (!saveHabits()) { habits = prev; renderAllHabitViews(); return { ok: false, errors: {}, error: REFUSED }; }
+    renderAllHabitViews();
+    return { ok: true, errors: {} };
+  }
+  // Done or not done on one day (a counting habit is filled to its daily target, or emptied). The same write as ticking it on the Habits screen.
+  function setHabitDay(id, date, done) { return changeHabits(function (list) { return HL.setDone(list, id, date, !!done, window.JarvisCore.todayISODate()); }); }
+  // One more (or one less) on a counting habit.
+  function stepHabitDay(id, date, delta) { return changeHabits(function (list) { return HL.adjust(list, id, date, delta, window.JarvisCore.todayISODate()); }); }
+  // Put a habit on the planner ({ time, days, from }), or change its time and days.
+  function planHabit(id, input) { return changeHabits(function (list) { return HP.setPlan(list, id, input); }); }
+  // Undo for the two above: its planner fields exactly as they were (HabitPlan.fields of the habit before).
+  function restoreHabitPlan(id, saved) { return changeHabits(function (list) { return HP.restorePlan(list, id, saved); }); }
+  function unplanHabit(id) { return changeHabits(function (list) { return HP.clearPlan(list, id); }); }
+  // A different time on one day only; the habit's usual time and days are not touched.
+  function moveHabitDay(id, date, time) { return changeHabits(function (list) { return HP.moveOn(list, id, date, time); }); }
+
+  window.JarvisHabits = { getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
 })();

@@ -385,6 +385,23 @@ test("a fingerprint stands for the content, not the order of its fields", () => 
 
 const habit = (id, days, extra) => Object.assign({ id: id, name: "Habit " + id, targetDays: 7, dailyTarget: 1, completions: days, createdAt: 1 }, extra);
 
+test("a habit's planner time, days and one-day moves survive the merge (this device's copy is kept; the other device's habit comes whole)", () => {
+  const plan = { planTime: "07:30", planDays: [1, 3, 5], planFrom: "2026-11-02", planMoves: { "2026-11-16": "08:15" } };
+  const phone = [habit("h1", { "2026-11-10": 1 }, plan)];
+  const computer = [habit("h1", { "2026-11-11": 1 }), habit("h2", { "2026-11-11": 1 }, { planTime: "21:00" })];
+  const m = B.mergeHabits(phone, computer);
+  assert.deepEqual(m[0].planDays, [1, 3, 5]); assert.equal(m[0].planTime, "07:30"); assert.deepEqual(m[0].planMoves, { "2026-11-16": "08:15" }); assert.equal(m[0].planFrom, "2026-11-02");
+  assert.deepEqual(m[0].completions, { "2026-11-10": 1, "2026-11-11": 1 }, "and the ticks from both");
+  assert.equal(m[1].planTime, "21:00", "a habit only the other device had keeps its planner time");
+  const back = B.mergeHabits(computer, phone);
+  assert.equal(back[0].planTime, "07:30", "a habit this device never put on the planner takes the other device's schedule, so it is not lost");
+  assert.deepEqual(back[0].planMoves, { "2026-11-16": "08:15" });
+  const both = B.mergeHabits([habit("h1", {}, { planTime: "06:00", planDays: [2], planMoves: { "2026-11-17": "06:30" } })], [habit("h1", {}, Object.assign({}, plan, { planMoves: { "2026-11-16": "08:15", "2026-11-17": "09:00" } }))]);
+  assert.equal(both[0].planTime, "06:00", "when both have one, this device's time and days are kept");
+  assert.deepEqual(both[0].planDays, [2]);
+  assert.deepEqual(both[0].planMoves, { "2026-11-16": "08:15", "2026-11-17": "06:30" }, "one-day moves from both are kept, this device's on the same day");
+});
+
 test("habits from two devices are combined: nothing ticked on either is lost", () => {
   const phone = [habit("h1", { "2026-11-10": 1, "2026-11-11": 1 }), habit("h2", { "2026-11-11": 1 })];
   const computer = [habit("h1", { "2026-11-09": 1, "2026-11-11": 1 }), habit("h3", { "2026-11-11": 1 })];

@@ -17,7 +17,7 @@
 (function () {
   "use strict";
 
-  const D = window.JarvisDayPlannerLogic, CL = window.JarvisCalendarLogic, PL = window.JarvisPlanLogic, W = window.JarvisPlanWeekLogic;
+  const D = window.JarvisDayPlannerLogic, CL = window.JarvisCalendarLogic, PL = window.JarvisPlanLogic, W = window.JarvisPlanWeekLogic, HPl = window.JarvisHabitPlan;
   const UI_KEY = "jarvisCalPlannerUi", SAVE_MS = 600, SHOW_TASKS = 5;
   const LENGTHS = [[0, "Just a time (no block)"], [15, "15 minutes"], [30, "30 minutes"], [45, "45 minutes"], [60, "1 hour"], [90, "1 hour 30 minutes"], [120, "2 hours"], [180, "3 hours"]];
 
@@ -36,10 +36,10 @@
   function label(t) { return CL.timeLabel(t); }
   function toTime(min) { return W.toTime(Math.max(0, Math.min(1439, min))); }
   function readUi() {
-    try { const v = JSON.parse(window.localStorage.getItem(UI_KEY) || "null"); if (v && typeof v === "object") return { plan: v.plan === "open" || v.plan === "closed" ? v.plan : "", habits: !!v.habits, ref: !!v.ref, allTasks: false }; } catch (e) { /* no saved choice */ }
-    return { plan: "", habits: false, ref: false, allTasks: false };
+    try { const v = JSON.parse(window.localStorage.getItem(UI_KEY) || "null"); if (v && typeof v === "object") return { plan: v.plan === "open" || v.plan === "closed" ? v.plan : "", habits: !!v.habits, ref: !!v.ref, allTasks: false, showHabits: v.showHabits !== false }; } catch (e) { /* no saved choice */ }
+    return { plan: "", habits: false, ref: false, allTasks: false, showHabits: true };
   }
-  function saveUi() { try { window.localStorage.setItem(UI_KEY, JSON.stringify({ plan: ui.plan, habits: ui.habits, ref: ui.ref })); } catch (e) { /* the choice is only for this visit */ } }
+  function saveUi() { try { window.localStorage.setItem(UI_KEY, JSON.stringify({ plan: ui.plan, habits: ui.habits, ref: ui.ref, showHabits: ui.showHabits })); } catch (e) { /* the choice is only for this visit */ } }
   // The Daily plan is open by default on a wide screen and folded on a phone, so the schedule is the first thing there.
   function planOpen() { return ui.plan ? ui.plan === "open" : !isPhone(); }
 
@@ -192,7 +192,7 @@
     if (open) {
       html += '<div class="cdp-plan-body" id="cdpPlanBody">' +
         '<div class="cdp-sec"><h4 class="cdp-h">Top 3 ' + (isToday ? "today" : "for this day") + '</h4>' + topHtml(date, top) + '</div>' +
-        '<div class="cdp-sec"><div class="cdp-h-row"><h4 class="cdp-h">Still to schedule</h4><button type="button" class="cal-more" data-cdp="add-task">+ Add task</button></div>' + unschedHtml(date, unsched) + '</div>' +
+        '<div class="cdp-sec"><div class="cdp-h-row"><h4 class="cdp-h">Still to schedule</h4><span class="cdp-h-btns"><button type="button" class="cal-more" data-cdp="add-task">+ Add task</button><button type="button" class="cal-more" data-cdp="add-habit">+ Add habit</button></span></div>' + unschedHtml(date, unsched) + '</div>' +
         goalStepsHtml(date) +
         refHtml(date) +
         '<div class="cdp-sec"><label class="cdp-h" for="cdpNotes">Notes for the day</label><textarea id="cdpNotes" class="cdp-area" data-note="notes" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="Anything to remember today">' + esc(view.notes) + '</textarea></div>' +
@@ -249,6 +249,7 @@
     html += '<div class="cdp-main">';
     html += summaryHtml(date, tl, items);
     if (allDay.length) html += '<div class="cdp-allday" role="group" aria-label="All day">' + allDay.map(host.chipHtml).join("") + '</div>';
+    html += habitsNoteHtml(date);
     html += habitsHtml(date);
     const rows = timelineHtml(date, tl);
     html += rows ? '<div class="cdp-timeline" role="group" aria-label="Schedule">' + rows + '</div>' :
@@ -285,7 +286,7 @@
     const allDay = tl.allDay.concat(tl.untimed).filter(function (it) { return it.source !== "task"; });
     const rows = timelineHtml(sel, tl);
     let html = '<div class="cdw">' + strip + '<section class="cdw-panel" data-date="' + sel + '" aria-label="' + esc(host.dayName(sel)) + '"><div class="cdw-head"><h3>' + esc((sel === t ? "Today \u00b7 " : "") + host.dayName(sel, { weekday: "long", month: "short", day: "numeric" })) + '</h3>' +
-      '<button type="button" class="cal-more" data-cal="goto-day" data-date="' + sel + '">Open day</button></div>' + topMiniHtml(sel) + summaryHtml(sel, tl, dayItems) + weekUnschedHtml(sel) + refHtml(sel);
+      '<button type="button" class="cal-more" data-cal="goto-day" data-date="' + sel + '">Open day</button></div>' + topMiniHtml(sel) + summaryHtml(sel, tl, dayItems) + habitsNoteHtml(sel) + weekUnschedHtml(sel) + refHtml(sel);
     if (allDay.length) html += '<div class="cdp-allday" role="group" aria-label="All day">' + allDay.map(host.chipHtml).join("") + '</div>';
     html += rows ? '<div class="cdp-timeline" role="group" aria-label="Schedule">' + rows + '</div>' : '<div class="cal-empty"><p>Nothing scheduled.</p><button type="button" class="btn btn-primary" data-cdp="add" data-date="' + sel + '">+ Add</button></div>';
     return html + '</section></div>';
@@ -309,11 +310,13 @@
       title: "Add", opener: opener,
       rows: [
         { key: "task", label: "Task", sub: "Something to do. Gets a time if you give it one" },
+        { key: "habit", label: "Habit", sub: "Put one of your habits on the planner at a time" },
         { key: "block", label: "Time block", sub: "Set time aside for a kind of work" },
         { key: "event", label: "Event", sub: "An appointment or meeting" }
       ],
       onPick: function (key) {
         if (key === "task") openTaskSheet({ date: date, time: opts.time });
+        else if (key === "habit") openHabitSheet({ date: date, time: opts.time });
         else if (key === "block") { const A = app(); if (A && A.openBlockSheet) A.openBlockSheet({ date: date, start: opts.time, end: opts.end }); }
         else if (key === "event") host.openEvent({ date: date, time: opts.time });
       }
@@ -416,6 +419,107 @@
     say((t.completed ? "Not done: " : "Done: ") + t.text + ".");
   }
 
+  /* ---------------- habits on the planner ---------------- */
+
+  function habitsShown() { return ui.showHabits !== false; }
+  function setHabitsShown(on) { ui.showHabits = !!on; saveUi(); }
+  // How many habits are planned on that day, whether or not they are shown.
+  function plannedCount(date) {
+    const h = habits();
+    try { return h && h.getHabits && HPl ? HPl.items(h.getHabits(), date, date, { today: host.today() }).length : 0; } catch (e) { return 0; }
+  }
+  // When habits are hidden: say so (and how many are), with the way back. Nothing is shown when they are on, or when the day has none.
+  function habitsNoteHtml(date) {
+    if (habitsShown()) return "";
+    const n = plannedCount(date);
+    if (!n) return "";
+    return '<p class="cdp-hidden-note" role="status">' + n + (n === 1 ? " habit is" : " habits are") + ' hidden. <button type="button" class="cal-more" data-cdp="habits-show">Show habits</button></p>';
+  }
+  function openHabitsScreen() {
+    const b = document.getElementById("navBtnHabits"); if (b) b.click();
+    const t = document.getElementById("habitsSubNavToday"); if (t) t.click();
+  }
+  function dayChipsHtml(days) {
+    return '<div class="cal-chips">' + [1, 2, 3, 4, 5, 6, 0].map(function (d) {
+      return '<label class="cal-chip-btn hb-daychip"><input type="checkbox" data-multi name="days" value="' + d + '"' + (days.indexOf(d) !== -1 ? " checked" : "") + '> ' + HPl.DAY_SHORT[d] + '</label>';
+    }).join("") + '</div>';
+  }
+  // The first day it shows from `from`, for the "added" message.
+  function firstDay(rec, from) {
+    for (let i = 0; i < 8; i++) { const d = CL.addDays(from, i); if (HPl.occursOn(rec, d)) return d; }
+    return "";
+  }
+  // Add a habit to the planner, or change a planned habit's usual time and days. It is the same habit record the Habits screen has: nothing is copied.
+  // o: { date, time, id } (id: edit that habit).
+  function openHabitSheet(o) {
+    const A = app(), h = habits(), opts = o || {};
+    if (!A || !h || !h.getHabits || !HPl) { tell("Habits can't be added here right now.", ""); return; }
+    const list = h.getHabits().filter(function (x) { return x && typeof x.id === "string" && x.name; });
+    if (!list.length) { tell("You have no habits yet. Make one in Habits first.", "Open Habits", openHabitsScreen); return; }
+    const editing = opts.id ? list.filter(function (x) { return x.id === opts.id; })[0] : null;
+    if (opts.id && !editing) { tell("That habit isn't there any more.", ""); return; }
+    const date = opts.date || host.date(), today = host.today(), startDay = date < today ? today : date;
+    const first = editing || list.filter(function (x) { return !HPl.onPlanner(x); })[0] || list[0];
+    const nextHalf = toTime(Math.ceil((host.nowMin() + 1) / 30) * 30);
+    function defaults(rec) {
+      const p = HPl.plan(rec);
+      return { time: p ? p.time : (opts.time || (date === today ? nextHalf : "09:00")), days: p ? p.days : (Number(rec.targetDays) >= 7 ? HPl.ALL_DAYS.slice() : []), from: p && p.from ? p.from : startDay, planned: !!p };
+    }
+    function daysHint(rec, d) { return !d.planned && Number(rec.targetDays) < 7 ? "Its goal in Habits is " + rec.targetDays + " days a week. Choose the days you plan to do it." : ""; }
+    const d0 = defaults(first);
+    let body = editing ? '<p class="cdp-sheet-habit"><strong>' + esc(editing.name) + '</strong></p><input type="hidden" name="habit" value="' + esc(editing.id) + '">' :
+      A.fSelect("habit", "Habit", list.map(function (x) { return [x.id, x.name + (HPl.onPlanner(x) ? " (on your planner)" : "")]; }), first.id);
+    body += A.fSelect("time", "Time", timeChoices(d0.time).slice(1), d0.time);
+    body += '<div class="form-row"><fieldset class="cdp-days"><legend>Days</legend>' + dayChipsHtml(d0.days) + '<p class="field-hint" data-hint="days">' + esc(daysHint(first, d0)) + '</p><p class="sp-err hidden" data-err="days" role="alert"></p></fieldset></div>';
+    body += A.fText("from", "Starts", d0.from, { type: "date", hint: "It shows on these days from this day on. Ticking it here ticks it in Habits, and the other way round." });
+    if (editing && d0.planned) body += '<div class="form-row"><button type="button" class="btn btn-danger" data-sheet-act="remove">Remove from planner</button><p class="field-hint">The habit, its streak and everything you have ticked stay in Habits.</p></div>';
+    function fill(root, rec) {
+      const d = defaults(rec);
+      root.querySelector('[name="time"]').value = d.time;
+      if (!root.querySelector('[name="time"]').value) { const op = document.createElement("option"); op.value = d.time; op.textContent = label(d.time); root.querySelector('[name="time"]').appendChild(op); root.querySelector('[name="time"]').value = d.time; }
+      Array.prototype.forEach.call(root.querySelectorAll('[name="days"]'), function (c) { c.checked = d.days.indexOf(Number(c.value)) !== -1; });
+      root.querySelector('[name="from"]').value = d.from;
+      const hint = root.querySelector('[data-hint="days"]'); if (hint) hint.textContent = daysHint(rec, d);
+    }
+    A.openSheet({
+      title: editing ? "Edit habit schedule" : "Add a habit", body: body, submit: editing || d0.planned ? "Save" : "Add to planner", focus: editing ? '[name="time"]' : '[name="habit"]',
+      onChange: function (el, root) {
+        if (el.name !== "habit") return;
+        const rec = list.filter(function (x) { return x.id === el.value; })[0];
+        if (rec) fill(root, rec);
+      },
+      onAct: function (act) { if (act === "remove" && editing) { A.closeSheet(true); removeHabitFromPlanner(editing.id); } },
+      onSubmit: function (v) { return saveHabitPlan(v); }
+    });
+  }
+  function saveHabitPlan(v) {
+    const h = habits(), rec = h.getHabits().filter(function (x) { return x.id === v.habit; })[0];
+    if (!rec) return { ok: false, message: "That habit isn't there any more." };
+    const before = HPl.fields(rec), wasPlanned = HPl.onPlanner(rec);
+    const r = h.planHabit(rec.id, { time: v.time, days: (v.days || []).map(Number), from: v.from });
+    if (!r.ok) return Object.keys(r.errors || {}).length ? { ok: false, errors: r.errors } : { ok: false, message: r.error };
+    const now = h.getHabits().filter(function (x) { return x.id === rec.id; })[0], p = HPl.plan(now), fd = firstDay(now, p.from);
+    if (host.changed) host.changed();
+    tell((wasPlanned ? "Saved \u201c" : "Added \u201c") + rec.name + "\u201d: " + HPl.daysLabel(p.days) + " at " + label(p.time) + "." + (fd ? " Next: " + host.dayName(fd, { weekday: "short", month: "short", day: "numeric" }) + "." : ""), "Undo", function () {
+      const u = h.restoreHabitPlan(rec.id, before);
+      if (!u.ok) { tell(u.error, ""); return; }
+      if (host.changed) host.changed(); say("Undone.");
+    });
+    return { ok: true };
+  }
+  function removeHabitFromPlanner(id) {
+    const h = habits(), rec = h && h.getHabits().filter(function (x) { return x.id === id; })[0];
+    if (!rec) return;
+    const before = HPl.fields(rec), r = h.unplanHabit(id);
+    if (!r.ok) { tell(r.error, ""); return; }
+    if (host.changed) host.changed();
+    tell("Removed \u201c" + rec.name + "\u201d from your planner. It is still in Habits.", "Undo", function () {
+      const u = h.restoreHabitPlan(id, before);
+      if (!u.ok) { tell(u.error, ""); return; }
+      if (host.changed) host.changed(); say("Undone.");
+    });
+  }
+
   /* ---------------- categories (what a time block is for) ---------------- */
 
   function openCategories() {
@@ -509,6 +613,9 @@
     if (act === "free") { openAdd({ date: date, time: el.getAttribute("data-start"), end: el.getAttribute("data-end"), opener: el }); return; }
     if (act === "add") { openAdd({ date: date, opener: el }); return; }
     if (act === "add-task") { openTaskSheet({ date: date }); return; }
+    if (act === "add-habit") { openHabitSheet({ date: date }); return; }
+    if (act === "habits-show") { setHabitsShown(true); host.render(); say("Habits are shown."); const b = document.querySelector('[data-cdp="habits-hide"]'); if (b) b.focus(); return; }
+    if (act === "habits-hide") { setHabitsShown(false); host.render(); say("Habits are hidden."); const b = document.querySelector('[data-cdp="habits-show"]'); if (b) b.focus(); return; }
     if (act === "top-pick") { pickTop(Number(el.getAttribute("data-i")), el, date); return; }
     if (act === "top-open") { openTopTask(Number(el.getAttribute("data-i")), date); return; }
     if (act === "top-clear") { const r = saveDay(date, { type: "top", index: Number(el.getAttribute("data-i")), taskId: "", text: "" }); if (!r.ok) tell(r.error, ""); else say("Removed from the top three."); return; }
@@ -569,6 +676,6 @@
   }
 
   window.JarvisCalPlanner = {
-    attach: attach, dayHtml: dayHtml, weekHtml: weekHtml, weekPrioHtml: weekPrioHtml, openAdd: openAdd, openTask: openTaskSheet, openCategories: openCategories, openHours: openHours, flush: flush
+    attach: attach, dayHtml: dayHtml, weekHtml: weekHtml, weekPrioHtml: weekPrioHtml, openAdd: openAdd, openTask: openTaskSheet, openHabit: openHabitSheet, habitsShown: habitsShown, setHabitsShown: setHabitsShown, openCategories: openCategories, openHours: openHours, flush: flush
   };
 })();

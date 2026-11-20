@@ -5472,3 +5472,21 @@ span.sp-trow-t { cursor: default; }
 @media (max-width: 359px) { .bnb-two { grid-template-columns: minmax(0, 1fr); } }
 .bnb-ed-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; margin: 0 0 10px; }
 .bnb-ed-book { margin: 0; }
+
+/* Habits on the Day planner and Calendar: the small icon marks a habit (a task has none), green is the habit colour */
+.hb-ico { width: 14px; height: 14px; flex: none; margin-right: 5px; vertical-align: -2px; color: var(--green); }
+.cal-chip-habit .hb-ico, .cal-ev-habit .hb-ico { width: 12px; height: 12px; margin-right: 3px; vertical-align: -1px; }
+.cal-ag-title .hb-ico, .cal-habit-name .hb-ico { margin-right: 6px; }
+.cal-ev-habit { border-left-style: dashed; }
+.cal-inline { display: flex; gap: 8px; align-items: center; }
+.cal-inline select { flex: 1; min-width: 0; }
+.hb-daychip { gap: 6px; }
+.hb-daychip input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--green); }
+.hb-daychip:has(input:checked) { color: var(--text); border-color: var(--green); background: var(--card-hover); }
+.hb-daychip:focus-within { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
+.hb-plan-days { border: 0; margin: 0; padding: 0; min-width: 0; }
+.hb-plan-days legend, .cdp-days legend { padding: 0; margin-bottom: 6px; font-size: 14px; color: var(--text-dim); }
+.cdp-days { border: 0; margin: 0; padding: 0; min-width: 0; }
+.cdp-h-btns { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+.cdp-hidden-note { margin: 4px 2px 10px; font-size: 14px; color: var(--text-dim); }
+.cdp-sheet-habit { margin: 0 0 10px; font-size: 16px; }
