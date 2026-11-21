@@ -5713,3 +5713,4 @@ details[open] > .mp-card-sum::after, details[open] > .mp-day-sum::after, details
 .mp-h5 { margin-top: 12px; }
 h3.mp-h5, h4.mp-h5 { font-size: 13px; }
 .mp-group-h h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.mp-result-k, .mp-result-d dt, .mp-result .mp-dim { color: #d5dbea; }
