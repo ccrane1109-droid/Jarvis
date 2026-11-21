@@ -1017,6 +1017,7 @@
     };
     // "scheduled" (an activity planned for that day, never overdue) or "deadline" (see task-kind-logic.js); a caller that does not say leaves it unmarked
     if (TK && TK.KINDS.indexOf(f.kind) !== -1) t.kind = f.kind;
+    if (typeof f.mealPrepId === "string" && f.mealPrepId) t.mealPrepId = f.mealPrepId.slice(0, 80);   // a Meal Prep session's task (the Calendar shows the session once, not the task too)
     tasks.push(t);
     saveTasks();
     renderTaskList(); renderDaySelectorPills(); renderTodayOverview();
@@ -1116,9 +1117,20 @@
   function planHabit(id, input) { return changeHabits(function (list) { return HP.setPlan(list, id, input); }); }
   // Undo for the two above: its planner fields exactly as they were (HabitPlan.fields of the habit before).
   function restoreHabitPlan(id, saved) { return changeHabits(function (list) { return HP.restorePlan(list, id, saved); }); }
+  // A new habit (the same record the Habits form makes). An existing habit with the same name is returned instead of a second one.
+  // -> { ok, habit, existed }
+  function addHabit(fields) {
+    const f = fields || {}, name = String(f.name || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!name) return { ok: false, error: "Give the habit a name." };
+    const have = habits.filter(function (h) { return String(h.name).toLowerCase() === name.toLowerCase(); })[0];
+    if (have) return { ok: true, habit: have, existed: true };
+    const made = { id: window.JarvisCore.uid("habit"), name: name, targetDays: clampInt(f.targetDays, 1, 7, 7), dailyTarget: clampInt(f.dailyTarget, 1, 50, 1), completions: {}, createdAt: Date.now() };
+    const r = changeHabits(function (list) { return { ok: true, habits: list.concat([made]) }; });
+    return r.ok ? { ok: true, habit: made, existed: false } : { ok: false, error: r.error };
+  }
   function unplanHabit(id) { return changeHabits(function (list) { return HP.clearPlan(list, id); }); }
   // A different time on one day only; the habit's usual time and days are not touched.
   function moveHabitDay(id, date, time) { return changeHabits(function (list) { return HP.moveOn(list, id, date, time); }); }
 
-  window.JarvisHabits = { getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
+  window.JarvisHabits = { addHabit: addHabit, getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
 })();

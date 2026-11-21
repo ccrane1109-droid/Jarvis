@@ -674,6 +674,12 @@
       } catch (err) {
         if (window.console) console.error("The Learning hub failed to start; the rest of the app is unaffected", err);
       }
+      // Meal Prep reads Nutrition, Groceries, Habits and the Calendar, so it starts after them.
+      try {
+        if (window.JarvisMealPrep && typeof window.JarvisMealPrep.init === "function") window.JarvisMealPrep.init();
+      } catch (err) {
+        if (window.console) console.error("Meal Prep failed to start; Nutrition and Groceries are unaffected", err);
+      }
       // The two Overviews only read what the screens above already hold, so they start after all of them.
       try {
         if (window.JarvisHealthOverview && typeof window.JarvisHealthOverview.init === "function") window.JarvisHealthOverview.init();

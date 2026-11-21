@@ -98,12 +98,38 @@
       '<div class="ov-chips"><button type="button" class="ov-chip" data-ov="nutrition">Open Nutrition</button><button type="button" class="ov-chip" data-ov="foods">Foods</button><button type="button" class="ov-chip" data-ov="nut-history">History</button></div></section>';
   }
 
+  /* ---------------- Meal prep ---------------- */
+
+  // Today's plan against what is logged, the next prep session and the prepared portions left. Read only: it comes from Meal Prep.
+  function mealPrepCard() {
+    const M = window.JarvisMealPrep;
+    let body = "";
+    try {
+      const o = M && M.overview ? M.overview() : null;
+      if (!o) body = '<p class="ov-meta">Meal prep details are not available right now.</p>';
+      else {
+        body = o.meals ? '<p class="ov-main">' + o.eaten + ' of ' + o.meals + ' planned ' + plural(o.meals, "meal") + ' eaten</p>' : '<p class="ov-main">No meals planned today</p>';
+        if (o.meals) {
+          body += '<dl class="ov-facts ov-facts-3"><div><dt>Planned</dt><dd>' + num(o.planned.calories) + ' cal</dd></div><div><dt>Logged</dt><dd>' + num(o.logged ? o.logged.calories : 0) + ' cal</dd></div><div><dt>Protein</dt><dd>' + num(Math.round(o.planned.protein)) + ' g planned</dd></div></dl>' +
+            (o.estimated ? '<p class="ov-meta">Some planned numbers are estimates.</p>' : '');
+        }
+        body += '<dl class="ov-facts"><div><dt>Next prep</dt><dd>' + (o.next ? esc(({ shopping: "Grocery shopping", cooking: "Cooking", portioning: "Portioning", reminder: "Reminder" })[o.next.kind] || "Prep") + ' &middot; ' + esc(prettyDate(o.next.date)) : 'None scheduled') + '</dd></div>' +
+          '<div><dt>Prepared portions</dt><dd>' + o.portions + (o.useSoon ? ' (' + o.useSoon + ' to use soon)' : '') + '</dd></div></dl>';
+      }
+    } catch (e) {
+      body = '<p class="ov-meta">Meal prep details are not available right now.</p>';
+    }
+    return '<section class="card ov-card" aria-labelledby="hoMealPrepTitle"><h2 class="ov-title" id="hoMealPrepTitle">Meal prep</h2>' + body +
+      '<button type="button" class="btn btn-primary ov-cta" data-ov="mealprep">Open Meal Prep</button>' +
+      '<div class="ov-chips"><button type="button" class="ov-chip" data-ov="mealprep-plan">Weekly plan</button><button type="button" class="ov-chip" data-ov="mealprep-grocery">Grocery list</button></div></section>';
+  }
+
   /* ---------------- drawing and taps ---------------- */
 
   function render() {
     const root = $("hoRoot");
     if (!root || !core()) return;
-    root.innerHTML = workoutCard() + nutritionCard();
+    root.innerHTML = workoutCard() + nutritionCard() + mealPrepCard();
   }
 
   function onClick(e) {
@@ -117,6 +143,8 @@
     else if (act === "nutrition") go("navBtnNutrition", "nutritionSubNavDashboard");
     else if (act === "foods") go("navBtnNutrition", "nutritionSubNavFoods");
     else if (act === "nut-history") go("navBtnNutrition", "nutritionSubNavHistory");
+    else if (act === "mealprep") go("navBtnNutrition", "nutritionSubNavMealPrep");
+    else if (act === "mealprep-plan" || act === "mealprep-grocery") { go("navBtnNutrition", "nutritionSubNavMealPrep"); if (window.JarvisMealPrep && window.JarvisMealPrep.kit) window.JarvisMealPrep.kit.setTab(act === "mealprep-plan" ? "plan" : "grocery"); }
     else if (act === "log-food") {
       go("navBtnNutrition", "nutritionSubNavDashboard");
       const b = $("foodOpenModalBtn"); if (b) b.click();

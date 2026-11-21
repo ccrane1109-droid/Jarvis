@@ -5490,3 +5490,226 @@ span.sp-trow-t { cursor: default; }
 .cdp-h-btns { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
 .cdp-hidden-note { margin: 4px 2px 10px; font-size: 14px; color: var(--text-dim); }
 .cdp-sheet-habit { margin: 0 0 10px; font-size: 16px; }
+
+/* ==========================================================================
+   Meal Prep (Nutrition > Meal Prep). Same dark navy cards, blue accent and green as the rest of JARVIS.
+   ========================================================================== */
+.mp-root { display: flex; flex-direction: column; gap: 12px; padding-bottom: 96px; }
+.mp-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.mp-dim { color: var(--text-dim); }
+.mp-foot { margin: 4px 2px 0; font-size: 13px; line-height: 1.5; color: var(--text-dim); }
+.mp-note { margin: 0 2px; font-size: 14px; color: var(--text-dim); line-height: 1.5; }
+.mp-warn { margin: 6px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--yellow-dim); color: var(--yellow); font-size: 14px; }
+.mp-h2 { margin: 0; font-size: 18px; }
+.mp-h3 { margin: 14px 0 6px; font-size: 15px; }
+.mp-h5 { margin: 12px 0 4px; font-size: 13px; letter-spacing: 0.02em; color: var(--text-dim); font-weight: 600; }
+.mp-err { color: var(--red); }
+
+/* overview + tabs */
+.mp-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 14px; }
+@media (min-width: 720px) { .mp-overview { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mp-stat { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mp-stat-k { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.mp-stat-v { font-size: 16px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.mp-stat-v small { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--text-dim); }
+.mp-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--card-border); border-radius: var(--radius); background: var(--bg-elevated); }
+.mp-tab { min-height: 44px; padding: 4px 2px; border: 0; border-radius: 10px; background: transparent; color: var(--text-dim); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.15; text-align: center; cursor: pointer; }
+.mp-tab.is-on { background: var(--accent-dim); color: var(--text); }
+.mp-tab:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
+@media (min-width: 420px) { .mp-tab { font-size: 14px; } }
+.mp-pane { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* shared bits */
+.mp-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--bg-elevated); color: var(--text-dim); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.mp-st-eaten, .mp-st-prepped { background: var(--green-dim); border-color: transparent; color: var(--green); }
+.mp-st-to-prep, .mp-st-soon { background: var(--yellow-dim); border-color: transparent; color: var(--yellow); }
+.mp-st-past { background: var(--red-dim); border-color: transparent; color: var(--red); }
+.mp-st-today { background: var(--accent-dim); border-color: transparent; color: var(--text); }
+.mp-st-train { background: var(--purple-dim); border-color: transparent; color: #c9b0ff; }
+.mp-est { font-style: normal; display: inline-block; padding: 0 5px; border: 1px solid var(--yellow); border-radius: 4px; color: var(--yellow); font-size: 11px; font-weight: 600; line-height: 1.5; }
+.mp-yours { font-style: normal; display: inline-block; padding: 0 5px; border: 1px solid var(--green); border-radius: 4px; color: var(--green); font-size: 11px; font-weight: 600; line-height: 1.5; }
+.mp-ico { flex: none; vertical-align: -3px; margin-right: 4px; }
+.mp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.mp-actions .btn, .mp-toolbar .btn, .mp-sec-h .btn, .mp-list .btn, .mp-sess-act .btn { min-height: 44px; }
+.mp-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mp-toolbar-wrap .mp-search { flex: 1 1 200px; min-width: 0; }
+.mp-search input { width: 100%; min-height: 44px; font-size: 16px; }
+.mp-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.mp-pill { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--bg-elevated); color: var(--text-dim); font: inherit; font-size: 14px; cursor: pointer; }
+.mp-pill.is-on { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+.mp-pill:focus-visible, .mp-add:focus-visible, .mp-fav:focus-visible, .mp-gi-btn:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
+.mp-emptycard { text-align: center; }
+.mp-emptycard p { margin: 4px 0; }
+.mp-emptycard .btn { margin-top: 10px; min-height: 44px; }
+.mp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mp-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mp-list li > span { min-width: 0; overflow-wrap: anywhere; }
+.mp-ings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.mp-ings li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--card-border); }
+.mp-ings li > span:last-child { color: var(--text-dim); text-align: right; flex: none; max-width: 45%; overflow-wrap: anywhere; }
+.mp-steps, .mp-ideas { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.55; }
+.mp-notes { margin: 10px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+/* collapsible cards */
+.mp-card { padding: 0; }
+.mp-card-sum, .mp-day-sum, .mp-recipe-sum, .mp-meal-sum, .mp-fin > summary, .mp-tbl > summary { list-style: none; cursor: pointer; }
+.mp-card-sum::-webkit-details-marker, .mp-day-sum::-webkit-details-marker, .mp-recipe-sum::-webkit-details-marker, .mp-meal-sum::-webkit-details-marker, .mp-fin > summary::-webkit-details-marker, .mp-tbl > summary::-webkit-details-marker { display: none; }
+.mp-card-sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 48px; padding: 14px 44px 14px 16px; position: relative; }
+.mp-card-title { font-weight: 700; font-size: 16px; }
+.mp-card-sum::after, .mp-day-sum::after, .mp-recipe-sum::after, .mp-meal-sum::after { content: ""; position: absolute; right: 16px; top: 50%; width: 8px; height: 8px; margin-top: -6px; border-right: 2px solid var(--text-dim); border-bottom: 2px solid var(--text-dim); transform: rotate(45deg); transition: transform 0.15s; }
+details[open] > .mp-card-sum::after, details[open] > .mp-day-sum::after, details[open] > .mp-recipe-sum::after, details[open] > .mp-meal-sum::after { transform: rotate(-135deg); margin-top: -2px; }
+.mp-card-sum:focus-visible, .mp-day-sum:focus-visible, .mp-recipe-sum:focus-visible, .mp-meal-sum:focus-visible, .mp-fin > summary:focus-visible, .mp-tbl > summary:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: -2px; border-radius: var(--radius); }
+.mp-card-body { padding: 0 16px 16px; }
+@media (prefers-reduced-motion: reduce) { .mp-card-sum::after, .mp-day-sum::after, .mp-recipe-sum::after, .mp-meal-sum::after { transition: none; } }
+
+/* weekly plan */
+.mp-week-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mp-week-title { margin: 0; font-size: 18px; text-align: center; flex: 1; }
+.mp-nav { min-width: 44px; min-height: 44px; font-size: 20px; }
+.mp-days { display: flex; flex-direction: column; gap: 10px; }
+.mp-day { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); }
+.mp-day.is-drop { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.mp-day-sum { position: relative; display: flex; flex-direction: column; gap: 4px; min-height: 56px; padding: 12px 44px 12px 16px; }
+.mp-day-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; }
+.mp-day-name b { font-size: 18px; }
+.mp-day-tot { font-size: 13px; color: var(--text-dim); }
+.mp-day-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.mp-train { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--purple-dim); color: #d9c9ff; font-size: 13px; line-height: 1.45; }
+.mp-group-h { display: flex; align-items: center; justify-content: space-between; }
+.mp-group-h h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.mp-add { min-height: 44px; padding: 0 10px; border: 0; background: transparent; color: var(--accent-hover); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.mp-empty { margin: 0 0 4px; font-size: 13px; color: var(--text-faint); }
+.mp-meal { position: relative; background: var(--bg-elevated); border: 1px solid var(--card-border); border-left: 4px solid var(--text-faint); border-radius: 10px; margin-bottom: 8px; }
+.mp-meal.is-eaten { border-left-color: var(--green); }
+.mp-meal.is-prepped { border-left-color: #5cc98f; }
+.mp-meal.is-to-prep { border-left-color: var(--yellow); }
+.mp-meal.is-dragging { opacity: 0.4; }
+.mp-meal-sum { position: relative; display: block; min-height: 56px; padding: 10px 40px 10px 12px; touch-action: manipulation; }
+.mp-meal-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.mp-meal-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.mp-meal.is-eaten .mp-meal-name { text-decoration: line-through; color: var(--text-dim); }
+.mp-rep { color: var(--text-dim); }
+.mp-meal-sub { display: block; margin-top: 3px; font-size: 13px; color: var(--text-dim); }
+.mp-meal-body { padding: 0 12px 12px; }
+.mp-meal-line { margin: 4px 0; font-size: 14px; line-height: 1.45; }
+.mp-ghost { position: fixed; z-index: 400; max-width: 220px; padding: 8px 12px; border-radius: 10px; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--text); font-size: 14px; pointer-events: none; box-shadow: var(--shadow); }
+
+/* planned vs logged */
+.mp-ov-day { margin: 10px 2px 8px; }
+.mp-bar-row { margin: 10px 0; }
+.mp-bar-h { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.mp-bar-h > span:first-child { font-weight: 600; }
+.mp-bar { position: relative; height: 12px; margin: 6px 0 4px; border-radius: 6px; background: var(--bg); border: 1px solid var(--card-border); }
+.mp-bar-logged { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--green); }
+.mp-bar-plan { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--accent-hover); }
+.mp-bar-d { font-size: 12px; }
+.mp-ov-meals { margin: 12px 0 4px; font-size: 14px; line-height: 1.5; }
+.mp-chart { display: block; width: 100%; height: auto; margin-top: 10px; }
+.mp-chart .mp-b-plan { fill: var(--accent); }
+.mp-chart .mp-b-log { fill: var(--green); }
+.mp-chart .mp-ax { stroke: var(--card-border); stroke-width: 1; }
+.mp-chart .mp-tgt { stroke: var(--yellow); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.mp-chart .mp-ax-t { fill: var(--text-dim); font-size: 13px; }
+.mp-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 8px 0 0; font-size: 13px; color: var(--text-dim); }
+.mp-key { display: inline-block; width: 12px; height: 12px; margin-right: 4px; border-radius: 3px; vertical-align: -1px; }
+.mp-key-plan { background: var(--accent); } .mp-key-log { background: var(--green); } .mp-key-tgt { height: 0; border-top: 2px dashed var(--yellow); border-radius: 0; }
+.mp-tbl { margin-top: 8px; font-size: 14px; }
+.mp-tbl > summary { min-height: 44px; display: flex; align-items: center; color: var(--accent-hover); }
+.mp-tbl table { width: 100%; border-collapse: collapse; }
+.mp-tbl th, .mp-tbl td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--card-border); }
+.mp-tbl th[scope="row"], .mp-tbl th:first-child { text-align: left; font-weight: 600; }
+
+/* recipes */
+.mp-recipes { display: flex; flex-direction: column; gap: 10px; }
+.mp-recipe { position: relative; background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); }
+.mp-recipe-sum { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 44px 12px 12px; }
+.mp-fav { position: absolute; top: 4px; right: 34px; z-index: 2; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--text-faint); cursor: pointer; }
+.mp-fav svg { fill: none; }
+.mp-fav.is-on { color: var(--yellow); } .mp-fav.is-on svg { fill: currentColor; }
+.mp-thumb { width: 56px; height: 56px; flex: none; border-radius: 10px; object-fit: cover; background: var(--bg-elevated); }
+.mp-recipe-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 40px; }
+.mp-recipe-name { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.mp-recipe-nums { font-size: 13px; }
+.mp-recipe-meta { font-size: 13px; }
+.mp-recipe-body { padding: 0 12px 14px; }
+.mp-recipe-img { display: block; max-width: 100%; max-height: 220px; margin: 0 0 8px; border-radius: 12px; object-fit: cover; }
+
+/* recipe sheet + calculator */
+.mp-ing, .mp-crow { margin: 10px 0; padding: 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg-elevated); }
+.mp-ing-h { display: flex; align-items: center; justify-content: space-between; }
+.mp-ing-n { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.mp-ing label, .mp-crow label { display: block; font-size: 13px; color: var(--text-dim); }
+.mp-ing input, .mp-ing select, .mp-crow input[type="text"], .mp-crow input[type="number"], .mp-crow select { width: 100%; min-height: 44px; font-size: 16px; margin-top: 2px; }
+.mp-crow .cal-check input { width: auto; min-height: 0; margin: 0 8px 0 0; }
+.mp-macro-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.mp-c-match { margin: 4px 0; font-size: 13px; }
+.mp-imgbox { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.mp-imgbox img { width: 88px; height: 88px; border-radius: 10px; object-fit: cover; }
+.mp-result { padding: 14px; margin: 8px 0; border-radius: var(--radius); background: var(--accent-dim); }
+.mp-result-k { margin: 0; font-size: 13px; color: var(--text-dim); }
+.mp-result-big { margin: 2px 0 8px; font-size: 34px; font-weight: 800; line-height: 1.1; }
+.mp-result-big span { font-size: 15px; font-weight: 600; color: var(--text-dim); }
+.mp-result-d { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+.mp-result-d dt { font-size: 12px; color: var(--text-dim); } .mp-result-d dd { margin: 0; font-weight: 700; font-size: 16px; }
+.mp-crows { margin-top: 8px; }
+
+/* grocery list */
+.mp-gsum { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 22px; padding: 14px 16px; }
+.mp-gsum-n { margin: 0; font-size: 28px; font-weight: 800; line-height: 1.1; }
+.mp-gsum p { margin: 0; }
+.mp-gsum-btns { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.mp-gsum-btns .btn { min-height: 44px; }
+.mp-glist { list-style: none; margin: 0; padding: 0 12px 10px; }
+.mp-gi { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 2px 0; border-top: 1px solid var(--card-border); }
+.mp-gi.is-bought .mp-gi-name { text-decoration: line-through; color: var(--text-dim); }
+.mp-gi-check { flex: none; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.mp-gi-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--green); }
+.mp-gi-box { display: none; }
+.mp-gi-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mp-gi-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.mp-gi-for { font-size: 12px; }
+.mp-gi-qty { flex: none; font-size: 14px; font-weight: 600; text-align: right; max-width: 90px; }
+.mp-gi-btn { flex: none; min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--accent-hover); font: inherit; font-size: 13px; cursor: pointer; }
+@media (max-width: 480px) { .mp-gi { flex-wrap: wrap; } .mp-gi-main { flex-basis: calc(100% - 120px); } .mp-gi-btn { padding: 0 6px; } }
+
+/* prep tracker */
+.mp-sec { display: flex; flex-direction: column; gap: 10px; }
+.mp-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.mp-sec-sub { margin: -4px 0 0; font-size: 13px; }
+.mp-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 8px; }
+.mp-facts dt { font-size: 12px; color: var(--text-dim); } .mp-facts dd { margin: 0; font-size: 14px; font-weight: 600; }
+.mp-step { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--card-border); border-radius: 999px; }
+.mp-step .btn-icon { min-width: 44px; min-height: 44px; }
+.mp-step-n { min-width: 24px; text-align: center; font-weight: 700; }
+.mp-batch.lv-past { border-left-color: var(--red); } .mp-batch.lv-soon, .mp-batch.lv-today { border-left-color: var(--yellow); } .mp-batch.lv-ok { border-left-color: #5cc98f; }
+.mp-fin { margin-top: 4px; } .mp-fin > summary { min-height: 44px; display: flex; align-items: center; color: var(--text-dim); font-size: 14px; }
+.mp-sesslist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mp-sess { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); }
+.mp-sess.is-done .mp-sess-t { text-decoration: line-through; color: var(--text-dim); }
+.mp-sess.is-late { border-color: var(--yellow); }
+.mp-sess-ico { flex: none; color: var(--green); padding-top: 2px; }
+.mp-sess-main { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-sess-t { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
+.mp-sess-chips { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 4px; }
+.mp-sess-act { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Undo bar */
+.mp-undo { position: fixed; left: 16px; right: 16px; bottom: 20px; z-index: 150; max-width: 520px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 14px; background: #1f2740; border: 1px solid var(--accent-dim); border-radius: var(--radius); box-shadow: var(--shadow); }
+.mp-undo.hidden { display: none; }
+.mp-undo .btn { flex: none; min-height: 44px; }
+.mp-undo-text { font-size: 14px; line-height: 1.35; }
+@media (max-width: 900px) { .mp-undo { bottom: calc(78px + env(safe-area-inset-bottom)); } }
+
+@media (min-width: 900px) {
+  .mp-days { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .mp-recipes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+.health-mealprep-note { margin-top: 6px; }
+@media (max-width: 460px) { .nutrition-sub-nav .nutrition-sub-nav-btn { margin-right: 4px; padding: 8px 3px; font-size: 14px; } }
+.mp-root .btn-primary, .mp-undo .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+.mp-root .btn-primary:hover:not(:disabled) { background: #2a66d4; border-color: #2a66d4; }
+.mp-empty { color: var(--text-dim); }
+.mp-result-big span { color: #d5dbea; }
+.mp-h5 { margin-top: 12px; }
+h3.mp-h5, h4.mp-h5 { font-size: 13px; }
+.mp-group-h h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }

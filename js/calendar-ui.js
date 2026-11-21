@@ -132,10 +132,17 @@
     if (!h || !h.getHabits || !HPl || !habitsShown()) return [];
     try { return HPl.items(h.getHabits(), from, to, { today: today() }); } catch (e) { return []; }
   }
+  // A Meal Prep session is ONE Calendar event. If you also put it on your to-do list for the day, that task (it carries mealPrepId) is not drawn
+  // here as a second copy while its event is on the calendar; it stays in the Day plan's task list, where it can be ticked.
+  function visibleTasks(h) {
+    const live = {};
+    events.forEach(function (e) { if (e && !e.deletedAt && e.linked && e.linked.type === "mealprep") live[e.linked.id] = true; });
+    return h.getTasks().filter(function (t) { return !(t && t.mealPrepId && live[t.mealPrepId]); });
+  }
   function allItems(from, to) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
-    const tasks = h ? C.taskItems(h.getTasks(), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
+    const tasks = h ? C.taskItems(visibleTasks(h), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
     const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to));
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });

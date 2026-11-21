@@ -215,9 +215,10 @@
   }
 
   function saveGoals() { window.JarvisCore.saveJSON(LS_GOALS, goals); }
-  function saveLog() { window.JarvisCore.saveJSON(LS_LOG, log); }
+  function nutritionChanged() { try { document.dispatchEvent(new CustomEvent("jarvis-nutrition-changed")); } catch (e) { /* nothing listens in an old browser */ } }
+  function saveLog() { const ok = window.JarvisCore.saveJSON(LS_LOG, log); if (ok) nutritionChanged(); return ok; }
   function saveSavedFoods() { window.JarvisCore.saveJSON(LS_SAVED, savedFoods); }
-  function saveRecipes() { window.JarvisCore.saveJSON(LS_RECIPES, recipes); }
+  function saveRecipes() { const ok = window.JarvisCore.saveJSON(LS_RECIPES, recipes); if (ok) nutritionChanged(); return ok; }
 
   // Persists the calculator's inputs plus its last computed result together,
   // so "Recalculate Goals" can re-open the form pre-filled, and the results
@@ -1400,7 +1401,7 @@
     const container = $("recipeIngredientRows");
     const last = recipeBuilder.ingredients.length - 1;
     container.innerHTML = recipeBuilder.ingredients.map(function (ing, i) {
-      const aiTag = ing.aiEstimated ? ' <span class="badge badge-yellow">AI estimated</span>' : "";
+      const aiTag = ing.aiEstimated ? ' <span class="badge badge-yellow">AI estimated</span>' : (ing.est ? ' <span class="badge badge-yellow">Estimated</span>' : "");
       return (
         '<div class="recipe-ingredient-card" data-index="' + i + '">' +
           '<div class="recipe-ingredient-card-header">' +
@@ -1439,6 +1440,7 @@
     if (!recipeBuilder.ingredients[i]) return;
     // Any manual edit means the value is no longer purely an AI guess.
     recipeBuilder.ingredients[i].aiEstimated = false;
+    if (!input.classList.contains("ri-name") && !input.classList.contains("ri-quantity")) recipeBuilder.ingredients[i].est = false;   // typing a number makes it yours
     if (input.classList.contains("ri-name")) recipeBuilder.ingredients[i].name = input.value;
     else if (input.classList.contains("ri-quantity")) recipeBuilder.ingredients[i].quantity = input.value;
     else if (input.classList.contains("ri-calories")) recipeBuilder.ingredients[i].calories = input.value;
@@ -1918,20 +1920,25 @@
     const cleanIngredients = recipeBuilder.ingredients
       .filter(function (ing) { return ing.name.trim(); })
       .map(function (ing) {
-        return {
+        const clean = {
           name: ing.name.trim(), quantity: (ing.quantity || "").trim(),
           calories: Number(ing.calories) || 0, protein: Number(ing.protein) || 0,
           carbs: Number(ing.carbs) || 0, fat: Number(ing.fat) || 0, fiber: Number(ing.fiber) || 0
         };
+        if (ing.state === "raw" || ing.state === "cooked" || ing.state === "packaged") clean.state = ing.state;
+        if (ing.aiEstimated || ing.est) clean.est = true;      // numbers that were not typed by you stay marked as estimates
+        return clean;
       });
     if (cleanIngredients.length === 0) { core.showToast("Add at least one ingredient."); return; }
 
-    const recipe = {
+    // Editing keeps everything else a recipe has (categories, favorite, times, storage, image: added in Meal Prep), not just these fields.
+    const prevRecipe = recipeBuilder.editId ? recipes.find(function (r) { return r.id === recipeBuilder.editId; }) : null;
+    const recipe = Object.assign({}, prevRecipe || {}, {
       id: recipeBuilder.editId || core.uid("recipe"),
       name: name, instructions: $("recipeInstructions").value.trim(),
       servings: Math.round(servings), ingredients: cleanIngredients,
-      createdAt: recipeBuilder.editId ? (recipes.find(function (r) { return r.id === recipeBuilder.editId; }) || {}).createdAt || Date.now() : Date.now()
-    };
+      createdAt: prevRecipe ? prevRecipe.createdAt || Date.now() : Date.now(), updatedAt: Date.now()
+    });
     if (recipeBuilder.editId) {
       const idx = recipes.findIndex(function (r) { return r.id === recipeBuilder.editId; });
       if (idx !== -1) recipes[idx] = recipe;
@@ -2633,6 +2640,7 @@
     if (targetId === "nutrition-nutrients") { renderNutrientsMacros(); renderNutrients(); }
     if (targetId === "nutrition-history") renderHistoryList();
     if (targetId === "nutrition-groceries" && window.JarvisGroceries) window.JarvisGroceries.onSubTabChange(targetId);
+    if (targetId === "nutrition-mealprep" && window.JarvisMealPrep && window.JarvisMealPrep.onShow) window.JarvisMealPrep.onShow();
   }
 
   function init() {
@@ -2754,5 +2762,62 @@
     renderHistoryList();
   }
 
-  window.JarvisNutrition = { init: init, getSummary: getSummary, getToday: getToday, onSubTabChange: onSubTabChange };
+  /* ---- for Meal Prep (mealprep-*.js) ----
+     Recipes and the food log live here, in memory, so Meal Prep reads and changes them only through these, never by writing the storage
+     keys itself. A change is reported as made only if it was saved; if the browser refuses, it is taken back. */
+
+  function copyOf(v) { return JSON.parse(JSON.stringify(v)); }
+  function getRecipesCopy() { return recipes.map(copyOf); }
+  const REFUSED = "That couldn't be saved. The browser may be full or blocking storage.";
+  // Adds or replaces one recipe (by id). Whatever fields it carries are kept. -> { ok, recipe, error }
+  function saveRecipeRecord(rec) {
+    const core = window.JarvisCore;
+    if (!rec || !String(rec.name || "").trim()) return { ok: false, error: "Give the recipe a name." };
+    if (!Array.isArray(rec.ingredients) || !rec.ingredients.length) return { ok: false, error: "Add at least one ingredient." };
+    const saved = Object.assign({}, copyOf(rec), { id: rec.id || core.uid("recipe"), updatedAt: Date.now() });
+    if (!saved.createdAt) saved.createdAt = Date.now();
+    const prev = recipes, at = recipes.findIndex(function (r) { return r.id === saved.id; });
+    recipes = at === -1 ? recipes.concat([saved]) : recipes.map(function (r, i) { return i === at ? saved : r; });
+    if (!saveRecipes()) { recipes = prev; return { ok: false, error: REFUSED }; }
+    renderRecipes();
+    return { ok: true, recipe: copyOf(saved) };
+  }
+  function deleteRecipeRecord(id) {
+    const prev = recipes;
+    if (!recipes.some(function (r) { return r.id === id; })) return { ok: false, error: "That recipe isn't there any more." };
+    recipes = recipes.filter(function (r) { return r.id !== id; });
+    if (!saveRecipes()) { recipes = prev; return { ok: false, error: REFUSED }; }
+    renderRecipes();
+    return { ok: true };
+  }
+  // What a day's log adds up to (read only).
+  function dayTotalsFor(date) {
+    const t = getDayTotals(date);
+    return { calories: Math.round(t.calories), protein: Math.round(t.protein), carbs: Math.round(t.carbs), fat: Math.round(t.fat), water: t.water, entries: getAllEntries(date).length };
+  }
+  function getTargets() { const g = getActiveTargets(); return { calories: g.calories || 0, protein: g.protein || 0, carbs: g.carbs || 0, fat: g.fat || 0, water: g.water || 0, mode: getMode() }; }
+  // One line in the food log (a snapshot of the numbers, so a recipe edited later does not change it). o: { date, meal, name, serving, calories, protein, carbs, fat }
+  function logMealItem(o) {
+    if (MEALS.indexOf(o.meal) === -1 || !/^\d{4}-\d{2}-\d{2}$/.test(o.date || "")) return { ok: false, error: "That isn't a meal or a day." };
+    const day = getDay(o.date), item = sanitizeFoodItem({ name: o.name, serving: o.serving || "1 serving", calories: o.calories, protein: o.protein, carbs: o.carbs, fat: o.fat });
+    day.meals[o.meal].push(item);
+    if (!saveLog()) { day.meals[o.meal].pop(); return { ok: false, error: REFUSED }; }
+    renderFoodLog(); renderDashboard();
+    return { ok: true, id: item.id };
+  }
+  function removeMealItem(date, meal, id) {
+    const list = peekDay(date).meals[meal] || [];
+    if (!list.some(function (x) { return x.id === id; })) return { ok: true, gone: true };       // already removed by hand
+    const day = getDay(date), prev = day.meals[meal];
+    day.meals[meal] = prev.filter(function (x) { return x.id !== id; });
+    if (!saveLog()) { day.meals[meal] = prev; return { ok: false, error: REFUSED }; }
+    renderFoodLog(); renderDashboard();
+    return { ok: true };
+  }
+
+  window.JarvisNutrition = {
+    init: init, getSummary: getSummary, getToday: getToday, onSubTabChange: onSubTabChange,
+    recipes: { all: getRecipesCopy, save: saveRecipeRecord, remove: deleteRecipeRecord },
+    log: { totals: dayTotalsFor, targets: getTargets, add: logMealItem, remove: removeMealItem }
+  };
 })();
