@@ -41,6 +41,8 @@
     "jarvisTasks", "jarvisGoals",
     "jarvisDiscipline", "jarvisWakeCheck", "jarvisWorkoutPrefs", "jarvisInsightPrefs", "jarvisExerciseExtras",
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
+    // Meal Prep: prepared-food batches, scheduled prep sessions, and its settings (recipes, the week plan and the grocery list are above).
+    "jarvisMealPrepBatches", "jarvisMealPrepSessions", "jarvisMealPrepPrefs",
     "jarvisFormCheckHistory",
     "jarvisCalendarEvents", "jarvisCalendarSettings",
     // The Learning & Research Hub: books, research projects, notes, actions and weekly reviews (each a list of records with ids).
@@ -274,7 +276,7 @@
     return { settings: !ls ? cs : !cs ? ls : stamp(cs) > stamp(ls) ? cs : ls, days: days };
   }
 
-  // Habits: { id, name, targetDays, dailyTarget, completions: { "YYYY-MM-DD": count }, createdAt }. Both devices' habits are kept (matched by id).
+  // Habits: { id, name, targetDays, dailyTarget, completions: { "YYYY-MM-DD": count }, createdAt, and optionally planTime / planDays / planFrom / planMoves }. Both devices' habits are kept (matched by id).
   // Within a habit, the days from both copies are kept (a day on both: the larger count, so a tick is never lost), and the rest of it
   // (name, targets) is this device's. A habit unticked on one device and left ticked on the other comes back ticked: that is the price of
   // never losing a tick, and it only applies when BOTH devices changed the habits since they last agreed.
@@ -291,7 +293,12 @@
       if (!other) return h;
       const days = Object.assign({}, isObj(other.completions) ? other.completions : {});
       Object.keys(isObj(h.completions) ? h.completions : {}).forEach(function (d) { days[d] = Math.max(Number(days[d]) || 0, Number(h.completions[d]) || 0); });
-      return Object.assign({}, h, { completions: days });
+      const merged = Object.assign({}, h, { completions: days });
+      // Where it sits on the Day planner (planTime, planDays, planFrom, planMoves): this device's, but a habit this device never put on the planner
+      // takes the other device's, so a schedule made on one device is not lost by a tick made on the other. One-day moves from both are kept.
+      if (typeof h.planTime !== "string" || !h.planTime) ["planTime", "planDays", "planFrom", "planMoves"].forEach(function (k) { if (other[k] !== undefined) merged[k] = other[k]; });
+      else if (isObj(other.planMoves)) merged.planMoves = Object.assign({}, other.planMoves, isObj(h.planMoves) ? h.planMoves : {});
+      return merged;
     });
     cloud.forEach(function (h) { if (isObj(h) && typeof h.id === "string" && h.id && !seen[h.id]) out.push(h); });
     return out;
@@ -302,6 +309,8 @@
     jarvisNutritionLog: mergeDateMeals,
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
     jarvisTasks: mergeById, jarvisGoals: mergeById, jarvisGroceryList: mergeById, jarvisGroceryMealPlan: mergeById, jarvisFormCheckHistory: mergeById,
+    // each carries updatedAt (the newer wins) and deletedAt tombstones, so a delete reaches the other device
+    jarvisMealPrepBatches: mergeById, jarvisMealPrepSessions: mergeById, jarvisMealPrepPrefs: mergeNewest,
     jarvisCalendarEvents: mergeById, jarvisCalendarSettings: mergeNewest,
     // deleted records stay as tombstones (deletedAt, with a newer updatedAt) for 30 days so a deletion reaches the other device
     jarvisLearnBooks: mergeById, jarvisLearnResearch: mergeById, jarvisLearnNotes: mergeById, jarvisLearnActions: mergeById, jarvisLearnReviews: mergeById,

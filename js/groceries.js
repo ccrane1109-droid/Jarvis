@@ -126,9 +126,9 @@
     showSetupForm = !prefs.setupDone;
   }
 
-  function savePantry() { window.JarvisCore.saveJSON(LS_PANTRY, pantry); }
-  function saveList() { window.JarvisCore.saveJSON(LS_LIST, groceryList); }
-  function savePlan() { window.JarvisCore.saveJSON(LS_PLAN, mealPlan); }
+  function savePantry() { return window.JarvisCore.saveJSON(LS_PANTRY, pantry); }
+  function saveList() { return window.JarvisCore.saveJSON(LS_LIST, groceryList); }
+  function savePlan() { return window.JarvisCore.saveJSON(LS_PLAN, mealPlan); }
   function savePrefs() { window.JarvisCore.saveJSON(LS_PREFS, prefs); }
   function saveChangelog() { window.JarvisCore.saveJSON(LS_CHANGELOG, changelog); }
 
@@ -242,7 +242,7 @@
       } else if (p.type === "recurring") {
         for (let i = 0; i < horizonDays; i++) {
           const d = addDaysISO(today, i);
-          if ((p.days || []).indexOf(dateDayOfWeek(d)) !== -1 && (p.completedDates || []).indexOf(d) === -1) {
+          if ((p.days || []).indexOf(dateDayOfWeek(d)) !== -1 && (p.completedDates || []).indexOf(d) === -1 && (p.skipDates || []).indexOf(d) === -1) {
             out.push({ planId: p.id, date: d, meal: p.meal, recipeId: p.recipeId, recipeName: p.recipeName, servings: p.servings });
           }
         }
@@ -337,8 +337,26 @@
       if (sourceLabel && demand[key].sources.indexOf(sourceLabel) === -1) demand[key].sources.push(sourceLabel);
     }
 
+    // Meals already prepared need no shopping: one you marked "prepped" in Meal Prep, or one that a batch you cooked (jarvisMealPrepBatches,
+    // portions left and still good on that day) covers, soonest first. Read only; Meal Prep owns the batches.
+    const avail = {};
+    (window.JarvisCore.loadJSON("jarvisMealPrepBatches", []) || []).forEach(function (b) {
+      if (b && !b.deletedAt && b.recipeId && Number(b.remaining) > 0) (avail[b.recipeId] = avail[b.recipeId] || []).push({ left: Math.floor(Number(b.remaining)), useBy: b.useBy || "9999-12-31" });
+    });
+    Object.keys(avail).forEach(function (id) { avail[id].sort(function (a, b) { return a.useBy < b.useBy ? -1 : 1; }); });
+    function coveredByPrepared(occ) {
+      const plan = mealPlan.find(function (p) { return p.id === occ.planId; });
+      if (plan && (plan.preppedDates || []).indexOf(occ.date) !== -1) return true;
+      const need = Math.max(1, Math.ceil(Number(occ.servings) || 1)), list = avail[occ.recipeId] || [];
+      const b = list.find(function (x) { return x.left >= need && x.useBy >= occ.date; });
+      if (!b) return false;
+      b.left -= need;
+      return true;
+    }
+
     occurrences.forEach(function (occ) {
       if (!occ.recipeId) return; // custom/no-recipe meal — surfaced separately, never fabricated
+      if (coveredByPrepared(occ)) return; // already cooked: nothing to buy for it
       const recipe = recipes.find(function (r) { return r.id === occ.recipeId; });
       if (!recipe || !recipe.servings) return;
       const ratio = occ.servings / recipe.servings;
@@ -1042,7 +1060,82 @@
     renderAll();
   }
 
+  /* ---- for Meal Prep (mealprep-*.js) ----
+     The meal plan, the grocery list and the pantry stay owned here: Meal Prep reads copies and asks for changes through these, so there is
+     one list, one set of rules for combining and for what you already have, and the same Undo banner. A change is reported as made only if saved. */
+
+  function copyOf(v) { return JSON.parse(JSON.stringify(v)); }
+  const REFUSED = "That couldn't be saved. The browser may be full or blocking storage.";
+  // Replaces the whole meal plan (a new list made from plan()), then brings the grocery list up to date.
+  function commitPlan(next) {
+    if (!Array.isArray(next)) return { ok: false, error: "That isn't a plan." };
+    const prev = mealPlan;
+    mealPlan = next;
+    if (!savePlan()) { mealPlan = prev; return { ok: false, error: REFUSED }; }
+    recomputeGroceryList(); renderAll();
+    return { ok: true };
+  }
+  function setPurchased(id, on) {
+    const item = groceryList.find(function (it) { return it.id === id; });
+    if (!item) return { ok: false, error: "That item isn't on the list any more." };
+    const before = copyOf(groceryList), pantryBefore = copyOf(pantry);
+    if (on && !item.purchased) adjustPantry(item.name, item.quantity, item.unit, "purchase");
+    else if (!on && item.purchased) adjustPantry(item.name, -item.quantity, item.unit, "purchase");
+    item.purchased = !!on;
+    if (!saveList()) { groceryList = before; pantry = pantryBefore; savePantry(); return { ok: false, error: REFUSED }; }
+    recomputeGroceryList(); renderAll();
+    return { ok: true };
+  }
+  function addListItem(name, qty, unit) {
+    const n = String(name || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (!n) return { ok: false, error: "Name the item." };
+    const prev = groceryList;
+    groceryList = groceryList.concat([{ id: window.JarvisCore.uid("grocery"), name: n, category: guessCategory(n), quantity: Math.max(0, Number(qty) || 1), unit: UNIT_LIST.indexOf(unit) !== -1 ? unit : "each", purchased: false, manual: true, excluded: false, userEdited: false, neededFor: [], addedAt: Date.now() }]);
+    if (!saveList()) { groceryList = prev; return { ok: false, error: REFUSED }; }
+    renderAll();
+    return { ok: true };
+  }
+  function removeListItem(id) {
+    const prev = groceryList;
+    if (!prev.some(function (it) { return it.id === id; })) return { ok: false, error: "That item isn't on the list any more." };
+    groceryList = prev.filter(function (it) { return it.id !== id; });
+    if (!saveList()) { groceryList = prev; return { ok: false, error: REFUSED }; }
+    recomputeGroceryList(); renderAll();
+    return { ok: true };
+  }
+  // "I already have this": its amount goes into the pantry, so it stops being asked for.
+  function haveListItem(id) {
+    const item = groceryList.find(function (it) { return it.id === id; });
+    if (!item) return { ok: false, error: "That item isn't on the list any more." };
+    adjustPantry(item.name, item.quantity, item.unit, "manual");
+    recomputeGroceryList(); renderAll();
+    return { ok: true };
+  }
+  function setPantryItem(name, amount, unit) {
+    const n = String(name || "").trim();
+    if (!n) return { ok: false, error: "Name the item." };
+    setPantryManual(n, Math.max(0, Number(amount) || 0), UNIT_LIST.indexOf(unit) !== -1 ? unit : "each");
+    recomputeGroceryList(); renderAll();
+    return { ok: true };
+  }
+  function removePantryEntry(key) { removePantryItem(key); recomputeGroceryList(); renderAll(); return { ok: true }; }
+  // Cooking or eating uses ingredients up: ingredients is a recipe's list, ratio = servings used / the recipe's servings.
+  function consumeIngredients(ingredients, ratio) {
+    (ingredients || []).forEach(function (ing) {
+      const q = parseQuantityString(ing.quantity);
+      adjustPantry(ing.name, -(q.amount * ratio), q.unit, "estimate");
+    });
+    recomputeGroceryList(); renderAll();
+    return { ok: true };
+  }
+
   window.JarvisGroceries = {
+    api: {
+      plan: function () { return copyOf(mealPlan); }, list: function () { return copyOf(groceryList); }, pantry: function () { return copyOf(pantry); }, prefs: function () { return copyOf(prefs); },
+      units: UNIT_LIST.slice(), categories: CATEGORIES.slice(), formatQty: formatQty,
+      commitPlan: commitPlan, setPurchased: setPurchased, addItem: addListItem, removeItem: removeListItem, alreadyHave: haveListItem,
+      setPantry: setPantryItem, removePantry: removePantryEntry, consume: consumeIngredients, refresh: function () { recomputeGroceryList(); renderAll(); }
+    },
     init: init,
     getSummary: getSummary,
     onSubTabChange: onSubTabChange,

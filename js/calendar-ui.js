@@ -3,6 +3,11 @@
 
    The rules are in calendar-logic.js; this file draws them and passes taps, keys and drags to them.
 
+   Planned habits (a habit with a time on the planner, see habit-plan-logic.js) are shown here too, worked out from the habit
+   records themselves (jarvisHabits, owned by habits.js): ticking one, or changing its time for one day, goes through habits.js,
+   so the Habits screen, this Calendar and the Day planner always show the same thing. They are drawn here and on the Day
+   planner only (not on Home), never as tasks, and never overdue.
+
    Saved in two keys (see calendar-logic.js): jarvisCalendarEvents and jarvisCalendarSettings, both in the
    merge-based cloud backup. Your ordinary tasks (jarvisTasks, owned by habits.js) are shown here as items
    too, read from and handed back to habits.js, never copied, so ticking or moving one here changes the
@@ -17,8 +22,9 @@
 
   const C = window.JarvisCalendarLogic;
   const S = window.JarvisScheduleLogic;
+  const HPl = window.JarvisHabitPlan;
   const EV_KEY = "jarvisCalendarEvents", SET_KEY = "jarvisCalendarSettings";
-  const SNAP = 15, UNDO_MS = 8000, TASK_COLOR = "#7d8fb3";
+  const SNAP = 15, UNDO_MS = 8000, TASK_COLOR = "#7d8fb3", HABIT_COLOR = "#33d17a";
   const ZONES = ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu", "America/Toronto", "America/Mexico_City", "America/Sao_Paulo",
     "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Athens", "Africa/Lagos", "Africa/Johannesburg", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Shanghai", "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland", "UTC"];
 
@@ -52,7 +58,10 @@
     }, 0);
   }
   function ctx() { return { now: Date.now(), zone: zone(), defaultDuration: settings.defaultDuration, makeId: function () { return core().uid("ev"); } }; }
-  function colorOf(it) { return it.source === "task" ? TASK_COLOR : it.color || C.categoryInfo(it.category).color; }
+  function colorOf(it) { return it.source === "task" ? TASK_COLOR : it.source === "habit" ? HABIT_COLOR : it.color || C.categoryInfo(it.category).color; }
+  // The small mark that tells a habit from a task: two arrows going round (it comes back). Decorative; the row says "Habit" in words.
+  const HABIT_ICON = '<svg class="hb-ico" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function habitsShown() { return planner() && planner().habitsShown ? planner().habitsShown() : true; }
   function shortTime(t) { const h = Number(t.slice(0, 2)), m = t.slice(3); return ((h + 11) % 12 + 1) + (m === "00" ? "" : ":" + m) + (h < 12 ? "a" : "p"); }
   function dayName(date, opts) { return C.fmtDate(date, opts || { weekday: "long", month: "long", day: "numeric" }); }
 
@@ -118,11 +127,23 @@
     if (GLg && GLg.calendarItems && h) return GLg.calendarItems(goals, h.getTasks(), from, to);
     return S ? S.goalItems(goals, from, to) : [];
   }
+  // Habits that have a time on the planner, drawn from the habit records themselves (nothing is copied): one per habit per planned day.
+  function habitItems(h, from, to) {
+    if (!h || !h.getHabits || !HPl || !habitsShown()) return [];
+    try { return HPl.items(h.getHabits(), from, to, { today: today() }); } catch (e) { return []; }
+  }
+  // A Meal Prep session is ONE Calendar event. If you also put it on your to-do list for the day, that task (it carries mealPrepId) is not drawn
+  // here as a second copy while its event is on the calendar; it stays in the Day plan's task list, where it can be ticked.
+  function visibleTasks(h) {
+    const live = {};
+    events.forEach(function (e) { if (e && !e.deletedAt && e.linked && e.linked.type === "mealprep") live[e.linked.id] = true; });
+    return h.getTasks().filter(function (t) { return !(t && t.mealPrepId && live[t.mealPrepId]); });
+  }
   function allItems(from, to) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
-    const tasks = h ? C.taskItems(h.getTasks(), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
-    const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks);
+    const tasks = h ? C.taskItems(visibleTasks(h), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
+    const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to));
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     // time blocks overlapping each other, or a timed event on the same day (the event rules above only know events)
@@ -149,8 +170,10 @@
     return { all: all, shown: shown };
   }
   function dayItems(items, date) { return items.filter(function (it) { return it.date <= date && it.endDate >= date; }).sort(sortItems); }
+  function habitCountWord(it) { return it.target > 1 ? it.count + " of " + it.target : ""; }
   function itemLabel(it) {
     const d = dayName(it.date, { weekday: "short", month: "short", day: "numeric" });
+    if (it.source === "habit") return C.timeLabel(it.time) + " " + it.title + " Habit" + (habitCountWord(it) ? " " + habitCountWord(it) : "") + (it.moved ? " Moved for this day" : "") + ", " + d + (it.completed ? ", done" : "");
     const when = it.allDay ? d + (it.endDate !== it.date ? " to " + dayName(it.endDate, { weekday: "short", month: "short", day: "numeric" }) : "") + ", all day" : d + ", " + C.timeLabel(it.time) + (it.point ? "" : " to " + C.timeLabel(it.endTime));
     return it.title + ", " + when + (it.kind !== "event" && it.source !== "task" ? ", " + C.kindInfo(it.kind).label : "") + (it.completed ? ", done" : "") + (it.conflict ? ", overlaps another event" : "");
   }
@@ -190,8 +213,13 @@
 
   function chipHtml(it) {
     const draggable = it.source === "task" || (!it.readOnly && it.source !== "goal");   // a goal date is changed in Goals, not by dragging
-    return '<button type="button" class="cal-chip' + (it.completed ? " cal-item-done" : "") + '" style="--cc:' + colorOf(it) + '" data-cal="open" data-key="' + esc(it.key) + '"' + (draggable ? ' data-drag="1"' : "") + ' aria-label="' + esc(itemLabel(it)) + '">' +
-      (it.allDay ? "" : esc(shortTime(it.time)) + " ") + esc(it.title) + '</button>';
+    return '<button type="button" class="cal-chip' + (it.source === "habit" ? " cal-chip-habit" : "") + (it.completed ? " cal-item-done" : "") + '" style="--cc:' + colorOf(it) + '" data-cal="open" data-key="' + esc(it.key) + '"' + (draggable ? ' data-drag="1"' : "") + ' aria-label="' + esc(itemLabel(it)) + '">' +
+      (it.source === "habit" ? HABIT_ICON : "") + (it.allDay ? "" : esc(shortTime(it.time)) + " ") + esc(it.title) + '</button>';
+  }
+  // Month: a day's habits are one small chip (done of planned), so a few habits do not crowd out the events. Tapping it opens the day.
+  function habitSummaryChip(list, d) {
+    const done = list.filter(function (x) { return x.completed; }).length;
+    return '<button type="button" class="cal-chip cal-chip-habit' + (done === list.length ? " cal-item-done" : "") + '" style="--cc:' + HABIT_COLOR + '" data-cal="num" data-date="' + d + '" aria-label="' + esc(done + "/" + list.length + " habits on " + dayName(d, { weekday: "short", month: "short", day: "numeric" }) + ", " + done + " of " + list.length + " done. Open the day") + '">' + HABIT_ICON + done + "/" + list.length + ' habits</button>';
   }
 
   function monthHtml(items) {
@@ -201,11 +229,12 @@
     g.weeks.forEach(function (week) {
       week.forEach(function (d) {
         const list = dayItems(items, d), other = d.slice(0, 7) !== g.month;
+        const hs = list.filter(function (x) { return x.source === "habit"; }), rest = list.filter(function (x) { return x.source !== "habit"; }), room = hs.length ? 2 : 3;
         html += '<div class="cal-cell' + (other ? " is-other" : "") + (d === t ? " is-today" : "") + (d === selected ? " is-selected" : "") + '" data-date="' + d + '">' +
           '<button type="button" class="cal-num" data-cal="num" data-date="' + d + '" aria-label="' + esc(dayName(d) + (list.length ? ", " + list.length + (list.length === 1 ? " item" : " items") : "")) + '">' + Number(d.slice(8)) + '</button>' +
-          list.slice(0, 3).map(chipHtml).join("") +
-          (list.length > 3 ? '<button type="button" class="cal-more" data-cal="num" data-date="' + d + '">+' + (list.length - 3) + ' more</button>' : "") +
-          '<div class="cal-dots" aria-hidden="true">' + list.slice(0, 4).map(function (it) { return '<span class="cal-dot" style="--cc:' + colorOf(it) + '"></span>'; }).join("") + '</div>' +
+          (hs.length ? habitSummaryChip(hs, d) : "") + rest.slice(0, room).map(chipHtml).join("") +
+          (rest.length > room ? '<button type="button" class="cal-more" data-cal="num" data-date="' + d + '">+' + (rest.length - room) + ' more</button>' : "") +
+          '<div class="cal-dots" aria-hidden="true">' + (hs.length ? [hs[0]] : []).concat(rest).slice(0, 4).map(function (it) { return '<span class="cal-dot" style="--cc:' + colorOf(it) + '"></span>'; }).join("") + '</div>' +
           '</div>';
       });
     });
@@ -225,13 +254,14 @@
       if (it.kind !== "event" && kind !== cat) sub.push(kind);
       sub.push(cat);
     }
+    if (it.source === "habit") { sub.length = 0; sub.push("Habit"); if (habitCountWord(it)) sub.push(habitCountWord(it)); if (it.moved) sub.push("Moved for this day"); }
     if (it.recurring) sub.push("Repeats");
-    const tickable = it.source === "task" || it.source === "plan" || (it.source === "goal" && !it.readOnly) || (it.source === "event" && C.isPoint(it.kind));
+    const tickable = (it.source === "habit" && it.editable) || it.source === "task" || it.source === "plan" || (it.source === "goal" && !it.readOnly) || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
       '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
         '<span class="cal-ag-time">' + esc(time) + (!it.allDay && !it.point && it.endTime ? '<small>' + esc(C.timeLabel(it.endTime)) + '</small>' : "") + '</span><span class="cal-ag-bar"></span>' +
-        '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + esc(it.title) + '</span><span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
+        '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span><span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
         (it.conflict ? '<span class="cal-ag-flag">Overlaps</span>' : "") +
       '</button>' +
       (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
@@ -278,8 +308,8 @@
     const it = seg.item, top = seg.startMin / 14.4, height = (seg.endMin - seg.startMin) / 14.4;
     const resizable = (it.source === "event" && !it.point && !it.recurring && it.date === it.endDate) || it.source === "plan";
     const when = it.allDay ? "" : C.timeLabel(it.time) + (it.point ? "" : " – " + C.timeLabel(it.endTime));
-    return '<button type="button" class="cal-ev' + (it.completed ? " cal-item-done" : "") + (it.conflict ? " is-conflict" : "") + (seg.endMin - seg.startMin < 50 ? " is-short" : "") + '" style="--cc:' + colorOf(it) + ';--col:' + seg.col + ';--cols:' + seg.cols + ';top:' + top.toFixed(3) + '%;height:' + height.toFixed(3) + '%" data-cal="open" data-drag="1" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
-      '<span class="t">' + esc(it.title) + '</span><span class="m">' + esc(when) + '</span>' + (resizable ? '<span class="cal-resize" data-resize="1" data-key="' + esc(it.key) + '"></span>' : "") + '</button>';
+    return '<button type="button" class="cal-ev' + (it.source === "habit" ? " cal-ev-habit" : "") + (it.completed ? " cal-item-done" : "") + (it.conflict ? " is-conflict" : "") + (seg.endMin - seg.startMin < 50 ? " is-short" : "") + '" style="--cc:' + colorOf(it) + ';--col:' + seg.col + ';--cols:' + seg.cols + ';top:' + top.toFixed(3) + '%;height:' + height.toFixed(3) + '%" data-cal="open" data-drag="1" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
+      '<span class="t">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span><span class="m">' + esc(when) + '</span>' + (resizable ? '<span class="cal-resize" data-resize="1" data-key="' + esc(it.key) + '"></span>' : "") + '</button>';
   }
 
   function gridHtml(dates, items) {
@@ -446,6 +476,33 @@
       (h ? '<button type="button" class="btn btn-secondary" data-cal="task-open">Open in Habits</button>' : "") + '<button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
   }
 
+  function freshHabit(it) {
+    const h = habits();
+    if (!h || !HPl) return null;
+    return HPl.items(h.getHabits(), it.occDate, it.occDate, { today: today() }).filter(function (x) { return x.id === it.id; })[0] || null;
+  }
+  function timeOptions(cur) {
+    const list = []; let seen = false;
+    for (let m = 0; m < 1440; m += 15) { const t = C.timeOf(m); if (t === cur) seen = true; list.push({ value: t, label: C.timeLabel(t) }); }
+    if (cur && !seen) list.push({ value: cur, label: C.timeLabel(cur) });
+    return list;
+  }
+  function habitSheetHtml(m) {
+    const it = m.item, h = habits(), rec = h ? h.getHabits().filter(function (x) { return x.id === it.id; })[0] : null, p = rec && HPl ? HPl.plan(rec) : null;
+    const when = dayName(it.date, { weekday: "long", month: "short", day: "numeric" }) + " \u00b7 " + C.timeLabel(it.time) + (p ? " \u00b7 " + HPl.daysLabel(p.days) : "") + (it.moved ? " \u00b7 moved for this day" : "");
+    let html = '<div class="cal-field"><span class="cal-lab">Habit</span><p><strong class="cal-habit-name">' + HABIT_ICON + esc(it.title) + '</strong></p><p class="field-hint">' + esc(when) + (it.completed ? " \u00b7 done" : "") + '</p></div>';
+    if (it.target > 1) html += '<div class="cal-field"><span class="cal-lab" id="calH_cnt_l">Count for this day</span><div class="stepper-row" role="group" aria-labelledby="calH_cnt_l">' +
+      '<button type="button" class="stepper-btn" data-cal="habit-step" data-d="-1" aria-label="One less"' + (it.editable ? "" : " disabled") + '>&minus;</button><span class="habit-card-count-value" role="status">' + it.count + ' of ' + it.target + '</span>' +
+      '<button type="button" class="stepper-btn" data-cal="habit-step" data-d="1" aria-label="One more"' + (it.editable ? "" : " disabled") + '>+</button></div></div>';
+    html += '<div class="cal-field"><label for="calH_time">Time on this day</label><div class="cal-inline"><select id="calH_time">' + selOpts(timeOptions(it.time), it.time) + '</select><button type="button" class="btn btn-secondary" data-cal="habit-time">Set time</button></div>' +
+      (it.moved && p ? '<button type="button" class="cal-more" data-cal="habit-reset">Back to its usual time (' + esc(C.timeLabel(p.time)) + ')</button>' : "") +
+      '<p class="field-hint">This changes this day only. Its usual time and days are in Edit schedule.</p></div>';
+    if (!it.editable) html += '<p class="field-hint">This day hasn\u2019t happened yet, so it can\u2019t be ticked.</p>';
+    html += '<div class="cal-actions">' + (it.editable ? '<button type="button" class="btn btn-primary" data-cal="habit-toggle">' + (it.target > 1 ? (it.completed ? "Mark not done" : "Mark all done") : (it.completed ? "Mark not done" : "Mark done")) + '</button>' : "") +
+      '<button type="button" class="btn btn-secondary" data-cal="habit-edit">Edit schedule</button><button type="button" class="btn btn-secondary" data-cal="habit-open">Open in Habits</button><button type="button" class="btn btn-secondary" data-cal="close">Close</button></div>';
+    return html;
+  }
+
   const EXT = {
     plan: { title: "Time block", where: "Strategy \u203a Weekly", nav: "navBtnStrategy", after: function () { const b = document.querySelector('#panel-strategy .sp-sub-nav [data-sp="weekly"]'); if (b) b.click(); }, note: "This is a time block from your weekly plan. Change or move it in Strategy, on the Weekly tab." },
     goal: { title: "Goal", where: "Goals", open: "Open goal", nav: "navBtnHabits", sub: "habitsSubNavGoals", after: function (it) { const G = window.JarvisGoals; if (G && G.show && it && it.goalId) G.show(it.goalId); }, note: "This date comes from one of your goals. Change it, or its milestones, in Goals." }
@@ -483,10 +540,10 @@
 
   function showModal() {
     const overlay = $("calModal"), form = $("calForm");
-    $("calModalTitle").textContent = modal.kind === "settings" ? "Calendar settings" : modal.kind === "task" ? "Task" : modal.kind === "external" ? externalTitle(modal.item) : modal.mode === "new" ? "New" : "Edit";
+    $("calModalTitle").textContent = modal.kind === "settings" ? "Calendar settings" : modal.kind === "task" ? "Task" : modal.kind === "habit" ? "Habit" : modal.kind === "external" ? externalTitle(modal.item) : modal.mode === "new" ? "New" : "Edit";
     if (modal.kind === "event") $("calModalTitle").textContent = modal.mode === "new" ? "New event" : "Edit " + C.kindInfo(modal.form.kind).label.toLowerCase();
     if (modal.kind === "keys") $("calModalTitle").textContent = "Keyboard shortcuts";
-    form.innerHTML = modal.kind === "keys" ? keysHtml() : modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
+    form.innerHTML = modal.kind === "keys" ? keysHtml() : modal.kind === "settings" ? settingsFormHtml() : modal.kind === "task" ? taskSheetHtml(modal) : modal.kind === "habit" ? habitSheetHtml(modal) : modal.kind === "external" ? externalSheetHtml(modal) : eventFormHtml(modal);
     overlay.classList.remove("hidden");
   }
   function closeModal(focusOpener) {
@@ -615,6 +672,7 @@
       render(); notify(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); return;
     }
     if (it.source === "plan") { tickBlock(it); return; }
+    if (it.source === "habit") { tickHabit(it); return; }
     if (it.source === "goal") {
       const G = window.JarvisGoals; if (!G || !it.milestoneId || !G.tickMilestone) return;
       const r = G.tickMilestone(it.goalId, it.milestoneId);
@@ -624,6 +682,29 @@
     if (it.readOnly) return;
     const res = C.setDone(events, it.id, it.occDate, !it.completed, ctx());
     if (res.ok && commit(res.events)) { render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + "."); }
+  }
+  // A habit: ticking it is that day's completion in the Habits screen (the same record, written once per day), so the two always agree.
+  // A habit with a daily count is filled to its target, or emptied; the + and - are in its popup.
+  function tickHabit(it) {
+    const h = habits(); if (!h) return;
+    if (!it.editable) { core().showToast("That day hasn't happened yet."); return; }
+    const r = h.setHabitDay(it.id, it.occDate, !it.completed);
+    if (!r.ok) { core().showToast(r.error); render(); return; }
+    render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + ".");
+    focusSoon('[data-cal="tick"][data-key="' + it.key + '"]', true);
+  }
+  // A different time for one day only. The habit's usual time and days stay as they are.
+  function setHabitTime(it, time, note) {
+    const h = habits(); if (!h) return false;
+    const before = it.time, r = h.moveHabitDay(it.id, it.occDate, time);
+    if (!r.ok) { core().showToast(r.error); render(); return false; }
+    render();
+    showUndo("Moved \u201c" + it.title + "\u201d to " + C.timeLabel(time) + " on " + dayName(it.occDate, { month: "short", day: "numeric" }) + " only." + (note || ""), function () {
+      const u = h.moveHabitDay(it.id, it.occDate, before);
+      if (!u.ok) core().showToast(u.error);
+      render(); announce("Undone.");
+    });
+    return true;
   }
   // A time block: if it holds a task, ticking it ticks that task (the same task the To-Do list shows); otherwise it marks that showing of the block done.
   function tickBlock(it) {
@@ -650,6 +731,12 @@
       render(); notify(); announce("Moved " + it.title + " to " + dayName(target.date) + (keepTime ? "" : " at " + C.timeLabel(target.time)) + "."); return;
     }
     if (it.source === "plan") { moveBlock(it, target); return; }
+    if (it.source === "habit") {
+      // A habit keeps its days: dragging changes its time on this day only.
+      if (target.time === undefined || (target.time === it.time && target.date !== it.date)) { core().showToast("Habits stay on their days. Drag up or down inside the day to change the time."); render(); return; }
+      setHabitTime(it, target.time, target.date !== it.date ? " Habits stay on their days." : "");
+      return;
+    }
     if (it.readOnly) return;
     const ev = C.byId(events, it.id);
     if (!ev) return;
@@ -827,6 +914,7 @@
     if (it.source === "plan" && window.JarvisPlanApp && window.JarvisPlanApp.openBlockSheet) { window.JarvisPlanApp.openBlockSheet({ id: it.id, date: it.occDate }); return; }
     if (it.source === "goal" || it.source === "plan") { modal = { kind: "external", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="ext-open"]'); return; }
     if (it.source === "task") { modal = { kind: "task", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="task-toggle"]'); return; }
+    if (it.source === "habit") { modal = { kind: "habit", item: it, opener: document.activeElement }; showModal(); focusSoon('#calForm [data-cal="habit-toggle"], #calForm [data-cal="close"]'); return; }
     openEdit(it); focusSoon("#calF_title");
   }
   function clearFilters() { filters = { q: "", categories: [], hideDone: false }; $("calSearch").value = ""; render(); announce("Filters cleared."); }
@@ -857,6 +945,7 @@
         { key: "search", label: "Search and filters", sub: "Find an event or task, or show only some kinds" },
         { key: "assist", label: "Planning assistant", sub: "Find time, plan a week, catch up" },
         { key: "style", label: dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list" },
+        { key: "habits", label: habitsShown() ? "Hide habits" : "Show habits", sub: habitsShown() ? "Take planned habits off the calendar and planner" : "Planned habits are hidden" },
         { key: "cats", label: "Time block categories", sub: "What your time blocks are for" },
         { key: "hours", label: "Planner hours", sub: "When your day starts and ends, and the daily limit" },
         { key: "agenda", label: "Next 30 days", sub: "Everything coming up, as a list" },
@@ -867,6 +956,7 @@
         if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
         else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
         else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour."); }
+        else if (key === "habits") { if (planner() && planner().setHabitsShown) { const on = !habitsShown(); planner().setHabitsShown(on); render(); announce(on ? "Habits are shown." : "Habits are hidden."); } }
         else if (key === "cats") { if (planner()) planner().openCategories(); }
         else if (key === "hours") { if (planner()) planner().openHours(); }
         else if (key === "agenda") setView("agenda");
@@ -891,6 +981,23 @@
     if (act === "ext-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
     if (act === "ext-open") { const it = modal.item; closeModal(false); goToSource(it); return; }
     if (act === "task-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
+    if (act === "habit-toggle") { const it = modal.item; closeModal(); tickItem(it); return; }
+    if (act === "habit-step") {
+      const it = modal.item, h = habits(); if (!h) return;
+      const d = Number(el.getAttribute("data-d")), r = h.stepHabitDay(it.id, it.occDate, d);
+      if (!r.ok) { core().showToast(r.error); return; }
+      const fresh = freshHabit(it); if (!fresh) { closeModal(); render(); return; }
+      modal.item = fresh; showModal(); render(); focusSoon('#calForm [data-cal="habit-step"][data-d="' + d + '"]'); announce(fresh.count + " of " + fresh.target + "."); return;
+    }
+    if (act === "habit-time" || act === "habit-reset") {
+      const it = modal.item, h = habits(); if (!h) return;
+      const rec = h.getHabits().filter(function (x) { return x.id === it.id; })[0], p = rec && HPl ? HPl.plan(rec) : null;
+      const time = act === "habit-reset" ? (p ? p.time : "") : ($("calH_time") ? $("calH_time").value : "");
+      if (!time || time === it.time) { if (act === "habit-time") core().showToast("That is already its time on this day."); return; }
+      closeModal(false); setHabitTime(it, time); focusSoon('[data-key="' + it.key + '"]', true); return;
+    }
+    if (act === "habit-edit") { const it = modal.item; closeModal(false); if (planner() && planner().openHabit) planner().openHabit({ id: it.id, date: it.occDate }); return; }
+    if (act === "habit-open") { const it = modal.item, h = habits(); closeModal(false); const b = $("navBtnHabits"); if (b) b.click(); const t = $("habitsSubNavToday"); if (t) t.click(); if (h) h.selectDate(it.date); return; }
     if (act === "task-open") { const it = modal.item, h = habits(); closeModal(false); const b = $("navBtnHabits"); if (b) b.click(); if (h) h.selectDate(it.date); return; }
   }
   function tickItem(it) { itemMap[it.key] = it; tick(it.key); }
@@ -1005,6 +1112,7 @@
     $("calModal").addEventListener("click", function (e) { if (e.target === $("calModal")) closeModal(); });
     document.addEventListener("keydown", onKey);
     document.addEventListener("jarvis-habits-day-changed", function () { if (panelActive()) render(); });
+    document.addEventListener("jarvis-habits-changed", function () { if (panelActive() && !drag && !modal) render(); });   // a habit ticked on the Habits screen shows here at once
     document.addEventListener("jarvis-tasks-changed", function () { if (panelActive() && !drag) render(); });
     document.addEventListener("jarvis-goals-changed", function () { if (panelActive() && !drag) render(); });
     try { const P = window.JarvisPlanStore; if (P && P.subscribe) P.subscribe(function (kind) { if (panelActive() && !drag && (kind === "blocks" || kind === "ingredients" || kind === "weeks")) render(); }); } catch (e) { /* the plan is optional here */ }
@@ -1025,7 +1133,8 @@
     init: init, onShow: onShow, openNew: function (o) { openNew(o || {}); }, goTo: function (date, v) { if (C.isDate(date)) { anchor = date; selected = date; if (v) view = v; wantScroll = true; render(); } },
     getEvents: function () { return events.slice(); }, getSettings: function () { return Object.assign({}, settings); }, zone: zone,
     // Every item from..to (dates in the view zone): events, your tasks and your personal goals, with no filters applied.
-    itemsBetween: function (from, to) { return allItems(from, to); },
+    // (Planned habits are not in this list: Home and the planning assistant read it, and habits are drawn from their own records on the Calendar and Day planner.)
+    itemsBetween: function (from, to) { return allItems(from, to).filter(function (it) { return it.source !== "habit"; }); },
     // Open an event's popup from another screen (Home).
     openEvent: function (id, occDate) { if (C.byId(events, id)) { openEdit({ id: id, occDate: occDate }); focusSoon("#calF_title"); } },
     // Tick something shown on the schedule, from any screen.
