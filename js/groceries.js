@@ -119,7 +119,8 @@
     const core = window.JarvisCore;
     pantry = core.loadJSON(LS_PANTRY, {}) || {};
     groceryList = core.loadJSON(LS_LIST, []) || [];
-    mealPlan = core.loadJSON(LS_PLAN, []) || [];
+    const loadedPlan = core.loadJSON(LS_PLAN, []);
+    mealPlan = Array.isArray(loadedPlan) ? loadedPlan.filter(function (p) { return p && typeof p === "object"; }) : [];    // a damaged entry is skipped, not a crash
     const loadedPrefs = core.loadJSON(LS_PREFS, null);
     prefs = loadedPrefs ? Object.assign({ setupDone: false, shoppingDay: 0, horizonDays: 7, weeklyReplenish: {} }, loadedPrefs) : prefs;
     changelog = core.loadJSON(LS_CHANGELOG, null);
@@ -242,7 +243,7 @@
       } else if (p.type === "recurring") {
         for (let i = 0; i < horizonDays; i++) {
           const d = addDaysISO(today, i);
-          if ((p.days || []).indexOf(dateDayOfWeek(d)) !== -1 && (p.completedDates || []).indexOf(d) === -1 && (p.skipDates || []).indexOf(d) === -1) {
+          if ((p.days || []).indexOf(dateDayOfWeek(d)) !== -1 && (p.completedDates || []).indexOf(d) === -1 && (p.skipDates || []).indexOf(d) === -1 && (!p.from || d >= p.from) && (!p.until || d <= p.until)) {
             out.push({ planId: p.id, date: d, meal: p.meal, recipeId: p.recipeId, recipeName: p.recipeName, servings: p.servings });
           }
         }
@@ -609,7 +610,7 @@
       }).join("");
     }
 
-    const needsDetails = mealPlan.filter(function (p) { return !p.recipeId; });
+    const needsDetails = mealPlan.filter(function (p) { return !p.recipeId && !p.macros && !p.foodId; });   // foods with their own numbers (added in Meal Prep) are not meals waiting for ingredients
     const detailsCard = $("groceryPlanNeedsDetailsCard");
     if (detailsCard) {
       detailsCard.classList.toggle("hidden", needsDetails.length === 0);
@@ -829,6 +830,8 @@
       const date = markBtn.getAttribute("data-date");
       const plan = mealPlan.find(function (p) { return p.id === planId; });
       if (!plan) return;
+      // Meal Prep checks a food off the same way everywhere: one food-log line, prepared portions used, nothing counted twice.
+      if (window.JarvisMealPrep && window.JarvisMealPrep.setEaten && window.JarvisMealPrep.setEaten(planId, date, true)) { renderAll(); return; }
       if (plan.recipeId) {
         const recipe = getRecipes().find(function (r) { return r.id === plan.recipeId; });
         if (recipe) {

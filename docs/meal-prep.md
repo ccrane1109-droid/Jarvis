@@ -4,29 +4,82 @@
 the times you shop and cook, to your Calendar, Day plan, Habits and nutrition numbers.
 
 ```
-TODAY'S MEALS        PLANNED PROTEIN     NEXT PREP SESSION     PREPARED PORTIONS
+TODAY'S FOODS        PLANNED PROTEIN     NEXT PREP SESSION     PREPARED PORTIONS
 0 of 4 eaten         85 g (target 160)   Cooking · Sat 10 AM   5 portions left · 1 to use soon
 
 [ Weekly Plan ] [ Recipes ] [ Grocery List ] [ Prep Tracker ]
 ```
 
 Nothing here is a second copy of anything. **Recipes, the week plan, the grocery list and the pantry are the ones Nutrition and Groceries already
-had** (they now open in a richer view). What is new is saved in three keys (`jarvisMealPrepBatches`, `jarvisMealPrepSessions`,
-`jarvisMealPrepPrefs`), all in the cloud backup.
+had** (they now open in a richer view). What is new is saved in four keys (`jarvisMealPrepBatches`, `jarvisMealPrepSessions`,
+`jarvisMealPrepMeals`, `jarvisMealPrepPrefs`), all in the cloud backup.
 
 ## Weekly Plan
 
-Seven day cards (today is open), four meals a day. Each planned meal shows its **name, calories, protein / carbs / fat, portion, preparation
-time and status**: *To prep*, *Prepped*, *Eaten* (or *Planned* for a quick meal, *Eating out*). Tap a meal for its **ingredients scaled to the
-portion**.
+**The idea: plan the foods you usually eat once, open JARVIS each day, tick off what you ate, and replace anything you ate differently.**
 
-* **Add a meal** from a recipe, or as a quick meal with your own numbers. **Repeat the same meal on several days** in one step: each day gets its own copy (tied by a group), so each can still be moved, edited or eaten separately, and one Undo reverses them all.
-* **Move**: drag a meal onto another day (a long press on a phone), or use **Move**. One day of a *repeating* meal moves on its own; the rest of the series stays.
-* **Mark eaten** puts one line in your food log with the numbers as they are *now*, uses a prepared portion if you have one (otherwise the ingredients come out of the pantry estimate), and **Undo** puts all of it back. *Not eaten* reverses it later.
-* Meals you are **eating out** need no shopping or prep. A meal marked **prepped** needs no shopping.
+Seven day cards (today is open, any day can be opened), each with **Breakfast, Lunch, Dinner and Snacks**, and **as many foods under each as you like**. A day card shows `2 of 4 foods eaten · 1 of 4 meals done`, a progress bar, and `1,123 kcal planned · 276 kcal eaten`.
+
+Every food is one row:
+
+```
+[ ]  Overnight oats   To prep
+     284 kcal · P 24 g · C 38 g · F 4 g est. · 1 serving
+     [ Replace ]  [ Edit ]  [ Remove ]
+     Details  v          (ingredients for the portion, prep time, Move, Mark prepped)
+```
+
+### Checking foods off
+
+* The **checkbox** means "I ate this". A checked food looks completed (struck through, green edge) and counts in the day's and the meal's progress ("1 of 1 eaten").
+* It is **saved the moment you tick it**. Reload the page and the ticks are still there.
+* Checking a food **adds one line to Today's food log** (so it is in History too) with the numbers it had, uses a **prepared portion** if you cooked ahead (otherwise the recipe's ingredients come out of the pantry estimate), and ticks the *Eat breakfast* habit for a breakfast. **Unchecking takes all of that back.**
+* **No duplicates.** The plan remembers which log line it made (`loggedItems`). Checking an already-checked food, a double tap, a reload or the old *Mark as eaten* button on the Groceries tab (it now goes through the same check) never adds a second line.
+* A day that **hasn't happened yet** can't be checked off (the box is disabled). Foods **with no numbers** can still be checked off; they go into the log by name with 0 calories (nothing is invented) and are listed as "without numbers" in the day total.
+* **Check off every food / Uncheck every food** for a whole meal is in that meal's **More** menu.
+* The numbers of a food you ate are **frozen for that day**. Editing the recipe later does not change them or your food log.
+
+### Planned and eaten are separate
+
+Each food shows calories, protein, carbs and fat when it has them (**est.** when some are estimates). The day card and the **Nutrition overview** show **planned** (everything on the plan) and **eaten** (only the foods you have checked off) next to each other, for calories, protein, carbs and fat, and in the seven-day chart (with a table view). It states differences in plain numbers ("eaten is 123 kcal less than planned"), never calls a day "over", and if your Today log has more than the plan's checked foods it says so ("Your Today food log shows 400 kcal… it also includes foods you added there yourself"). A plan far under your calorie target suggests adding food, not removing it.
+
+### Add a food
+
+**+ Add food** (on a meal, or at the top) opens one sheet:
+
+* **Search my foods**: your saved foods (the Foods tab list), your recipes, and your saved meals, in one searchable list.
+* **New food**: name, serving, calories, protein, carbs, fat (all but the name optional; nothing is guessed). *Save it to my foods* is on by default, so next week it is one search away. The same name and serving is never saved twice.
+* Choose the **meal**, the **day**, and **how much** (servings), then **Repeat**:
+
+| Repeat | What it makes |
+|---|---|
+| Just this day | one food on that day |
+| Selected days of this week only | one copy per chosen day, tied together (Remove can take them all away; Undo reverses them all) |
+| Selected days every week | **one repeating food** on the chosen weekdays, starting on the day you picked |
+| Every day, every week | one repeating food on all seven days |
+
+**A repeating food carries into next week by itself** (and the week after), with no copying, until you change or remove it. Foods planned for one day don't carry. **Copy last week** (top of the plan) puts last week's one-day foods on this week (same weekday); anything already there (same meal, day and food) is left alone, so pressing it twice adds nothing.
+
+### Replace: what you actually ate
+
+**Replace** is beside every food. Pick what you ate instead (search saved foods, recipes, or **New food**), set how much, and:
+
+* **I ate this** (on by default for today and past days) checks the replacement off. Nutrition totals and Today's log then show what you actually ate: if the original was already checked, its log line is replaced, not added to.
+* For a **repeating** food choose **Just this day** (the series skips the day and a one-day food takes its place) or **This day and every week after** (the old food ends the day before, the new one starts that day). Earlier days, and what was eaten on them, keep the old food.
+* **Undo** puts back the plan *and* the log line.
+
+**Edit** changes a food's name, serving and numbers (your own foods), the portion, the meal, or marks it *eating out*; a checked food's log line follows the edit. **Remove** takes a food off one day (a repeating food: just that day, or this day and every week after). A repeated set can be removed together. **Removing a food you already checked leaves its line in your food log**: you ate it.
+
+### Whole meals
+
+A meal's **More** menu: **Add a saved meal**, **Save this meal** (a name for the foods in it, e.g. *My usual breakfast*, kept with their numbers so later recipe or saved-food changes don't break it), **Repeat this meal** (to other days of this week, on chosen days every week, or every day), **Check off / uncheck every food**, **Remove all foods** (Undo), and **Manage saved meals** (delete one you no longer use, with Undo; days you already added it to are not changed).
+
+### Also in the plan
+
+* **Move**: drag a food onto another day (a long press on a phone), or *Details ▸ Move to another day*. One day of a repeating food moves on its own.
+* A food **eating out** needs no shopping or prep; a food **marked prepped** needs no shopping. A recipe food is *Prepped* when a batch of it with portions left (and still good) covers that day.
 * **Training days** (from your Workout routine schedule) are marked, with a note to plan protein and carbs around them. Nothing limits how much you eat.
-* **Nutrition overview**: pick a day to see planned and logged calories, protein, carbs and fat side by side (plus your target, if you set one), meals done and still to come, and a seven-day chart with a table view. It states differences in plain numbers ("logged is 723 kcal less than planned") and never calls a day "over". If a plan is far under your calorie target it suggests adding food, not removing it.
-* **Ideas** (suggestions, not rules): meals for empty slots from your own recipes (a different one from the last few days, favorites first, protein and carbs on a training day), recipes that are good for recovery (at least 25 g protein and 30 g carbs a serving), and recipes you can cook with what is in your pantry.
+* **Ideas** (suggestions, not rules): foods for empty slots from your own recipes, recipes that are good for recovery (at least 25 g protein and 30 g carbs a serving), and recipes you can cook with what is in your pantry.
 
 ## Recipes
 
@@ -64,7 +117,8 @@ Use-by dates follow general food-safety guidance (USDA FoodSafety.gov): refriger
 
 | | |
 |---|---|
-| **Health overview** | A *Meal prep* card: planned and logged calories today, protein, the next prep session, prepared portions. |
+| **Health overview** | A *Meal prep* card: foods eaten today, planned and eaten calories, protein, the next prep session, prepared portions. |
+| **Today / History (Nutrition)** | Checking a food adds its line to the food log; unchecking removes it. |
 | **Calendar and Day plan** | Prep sessions are Calendar events (Health category). |
 | **Habits** | The three meal habits above. |
 | **Workout** | Training days on the week plan, from your routines. |
@@ -74,7 +128,9 @@ Use-by dates follow general food-safety guidance (USDA FoodSafety.gov): refriger
 | | |
 |---|---|
 | `jarvisNutritionRecipes` | recipes: now with optional `cats`, `favorite`, `prepMin`, `cookMin`, `storage`, `image`, `updatedAt`, and per ingredient `state` and `est`. A recipe saved before is read as it was. The older Foods form keeps these fields when you edit there. |
-| `jarvisGroceryMealPlan` | the week plan: now with optional `skipDates`, `preppedDates`, `macros` (a quick meal's own numbers), `frozen` (numbers of a meal as eaten), `loggedItems`, `fromBatch`, `group`, `updatedAt`. |
+| `jarvisGroceryMealPlan` | the week plan. **Each entry is one food** under a meal: `{ id, type: "single" \| "recurring", date, days[0-6 Sun=0], meal, recipeId \| null, recipeName, servings, isRestaurant, includeInGroceries, completedDates[] }` plus optional `serving`, `foodId` (a saved food), `macros` (per serving, for a food that isn't a recipe), `skipDates`, `preppedDates`, `frozen` (numbers as eaten, by date), `loggedItems` (the food-log line each checked day made), `fromBatch`, `group`, `from` / `until` (the dates a repeating food applies; a replace "from this day on" ends the old entry the day before and starts a new one), `updatedAt`. A plan saved before is read as it was. |
+| `jarvisMealPrepMeals` | saved meals: `{ id, name, meal, foods[], createdAt, updatedAt }` (removed ones are marked, 30 days). Each food is a copy with its numbers. |
+| `jarvisNutritionSavedFoods` | the Foods tab's saved foods. Meal Prep reads it, and saves a New food to it (same name and serving is not saved twice). |
 | `jarvisMealPrepBatches` | `{ id, recipeId, name, preparedOn, portions, remaining, place, useBy, reheat, per, notes, eaten[] }` (removed ones are marked, 30 days, so a delete reaches other devices) |
 | `jarvisMealPrepSessions` | `{ id, kind, title, date, time, durationMin, recipeIds, remind, eventId, taskId, doneAt }` |
 | Calendar event | an ordinary event with `linked: { type: "mealprep", id }`. Tasks made from a session carry `mealPrepId`. |
@@ -82,7 +138,9 @@ Use-by dates follow general food-safety guidance (USDA FoodSafety.gov): refriger
 ## Limits worth knowing
 
 * The typical values are approximate and cover about 50 foods. The calculator and "Estimate" need weights (g, oz, lb) or pieces/spoons for foods the list knows. For anything else type the numbers.
-* A planned meal needs a recipe to add groceries; a quick meal with your own numbers counts toward nutrition but adds nothing to the list.
+* A planned food needs a recipe to add groceries; a food with your own numbers counts toward nutrition but adds nothing to the list.
+* **Eaten means checked.** The overview no longer compares the plan with the whole food log: it compares it with the foods you checked off, and notes when the log has more.
+* Editing or replacing a repeating food "from this day on" keeps the earlier part as its own entry, so it will show as two entries if you look at the raw data.
 * Prepared portions cover planned meals of the *same recipe* only.
 * A meal removed from the plan on one device can come back from another device that still had it (as with the rest of the backup).
 * Pantry amounts are estimates (what you bought, minus what you cooked or ate) and can be corrected any time in the Grocery List or Groceries.
@@ -91,4 +149,4 @@ Use-by dates follow general food-safety guidance (USDA FoodSafety.gov): refriger
 
 ## Where the code is
 
-`js/mealprep-logic.js` (pure rules; tests `functions/test/mealprep-logic.test.js`) · `js/mealprep-foods.js` (typical values) · `js/mealprep-ui.js` (shell, overview, saving, Undo) · `js/mealprep-plan-ui.js`, `-recipes-ui.js`, `-grocery-ui.js`, `-tracker-ui.js` (the four tabs) · `js/nutrition.js` (recipe and food-log API) · `js/groceries.js` (plan, list and pantry API; prepared meals) · `js/habits.js` (`addHabit`) · `js/calendar-ui.js` (one row per session) · `js/health-overview-ui.js` (the card).
+`js/mealprep-logic.js` (pure rules; tests `functions/test/mealprep-logic.test.js`) · `js/mealprep-foods.js` (typical values) · `js/mealprep-ui.js` (shell, overview, saving, Undo) · `js/mealprep-plan-ui.js` (rows, check-off, add / replace / edit, saved meals), `-recipes-ui.js`, `-grocery-ui.js`, `-tracker-ui.js` (the four tabs) · `js/nutrition.js` (recipe, food-log and saved-foods API) · `js/groceries.js` (plan, list and pantry API; prepared meals) · `js/habits.js` (`addHabit`) · `js/calendar-ui.js` (one row per session) · `js/health-overview-ui.js` (the card).

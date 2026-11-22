@@ -321,3 +321,110 @@ test("dates: weeks start on Monday", () => {
   assert.deepEqual(M.weekDates("2026-11-16").slice(-1), ["2026-11-22"]);
   assert.equal(M.isDate("2026-02-30"), false);
 });
+
+/* ---------------- foods: repeat, replace, edit, remove, saved meals ---------------- */
+
+const idGen = () => { let n = 0; return () => "n" + (++n); };
+const banana = L_plain();
+function L_plain() { return M.plainFood({ name: "Banana", serving: "1 medium", calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }); }
+const food = (id, o) => Object.assign({ id, type: "single", date: "2026-11-18", meal: "breakfast", recipeId: null, recipeName: "Banana", servings: 1, macros: { calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }, completedDates: [], createdAt: 1 }, o || {});
+
+test("plain foods: only the numbers you gave are kept; nothing is invented", () => {
+  assert.deepEqual(banana, { recipeId: null, recipeName: "Banana", servings: 1, serving: "1 medium", macros: { calories: 105, protein: 1.3, carbs: 27, fat: 0.4 } });
+  assert.equal(M.plainFood({ name: "Coffee" }).macros, null, "a food with no numbers has none");
+  assert.deepEqual(M.plainFood({ name: "Rice", servings: 2, calories: 200, foodId: "sf1" }).macros, { calories: 200, protein: 0, carbs: 0, fat: 0 });
+  assert.equal(M.plainFood({ name: "Rice", foodId: "sf1" }).foodId, "sf1");
+  assert.deepEqual(M.recipeFood({ id: "r1", name: "Bowl" }, 1.5), { recipeId: "r1", recipeName: "Bowl", servings: 1.5, macros: null, foodId: null, serving: "" });
+});
+
+test("a repeating food runs from its first day to its last, so it carries into next week by itself", () => {
+  const rec = M.makeRecurring(food("x", { meal: "lunch" }), [5, 1, 3, 3], "2026-11-16", "r1", "", 9);
+  assert.deepEqual([rec.type, rec.days, rec.from, rec.date], ["recurring", [1, 3, 5], "2026-11-16", null]);
+  assert.deepEqual(M.occurrences([rec], "2026-11-16", "2026-11-22").map((o) => o.date), ["2026-11-16", "2026-11-18", "2026-11-20"]);
+  assert.deepEqual(M.occurrences([rec], "2026-11-23", "2026-11-29").map((o) => o.date), ["2026-11-23", "2026-11-25", "2026-11-27"], "the next week has it without anyone copying it");
+  assert.deepEqual(M.occurrences([rec], "2026-11-09", "2026-11-15"), [], "and weeks before its first day do not");
+  const ended = Object.assign({}, rec, { until: "2026-11-18" });
+  assert.deepEqual(M.occurrences([ended], "2026-11-16", "2026-11-29").map((o) => o.date), ["2026-11-16", "2026-11-18"], "until ends it");
+  assert.deepEqual(M.occurrences([M.makeRecurring(food("y"), [0, 1, 2, 3, 4, 5, 6], "2026-11-16", "r2", "", 9)], "2026-11-16", "2026-11-22").length, 7, "every day");
+});
+
+test("replacing a single food changes it in place; eaten state is the caller's to undo first", () => {
+  const plan = [food("a"), food("b", { recipeName: "Oats", meal: "breakfast" })];
+  const r = M.changeFood(plan, "a", "2026-11-18", "day", M.plainFood({ name: "Toast", calories: 120, protein: 4 }), "new", 5);
+  assert.equal(r.id, "a"); assert.equal(r.plan.length, 2);
+  const a = r.plan.find((e) => e.id === "a");
+  assert.deepEqual([a.recipeName, a.macros.calories, a.serving, a.updatedAt], ["Toast", 120, undefined, 5], "new food, the old portion label is gone");
+  assert.equal(plan[0].recipeName, "Banana", "the list that was given is not changed");
+  assert.equal(M.changeFood(plan, "zzz", "2026-11-18", "day", {}, "n", 1).error, "That food isn't there any more.");
+  const toRecipe = M.changeFood(plan, "a", "2026-11-18", "day", M.recipeFood({ id: "r1", name: "Bowl" }, 1), "n", 6).plan.find((e) => e.id === "a");
+  assert.deepEqual([toRecipe.recipeId, toRecipe.macros, toRecipe.foodId], ["r1", undefined, undefined], "a recipe replaces the food's own numbers");
+});
+
+test("replacing one day of a repeating food leaves the rest of the week alone", () => {
+  const rec = M.makeRecurring(food("x"), [1, 2, 3], "2026-11-01", "r1", "", 1);
+  const r = M.changeFood([rec], "r1", "2026-11-18", "day", M.plainFood({ name: "Eggs", calories: 150, protein: 12 }), "n1", 7);
+  const series = r.plan.find((e) => e.id === "r1"), one = r.plan.find((e) => e.id === "n1");
+  assert.deepEqual(series.skipDates, ["2026-11-18"]);
+  assert.deepEqual([one.type, one.date, one.recipeName, one.meal, one.macros.protein, one.from, one.days], ["single", "2026-11-18", "Eggs", "breakfast", 12, undefined, null]);
+  const days = M.occurrences(r.plan, "2026-11-16", "2026-11-29").filter((o) => o.meal === "breakfast").map((o) => o.date + ":" + o.entry.recipeName);
+  assert.deepEqual(days, ["2026-11-16:Banana", "2026-11-17:Banana", "2026-11-18:Eggs", "2026-11-23:Banana", "2026-11-24:Banana", "2026-11-25:Banana"], "only Wednesday the 18th is Eggs");
+});
+
+test("updating the weekly plan from a day on: earlier days keep the old food and what was eaten", () => {
+  let rec = M.makeRecurring(food("x"), [1, 2, 3], "2026-11-01", "r1", "", 1);
+  rec = Object.assign({}, rec, { completedDates: ["2026-11-16", "2026-11-18"], frozen: { "2026-11-16": { calories: 105, protein: 1.3, carbs: 27, fat: 0.4, name: "Banana" }, "2026-11-18": { calories: 105, protein: 1.3, carbs: 27, fat: 0.4 } }, loggedItems: { "2026-11-16": "f1", "2026-11-18": "f2" }, skipDates: ["2026-11-24"] });
+  const r = M.changeFood([rec], "r1", "2026-11-18", "series", M.plainFood({ name: "Eggs", calories: 150, protein: 12 }), "n1", 7);
+  assert.equal(r.id, "n1");
+  const old = r.plan.find((e) => e.id === "r1"), neu = r.plan.find((e) => e.id === "n1");
+  assert.deepEqual([old.until, old.completedDates, Object.keys(old.loggedItems)], ["2026-11-17", ["2026-11-16"], ["2026-11-16"]], "the old part ends the day before and keeps Monday's tick");
+  assert.deepEqual([neu.from, neu.recipeName, neu.completedDates, Object.keys(neu.loggedItems), neu.skipDates, neu.until], ["2026-11-18", "Eggs", ["2026-11-18"], ["2026-11-18"], ["2026-11-24"], undefined], "the new part starts that day and takes the later ticks and skips");
+  const oc = M.occurrences(r.plan, "2026-11-16", "2026-11-26").map((o) => o.date + ":" + o.entry.recipeName);
+  assert.deepEqual(oc, ["2026-11-16:Banana", "2026-11-17:Banana", "2026-11-18:Eggs", "2026-11-23:Eggs", "2026-11-25:Eggs"], "Monday and Tuesday keep Banana, then Eggs (the 24th stays skipped)");
+  // starting on or before its first day there is nothing earlier to keep: the entry itself changes
+  const first = M.changeFood([rec], "r1", "2026-11-01", "series", M.plainFood({ name: "Eggs" }), "n2", 8);
+  assert.equal(first.id, "r1"); assert.equal(first.plan.length, 1); assert.equal(first.plan[0].recipeName, "Eggs");
+});
+
+test("removing a food: one day, from a day on, or the whole thing", () => {
+  const rec = M.makeRecurring(food("x"), [1, 3], "2026-11-01", "r1", "", 1);
+  const one = M.removeFood([rec], "r1", "2026-11-18", "day", 5);
+  assert.deepEqual(one[0].skipDates, ["2026-11-18"]);
+  const fwd = M.removeFood([rec], "r1", "2026-11-18", "series", 5);
+  assert.equal(fwd[0].until, "2026-11-17");
+  assert.deepEqual(M.occurrences(fwd, "2026-11-16", "2026-11-29").map((o) => o.date), ["2026-11-16"], "Monday stays, nothing after");
+  assert.equal(M.removeFood([rec], "r1", "2026-11-01", "series", 5).length, 0, "from its first day there is nothing left to keep");
+  assert.equal(M.removeFood([food("a"), food("b")], "a", "2026-11-18", "day", 5).length, 1, "a food made for one day is simply removed");
+});
+
+test("last week's foods can be put on this week without doubling up", () => {
+  const plan = [food("a", { date: "2026-11-16" }), food("b", { date: "2026-11-18", meal: "dinner", recipeName: "Pasta", completedDates: ["2026-11-18"] }), M.makeRecurring(food("r"), [1], "2026-11-01", "rec", "", 1), food("c", { date: "2026-11-23" })];
+  const out = M.copyWeek(plan, "2026-11-16", "2026-11-23", idGen(), 9);
+  assert.equal(out.added, 1, "Monday's banana is already there, the recurring one is not copied (it repeats by itself)");
+  const p = out.plan.find((e) => e.recipeName === "Pasta" && e.date === "2026-11-25");
+  assert.ok(p); assert.deepEqual(p.completedDates, [], "a copy starts un-eaten");
+  assert.equal(M.copyWeek(out.plan, "2026-11-16", "2026-11-23", idGen(), 9).added, 0, "doing it twice adds nothing");
+});
+
+test("a day's progress: foods eaten, meals done, planned against eaten (only checked foods count as eaten)", () => {
+  const plan = [food("a"), food("b", { recipeName: "Oats", macros: { calories: 300, protein: 10, carbs: 50, fat: 5 } }), food("c", { meal: "lunch", recipeName: "Soup", macros: { calories: 200, protein: 8, carbs: 20, fat: 6 } }), food("d", { meal: "lunch", recipeName: "Coffee", macros: null })];
+  const eaten = M.markEaten(M.markEaten(plan, "a", "2026-11-18", { nutrition: { calories: 105, protein: 1.3, carbs: 27, fat: 0.4 }, name: "Banana" }, 2), "b", "2026-11-18", { nutrition: { calories: 300, protein: 10, carbs: 50, fat: 5 } }, 2);
+  const d = M.dayPlan(eaten, [], "2026-11-18");
+  assert.deepEqual([d.eaten, d.items.length, d.mealsDone, d.mealsPlanned], [2, 4, 1, 2], "2 of 4 foods; breakfast is done, lunch is not");
+  assert.deepEqual(d.meals.breakfast, { total: 2, eaten: 2, done: true }); assert.deepEqual(d.meals.lunch, { total: 2, eaten: 0, done: false });
+  assert.equal(d.totals.calories, 605, "planned"); assert.equal(d.eatenTotals.calories, 405, "eaten");
+  assert.equal(d.withoutNumbers, 1);
+  assert.equal(M.dayPlan(plan, [], "2026-11-18").eatenTotals.calories, 0, "nothing counts as eaten until it is checked");
+});
+
+test("saved meals: copied as they are, and put on any day as their own foods", () => {
+  const entries = [food("a", { meal: "breakfast" }), food("b", { meal: "breakfast", recipeName: "Oats", recipeId: "r_oats", macros: undefined })];
+  const s = M.savedMealFrom("  My usual  ", "breakfast", entries, "sm1", 5);
+  assert.deepEqual([s.name, s.meal, s.foods.length], ["My usual", "breakfast", 2]);
+  assert.ok(!("meal" in s.foods[0]) && !("completedDates" in s.foods[0]) && !("id" in s.foods[0]), "only what the food is");
+  entries[0].macros.calories = 9999; assert.equal(s.foods[0].macros.calories, 105, "a copy");
+  const made = M.entriesFromSavedMeal(s, "lunch", "2026-11-20", idGen(), 6);
+  assert.deepEqual(made.map((e) => [e.meal, e.date, e.recipeName, e.type]), [["lunch", "2026-11-20", "Banana", "single"], ["lunch", "2026-11-20", "Oats", "single"]], "each food becomes its own entry, in the meal you chose");
+  assert.equal(made[1].recipeId, "r_oats"); assert.deepEqual(made[0].completedDates, []);
+  assert.equal(new Set(made.map((e) => e.id)).size, 2);
+  assert.deepEqual(M.entriesFromSavedMeal(null, "lunch", "2026-11-20", idGen(), 1), []);
+});

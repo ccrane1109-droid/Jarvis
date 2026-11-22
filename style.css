@@ -5575,23 +5575,65 @@ details[open] > .mp-card-sum::after, details[open] > .mp-day-sum::after, details
 .mp-day-tot { font-size: 13px; color: var(--text-dim); }
 .mp-day-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
 .mp-train { margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--purple-dim); color: #d9c9ff; font-size: 13px; line-height: 1.45; }
-.mp-group-h { display: flex; align-items: center; justify-content: space-between; }
-.mp-group-h h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.mp-group { display: flex; flex-direction: column; gap: 6px; }
+.mp-group-h { display: flex; align-items: center; flex-wrap: wrap; gap: 0 10px; }
+.mp-group-h h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+.mp-group-prog { font-size: 12px; color: var(--text-dim); }
+.mp-group-prog.is-done { color: var(--green); }
+.mp-group-act { margin-left: auto; display: flex; }
 .mp-add { min-height: 44px; padding: 0 10px; border: 0; background: transparent; color: var(--accent-hover); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-.mp-empty { margin: 0 0 4px; font-size: 13px; color: var(--text-faint); }
-.mp-meal { position: relative; background: var(--bg-elevated); border: 1px solid var(--card-border); border-left: 4px solid var(--text-faint); border-radius: 10px; margin-bottom: 8px; }
-.mp-meal.is-eaten { border-left-color: var(--green); }
-.mp-meal.is-prepped { border-left-color: #5cc98f; }
-.mp-meal.is-to-prep { border-left-color: var(--yellow); }
-.mp-meal.is-dragging { opacity: 0.4; }
-.mp-meal-sum { position: relative; display: block; min-height: 56px; padding: 10px 40px 10px 12px; touch-action: manipulation; }
-.mp-meal-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.mp-meal-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
-.mp-meal.is-eaten .mp-meal-name { text-decoration: line-through; color: var(--text-dim); }
+.mp-empty { margin: 0 0 4px; font-size: 13px; color: #9aa6c4; }
+.mp-food { position: relative; background: var(--bg-elevated); border: 1px solid var(--card-border); border-left: 4px solid var(--text-faint); border-radius: 10px; }
+.mp-food.is-done { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, var(--bg-elevated)); }
+.mp-food.is-prepped { border-left-color: #5cc98f; }
+.mp-food.is-to-prep { border-left-color: var(--yellow); }
+.mp-food.is-done.is-prepped, .mp-food.is-done.is-to-prep { border-left-color: var(--green); }
+.mp-food.is-dragging { opacity: 0.4; }
+.mp-food-top { display: flex; align-items: stretch; }
+.mp-food-check { flex: none; width: 52px; min-height: 56px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.mp-food-check input { width: 26px; height: 26px; margin: 0; accent-color: var(--green); cursor: pointer; }
+.mp-food-check input:disabled { cursor: not-allowed; opacity: 0.5; }
+.mp-food-check input:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 3px; border-radius: 4px; }
+.mp-food-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 8px 0; touch-action: manipulation; }
+.mp-food-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.mp-food.is-done .mp-food-name { text-decoration: line-through; color: var(--text-dim); }
+.mp-food-sub { font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
 .mp-rep { color: var(--text-dim); }
-.mp-meal-sub { display: block; margin-top: 3px; font-size: 13px; color: var(--text-dim); }
-.mp-meal-body { padding: 0 12px 12px; }
+.mp-food-btns { display: flex; gap: 6px; padding: 0 8px 6px; }
+.mp-fb { flex: 1; min-width: 0; min-height: 44px; padding: 0 6px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg); color: var(--accent-hover); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.mp-fb-del { color: #ff8a8a; }
+.mp-fb:focus-visible, .mp-food-more > summary:focus-visible, .mp-seg-b:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
+.mp-food-more > summary { position: relative; list-style: none; cursor: pointer; display: flex; align-items: center; min-height: 40px; padding: 0 36px 0 14px; font-size: 13px; color: var(--text-dim); }
+.mp-food-more > summary::-webkit-details-marker { display: none; }
+.mp-food-more > summary::after { content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; margin-top: -5px; border-right: 2px solid var(--text-dim); border-bottom: 2px solid var(--text-dim); transform: rotate(45deg); }
+.mp-food-more[open] > summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.mp-meal-body { padding: 0 14px 12px; }
 .mp-meal-line { margin: 4px 0; font-size: 14px; line-height: 1.45; }
+.mp-day.is-complete { border-color: var(--green); }
+.mp-day-prog { font-size: 13px; }
+.mp-day-prog strong { color: var(--text); }
+.mp-prog { display: block; height: 6px; margin: 2px 0; border-radius: 3px; background: var(--bg); border: 1px solid var(--card-border); overflow: hidden; }
+.mp-prog > span { display: block; height: 100%; background: var(--green); }
+.mp-toolbar .btn-primary { min-height: 44px; }
+/* picking a food (Add / Replace) */
+.mp-seg { display: flex; gap: 4px; padding: 4px; margin-bottom: 10px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+.mp-seg-b { flex: 1; min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--text-dim); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.mp-seg-b.is-on { background: var(--accent-dim); color: var(--text); }
+.mp-pick-q { width: 100%; min-height: 44px; font-size: 16px; }
+.mp-picklist { display: flex; flex-direction: column; gap: 6px; max-height: 34vh; overflow-y: auto; margin: 8px 0; padding: 2px; }
+.mp-pick { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; min-height: 52px; padding: 8px 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg-elevated); cursor: pointer; }
+.mp-pick input { grid-row: 1 / span 2; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.mp-pick-t { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.mp-pick-s { grid-column: 2; font-size: 12px; color: var(--text-dim); overflow-wrap: anywhere; }
+.mp-pick:has(input:checked) { border-color: var(--accent); background: var(--accent-dim); }
+.mp-pick:focus-within { outline: 2px solid var(--accent-hover); outline-offset: 1px; }
+.mp-pick-none, .mp-pick-nomatch { margin: 4px 2px; font-size: 14px; }
+.mp-saved-row { cursor: default; grid-template-columns: minmax(0, 1fr) auto; }
+.mp-saved-row .mp-pick-t { grid-column: 1; }
+.mp-saved-row .mp-pick-s { grid-column: 1; }
+.mp-saved-row .mp-fb { grid-column: 2; grid-row: 1 / span 2; flex: none; min-width: 76px; }
+.mp-instead { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.mp-eatout { margin-top: 4px; }
 .mp-ghost { position: fixed; z-index: 400; max-width: 220px; padding: 8px 12px; border-radius: 10px; background: var(--accent-dim); border: 1px solid var(--accent); color: var(--text); font-size: 14px; pointer-events: none; box-shadow: var(--shadow); }
 
 /* planned vs logged */

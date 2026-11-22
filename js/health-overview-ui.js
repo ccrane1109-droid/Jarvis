@@ -108,9 +108,9 @@
       const o = M && M.overview ? M.overview() : null;
       if (!o) body = '<p class="ov-meta">Meal prep details are not available right now.</p>';
       else {
-        body = o.meals ? '<p class="ov-main">' + o.eaten + ' of ' + o.meals + ' planned ' + plural(o.meals, "meal") + ' eaten</p>' : '<p class="ov-main">No meals planned today</p>';
+        body = o.meals ? '<p class="ov-main">' + o.eaten + ' of ' + o.meals + ' planned ' + plural(o.meals, "food") + ' eaten</p>' : '<p class="ov-main">No meals planned today</p>';
         if (o.meals) {
-          body += '<dl class="ov-facts ov-facts-3"><div><dt>Planned</dt><dd>' + num(o.planned.calories) + ' cal</dd></div><div><dt>Logged</dt><dd>' + num(o.logged ? o.logged.calories : 0) + ' cal</dd></div><div><dt>Protein</dt><dd>' + num(Math.round(o.planned.protein)) + ' g planned</dd></div></dl>' +
+          body += '<dl class="ov-facts ov-facts-3"><div><dt>Planned</dt><dd>' + num(o.planned.calories) + ' cal</dd></div><div><dt>Eaten</dt><dd>' + num(o.eatenTotals ? o.eatenTotals.calories : 0) + ' cal</dd></div><div><dt>Protein</dt><dd>' + num(Math.round(o.planned.protein)) + ' g planned</dd></div></dl>' +
             (o.estimated ? '<p class="ov-meta">Some planned numbers are estimates.</p>' : '');
         }
         body += '<dl class="ov-facts"><div><dt>Next prep</dt><dd>' + (o.next ? esc(({ shopping: "Grocery shopping", cooking: "Cooking", portioning: "Portioning", reminder: "Reminder" })[o.next.kind] || "Prep") + ' &middot; ' + esc(prettyDate(o.next.date)) : 'None scheduled') + '</dd></div>' +

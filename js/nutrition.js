@@ -217,7 +217,7 @@
   function saveGoals() { window.JarvisCore.saveJSON(LS_GOALS, goals); }
   function nutritionChanged() { try { document.dispatchEvent(new CustomEvent("jarvis-nutrition-changed")); } catch (e) { /* nothing listens in an old browser */ } }
   function saveLog() { const ok = window.JarvisCore.saveJSON(LS_LOG, log); if (ok) nutritionChanged(); return ok; }
-  function saveSavedFoods() { window.JarvisCore.saveJSON(LS_SAVED, savedFoods); }
+  function saveSavedFoods() { return window.JarvisCore.saveJSON(LS_SAVED, savedFoods); }
   function saveRecipes() { const ok = window.JarvisCore.saveJSON(LS_RECIPES, recipes); if (ok) nutritionChanged(); return ok; }
 
   // Persists the calculator's inputs plus its last computed result together,
@@ -2805,6 +2805,23 @@
     renderFoodLog(); renderDashboard();
     return { ok: true, id: item.id };
   }
+  // The foods you saved (Foods tab). Meal Prep searches them and can save a new one. A food with the same name and serving is not saved twice.
+  function getSavedFoodsCopy() { return savedFoods.map(copyOf); }
+  function saveFoodRecord(o) {
+    const name = String(o && o.name || "").replace(/\s+/g, " ").trim();
+    if (!name) return { ok: false, error: "Give the food a name." };
+    const serving = String(o.serving || "").trim().slice(0, 40);
+    const same = savedFoods.filter(function (f) { return String(f.name).toLowerCase() === name.toLowerCase() && String(f.serving || "").toLowerCase() === serving.toLowerCase(); })[0];
+    if (same) return { ok: true, food: copyOf(same), existed: true };
+    const item = sanitizeFoodItem({ name: name, serving: serving, calories: o.calories, protein: o.protein, carbs: o.carbs, fat: o.fat });
+    const prev = savedFoods;
+    savedFoods = savedFoods.concat([item]);
+    if (!saveSavedFoods()) { savedFoods = prev; return { ok: false, error: REFUSED }; }
+    renderSavedFoods();
+    return { ok: true, food: copyOf(item), existed: false };
+  }
+  // Is this line still in the food log? (so a plan can tell whether what it logged is still there)
+  function hasMealItem(date, meal, id) { return (peekDay(date).meals[meal] || []).some(function (x) { return x.id === id; }); }
   function removeMealItem(date, meal, id) {
     const list = peekDay(date).meals[meal] || [];
     if (!list.some(function (x) { return x.id === id; })) return { ok: true, gone: true };       // already removed by hand
@@ -2818,6 +2835,7 @@
   window.JarvisNutrition = {
     init: init, getSummary: getSummary, getToday: getToday, onSubTabChange: onSubTabChange,
     recipes: { all: getRecipesCopy, save: saveRecipeRecord, remove: deleteRecipeRecord },
-    log: { totals: dayTotalsFor, targets: getTargets, add: logMealItem, remove: removeMealItem }
+    savedFoods: { all: getSavedFoodsCopy, save: saveFoodRecord },
+    log: { totals: dayTotalsFor, targets: getTargets, add: logMealItem, remove: removeMealItem, has: hasMealItem }
   };
 })();
