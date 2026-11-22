@@ -42,7 +42,7 @@
     "jarvisDiscipline", "jarvisWakeCheck", "jarvisWorkoutPrefs", "jarvisInsightPrefs", "jarvisExerciseExtras",
     "jarvisGroceryList", "jarvisGroceryMealPlan", "jarvisGroceryPantry", "jarvisGroceryPrefs",
     // Meal Prep: prepared-food batches, scheduled prep sessions, and its settings (recipes, the week plan and the grocery list are above).
-    "jarvisMealPrepBatches", "jarvisMealPrepSessions", "jarvisMealPrepPrefs",
+    "jarvisMealPrepBatches", "jarvisMealPrepSessions", "jarvisMealPrepPrefs", "jarvisMealPrepMeals",
     "jarvisFormCheckHistory",
     "jarvisCalendarEvents", "jarvisCalendarSettings",
     // The Learning & Research Hub: books, research projects, notes, actions and weekly reviews (each a list of records with ids).
@@ -310,7 +310,7 @@
     jarvisNutritionSavedFoods: mergeById, jarvisNutritionRecipes: mergeById, jarvisNutritionCheckins: mergeById,
     jarvisTasks: mergeById, jarvisGoals: mergeById, jarvisGroceryList: mergeById, jarvisGroceryMealPlan: mergeById, jarvisFormCheckHistory: mergeById,
     // each carries updatedAt (the newer wins) and deletedAt tombstones, so a delete reaches the other device
-    jarvisMealPrepBatches: mergeById, jarvisMealPrepSessions: mergeById, jarvisMealPrepPrefs: mergeNewest,
+    jarvisMealPrepBatches: mergeById, jarvisMealPrepSessions: mergeById, jarvisMealPrepMeals: mergeById, jarvisMealPrepPrefs: mergeNewest,
     jarvisCalendarEvents: mergeById, jarvisCalendarSettings: mergeNewest,
     // deleted records stay as tombstones (deletedAt, with a newer updatedAt) for 30 days so a deletion reaches the other device
     jarvisLearnBooks: mergeById, jarvisLearnResearch: mergeById, jarvisLearnNotes: mergeById, jarvisLearnActions: mergeById, jarvisLearnReviews: mergeById,

@@ -8,6 +8,7 @@
      what is new is saved here, in three keys that are in the cloud backup:
        jarvisMealPrepBatches   prepared food: portions left, where it is kept, use-by date
        jarvisMealPrepSessions  shopping / cooking / portioning / reminder times (each is also ONE Calendar event)
+       jarvisMealPrepMeals     meals you saved to reuse (a name and its foods)
        jarvisMealPrepPrefs     which meal habits you track, the tab you were on
 
    The tabs are in mealprep-plan-ui.js, mealprep-recipes-ui.js, mealprep-grocery-ui.js and mealprep-tracker-ui.js. Each registers
@@ -21,7 +22,7 @@
   "use strict";
 
   const L = window.JarvisMealPrepLogic;
-  const KEYS = { batches: "jarvisMealPrepBatches", sessions: "jarvisMealPrepSessions", prefs: "jarvisMealPrepPrefs" };
+  const KEYS = { batches: "jarvisMealPrepBatches", sessions: "jarvisMealPrepSessions", prefs: "jarvisMealPrepPrefs", meals: "jarvisMealPrepMeals" };
   const TABS = [["plan", "Weekly Plan"], ["recipes", "Recipes"], ["grocery", "Grocery List"], ["tracker", "Prep Tracker"]];
   const UNDO_MS = 9000, TOMBSTONE_MS = 30 * 86400000;
 
@@ -70,7 +71,7 @@
       }
     };
   }
-  const batchStore = makeStore(KEYS.batches), sessionStore = makeStore(KEYS.sessions);
+  const batchStore = makeStore(KEYS.batches), sessionStore = makeStore(KEYS.sessions), mealStore = makeStore(KEYS.meals);
   let prefs = { tab: "plan", habits: {}, updatedAt: 0 };
   function loadPrefs() {
     const v = core().loadJSON(KEYS.prefs, null);
@@ -102,6 +103,7 @@
   }
   // Prepared portions cover planned meals, so the grocery list is brought up to date after any change to them.
   function commitBatches(next) { if (batchStore.replace(next)) { const g = G(); if (g && g.refresh) g.refresh(); return true; } toast("That couldn't be saved. The browser may be full or blocking storage."); return false; }
+  function commitMeals(next) { if (mealStore.replace(next)) return true; toast("That couldn't be saved. The browser may be full or blocking storage."); return false; }
   function commitSessions(next) { if (sessionStore.replace(next)) return true; toast("That couldn't be saved. The browser may be full or blocking storage."); return false; }
 
   /* ---------------- messages ---------------- */
@@ -137,13 +139,13 @@
     const t = today(), day = L.dayPlan(plan(), recipes(), t), lg = logged(t), tg = targets(), ns = nextSession();
     const batches = batchStore.all(), left = L.portionsLeft(batches, t);
     const soon = batches.filter(function (b) { const s = L.batchState(b, t); return s.level === "soon" || s.level === "today" || s.level === "past"; }).length;
-    return { date: t, meals: day.items.length, eaten: day.eaten, planned: day.totals, withoutNumbers: day.withoutNumbers, estimated: day.anyEstimated, logged: lg, targets: tg, next: ns, portions: left, useSoon: soon };
+    return { date: t, meals: day.items.length, eaten: day.eaten, mealsPlanned: day.mealsPlanned, mealsDone: day.mealsDone, planned: day.totals, eatenTotals: day.eatenTotals, withoutNumbers: day.withoutNumbers, estimated: day.anyEstimated, logged: lg, targets: tg, next: ns, portions: left, useSoon: soon };
   }
   function overviewHtml() {
     const o = overview();
     const nextTxt = o.next ? esc(KIND_LABELS[o.next.kind] || "Prep") + '<small>' + esc(sessionWhen(o.next)) + '</small>' : 'None scheduled<small>Plan one in the Prep Tracker</small>';
     return '<section class="card mp-overview" aria-label="Meal prep today">' +
-      '<div class="mp-stat"><span class="mp-stat-k">Today’s meals</span><span class="mp-stat-v">' + (o.meals ? o.eaten + ' of ' + o.meals + ' eaten' : 'None planned') + '</span></div>' +
+      '<div class="mp-stat"><span class="mp-stat-k">Today’s foods</span><span class="mp-stat-v">' + (o.meals ? o.eaten + ' of ' + o.meals + ' eaten' : 'None planned') + (o.meals ? '<small>' + o.mealsDone + ' of ' + o.mealsPlanned + ' ' + plural(o.mealsPlanned, 'meal') + ' done</small>' : '') + '</span></div>' +
       '<div class="mp-stat"><span class="mp-stat-k">Planned protein</span><span class="mp-stat-v">' + (o.meals && o.planned.protein ? num(Math.round(o.planned.protein)) + ' g' : '—') + (o.targets && o.targets.protein > 0 ? '<small>target ' + num(o.targets.protein) + ' g</small>' : '') + '</span></div>' +
       '<div class="mp-stat"><span class="mp-stat-k">Next prep session</span><span class="mp-stat-v">' + nextTxt + '</span></div>' +
       '<div class="mp-stat"><span class="mp-stat-k">Prepared portions</span><span class="mp-stat-v">' + o.portions + ' ' + plural(o.portions, 'portion') + ' left' + (o.useSoon ? '<small>' + o.useSoon + ' to use soon</small>' : '') + '</span></div>' +
@@ -231,7 +233,7 @@
   function init() {
     root = $("mpRoot");
     if (!root || started) return;
-    batchStore.load(); sessionStore.load(); loadPrefs();
+    batchStore.load(); sessionStore.load(); mealStore.load(); loadPrefs();
     ui.tab = panes[prefs.tab] ? prefs.tab : "plan";
     started = true;
     root.addEventListener("click", onClick);
@@ -253,7 +255,7 @@
     kit: {
       L: L, $: $, esc: esc, now: now, today: today, uid: uid, plural: plural, num: num, ui: ui, isOpen: isOpen, openAttr: openAttr,
       N: N, G: G, A: A, recipes: recipes, recipeById: recipeById, plan: plan, routines: routines, logged: logged, targets: targets, commitPlan: commitPlan,
-      batches: batchStore, sessions: sessionStore, commitBatches: commitBatches, commitSessions: commitSessions, prefs: function () { return prefs; }, savePrefs: savePrefs,
+      batches: batchStore, sessions: sessionStore, meals: mealStore, commitBatches: commitBatches, commitSessions: commitSessions, commitMeals: commitMeals, prefs: function () { return prefs; }, savePrefs: savePrefs,
       toast: toast, say: say, undo: undo, hideUndo: hideUndo, render: render, refresh: refresh, setTab: setTab,
       prettyDay: prettyDay, timeLabel: timeLabel, sessionWhen: sessionWhen, nextSession: nextSession, KIND_LABELS: KIND_LABELS,
       suppressClicks: function (ms) { suppressClickUntil = Date.now() + ms; }

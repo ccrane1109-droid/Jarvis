@@ -7,7 +7,11 @@
                     and, optionally: cats[], favorite, prepMin, cookMin, storage { place, notes, reheat }, image, updatedAt.
                     The numbers on an ingredient are for the whole amount of it; per serving is always worked out (sum / servings).
      the week plan  jarvisGroceryMealPlan   { id, type: "single" | "recurring", date, days, meal, recipeId, recipeName, servings, isRestaurant,
-                    includeInGroceries, completedDates }  and, optionally: skipDates, preppedDates, macros, frozen, loggedItems, fromBatch, group, updatedAt.
+                    includeInGroceries, completedDates }  and, optionally: skipDates, preppedDates, macros, frozen, loggedItems, fromBatch, group, updatedAt,
+                    serving, foodId, from, until.
+                    Each entry is ONE FOOD under a meal (a recipe's serving, or a food with its own numbers). A meal is the foods that share
+                    a day and a slot. "recurring" entries repeat every week on their weekdays, between from and until (both optional): that is
+                    what carries a regular food into next week without anyone copying it.
      the food log   jarvisNutritionLog       (what you actually ate; Meal Prep only reads it, and adds a line when you tap "Eaten")
      batches        jarvisMealPrepBatches    cooked food you prepared ahead: portions, where it is kept, use-by date.
      sessions       jarvisMealPrepSessions   shopping / cooking / portioning / reminder times, each one also ONE Calendar event.
@@ -265,7 +269,7 @@
       if (e.type === "recurring") {
         const days = Array.isArray(e.days) ? e.days : [];
         for (let d = from; d <= to; d = addDays(d, 1)) {
-          if (days.indexOf(weekday(d)) !== -1 && (e.skipDates || []).indexOf(d) === -1) out.push({ key: e.id + "@" + d, planId: e.id, date: d, meal: e.meal, entry: e, recurring: true });
+          if (days.indexOf(weekday(d)) !== -1 && (e.skipDates || []).indexOf(d) === -1 && (!isDate(e.from) || d >= e.from) && (!isDate(e.until) || d <= e.until)) out.push({ key: e.id + "@" + d, planId: e.id, date: d, meal: e.meal, entry: e, recurring: true });
         }
       } else if (isDate(e.date) && e.date >= from && e.date <= to) {
         out.push({ key: e.id + "@" + e.date, planId: e.id, date: e.date, meal: e.meal, entry: e, recurring: false });
@@ -298,12 +302,16 @@
       const n = entryNutrition(o.entry, recipes, o.date);
       return Object.assign({}, o, { nutrition: n.nutrition, source: n.source, frozen: n.frozen, eaten: eatenOn(o.entry, o.date), recipe: recipeOf(o.entry, recipes) });
     });
-    let t = zero(), withNumbers = 0, without = 0, eaten = 0, eatenCal = 0;
+    let t = zero(), e = zero(), withNumbers = 0, without = 0, eaten = 0;
     items.forEach(function (it) {
       if (it.eaten) eaten++;
-      if (it.nutrition) { t = addMacros(t, it.nutrition); withNumbers++; if (it.eaten) eatenCal += it.nutrition.calories; } else without++;
+      if (it.nutrition) { t = addMacros(t, it.nutrition); withNumbers++; if (it.eaten) e = addMacros(e, it.nutrition); } else without++;
     });
-    return { date: date, items: items, totals: roundMacros(t), withNumbers: withNumbers, withoutNumbers: without, eaten: eaten, upcoming: items.length - eaten, anyEstimated: items.some(function (i) { return i.nutrition && (i.source === "estimated" || i.source === "mixed"); }) };
+    // each meal: how many of its foods are eaten, and whether the whole meal is done (it has foods and all are eaten)
+    const meals = {};
+    MEALS.forEach(function (m) { const f = items.filter(function (i) { return i.meal === m; }); meals[m] = { total: f.length, eaten: f.filter(function (i) { return i.eaten; }).length, done: f.length > 0 && f.every(function (i) { return i.eaten; }) }; });
+    return { date: date, items: items, totals: roundMacros(t), eatenTotals: roundMacros(e), meals: meals, mealsDone: MEALS.filter(function (m) { return meals[m].done; }).length, mealsPlanned: MEALS.filter(function (m) { return meals[m].total > 0; }).length,
+      withNumbers: withNumbers, withoutNumbers: without, eaten: eaten, upcoming: items.length - eaten, anyEstimated: items.some(function (i) { return i.nutrition && (i.source === "estimated" || i.source === "mixed"); }) };
   }
   // Planned against logged for one day. No "over" and no "under": two numbers and the plain difference, so it reads as information.
   function compare(planned, logged) {
@@ -388,6 +396,121 @@
       o.frozen = Object.assign({}, x.frozen || {}); o.loggedItems = Object.assign({}, x.loggedItems || {}); o.fromBatch = Object.assign({}, x.fromBatch || {});
       delete o.frozen[date]; delete o.loggedItems[date]; delete o.fromBatch[date];
       return o;
+    });
+  }
+
+
+  /* ---------------- foods: changing, replacing and repeating them ---------------- */
+
+  // What identifies the food an entry stands for (not its day or its eaten state).
+  const FOOD_KEYS = ["meal", "recipeId", "recipeName", "servings", "serving", "foodId", "macros", "isRestaurant"];
+  function foodOf(entry) {
+    const o = {};
+    FOOD_KEYS.forEach(function (k) { if (entry && entry[k] !== undefined && entry[k] !== null && !(k === "recipeId" && !entry[k])) o[k] = clone(entry[k]); });
+    return o;
+  }
+  // The food a plain food (not a recipe) is: name, how much, and its own numbers per serving (any left out stay out, nothing is invented).
+  function plainFood(o) {
+    const f = { recipeId: null, recipeName: oneLine(o.name, 80), servings: num(o.servings) || 1 };
+    if (oneLine(o.serving, 40)) f.serving = oneLine(o.serving, 40);
+    if (o.foodId) f.foodId = String(o.foodId).slice(0, 80);
+    const m = { calories: num(o.calories), protein: num(o.protein), carbs: num(o.carbs), fat: num(o.fat) };
+    if (MACROS.some(function (k) { return m[k]; })) f.macros = m; else f.macros = null;
+    return f;
+  }
+  function recipeFood(recipe, servings) { return { recipeId: recipe.id, recipeName: recipe.name, servings: num(servings) || 1, macros: null, foodId: null, serving: "" }; }
+
+  // The per-date state of an entry (eaten, prepped, skipped, what was logged) split at a date: before it and from it on.
+  const DATE_LISTS = ["completedDates", "preppedDates", "skipDates"], DATE_MAPS = ["frozen", "loggedItems", "fromBatch"];
+  function splitState(e, date) {
+    const before = {}, after = {};
+    DATE_LISTS.forEach(function (k) { const l = Array.isArray(e[k]) ? e[k] : []; before[k] = l.filter(function (d) { return d < date; }); after[k] = l.filter(function (d) { return d >= date; }); });
+    DATE_MAPS.forEach(function (k) { const m = e[k] && typeof e[k] === "object" ? e[k] : {}; before[k] = {}; after[k] = {}; Object.keys(m).forEach(function (d) { (d < date ? before : after)[k][d] = m[d]; }); });
+    return { before: before, after: after };
+  }
+  // A repeating food, from one day on. The earlier days keep the old food (and what you ate on them); the new part is its own entry.
+  // -> { plan, id, whole } : whole is true when the series starts on or after that day, so the entry itself is the one to change.
+  function splitSeries(plan, id, date, newId, now) {
+    const e = (plan || []).filter(function (x) { return x && x.id === id; })[0];
+    if (!e || e.type !== "recurring") return { plan: plan, id: id, whole: true };
+    if (isDate(e.from) && date <= e.from) return { plan: plan, id: id, whole: true };
+    const parts = splitState(e, date);
+    const old = Object.assign({}, e, parts.before, { until: addDays(date, -1), updatedAt: now });
+    const fresh = Object.assign({}, clone(e), parts.after, { id: newId, from: date, createdAt: now, updatedAt: now });
+    delete fresh.group;
+    return { plan: plan.map(function (x) { return x.id === id ? old : x; }).concat([fresh]), id: newId, whole: false };
+  }
+  function applyFood(e, fields, now) {
+    const o = Object.assign({}, e, fields, { updatedAt: now });
+    if (fields.macros === null || (fields.macros && !MACROS.some(function (k) { return num(fields.macros[k]); }))) delete o.macros;
+    ["foodId", "serving"].forEach(function (k) { if (fields[k] === null || fields[k] === "") delete o[k]; });
+    if (!o.recipeId) o.recipeId = null;
+    return o;
+  }
+  // Change what a food is (replace it, or edit its name, numbers, portion or meal).
+  // scope: "day" (only that day) or "series" (that day and every week after). A food made for one day changes in place either way.
+  // -> { plan, id } the entry that now holds the food on that date, or { plan, error }
+  function changeFood(plan, id, date, scope, fields, newId, now) {
+    const e = (plan || []).filter(function (x) { return x && x.id === id; })[0];
+    if (!e) return { plan: plan, error: "That food isn't there any more." };
+    if (e.type !== "recurring") return { plan: plan.map(function (x) { return x.id === id ? applyFood(x, fields, now) : x; }), id: id };
+    if (scope === "series") {
+      const sp = splitSeries(plan, id, date, newId, now);
+      return { plan: sp.plan.map(function (x) { return x.id === sp.id ? applyFood(x, fields, now) : x; }), id: sp.id };
+    }
+    const base = clone(e);
+    ["from", "until", "group", "frozen", "loggedItems", "fromBatch"].forEach(function (k) { delete base[k]; });
+    const single = applyFood(Object.assign(base, { id: newId, type: "single", date: date, days: null, completedDates: [], preppedDates: [], skipDates: [], loggedItems: {}, frozen: {}, fromBatch: {}, createdAt: now }), fields, now);
+    const skipped = plan.map(function (x) { return x.id === id ? Object.assign({}, x, { skipDates: (x.skipDates || []).filter(function (d) { return d !== date; }).concat([date]), updatedAt: now }) : x; });
+    return { plan: skipped.concat([single]), id: newId };
+  }
+  // Take a food off one day, or off that day and every week after (what was eaten before stays on the earlier days).
+  function removeFood(plan, id, date, scope, now) {
+    const e = (plan || []).filter(function (x) { return x && x.id === id; })[0];
+    if (!e) return plan;
+    if (e.type !== "recurring") return plan.filter(function (x) { return x.id !== id; });
+    if (scope === "series") {
+      if (isDate(e.from) && date <= e.from) return plan.filter(function (x) { return x.id !== id; });
+      return plan.map(function (x) { return x.id === id ? Object.assign({}, x, { until: addDays(date, -1), updatedAt: now }) : x; });
+    }
+    return removeOccurrence(plan, id, date, now);
+  }
+  // A food that repeats every week on some weekdays, starting on a day (it carries into next week by itself).
+  function makeRecurring(base, days, from, id, group, now) {
+    const d = (days || []).map(Number).filter(function (x, i, a) { return x >= 0 && x <= 6 && a.indexOf(x) === i; }).sort(function (a, b) { return a - b; });
+    const o = Object.assign({}, clone(base), { id: id, type: "recurring", days: d, date: null, from: from, createdAt: now, updatedAt: now, completedDates: [], preppedDates: [], skipDates: [], loggedItems: {}, frozen: {}, fromBatch: {} });
+    delete o.until;
+    if (group) o.group = group; else delete o.group;
+    return o;
+  }
+  // Last week's one-off foods put on this week (same weekday). Anything already there (same meal, day and food) is left alone.
+  // -> { plan, added }
+  function copyWeek(plan, fromStart, toStart, makeId, now) {
+    const shift = diffDays(fromStart, toStart), have = {};
+    (plan || []).forEach(function (e) { if (e && e.type !== "recurring" && isDate(e.date)) have[e.date + "|" + e.meal + "|" + (e.recipeId || e.recipeName)] = true; });
+    const add = [];
+    (plan || []).forEach(function (e) {
+      if (!e || e.type === "recurring" || !isDate(e.date) || e.date < fromStart || e.date > addDays(fromStart, 6)) return;
+      const d = addDays(e.date, shift), key = d + "|" + e.meal + "|" + (e.recipeId || e.recipeName);
+      if (have[key]) return;
+      have[key] = true;
+      add.push(Object.assign({}, clone(e), { id: makeId(), date: d, completedDates: [], preppedDates: [], skipDates: [], loggedItems: {}, frozen: {}, fromBatch: {}, createdAt: now, updatedAt: now }));
+      delete add[add.length - 1].group;
+    });
+    return { plan: (plan || []).concat(add), added: add.length };
+  }
+
+  /* ---------------- saved meals ---------------- */
+
+  // A meal you eat often: a name, the meal it belongs to, and its foods. Each food is copied as it is now (numbers included), so a saved
+  // meal keeps working if a recipe or a saved food is edited or deleted later.
+  function savedMealFrom(name, meal, entries, id, now) {
+    return { id: id, name: oneLine(name, 60), meal: MEALS.indexOf(meal) === -1 ? "dinner" : meal, foods: (entries || []).map(foodOf).map(function (f) { delete f.meal; delete f.isRestaurant; return f; }), createdAt: now, updatedAt: now };
+  }
+  // The plan entries a saved meal makes on a date (one per food): [{ ...food, meal, type: single, date }]
+  function entriesFromSavedMeal(saved, meal, date, makeId, now) {
+    return ((saved && saved.foods) || []).map(function (f) {
+      return Object.assign({ id: makeId(), type: "single", date: date, days: null, meal: meal, isRestaurant: false, includeInGroceries: false, completedDates: [], createdAt: now, updatedAt: now }, clone(f), { meal: meal });
     });
   }
 
@@ -592,6 +715,8 @@
     totalMinutes: totalMinutes, searchRecipes: searchRecipes, duplicateRecipe: duplicateRecipe, scaledIngredients: scaledIngredients,
     estimate: estimate, calculate: calculate,
     occurrences: occurrences, eatenOn: eatenOn, recipeOf: recipeOf, entryNutrition: entryNutrition, dayPlan: dayPlan, compare: compare, targetShare: targetShare, status: status,
+    foodOf: foodOf, plainFood: plainFood, recipeFood: recipeFood, splitSeries: splitSeries, changeFood: changeFood, removeFood: removeFood, makeRecurring: makeRecurring, copyWeek: copyWeek,
+    savedMealFrom: savedMealFrom, entriesFromSavedMeal: entriesFromSavedMeal,
     moveOccurrence: moveOccurrence, repeatEntries: repeatEntries, removeEntry: removeEntry, removeOccurrence: removeOccurrence, setPrepped: setPrepped, markEaten: markEaten, unmarkEaten: unmarkEaten,
     useBy: useBy, reheatText: reheatText, batchState: batchState, newBatch: newBatch, availableBatch: availableBatch, portionsLeft: portionsLeft, eatPortions: eatPortions,
     restorePortions: restorePortions, useFromBatches: useFromBatches, moveBatch: moveBatch,

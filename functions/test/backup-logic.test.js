@@ -463,3 +463,16 @@ test("Meal Prep: batches and sessions merge by id (the newer wins, deletions tra
   const plan = { id: "p1", type: "recurring", days: [1], meal: "snacks", recipeName: "Fruit", servings: 1, completedDates: [], skipDates: ["2026-11-16"], preppedDates: [], frozen: {}, createdAt: 1, updatedAt: 4 };
   assert.deepEqual(JSON.parse(B.mergeText("jarvisGroceryMealPlan", JSON.stringify([plan]), JSON.stringify([])).text)[0].skipDates, ["2026-11-16"], "a skipped day on a repeating meal is kept");
 });
+
+test("Meal Prep weekly plan: saved meals are backed up and merge by id; a food's repeat range, eaten state and log links are kept whole", () => {
+  assert.ok(B.BACKUP_KEYS.includes("jarvisMealPrepMeals"), "saved meals are backed up");
+  const meal = (id, name, at, extra) => Object.assign({ id: id, name: name, meal: "breakfast", foods: [{ recipeName: "Toast", servings: 1, macros: { calories: 90, protein: 3, carbs: 17, fat: 1 } }], createdAt: 1, updatedAt: at }, extra || {});
+  const m = JSON.parse(B.mergeText("jarvisMealPrepMeals", JSON.stringify([meal("m1", "My usual", 50), meal("m2", "Phone only", 5)]), JSON.stringify([meal("m1", "Old name", 20), meal("m3", "Computer only", 5)])).text);
+  assert.deepEqual(m.map((x) => [x.id, x.name]), [["m1", "My usual"], ["m2", "Phone only"], ["m3", "Computer only"]], "the newer edit wins; meals only one device has are kept");
+  assert.deepEqual(m[0].foods[0].macros, { calories: 90, protein: 3, carbs: 17, fat: 1 }, "a saved meal keeps its foods and their numbers");
+  const gone = JSON.parse(B.mergeText("jarvisMealPrepMeals", JSON.stringify([meal("m1", "x", 90, { deletedAt: 90 })]), JSON.stringify([meal("m1", "x", 20)])).text);
+  assert.equal(gone[0].deletedAt, 90, "a deleted meal stays deleted on the other device");
+  const food = { id: "p9", type: "recurring", days: [1, 3], date: null, meal: "snacks", recipeId: null, recipeName: "Trail mix", servings: 2, serving: "1 handful", foodId: "f1", macros: { calories: 150, protein: 5, carbs: 15, fat: 8 }, from: "2026-11-20", until: "2026-12-31", completedDates: ["2026-11-25"], frozen: { "2026-11-25": { calories: 300, protein: 10, carbs: 30, fat: 16, source: "entered" } }, loggedItems: { "2026-11-25": "item-1" }, fromBatch: {}, skipDates: [], preppedDates: [], createdAt: 1, updatedAt: 7 };
+  const back = JSON.parse(B.mergeText("jarvisGroceryMealPlan", JSON.stringify([food]), JSON.stringify([Object.assign({}, food, { updatedAt: 2, recipeName: "Old" })])).text);
+  assert.deepEqual(back[0], food, "the newer plan entry is kept whole: repeat range, serving, saved-food link, eaten days, frozen numbers and the food-log link");
+});
