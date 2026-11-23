@@ -3204,21 +3204,60 @@ button.hs-day:hover { background: var(--card-hover); }
 .pg-more { margin-top: 10px; }
 .pg-plain { margin: 0; padding-left: 18px; font-size: 14px; }
 .pg-plain li { margin: 6px 0; }
-.pg-map { max-width: 260px; margin: 6px auto 0; }
-.pg-map svg { width: 100%; height: auto; display: block; }
-.pg-map .bodymap-heat-layer { filter: none; }
-.pg-map .bodymap-muscle-region { stroke: var(--card); stroke-width: 1; cursor: pointer; }
-.pg-map .bodymap-muscle-region.is-unrated { fill: #343f58; }
-.pg-map .bodymap-muscle-region.is-selected { stroke: #fff; stroke-width: 2.5; filter: none; }
-.pg-map .bodymap-body-part { fill: #1c2333; stroke: var(--card-border); }
 .pg-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; font-size: 13px; color: var(--text-dim); }
 .pg-legend li { display: flex; align-items: center; gap: 6px; }
 .pg-swatch { flex: 0 0 12px; width: 12px; height: 12px; border-radius: 3px; }
-.pg-swatch-none { background: #343f58; }
-.pg-muscle-info { margin-top: 10px; }
-.pg-muscle-card { padding: 10px 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 12px; }
-.pg-muscle-head { display: flex; align-items: center; justify-content: space-between; }
-.pg-muscle-card p { margin: 4px 0; }
+.pg-swatch-none { background: #0f1a2d; border: 1px solid #5a6a8c; }
+/* ---------------- the muscle map (Progress) ----------------
+   Both figures in one picture (musclemap-art.js). Every muscle region is its own element: dark with no sets, then five steps of
+   blue, always with the thin white outline so the shapes stay readable at any colour. */
+.mm-card { margin-top: 4px; }
+.mm-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mm-head .pg-sub { margin: 8px 0 6px; }
+.mm-range { display: flex; gap: 4px; flex: none; }
+.mm-range .pg-metric { flex: none; min-width: 74px; }
+.mm-caption { margin: 0 0 8px; font-size: 13px; }
+.mm-stage { padding: 10px 6px 8px; border-radius: 16px; border: 1px solid var(--card-border); background: radial-gradient(120% 90% at 50% 20%, #0f1829 0%, #0a101c 70%); }
+.mm-stage:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+.mm-svgbox { max-width: 460px; margin: 0 auto; }
+.mm-svg { display: block; width: 100%; height: auto; -webkit-tap-highlight-color: transparent; }
+.mm-body { fill: #0a111f; stroke: #dbe6ff; stroke-width: 1.2px; stroke-linejoin: round; }
+.mm-r { fill: #0f1a2d; stroke: #e4ecff; stroke-width: 1px; stroke-linejoin: round; cursor: pointer; transition: opacity 0.15s; }
+.mm-r.mm-s { pointer-events: none; cursor: default; }
+.mm-glow { fill: none; stroke: #9fb8ff; stroke-width: 2.4px; opacity: 0.26; pointer-events: none; }
+.mm-r.is-dim { opacity: 0.42; }
+.mm-r.is-sel { stroke: #fff; stroke-width: 2px; }
+.mm-r.is-focus { stroke: #fff; stroke-width: 2.2px; stroke-dasharray: 5 3; }
+@media (hover: hover) { .mm-r.mm-m:hover, .mm-r.mm-o:hover { stroke: #fff; } }
+.pg-legend.mm-legend { justify-content: center; gap: 4px 12px; margin-top: 10px; font-size: 12px; }
+.mm-legend .pg-swatch { flex-basis: 10px; width: 10px; height: 10px; }
+.mm-hint { margin: 6px 0 0; text-align: center; font-size: 12.5px; }
+.mm-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.28s ease; }
+.mm-panel[data-open="true"] { grid-template-rows: 1fr; }
+.mm-panel-in { overflow: hidden; min-height: 0; visibility: hidden; transition: visibility 0s 0.28s; }
+.mm-panel[data-open="true"] .mm-panel-in { visibility: visible; transition: none; }
+.mm-detail { margin-top: 10px; padding: 12px; background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 14px; }
+.mm-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.mm-detail-name { margin: 0; font-size: 18px; font-weight: 600; }
+.mm-parts { margin: 2px 0 0; font-size: 13px; }
+.mm-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.mm-facts > div:last-child { grid-column: 1 / -1; }
+@media (min-width: 520px) { .mm-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } .mm-facts > div:last-child { grid-column: auto; } }
+.mm-facts > div { min-width: 0; padding: 8px 10px; background: var(--card); border: 1px solid var(--card-border); border-radius: 10px; }
+.mm-facts dt { font-size: 12px; color: var(--text-dim); }
+.mm-facts dd { margin: 2px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.mm-facts dd strong { font-size: 18px; }
+.mm-facts .mm-small { font-size: 12px; color: var(--text-dim); }
+.mm-ex-h { margin: 10px 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+.mm-ex { list-style: none; margin: 0; padding: 0; }
+.mm-ex li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--card-border); font-size: 14px; }
+.mm-ex li:last-child { border-bottom: 0; }
+.mm-ex-name { min-width: 0; overflow-wrap: anywhere; }
+.mm-ex-sets { flex: none; color: var(--text-dim); white-space: nowrap; }
+.mm-note { margin: 8px 0 0; font-size: 12.5px; }
+.mm-close { flex: none; }
+@media (prefers-reduced-motion: reduce) { .mm-panel, .mm-r, .mm-panel-in { transition: none; } }
+.bodymap-view-wrap .mm-svg { max-width: 300px; margin: 0 auto; }
 .pg-muted { color: var(--text-dim); font-size: 13px; }
 .pg-half { margin: 0 0 8px; }
 .pg-records { list-style: none; margin: 0; padding: 0; }

@@ -3735,7 +3735,8 @@
 
   function renderBodyMapView() {
     const colors = computeMuscleMapColors();
-    const svg = bodyMapSide === "front" ? bodyMapFrontSvg(colors) : bodyMapBackSvg(colors);
+    const MM = window.JarvisMuscleMap;
+    const svg = MM ? MM.svg({ views: [bodyMapSide], colors: colors, selected: selectedMuscle || "", idPrefix: "bmOld", label: (bodyMapSide === "back" ? "Back" : "Front") + " body map" }) : bodyMapSide === "front" ? bodyMapFrontSvg(colors) : bodyMapBackSvg(colors);
     document.getElementById("bodyMapView").innerHTML = svg;
   }
 
@@ -3806,7 +3807,7 @@
     let el = e.target.closest("[data-muscle]");
     if (!el) {
       const svg = e.currentTarget.querySelector("svg");
-      if (!svg) return;
+      if (!svg || svg.classList.contains("mm-svg")) return;      // the new drawing's regions fill the body, so a tap lands on one or on a part that does nothing
       const pt = svgPointFromEvent(svg, e.clientX, e.clientY);
       if (pt) {
         let best = null, bestDist = Infinity;
@@ -4233,7 +4234,10 @@
     activeRoutines: activeRoutines,
     // The body drawing (front or back) with each muscle region filled from colors { muscleName: "#hex" or null }.
     // selected: the muscle to outline, or null. Used by Progress, which colours it by how many sets you did.
-    bodyMapSvg: function (side, colors, selected) {
+    // side: "front", "back" or "both". extra: { other, focus, idPrefix, label } for the map on Progress.
+    bodyMapSvg: function (side, colors, selected, extra) {
+      const MM = window.JarvisMuscleMap, x = extra || {};
+      if (MM) return MM.svg({ views: side === "front" ? ["front"] : side === "back" ? ["back"] : ["front", "back"], colors: colors || {}, selected: selected || "", other: x.other || "", focus: x.focus || "", idPrefix: x.idPrefix || "mm", label: x.label });
       const keep = selectedMuscle;
       selectedMuscle = selected || null;
       try { return side === "back" ? bodyMapBackSvg(colors || {}) : bodyMapFrontSvg(colors || {}); } finally { selectedMuscle = keep; }

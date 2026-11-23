@@ -211,6 +211,41 @@ test("days since each muscle was last the main target", () => {
   assert.deepEqual(P.lastTrained(list, TODAY, lookup), { Chest: 14, Back: 4 });
 });
 
+test("the muscle map looks at the last 7 or the last 30 days, today included", () => {
+  const w = P.mapWindow("week", TODAY), m = P.mapWindow("month", TODAY);
+  assert.deepEqual([w.start, w.end, w.days, w.label], ["2026-10-28", TODAY, 7, "Last 7 days"]);
+  assert.deepEqual([m.start, m.end, m.days, m.label], ["2026-10-05", TODAY, 30, "Last 30 days"]);
+  assert.equal(W.addDays(w.start, 6), TODAY, "7 days, both ends counted");
+  assert.equal(P.mapWindow("nonsense", TODAY).key, "month", "an unknown window falls back to 30 days");
+  assert.deepEqual(Object.keys(P.MAP_WINDOWS), ["week", "month"]);
+});
+
+test("one muscle in the map: sets this week and this month, when it was last trained, and which exercises counted", () => {
+  const lk = (id) => ({ bench: { primary: ["Chest"], secondary: ["Triceps"] }, fly: { primary: ["Chest"], secondary: [] }, row: { primary: ["Lats"], secondary: ["Biceps"] } }[id] || null);
+  const list = [
+    sess("2026-11-03", [ex("bench", [set(100, 5), set(100, 5), set(40, 10, { warmup: true })])]),
+    sess("2026-10-30", [ex("fly", [set(30, 12), set(30, 12), set(30, 12)]), ex("row", [set(80, 8)])]),
+    sess("2026-10-10", [ex("bench", [set(95, 5), set(95, 5), set(95, 5), set(95, 5)])]),
+    sess("2026-09-01", [ex("bench", [set(90, 5)])])
+  ];
+  const d = P.muscleDetail(list, TODAY, "Chest", lk, { window: "month" });
+  assert.deepEqual([d.week, d.month], [5, 9], "7 days: 2 + 3 working sets (the warm-up is not counted); 30 days adds the 4 from Oct 10");
+  assert.equal(d.perWeek, 2.1, "9 sets over 30 days is about 2.1 a week");
+  assert.deepEqual([d.lastDaysAgo, d.lastDate], [0, TODAY], "trained today");
+  assert.deepEqual(d.exercises, [{ exerciseId: "bench", sets: 6 }, { exerciseId: "fly", sets: 3 }], "most sets first, in the 30-day window");
+  assert.deepEqual(P.muscleDetail(list, TODAY, "Chest", lk, { window: "week" }).exercises, [{ exerciseId: "fly", sets: 3 }, { exerciseId: "bench", sets: 2 }].sort((a, b) => b.sets - a.sets || (a.exerciseId < b.exerciseId ? -1 : 1)), "the 7-day window lists only what was done in it");
+  // helping muscles count half only when asked
+  assert.equal(P.muscleDetail(list, TODAY, "Triceps", lk, {}).week, 0, "a helping muscle gets nothing by default");
+  const t = P.muscleDetail(list, TODAY, "Triceps", lk, { secondaryHalf: true, window: "week" });
+  assert.deepEqual([t.week, t.month, t.exercises], [1, 3, [{ exerciseId: "bench", sets: 1 }]], "half a set for each working set of the bench");
+  assert.deepEqual([t.lastDaysAgo, t.lastDate], [null, null], "never the main muscle of a set, so no last date is claimed");
+  // nothing logged for the muscle
+  const none = P.muscleDetail(list, TODAY, "Calves", lk, {});
+  assert.deepEqual([none.week, none.month, none.perWeek, none.lastDaysAgo, none.exercises], [0, 0, 0, null, []]);
+  // an old session is found for "last trained" even outside both windows
+  assert.deepEqual(P.muscleDetail([sess("2026-09-01", [ex("bench", [set(90, 5)])])], TODAY, "Chest", lk, {}).lastDate, "2026-09-01");
+});
+
 test("times of day and the time-spent points", () => {
   assert.deepEqual(["2026-11-02T18:30", "2026-11-02T00:05", "2026-11-02T12:00", "2026-11-02T09:07", "", null, "x"].map(P.timeLabel), ["6:30 PM", "12:05 AM", "12:00 PM", "9:07 AM", "", "", ""]);
   const pts = P.durationPoints([sess("2026-10-20", [], { duration: 50 }), sess("2026-10-13", [], { duration: 40 }), sess("2026-10-14", [], { duration: null }), sess("2026-10-15", [], { duration: 0 })]);
