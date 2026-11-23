@@ -304,6 +304,47 @@
     return out;
   }
 
+  /* ---------------- the muscle map ---------------- */
+
+  // The map is coloured by one of two windows, both ending today: the last 7 days or the last 30 days (today counts as a day).
+  const MAP_WINDOWS = { week: { label: "Last 7 days", short: "Week", days: 7 }, month: { label: "Last 30 days", short: "Month", days: 30 } };
+  function mapWindow(key, todayKey) {
+    const k = MAP_WINDOWS[key] ? key : "month", w = MAP_WINDOWS[k];
+    return { key: k, label: w.label, short: w.short, days: w.days, start: WL.addDays(todayKey, -(w.days - 1)), end: todayKey };
+  }
+
+  // The exercises that counted toward one muscle in a window, with the working sets each gave it: a set counts 1 for the exercise's main
+  // muscles, and half for the muscles that help when opts.secondaryHalf. Most sets first.
+  function muscleExercises(sessions, start, end, muscle, lookup, opts) {
+    const half = !!(opts && opts.secondaryHalf), by = {};
+    inRange(WL.sessionsOf(sessions), start, end).forEach(function (w) {
+      w.exercises.forEach(function (se) {
+        const n = WL.working(se.sets).length;
+        if (!n) return;
+        const t = lookup(se.exerciseId);
+        if (!t) return;
+        if ((t.primary || []).indexOf(muscle) !== -1) by[se.exerciseId] = (by[se.exerciseId] || 0) + n;
+        else if (half && (t.secondary || []).indexOf(muscle) !== -1) by[se.exerciseId] = (by[se.exerciseId] || 0) + n * 0.5;
+      });
+    });
+    return Object.keys(by).map(function (id) { return { exerciseId: id, sets: round1(by[id]) }; })
+      .sort(function (a, b) { return b.sets - a.sets || (a.exerciseId < b.exerciseId ? -1 : 1); });
+  }
+
+  // What the details panel says about one muscle: sets in the last 7 and 30 days, when it was last the main target of a set, and the
+  // exercises behind the window the map is showing (opts.window, "week" or "month").
+  function muscleDetail(sessions, todayKey, muscle, lookup, opts) {
+    const o = opts || {}, wk = mapWindow("week", todayKey), mo = mapWindow("month", todayKey), win = mapWindow(o.window, todayKey);
+    const wt = muscleTotals(sessions, wk.start, wk.end, lookup, o).byMuscle[muscle] || 0;
+    const mt = muscleTotals(sessions, mo.start, mo.end, lookup, o).byMuscle[muscle] || 0;
+    const ago = lastTrained(sessions, todayKey, lookup)[muscle];
+    return {
+      muscle: muscle, week: round1(wt), month: round1(mt), perWeek: round1(mt / (mo.days / 7)),
+      lastDaysAgo: ago === undefined ? null : ago, lastDate: ago === undefined ? null : WL.addDays(todayKey, -ago),
+      window: win, exercises: muscleExercises(sessions, win.start, win.end, muscle, lookup, o)
+    };
+  }
+
   /* ---------------- time spent ---------------- */
 
   function durationPoints(sessions) {
@@ -383,7 +424,7 @@
     shiftMonth: shiftMonth, calendarMonth: calendarMonth,
     exerciseSeries: exerciseSeries, seriesChange: seriesChange, exerciseSummary: exerciseSummary, exerciseList: exerciseList, topLifts: topLifts,
     recordsBetween: recordsBetween, recordCountBySession: recordCountBySession,
-    muscleTotals: muscleTotals, muscleRows: muscleRows, lastTrained: lastTrained, durationPoints: durationPoints,
+    muscleTotals: muscleTotals, muscleRows: muscleRows, lastTrained: lastTrained, MAP_WINDOWS: MAP_WINDOWS, mapWindow: mapWindow, muscleExercises: muscleExercises, muscleDetail: muscleDetail, durationPoints: durationPoints,
     timeLabel: timeLabel, sortNewest: sortNewest, historyItem: historyItem, filterHistory: filterHistory, routineOptions: routineOptions
   };
 });

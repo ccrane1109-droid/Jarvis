@@ -20,7 +20,7 @@
   const CH = window.JarvisCharts;
 
   let started = false;
-  const state = { range: PL ? PL.DEFAULT_RANGE : "3m", exerciseId: "", metric: "e1rm", half: false, side: "front", muscle: null, lifts: 5, records: 5, muscles: 6 };
+  const state = { range: PL ? PL.DEFAULT_RANGE : "3m", exerciseId: "", metric: "e1rm", half: false, mapRange: "month", muscle: null, other: null, kb: null, lifts: 5, records: 5, muscles: 6 };
   let drawn = [];   // the chart builders for what is on screen, so a resize can redraw them at the new width
 
   function $(id) { return document.getElementById(id); }
@@ -74,7 +74,7 @@
   function periodHtml(m) {
     const b = m.b;
     return '<div class="pg-period" role="group" aria-label="Period">' + PL.RANGES.map(function (r) {
-      return '<button type="button" class="pg-range' + (r.key === b.key ? " is-on" : "") + '" data-pg="range" data-range="' + r.key + '" aria-pressed="' + (r.key === b.key) + '" aria-label="' + esc(r.label) + '">' + esc(r.short) + '</button>';
+      return '<button type="button" class="pg-range' + (r.key === b.key ? " is-on" : "") + '" data-pg="range" data-range="' + r.key + '" aria-pressed="' + (r.key === b.key) + '" aria-label="' + esc(r.short === r.label ? r.label : r.short + ", " + r.label) + '">' + esc(r.short) + '</button>';
     }).join("") + '</div><p class="pg-dates">' + esc(rangeText(b.from, b.end)) + (b.from > b.start ? ' (from your first workout)' : '') + (b.hasPrev ? ' &middot; compared with ' + esc(rangeText(b.prevStart, b.prevEnd)) : '') + '</p>';
   }
 
@@ -206,41 +206,122 @@
     return { totals: t, rows: rows, max: max, last: PL.lastTrained(m.sessions, m.today, fineLookup), weeks: weeksF };
   }
 
-  function mapHtml(m, mm) {
-    const colors = {};
-    api().fineMuscles.forEach(function (name) { colors[name] = CH.heatColor(mm.totals.byMuscle[name] || 0, mm.max); });
-    const svg = api().bodyMapSvg(state.side, colors, state.muscle).replace(/id="bodyShade"/g, 'id="pgShade"').replace(/id="heatBlur"/g, 'id="pgBlur"').replace(/url\(#bodyShade\)/g, "url(#pgShade)");
-    const bands = mm.max > 0 ? CH.heatBands(mm.max) : [];
-    const legend = '<ul class="pg-legend" aria-label="Colour scale, sets in this period"><li><span class="pg-swatch pg-swatch-none"></span>0 sets</li>' + bands.map(function (b) { return '<li><span class="pg-swatch" style="background:' + b.color + '"></span>' + (b.from === b.to ? b.from : b.from + "–" + b.to) + ' ' + plural(b.to, "set") + '</li>'; }).join("") + '</ul>';
-    const sides = '<div class="pg-metrics pg-sides" role="group" aria-label="Which side of the body">' + [["front", "Front"], ["back", "Back"]].map(function (x) { return '<button type="button" class="pg-metric' + (state.side === x[0] ? " is-on" : "") + '" data-pg="side" data-side="' + x[0] + '" aria-pressed="' + (state.side === x[0]) + '">' + x[1] + '</button>'; }).join("") + '</div>';
-    return sides + '<div class="pg-map" data-pg-map>' + svg + '</div>' + legend + '<div id="pgMuscleInfo" class="pg-muscle-info" aria-live="polite">' + muscleInfoHtml(m, mm) + '</div>';
+  /* ---- the muscle map ----
+     Both sides of the body, side by side (musclemap-art.js draws them; every region is its own element). Muscles are coloured by the
+     sets done in the last 7 or the last 30 days, whatever the period at the top says. Tapping a muscle opens its details underneath. */
+
+  // The order the arrow keys walk the muscles in: front of the body first, then the back, then the legs.
+  const KEY_ORDER = ["Chest", "FrontDelts", "SideDelts", "RearDelts", "Biceps", "Triceps", "Forearms", "Abs", "Obliques", "Traps", "UpperBack", "Lats", "LowerBack", "Glutes", "Quads", "Hamstrings", "Calves"];
+
+  function mapSource() { return { sessions: WL.sessionsOf(api().getWorkouts()), today: WL.dayKey(Date.now()) }; }
+
+  function mapModel(src) {
+    const win = PL.mapWindow(state.mapRange, src.today);
+    const by = PL.muscleTotals(src.sessions, win.start, win.end, fineLookup, { secondaryHalf: state.half }).byMuscle;
+    let max = 0;
+    Object.keys(by).forEach(function (k) { if (by[k] > max) max = by[k]; });
+    return { src: src, win: win, by: by, max: max };
   }
 
-  function muscleInfoHtml(m, mm) {
-    const name = state.muscle;
-    if (!name) return '<p class="field-hint">Tap a muscle on the body for its sets, when you last trained it, and which exercises counted.</p>';
-    const label = api().muscleName(name);
-    const sets = mm.totals.byMuscle[name] || 0;
-    const byEx = {};
-    m.cur.forEach(function (w) {
-      w.exercises.forEach(function (se) {
-        const n = WL.working(se.sets).length;
-        if (!n) return;
-        const t = fineLookup(se.exerciseId);
-        if (!t) return;
-        if (t.primary.indexOf(name) !== -1) byEx[se.exerciseId] = (byEx[se.exerciseId] || 0) + n;
-        else if (state.half && t.secondary.indexOf(name) !== -1) byEx[se.exerciseId] = (byEx[se.exerciseId] || 0) + n * 0.5;
-      });
+  function mapSvgHtml(mm) {
+    const colors = {};
+    api().fineMuscles.forEach(function (name) { colors[name] = CH.heatColor(mm.by[name] || 0, mm.max); });
+    return api().bodyMapSvg("both", colors, state.muscle, { other: state.other, focus: state.kb, idPrefix: "pgMm", label: "Muscle map, front and back, coloured by sets in the " + mm.win.label.toLowerCase() }).replace(/id="bodyShade"/g, 'id="pgShade"').replace(/id="heatBlur"/g, 'id="pgBlur"').replace(/url\(#bodyShade\)/g, "url(#pgShade)");
+  }
+
+  function mapLegendHtml(mm) {
+    const bands = mm.max > 0 ? CH.heatBands(mm.max) : [];
+    return '<li><span class="pg-swatch pg-swatch-none"></span>0 sets</li>' + bands.map(function (b, i) {
+      const last = i === bands.length - 1, txt = b.from === b.to ? String(b.from) : last ? b.from + "+" : b.from + "–" + b.to;
+      return '<li><span class="pg-swatch" style="background:' + b.color + '"></span>' + txt + '</li>';
+    }).join("");
+  }
+
+  function mapRangeHtml() {
+    return Object.keys(PL.MAP_WINDOWS).map(function (k) {
+      return '<button type="button" class="pg-metric mm-range-btn' + (state.mapRange === k ? " is-on" : "") + '" data-pg="map-range" data-range="' + k + '" aria-pressed="' + (state.mapRange === k) + '" aria-label="' + esc(PL.MAP_WINDOWS[k].short + ", " + PL.MAP_WINDOWS[k].label.toLowerCase()) + '">' + esc(PL.MAP_WINDOWS[k].short) + '</button>';
+    }).join("");
+  }
+
+  function mapCaption(mm) { return mm.win.label + " &middot; " + esc(rangeText(mm.win.start, mm.win.end)); }
+
+  function daysAgoText(n) { return n === 0 ? "Today" : n === 1 ? "Yesterday" : n + " days ago"; }
+
+  // The details of the muscle that is tapped (or the note for a drawn muscle JARVIS doesn't count).
+  function mapDetailHtml(mm) {
+    const close = '<button type="button" class="wk-link mm-close" data-pg="muscle-close">Close</button>';
+    if (state.other) {
+      return '<div class="mm-detail"><div class="mm-detail-head"><h4 class="mm-detail-name">' + esc(state.other) + '</h4>' + close + '</div>' +
+        '<p class="pg-muted">JARVIS counts working sets for 17 muscle groups, and this isn\'t one of them. It is drawn so you can see where it sits, so there is nothing to show for it.</p></div>';
+    }
+    if (!state.muscle) return "";
+    const name = state.muscle, label = api().muscleName(name), mmod = window.JarvisMuscleMap;
+    const d = PL.muscleDetail(mm.src.sessions, mm.src.today, name, fineLookup, { secondaryHalf: state.half, window: state.mapRange });
+    const parts = mmod && mmod.partsOf ? mmod.partsOf(name) : [];
+    const exs = d.exercises.slice(0, 6).map(function (x) { return '<li><span class="mm-ex-name">' + esc(exInfo(x.exerciseId).name) + '</span><span class="mm-ex-sets">' + num(x.sets) + ' ' + plural(x.sets, "set") + '</span></li>'; }).join("");
+    const more = d.exercises.length > 6 ? '<li class="pg-muted">and ' + (d.exercises.length - 6) + ' more</li>' : "";
+    return '<div class="mm-detail"><div class="mm-detail-head"><div><h4 class="mm-detail-name">' + esc(label) + '</h4>' + (parts.length ? '<p class="pg-muted mm-parts">' + esc(parts.join(", ")) + '</p>' : '') + '</div>' + close + '</div>' +
+      '<dl class="mm-facts">' +
+        '<div><dt>Last 7 days</dt><dd><strong>' + num(d.week) + '</strong> ' + plural(d.week, "set") + '</dd></div>' +
+        '<div><dt>Last 30 days</dt><dd><strong>' + num(d.month) + '</strong> ' + plural(d.month, "set") + '</dd><dd class="mm-small">about ' + num(d.perWeek) + ' a week</dd></div>' +
+        '<div><dt>Last workout</dt>' + (d.lastDaysAgo === null ? '<dd><strong>Not yet</strong></dd><dd class="mm-small">never a main muscle of a set</dd>' : '<dd><strong>' + daysAgoText(d.lastDaysAgo) + '</strong></dd><dd class="mm-small">' + esc(dayDate(d.lastDate)) + '</dd>') + '</div>' +
+      '</dl>' +
+      '<h5 class="mm-ex-h">Exercises, ' + esc(d.window.label.toLowerCase()) + '</h5>' +
+      (exs ? '<ul class="mm-ex">' + exs + more + '</ul>' : '<p class="pg-muted">No sets for this muscle in the ' + esc(d.window.label.toLowerCase()) + '.</p>') +
+      (state.half ? '<p class="pg-muted mm-note">Helping muscles count half a set (the box above).</p>' : '') + '</div>';
+  }
+
+  function mapCardHtml(mm) {
+    const open = !!(state.muscle || state.other);
+    return '<div class="mm-card" id="pgMap"><div class="mm-head"><h3 class="pg-sub mm-title" id="pgMapH">Body map</h3><div class="mm-range" role="group" aria-label="Period for the map">' + mapRangeHtml() + '</div></div>' +
+      '<p class="pg-muted mm-caption" id="pgMapCap">' + mapCaption(mm) + '</p>' +
+      '<div class="mm-stage" data-pg-map tabindex="0" role="group" aria-labelledby="pgMapH" aria-describedby="pgMapHint pgMapKeys"><div class="mm-svgbox">' + mapSvgHtml(mm) + '</div></div>' +
+      '<ul class="pg-legend mm-legend" id="pgMapLegend" aria-label="Colour scale, sets per muscle in the ' + esc(mm.win.label.toLowerCase()) + '">' + mapLegendHtml(mm) + '</ul>' +
+      '<p class="pg-muted mm-hint" id="pgMapHint">Tap a muscle for its sets, last workout and exercises.</p><span class="visually-hidden" id="pgMapKeys">With the keyboard, use the arrow keys to move between muscles and Enter to open one. Escape closes it.</span>' +
+      '<div class="mm-panel" id="pgMuscleInfo" data-open="' + open + '"' + (open ? '' : ' inert aria-hidden="true"') + '><div class="mm-panel-in"><div class="mm-panel-body" id="pgMuscleBody">' + mapDetailHtml(mm) + '</div></div></div>' +
+      '<p class="visually-hidden" id="pgMapLive" aria-live="polite"></p></div>';
+  }
+
+  // The selection and the keyboard cursor are only classes on the drawing, so a tap changes those and doesn't redraw the figures.
+  function syncMapSelection() {
+    const svg = document.querySelector("#pgMap .mm-svg");
+    if (!svg) return;
+    const any = !!(state.muscle || state.other);
+    svg.classList.toggle("has-sel", any);
+    Array.prototype.forEach.call(svg.querySelectorAll("use.mm-r[data-region]"), function (u) {
+      const m = u.getAttribute("data-muscle"), o = u.getAttribute("data-other");
+      const sel = m ? m === state.muscle : !!state.other && o === state.other;
+      u.classList.toggle("is-sel", sel);
+      u.classList.toggle("is-dim", any && !sel);
+      u.classList.toggle("is-focus", !!m && m === state.kb);
+      if (sel) { const fig = u.parentNode, glow = fig.querySelector(".mm-glow"); if (glow) fig.insertBefore(u, glow); }   // drawn last, so its outline isn't covered
     });
-    const exList = Object.keys(byEx).sort(function (a, b) { return byEx[b] - byEx[a]; }).slice(0, 5).map(function (id) { return esc(exInfo(id).name) + " (" + (Math.round(byEx[id] * 10) / 10) + ")"; });
-    const ago = mm.last[name];
-    return '<div class="pg-muscle-card"><div class="pg-muscle-head"><strong>' + esc(label) + '</strong><button type="button" class="wk-link" data-pg="muscle-close">Close</button></div>' +
-      '<p>' + (sets ? '<strong>' + (Math.round(sets * 10) / 10) + '</strong> ' + plural(sets, "set") + ' in this period, about ' + (Math.round(sets / mm.weeks * 10) / 10) + ' a week.' : 'No sets in this period.') + (ago !== undefined ? ' Last trained ' + (ago === 0 ? 'today' : ago + ' ' + plural(ago, "day") + ' ago') + '.' : ' Never trained as a main muscle.') + '</p>' +
-      (exList.length ? '<p class="pg-muted">From: ' + exList.join(", ") + '</p>' : '') + '</div>';
+  }
+
+  // Updates the map's own parts without redrawing the page, so the page doesn't jump. redraw: the colours changed (another window), so the
+  // figures and the legend are drawn again; otherwise only the selection and the details change.
+  function refreshMap(redraw) {
+    const box = $("pgMap");
+    if (!box) { render(); return null; }
+    const mm = mapModel(mapSource());
+    if (redraw) {
+      box.querySelector(".mm-svgbox").innerHTML = mapSvgHtml(mm);
+      $("pgMapLegend").innerHTML = mapLegendHtml(mm);
+      $("pgMapLegend").setAttribute("aria-label", "Colour scale, sets per muscle in the " + mm.win.label.toLowerCase());
+      $("pgMapCap").innerHTML = mapCaption(mm);
+      box.querySelector(".mm-range").innerHTML = mapRangeHtml();
+    } else syncMapSelection();
+    const panel = $("pgMuscleInfo"), open = !!(state.muscle || state.other), body = $("pgMuscleBody");
+    if (open) { body.innerHTML = mapDetailHtml(mm); panel.removeAttribute("inert"); panel.removeAttribute("aria-hidden"); }
+    else { panel.setAttribute("inert", ""); panel.setAttribute("aria-hidden", "true"); }     // the old text stays while it folds away
+    panel.setAttribute("data-open", String(open));
+    return mm;
   }
 
   function musclesHtml(m) {
-    if (!m.cur.length) return section("Muscles", "pgMuscles", '<p class="wk-empty">No workouts in this period.</p>');
+    const half = '<label class="wk-check-row pg-half"><input type="checkbox" id="pgHalf"' + (state.half ? " checked" : "") + '> <span>Count helping muscles as half a set</span></label>';
+    const map = mapCardHtml(mapModel(mapSource()));
+    if (!m.cur.length) return section("Muscles", "pgMuscles", half + map + '<p class="wk-empty">No workouts in ' + esc(PL.rangeInfo(m.b.key).label) + ', so no list of sets by muscle.</p>');
     const mm = muscleModel(m);
     const rows = mm.rows.slice(0, state.muscles).map(function (r) {
       const ago = mm.last[r.muscle];
@@ -250,8 +331,7 @@
     const notes = [];
     if (untrained.length) notes.push('No sets in this period for: ' + esc(untrained.join(", ")) + '.');
     if (mm.totals.unknownSets) notes.push(num(mm.totals.unknownSets) + ' ' + plural(mm.totals.unknownSets, "set") + ' ' + plural(mm.totals.unknownSets, "is", "are") + ' for exercises with no muscle on record, so ' + plural(mm.totals.unknownSets, "it is", "they are") + ' not counted here.');
-    const half = '<label class="wk-check-row pg-half"><input type="checkbox" id="pgHalf"' + (state.half ? " checked" : "") + '> <span>Count helping muscles as half a set</span></label>';
-    return section("Muscles", "pgMuscles", half + mapHtml(m, mm) + '<h3 class="pg-sub">Sets by muscle</h3>' + (rows.length ? CH.rankedBars(rows, { ariaLabel: "Working sets per muscle, " + PL.rangeInfo(m.b.key).label }) : '<p class="wk-empty">No sets counted.</p>') +
+    return section("Muscles", "pgMuscles", half + map + '<h3 class="pg-sub">Sets by muscle, ' + esc(PL.rangeInfo(m.b.key).label) + '</h3>' + (rows.length ? CH.rankedBars(rows, { ariaLabel: "Working sets per muscle, " + PL.rangeInfo(m.b.key).label }) : '<p class="wk-empty">No sets counted.</p>') +
       (mm.rows.length > rows.length ? '<button type="button" class="btn btn-secondary pg-more" data-pg="more-muscles">Show all ' + mm.rows.length + ' muscles</button>' : '') +
       (notes.length ? '<ul class="pg-facts">' + notes.map(function (n) { return '<li>' + n + '</li>'; }).join("") + '</ul>' : '') +
       '<p class="field-hint">Each working set counts for the exercise\'s main muscle' + (state.half ? ', and half a set for the muscles that help' : '') + '. It is a simple count of sets, not a measure of how hard a muscle worked.</p>');
@@ -376,6 +456,7 @@
   }
 
   function onKey(e) {
+    if (mapKey(e)) return;
     const wrap = e.target.closest && e.target.closest(".ch");
     if (!wrap || e.target !== wrap) return;
     const d = chartData(wrap), cur = wrap._idx === undefined ? d.xs.length - 1 : wrap._idx;
@@ -388,25 +469,39 @@
 
   /* ---------------- the body map ---------------- */
 
+  // A tap on a muscle selects it (a tap on it again closes it). The head, hands, feet and the joints are drawn but do nothing.
   function mapTap(e) {
     const box = e.target.closest("[data-pg-map]");
     if (!box) return false;
-    let el = e.target.closest("[data-muscle]");
-    if (!el) {
-      const svg = box.querySelector("svg");
-      const ctm = svg && svg.getScreenCTM();
-      if (ctm) {
-        const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-        const p = pt.matrixTransform(ctm.inverse());
-        let best = null, bd = Infinity;
-        svg.querySelectorAll("[data-muscle]").forEach(function (r) { const bb = r.getBBox(), d = Math.hypot(p.x - (bb.x + bb.width / 2), p.y - (bb.y + bb.height / 2)); if (d < bd) { bd = d; best = r; } });
-        if (best && bd < 40) el = best;
-      }
-    }
+    const el = e.target.closest("[data-muscle],[data-other]");
     if (!el) return true;
-    const name = el.getAttribute("data-muscle");
-    state.muscle = state.muscle === name ? null : name;
-    render();
+    pick(el.hasAttribute("data-muscle") ? { muscle: el.getAttribute("data-muscle") } : { other: el.getAttribute("data-other") });
+    return true;
+  }
+
+  function pick(sel) {
+    if (sel.muscle) { state.muscle = state.muscle === sel.muscle ? null : sel.muscle; state.other = null; }
+    else if (sel.other) { state.other = state.other === sel.other ? null : sel.other; state.muscle = null; }
+    else { state.muscle = null; state.other = null; }
+    refreshMap();
+  }
+
+  function mapKey(e) {
+    const box = e.target.closest && e.target.closest("[data-pg-map]");
+    if (!box || e.target !== box) return false;
+    const i = KEY_ORDER.indexOf(state.kb);
+    let next = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = i < 0 ? 0 : (i + 1) % KEY_ORDER.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = i < 0 ? KEY_ORDER.length - 1 : (i - 1 + KEY_ORDER.length) % KEY_ORDER.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = KEY_ORDER.length - 1;
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (state.kb) pick({ muscle: state.kb }); return true; }
+    else if (e.key === "Escape" && (state.muscle || state.other)) { e.preventDefault(); pick({}); return true; }
+    else return false;
+    e.preventDefault();
+    state.kb = KEY_ORDER[next];
+    const mm = refreshMap(), n = (mm && mm.by[state.kb]) || 0, live = $("pgMapLive");
+    if (live) live.textContent = api().muscleName(state.kb) + ", " + (Math.round(n * 10) / 10) + " " + plural(n, "set") + " in the " + mm.win.label.toLowerCase() + ". Press Enter for details.";
     return true;
   }
 
@@ -422,12 +517,12 @@
       case "jump": { const t = $(el.getAttribute("data-target")), h = t && $(el.getAttribute("data-target") + "H"); if (t) { t.scrollIntoView({ block: "start" }); if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); } } break; }
       case "range": state.range = el.getAttribute("data-range"); render(); break;
       case "metric": state.metric = el.getAttribute("data-metric"); render(); break;
-      case "side": state.side = el.getAttribute("data-side"); render(); break;
+      case "map-range": state.mapRange = el.getAttribute("data-range") === "week" ? "week" : "month"; refreshMap(true); { const b = document.querySelector('[data-pg="map-range"][data-range="' + state.mapRange + '"]'); if (b) b.focus({ preventScroll: true }); } break;
       case "lift": state.exerciseId = el.getAttribute("data-id"); render(); { const s = $("pgStrengthH"); if (s) { s.setAttribute("tabindex", "-1"); s.scrollIntoView({ block: "start" }); s.focus({ preventScroll: true }); } } break;
       case "more-lifts": state.lifts += 10; render(); break;
       case "more-records": state.records += 10; render(); break;
       case "more-muscles": state.muscles = 99; render(); break;
-      case "muscle-close": state.muscle = null; render(); break;
+      case "muscle-close": pick({}); { const st = document.querySelector("[data-pg-map]"); if (st) st.focus({ preventScroll: true }); } break;
       default: break;
     }
   }
