@@ -5926,3 +5926,13 @@ h3.mp-h5, h4.mp-h5 { font-size: 13px; }
 #savedFoodFormWrap .field-hint, #recipeFormWrap .field-hint { color: var(--text-dim); }
 .nut-lib-sec .list-item-row { flex-wrap: wrap; }
 .nut-lib-sec .list-item-actions { flex-shrink: 1; }
+
+/* Planning sync: possible duplicates (planning-sync-ui.js) */
+.pc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pc-card { padding: 10px 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: var(--bg-elevated); }
+.pc-line { margin: 0 0 8px; font-size: 14px; overflow-wrap: anywhere; }
+.pc-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pc-acts .btn { min-height: 44px; }
+.pc-msg { margin: 0 0 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--green-dim); font-size: 14px; }
+.pc-msg .btn-icon { min-height: 44px; margin-left: 6px; }
+#taskDupRow select, #habitDupRow select { border-color: var(--yellow); }

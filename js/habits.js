@@ -35,6 +35,7 @@
 
   const TK = window.JarvisTaskKind;
   const HL = window.JarvisHabitLogic;   // counting, streaks and checking a habit off on any day (habit-logic.js)
+  const PC = window.JarvisPlanningCore; // a task that stands for a habit on one day shares that habit's completion (planning-core-logic.js)
   const HP = window.JarvisHabitPlan;    // a habit's place on the Day planner and Calendar: time, days, one-day moves (habit-plan-logic.js)
 
   const LS_TASKS = "jarvisTasks";
@@ -202,6 +203,8 @@
     $("taskTime").value = "";
     $("taskCategory").value = "";
     $("taskGoalSelect").value = "";
+    taskDupFound = [];
+    if ($("taskDupRow")) { $("taskDupRow").classList.add("hidden"); $("taskDupSelect").innerHTML = ""; }
     if ($("taskDeadline")) $("taskDeadline").checked = true;
     renderTaskPlanSelect("");
     $("taskFormTitle").textContent = "Add Task";
@@ -227,6 +230,23 @@
       return '<option value="' + core.escapeHtml(g.id) + '">' + core.escapeHtml(g.name) + '</option>';
     }).join("");
     if (goals.some(function (g) { return g.id === current; })) sel.value = current;
+  }
+
+  // "Looks like something you already have" under the Task field and the Habit name: shown while typing, and a choice is needed before saving.
+  let taskDupFound = [], habitDupFound = [];
+  function taskDupEls() { return { row: $("taskDupRow"), select: $("taskDupSelect"), note: $("taskDupNote") }; }
+  function habitDupEls() { return { row: $("habitDupRow"), select: $("habitDupSelect"), note: $("habitDupNote") }; }
+  function refreshTaskDup() {
+    const PS = window.JarvisPlanSync, els = taskDupEls();
+    if (!PS || !els.row) return;
+    if (taskFormEditId) { els.row.classList.add("hidden"); taskDupFound = []; return; }
+    taskDupFound = PS.fill(els, { type: "task", name: $("taskText").value, date: selectedDate, time: $("taskTime").value });
+  }
+  function refreshHabitDup() {
+    const PS = window.JarvisPlanSync, els = habitDupEls();
+    if (!PS || !els.row) return;
+    if (habitFormEditId) { els.row.classList.add("hidden"); habitDupFound = []; return; }
+    habitDupFound = PS.fill(els, { type: "habit", name: $("habitName").value });
   }
 
   function handleTaskAddToggle() {
@@ -267,11 +287,22 @@
       }
     } else {
       if (TK) raw.kind = wantDeadline ? "deadline" : "scheduled";
+      refreshTaskDup();
+      const decision = window.JarvisPlanSync ? window.JarvisPlanSync.decide(taskDupEls(), taskDupFound) : { action: "create" };
+      if (!decision) { core.showToast("This looks like something you already have. Choose how to add it."); if ($("taskDupSelect")) $("taskDupSelect").focus(); return; }
+      if (decision.action === "link") ensureSnapshot();
       const repeatDates = Array.prototype.slice.call($("taskRepeatDaysRow").querySelectorAll(".day-picker-btn.selected"))
         .map(function (b) { return b.getAttribute("data-date"); });
       const datesToCreate = [selectedDate].concat(repeatDates.filter(function (d) { return d !== selectedDate; }));
       datesToCreate.forEach(function (d) {
+        if (decision.action === "existing" && d === selectedDate) return;      // the one you already have is kept; nothing new is added for this day
         const made = Object.assign({}, raw, { id: core.uid("task"), date: d, completed: false, order: nextOrderForDate(d), createdAt: Date.now() });
+        if (decision.action === "link" && habitAllowsLink(decision.habitId, d)) {
+          made.habitId = decision.habitId;
+          const hb = habits.filter(function (x) { return x.id === decision.habitId; })[0];
+          if (hb && HL.isDone(hb, d)) made.completed = true;      // the habit was already done that day
+        }
+        if (decision.action === "separate" && decision.ids.length && d === selectedDate) made.separate = decision.ids.slice();
         tasks.push(made);
         madeIds.push(made.id);
       });
@@ -282,7 +313,7 @@
     renderTaskList();
     renderDaySelectorPills();
     renderTodayOverview();
-    core.showToast(taskFormEditId ? "Task updated." : "Task added.");
+    core.showToast(taskFormEditId ? "Task updated." : madeIds.length ? "Task added." : "Kept the one you already have.");
   }
 
   function taskMenuHtml(t) {
@@ -385,7 +416,7 @@
     const checkBtn = e.target.closest(".task-check-btn");
     if (checkBtn) {
       const t = tasks.find(function (tt) { return tt.id === checkBtn.getAttribute("data-id"); });
-      if (t) { t.completed = !t.completed; saveTasks(); renderTaskList(); renderTodayOverview(); }
+      if (t) setTasks(tasks.map(function (x) { return x.id === t.id ? Object.assign({}, x, { completed: !x.completed }) : x; }));
       return;
     }
     const menuBtn = e.target.closest(".task-menu-btn");
@@ -475,6 +506,8 @@
     $("habitName").value = "";
     $("habitTargetDays").value = "7";
     $("habitDailyTarget").value = "1";
+    habitDupFound = [];
+    if ($("habitDupRow")) { $("habitDupRow").classList.add("hidden"); $("habitDupSelect").innerHTML = ""; }
     setPlanForm(null);
     $("habitFormTitle").textContent = "Add a Habit";
     $("habitSubmitBtn").textContent = "Add Habit";
@@ -539,8 +572,16 @@
     const targetDays = clampInt($("habitTargetDays").value, 1, 7, 7);
     const dailyTarget = clampInt($("habitDailyTarget").value, 1, 50, 1);
     const existing = habitFormEditId ? habits.find(function (hh) { return hh.id === habitFormEditId; }) : null;
+    let newHabitId = "";
     const plan = readPlanForm(existing);
     if (!plan.ok) { core.showToast(plan.error); return; }
+    let habitDecision = { action: "create" };
+    if (!habitFormEditId) {
+      refreshHabitDup();
+      habitDecision = window.JarvisPlanSync ? window.JarvisPlanSync.decide(habitDupEls(), habitDupFound) : { action: "create" };
+      if (!habitDecision) { core.showToast("This looks like something you already have. Choose how to add it."); if ($("habitDupSelect")) $("habitDupSelect").focus(); return; }
+      if (habitDecision.action === "existing") { resetHabitForm(); core.showToast("Kept the habit you already have."); return; }
+    }
     if (habitFormEditId) {
       const h = existing;
       if (h) { h.name = name; h.targetDays = targetDays; h.dailyTarget = dailyTarget; applyPlanToHabit(h, plan); }
@@ -548,8 +589,18 @@
       const made = { id: core.uid("habit"), name: name, targetDays: targetDays, dailyTarget: dailyTarget, completions: {}, createdAt: Date.now() };
       applyPlanToHabit(made, plan);
       habits.push(made);
+      newHabitId = made.id;
     }
     saveHabits();
+    // what was chosen for tasks that look like this habit: link them to it, or remember they are meant to be separate
+    if (newHabitId && PC && habitDecision.ids && habitDecision.ids.length) {
+      if (habitDecision.action === "linkall") linkTasksToHabit(habitDecision.ids, newHabitId);
+      else if (habitDecision.action === "separate") {
+        let t = tasks;
+        habitDecision.ids.forEach(function (id) { const r = PC.markSeparate(t, id, newHabitId); if (r.ok) t = r.tasks; });
+        if (t !== tasks) { tasks = t; saveTasks(); renderTaskList(); }
+      }
+    }
     resetHabitForm();
     renderAllHabitViews();
     core.showToast(habitFormEditId ? "Habit updated." : "Habit added.");
@@ -629,6 +680,7 @@
       window.JarvisCore.showToast("That couldn't be saved. The browser may be full or blocking storage.");
       return false;
     }
+    followHabits(prev);
     renderAllHabitViews();
     return true;
   }
@@ -720,6 +772,8 @@
       if (!window.confirm('Delete habit "' + h.name + '"? This removes its entire history and can\'t be undone.')) return;
       habits = habits.filter(function (hh) { return hh.id !== h.id; });
       saveHabits();
+      // tasks that stood for this habit stay, as ordinary tasks (their own tick is kept)
+      if (PC) { const un = PC.dropHabitLinks(tasks, h.id); if (un !== tasks) { tasks = un; saveTasks(); renderTaskList(); } }
       renderAllHabitViews();
       window.JarvisCore.showToast("Habit deleted.");
     }
@@ -927,15 +981,17 @@
       title: "Habits", opener: $("habitsMenuBtn"),
       rows: [
         { key: "habits-plan", label: "Day planner", sub: "Put tasks into the hours of a day" },
+        { key: "dup-review", label: "Review possible duplicates", sub: dupSub() },
         { key: "habits-goals", label: "Goals", sub: "Personal goals and their progress" },
         { key: "habits-reminders", label: "Reminders", sub: "Phone notifications and quiet hours" },
         { key: "habits-wake", label: "Wake check", sub: "Prove you are up" },
         { key: "discipline-program", label: "30-day program", sub: "Optional lessons and missions" },
         { key: "discipline-setup", label: "Discipline settings", sub: "Phone limit, rules, schedule, your data" }
       ],
-      onPick: go
+      onPick: function (key) { if (key === "dup-review") { if (window.JarvisPlanSync) window.JarvisPlanSync.openReview($("habitsMenuBtn")); } else go(key); }
     });
   }
+  function dupSub() { const n = window.JarvisPlanSync ? window.JarvisPlanSync.count() : 0; return n ? n + " possible " + (n === 1 ? "pair" : "pairs") + " to look at" : "Nothing looks duplicated"; }
 
   function handleDaySelectorClick(e) {
     const pill = e.target.closest(".day-pill");
@@ -997,12 +1053,45 @@
      The planner works on the very same tasks the To-Do list shows (a task with a time is an item in that hour), so it
      reads them from here and hands the changed list back. Nothing is copied: one list, one place it is saved. */
   function getTasks() { return tasks; }
-  function commitTasks(next) {
-    tasks = Array.isArray(next) ? next : tasks;
+  function commitTasks(next) { if (Array.isArray(next)) setTasks(next); }
+
+  // The one way a changed task list is saved when something else may need to follow it: a task that stands for a habit on a day (task.habitId)
+  // shares that habit's tick, so ticking, unticking or moving it brings the habit along, in the same save. If the habits can't be saved, nothing
+  // changes (neither the task nor the habit).
+  function setTasks(next) {
+    const prev = tasks, today = window.JarvisCore.todayISODate();
+    let list = next;
+    if (PC) {
+      // a linked task moved to another day takes that day's state from its habit (the habit is where a tick lives)
+      list = next.map(function (t) {
+        const p = t && t.habitId ? prev.filter(function (x) { return x.id === t.id; })[0] : null;
+        if (!p || p.date === t.date || !!p.completed !== !!t.completed) return t;
+        const h = habits.filter(function (x) { return x.id === t.habitId; })[0];
+        return h && HL.isDone(h, t.date) !== !!t.completed ? Object.assign({}, t, { completed: HL.isDone(h, t.date) }) : t;
+      });
+      const sync = PC.syncFromTasks(prev, list, habits, today);
+      if (sync.changed.length) {
+        const before = habits;
+        habits = sync.habits;
+        if (!saveHabits()) { habits = before; renderAllHabitViews(); renderTaskList(); window.JarvisCore.showToast("That couldn't be saved. The browser may be full or blocking storage."); return false; }
+      }
+    }
+    tasks = list;
     saveTasks();
     renderTaskList();
     renderDaySelectorPills();
     renderTodayOverview();
+    if (PC && habits) renderAllHabitViews();
+    return true;
+  }
+  // After a habit's days changed (prev -> now), the tasks that stand for it on those days follow. Called once the habits were saved.
+  function followHabits(prevHabits) {
+    if (!PC) return;
+    const s = PC.syncFromHabits(prevHabits, habits, tasks);
+    if (!s.changed.length) return;
+    tasks = s.tasks;
+    saveTasks();
+    renderTaskList(); renderDaySelectorPills(); renderTodayOverview();
   }
   function getSelectedDate() { return selectedDate; }
   // A new task made by another part of the app (the Strategy tab). It is the same record the To-Do form makes, in the same list.
@@ -1041,6 +1130,8 @@
 
     $("taskAddToggleBtn").addEventListener("click", handleTaskAddToggle);
     $("taskForm").addEventListener("submit", handleTaskFormSubmit);
+    $("taskText").addEventListener("input", refreshTaskDup);
+    $("taskTime").addEventListener("input", refreshTaskDup);
     $("taskFormCancelBtn").addEventListener("click", resetTaskForm);
     $("taskList").addEventListener("click", handleTaskListClick);
     $("taskRepeatDaysRow").addEventListener("click", function (e) {
@@ -1060,6 +1151,7 @@
     $("habitsDayNote").addEventListener("click", handleHabitsDayNoteClick);
     $("habitHistoryGrid").addEventListener("click", handleHabitGridClick);
     $("habitForm").addEventListener("submit", handleHabitFormSubmit);
+    $("habitName").addEventListener("input", refreshHabitDup);
     $("habitPlanTime").addEventListener("input", syncPlanForm);
     $("habitTargetDays").addEventListener("input", syncPlanForm);
     $("habitFormCancelBtn").addEventListener("click", resetHabitForm);
@@ -1106,6 +1198,7 @@
     const prev = habits;
     habits = res.habits;
     if (!saveHabits()) { habits = prev; renderAllHabitViews(); return { ok: false, errors: {}, error: REFUSED }; }
+    followHabits(prev);
     renderAllHabitViews();
     return { ok: true, errors: {} };
   }
@@ -1132,5 +1225,80 @@
   // A different time on one day only; the habit's usual time and days are not touched.
   function moveHabitDay(id, date, time) { return changeHabits(function (list) { return HP.moveOn(list, id, date, time); }); }
 
-  window.JarvisHabits = { addHabit: addHabit, getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
+
+  /* ---- one occurrence, one tick: links between tasks and habits, and duplicate suggestions (planning-core-logic.js) ----
+     A task with habitId stands for that habit on the task's day and shares its tick. Nothing is merged or deleted for you: a link is made, or a pair is
+     kept separate, only when asked. The first time a link is made, the tasks and habits as they were are copied to this device (jarvisPlanSnapshot). */
+
+  const SNAP_KEY = "jarvisPlanSnapshot";
+  function ensureSnapshot() {
+    try {
+      if (window.JarvisCore.loadJSON(SNAP_KEY, null)) return;
+      const snap = { v: 1, at: Date.now(), reason: "before the first task and habit were linked", tasks: tasks, habits: habits };
+      if (JSON.stringify(snap).length > 1500000) return;
+      window.JarvisCore.saveJSON(SNAP_KEY, snap);
+    } catch (e) { /* a snapshot is a convenience; linking does not depend on it */ }
+  }
+  // A habit with a planner time is on its planner days; one without can be done any day, so it is "on" every day for duplicate suggestions.
+  function habitOnDay(h, date) { return HP && HP.onPlanner(h) ? HP.occursOn(h, date) : true; }
+  function habitAtTime(h, date) { return HP ? HP.timeOn(h, date) : ""; }
+  function calEvents(from, to) {
+    try {
+      const c = window.JarvisCalendar;
+      return c && c.itemsBetween ? c.itemsBetween(from, to).filter(function (it) { return it.source === "event"; }).map(function (it) { return { id: it.id, title: it.title, date: it.date, time: it.allDay ? "" : it.time, allDay: !!it.allDay }; }) : [];
+    } catch (e) { return []; }
+  }
+  // Possible duplicates of something being made. cand { type: "task"|"habit"|"event"|"block", name, date?, time? }. Suggestions only.
+  function duplicateCheck(cand) {
+    if (!PC || !cand) return [];
+    const today = window.JarvisCore.todayISODate(), day = /^\d{4}-\d{2}-\d{2}$/.test(cand.date || "") ? cand.date : "";
+    return PC.findDuplicates(cand, { tasks: tasks, habits: habits, events: day ? calEvents(day, day) : [] }, { today: today, from: today, habitOn: habitOnDay, habitTime: habitAtTime });
+  }
+  // Pairs among what is already saved that may be one occurrence entered twice. opts { from, to }.
+  function duplicateScan(opts) {
+    if (!PC) return [];
+    const today = window.JarvisCore.todayISODate(), o = opts || {};
+    const from = o.from || PCaddDays(today, -7), to = o.to || PCaddDays(today, 60);
+    return PC.scan({ tasks: tasks, habits: habits, events: calEvents(from, to) }, { today: today, habitOn: habitOnDay, habitTime: habitAtTime }, { from: from, to: to });
+  }
+  function PCaddDays(d, n) { return addDaysISO(d, n); }
+  // Saves a changed pair of lists together; if the browser refuses, both go back. -> { ok, error }
+  function commitLinked(nextTasks, nextHabits) {
+    const prevT = tasks, prevH = habits;
+    tasks = nextTasks; habits = nextHabits;
+    if (nextHabits !== prevH && !saveHabits()) { tasks = prevT; habits = prevH; renderAllHabitViews(); renderTaskList(); return { ok: false, error: REFUSED }; }
+    saveTasks();
+    renderTaskList(); renderDaySelectorPills(); renderTodayOverview(); renderAllHabitViews();
+    return { ok: true };
+  }
+  function linkTaskToHabit(taskId, habitId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    ensureSnapshot();
+    const r = PC.link(tasks, habits, taskId, habitId, window.JarvisCore.todayISODate());
+    return r.ok ? commitLinked(r.tasks, r.habits) : r;
+  }
+  function unlinkTask(taskId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    const r = PC.unlink(tasks, taskId);
+    return r.ok ? commitLinked(r.tasks, habits) : r;
+  }
+  function keepSeparate(taskId, otherId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    const r = PC.markSeparate(tasks, taskId, otherId);
+    return r.ok ? commitLinked(r.tasks, habits) : r;
+  }
+  // Links every one of these tasks to the habit. -> { ok, linked }
+  function linkTasksToHabit(taskIds, habitId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    ensureSnapshot();
+    let t = tasks, hs = habits, linked = 0;
+    taskIds.forEach(function (id) { const r = PC.link(t, hs, id, habitId, window.JarvisCore.todayISODate()); if (r.ok) { t = r.tasks; hs = r.habits; linked++; } });
+    if (!linked) return { ok: true, linked: 0 };
+    const r = commitLinked(t, hs);
+    return r.ok ? { ok: true, linked: linked } : r;
+  }
+  function habitAllowsLink(habitId, date) { const h = habits.filter(function (x) { return x.id === habitId; })[0]; return !!h && habitOnDay(h, date); }
+  function getSnapshotInfo() { const s = window.JarvisCore.loadJSON(SNAP_KEY, null); return s && s.v ? { at: s.at, tasks: (s.tasks || []).length, habits: (s.habits || []).length, reason: s.reason } : null; }
+
+  window.JarvisHabits = { duplicateCheck: duplicateCheck, duplicateScan: duplicateScan, linkTaskToHabit: linkTaskToHabit, linkTasksToHabit: linkTasksToHabit, unlinkTask: unlinkTask, keepSeparate: keepSeparate, habitAllowsLink: habitAllowsLink, getSnapshotInfo: getSnapshotInfo, addHabit: addHabit, getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
 })();

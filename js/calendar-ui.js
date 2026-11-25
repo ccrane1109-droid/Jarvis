@@ -139,11 +139,13 @@
     events.forEach(function (e) { if (e && !e.deletedAt && e.linked && e.linked.type === "mealprep") live[e.linked.id] = true; });
     return h.getTasks().filter(function (t) { return !(t && t.mealPrepId && live[t.mealPrepId]); });
   }
-  function allItems(from, to) {
+  function allItems(from, to, keepLinked) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
     const tasks = h ? C.taskItems(visibleTasks(h), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
-    const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to));
+    let items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to));
+    // a task that stands for a habit on its day is the same occurrence as that habit: drawn once (planning-core-logic.js)
+    if (window.JarvisPlanningCore && h && !keepLinked) { const byId = {}; h.getTasks().forEach(function (t) { if (t && t.habitId) byId[t.id] = t; }); items = window.JarvisPlanningCore.unifyItems(items, byId); }
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     // time blocks overlapping each other, or a timed event on the same day (the event rules above only know events)
@@ -944,6 +946,7 @@
       rows: [
         { key: "search", label: "Search and filters", sub: "Find an event or task, or show only some kinds" },
         { key: "assist", label: "Planning assistant", sub: "Find time, plan a week, catch up" },
+        { key: "dups", label: "Review possible duplicates", sub: dupSub() },
         { key: "style", label: dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list" },
         { key: "habits", label: habitsShown() ? "Hide habits" : "Show habits", sub: habitsShown() ? "Take planned habits off the calendar and planner" : "Planned habits are hidden" },
         { key: "cats", label: "Time block categories", sub: "What your time blocks are for" },
@@ -954,6 +957,7 @@
       ],
       onPick: function (key) {
         if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
+        else if (key === "dups") { if (window.JarvisPlanSync) window.JarvisPlanSync.openReview($("calMenuBtn")); }
         else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
         else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour."); }
         else if (key === "habits") { if (planner() && planner().setHabitsShown) { const on = !habitsShown(); planner().setHabitsShown(on); render(); announce(on ? "Habits are shown." : "Habits are hidden."); } }
@@ -965,6 +969,7 @@
       }
     });
   }
+  function dupSub() { const n = window.JarvisPlanSync ? window.JarvisPlanSync.count() : 0; return n ? n + " possible " + (n === 1 ? "pair" : "pairs") + " to look at" : "Nothing looks duplicated"; }
   function openSettings() { modal = { kind: "settings", opener: document.activeElement }; showModal(); focusSoon("#calS_zone"); }
 
   function onModalClick(e) {
@@ -1134,7 +1139,7 @@
     getEvents: function () { return events.slice(); }, getSettings: function () { return Object.assign({}, settings); }, zone: zone,
     // Every item from..to (dates in the view zone): events, your tasks and your personal goals, with no filters applied.
     // (Planned habits are not in this list: Home and the planning assistant read it, and habits are drawn from their own records on the Calendar and Day planner.)
-    itemsBetween: function (from, to) { return allItems(from, to).filter(function (it) { return it.source !== "habit"; }); },
+    itemsBetween: function (from, to) { return allItems(from, to, true).filter(function (it) { return it.source !== "habit"; }); },
     // Open an event's popup from another screen (Home).
     openEvent: function (id, occDate) { if (C.byId(events, id)) { openEdit({ id: id, occDate: occDate }); focusSoon("#calF_title"); } },
     // Tick something shown on the schedule, from any screen.
