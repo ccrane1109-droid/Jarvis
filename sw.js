@@ -60,6 +60,7 @@ const APP_SHELL = [
   "./js/habit-logic.js?v=95",
   "./js/task-kind-logic.js?v=95",
   "./js/habit-plan-logic.js?v=95",
+  "./js/habit-schedule-logic.js?v=95",
   "./js/planning-core-logic.js?v=95",
   "./js/goals-logic.js?v=95",
   "./js/dayplan-logic.js?v=95",

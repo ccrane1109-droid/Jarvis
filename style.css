@@ -5936,3 +5936,42 @@ h3.mp-h5, h4.mp-h5 { font-size: 13px; }
 .pc-msg { margin: 0 0 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--green-dim); font-size: 14px; }
 .pc-msg .btn-icon { min-height: 44px; margin-left: 6px; }
 #taskDupRow select, #habitDupRow select { border-color: var(--yellow); }
+
+/* Habits Today (compact rows grouped by part of the day), Routines menu, flexible and archived sections */
+.hb-prog { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
+.hb-prog-t { font-size: 14px; color: var(--text-dim); white-space: nowrap; }
+.hb-prog-bar { flex: 1 1 auto; height: 6px; border-radius: 99px; background: var(--card-border); overflow: hidden; }
+.hb-prog-bar > span { display: block; height: 100%; background: var(--green); border-radius: 99px; }
+.hb-grp { margin: 0 0 4px; }
+.hb-grp-h { margin: 10px 0 0; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); display: flex; justify-content: space-between; align-items: baseline; }
+.hb-grp-n { font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.hb-r { min-height: 52px; padding: 4px 0; gap: 8px; }
+.hb-r .habit-row-main { gap: 1px; }
+.hb-r .habit-row .habit-card-name, .hb-r .habit-card-name { font-size: 15px; }
+.hb-r .habit-toggle-btn { min-width: 44px; width: 44px; padding: 0; border-radius: 50%; }
+.hb-r .habit-menu-btn { flex: 0 0 auto; min-width: 44px; min-height: 44px; border-color: transparent; font-size: 18px; }
+.hb-r.is-skipped .habit-card-name { text-decoration: line-through; color: var(--text-dim); }
+.hb-r .stepper-row { flex: 0 0 auto; }
+.hb-done-fold { margin: 0; }
+.hb-done-fold > summary, .hb-flex > summary, .hb-archived > summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 14px; color: var(--text-dim); }
+.hb-done-fold[open] > summary, .hb-flex[open] > summary, .hb-archived[open] > summary { color: var(--text); }
+.hb-flex, .hb-archived { margin: 8px 0; border-top: 1px solid var(--card-border); }
+.hb-paused { margin: 8px 0; font-size: 14px; color: var(--text-dim); }
+.btn-link { background: none; border: 0; color: #9ec1ff; font: inherit; text-decoration: underline; cursor: pointer; padding: 10px 4px; min-height: 44px; }
+.hb-warn { color: var(--yellow) !important; }
+.hb-mrow .list-item-actions .habit-more-btn { min-width: 44px; min-height: 44px; font-size: 18px; }
+.hb-day.is-off { opacity: 0.4; }
+.hb-day.is-skip { border-style: dashed; }
+.hb-day.is-miss:not(.is-done) { border-color: rgba(255, 200, 87, 0.5); }
+.hb-cons-list { list-style: none; margin: 0; padding: 0; }
+.hb-cons-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-top: 1px solid var(--card-border); align-items: center; }
+.hb-cons-row:first-child { border-top: 0; }
+.hb-cons-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.hb-cons-name { font-weight: 600; overflow-wrap: anywhere; }
+.hb-cons-sub { font-size: 13px; color: var(--text-dim); }
+.hb-cons-pct { font-size: 18px; font-weight: 700; }
+.hb-cons-bar { grid-column: 1 / -1; height: 5px; border-radius: 99px; background: var(--card-border); overflow: hidden; }
+.hb-cons-bar > span { display: block; height: 100%; background: var(--accent); }
+.hb-cons-note { margin: 8px 0 0; font-size: 14px; color: var(--text-dim); }
+.hb-cons-how { margin-top: 6px; }
+.hb-cons-how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 14px; color: var(--text-dim); }

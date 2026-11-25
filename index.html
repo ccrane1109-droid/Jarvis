@@ -2121,8 +2121,8 @@ npx firebase-tools deploy --only firestore:rules</pre>
             <input type="time" id="habitPlanTime" name="habitPlanTime" step="900" aria-describedby="habitPlanHint">
             <p class="field-hint" id="habitPlanHint">Give it a time and it appears on your Day planner and Calendar on its days, and ticking it there ticks it here. Leave it empty to keep it off the planner.</p>
           </div>
-          <fieldset class="form-row hb-plan-days hidden" id="habitPlanDaysWrap">
-            <legend>Days in your planner</legend>
+          <fieldset class="form-row hb-plan-days" id="habitPlanDaysWrap">
+            <legend>Days it&rsquo;s for</legend>
             <div class="cal-chips" id="habitPlanDays"></div>
             <p class="field-hint" id="habitPlanDaysHint"></p>
           </fieldset>
@@ -2164,6 +2164,16 @@ npx firebase-tools deploy --only firestore:rules</pre>
     <!-- ---------- Progress: weekly consistency, trends, past reflections ---------- -->
     <div id="habits-progress" class="habits-sub-panel" role="tabpanel" aria-labelledby="habitsSubNavProgress">
       <div class="sm-pills" role="group" aria-label="Progress views"><button type="button" class="sm-pill is-on" data-subgo="habits-progress" aria-pressed="true">Consistency</button><button type="button" class="sm-pill" data-subgo="habits-goals" aria-pressed="false">Goals</button></div>
+      <div class="card" id="hbConsCard">
+        <div class="card-title-row">
+          <h2 class="card-title" id="hbConsH">Consistency</h2>
+          <div class="sm-pills" role="group" aria-label="Consistency period">
+            <button type="button" class="sm-pill is-on" data-hbcons="week" aria-pressed="true">Week</button>
+            <button type="button" class="sm-pill" data-hbcons="month" aria-pressed="false">Month</button>
+          </div>
+        </div>
+        <div id="hbConsBody" aria-live="polite"></div>
+      </div>
       <div class="card">
         <div class="card-title-row">
           <h2 class="card-title">Habit History</h2>
@@ -3149,6 +3159,7 @@ npx firebase-tools deploy --only firestore:rules</pre>
 <script src="js/habit-logic.js?v=95"></script>
 <script src="js/task-kind-logic.js?v=95"></script>
 <script src="js/habit-plan-logic.js?v=95"></script>
+<script src="js/habit-schedule-logic.js?v=95"></script>
 <script src="js/planning-core-logic.js?v=95"></script>
 <script src="js/goals-logic.js?v=95"></script>
 <script src="js/dayplan-logic.js?v=95"></script>
