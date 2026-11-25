@@ -128,8 +128,8 @@
     return S ? S.goalItems(goals, from, to) : [];
   }
   // Habits that have a time on the planner, drawn from the habit records themselves (nothing is copied): one per habit per planned day.
-  function habitItems(h, from, to) {
-    if (!h || !h.getHabits || !HPl || !habitsShown()) return [];
+  function habitItems(h, from, to, force) {
+    if (!h || !h.getHabits || !HPl || (!force && !habitsShown())) return [];
     try { return HPl.items(h.getHabits(), from, to, { today: today() }); } catch (e) { return []; }
   }
   // A Meal Prep session is ONE Calendar event. If you also put it on your to-do list for the day, that task (it carries mealPrepId) is not drawn
@@ -139,11 +139,11 @@
     events.forEach(function (e) { if (e && !e.deletedAt && e.linked && e.linked.type === "mealprep") live[e.linked.id] = true; });
     return h.getTasks().filter(function (t) { return !(t && t.mealPrepId && live[t.mealPrepId]); });
   }
-  function allItems(from, to, keepLinked) {
+  function allItems(from, to, keepLinked, forceHabits) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
     const tasks = h ? C.taskItems(visibleTasks(h), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
-    let items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to));
+    let items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to, forceHabits));
     // a task that stands for a habit on its day is the same occurrence as that habit: drawn once (planning-core-logic.js)
     if (window.JarvisPlanningCore && h && !keepLinked) { const byId = {}; h.getTasks().forEach(function (t) { if (t && t.habitId) byId[t.id] = t; }); items = window.JarvisPlanningCore.unifyItems(items, byId); }
     const mark = {};
@@ -1140,6 +1140,9 @@
     // Every item from..to (dates in the view zone): events, your tasks and your personal goals, with no filters applied.
     // (Planned habits are not in this list: Home and the planning assistant read it, and habits are drawn from their own records on the Calendar and Day planner.)
     itemsBetween: function (from, to) { return allItems(from, to, true).filter(function (it) { return it.source !== "habit"; }); },
+    // What the Overview shows: the same items, one row for one occurrence (a task that stands for a habit is the habit's row), habits included
+    // whether or not they are drawn on the Calendar. Dates in the view zone.
+    planItems: function (from, to) { return allItems(from, to, false, true); },
     // Open an event's popup from another screen (Home).
     openEvent: function (id, occDate) { if (C.byId(events, id)) { openEdit({ id: id, occDate: occDate }); focusSoon("#calF_title"); } },
     // Tick something shown on the schedule, from any screen.

@@ -5975,3 +5975,83 @@ h3.mp-h5, h4.mp-h5 { font-size: 13px; }
 .hb-cons-note { margin: 8px 0 0; font-size: 14px; color: var(--text-dim); }
 .hb-cons-how { margin-top: 6px; }
 .hb-cons-how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 14px; color: var(--text-dim); }
+
+/* Focus timer bar (focus-ui.js): above the phone's bottom bar, with room left under the page so it never covers a control */
+.fc-bar { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 46; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 14px; background: var(--card); border: 1px solid var(--accent); box-shadow: var(--shadow); }
+.fc-bar.hidden { display: none; }
+.fc-main { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; }
+.fc-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.fc-clock { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fc-clock.is-up { color: var(--yellow); }
+.fc-bar.is-paused .fc-clock { color: var(--text-dim); }
+.fc-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.fc-acts .btn { min-height: 44px; }
+.fc-bar .btn-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+body.fc-on { padding-bottom: 76px; }
+@media (max-width: 900px) { .fc-bar { bottom: calc(66px + env(safe-area-inset-bottom)); } body.fc-on { padding-bottom: 150px; } }
+
+/* ---------- Planning › Overview: the command center (po-) ---------- */
+.po-wide { grid-column: 1 / -1; }
+.po-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.po-date { margin: 0; font-size: 18px; font-weight: 700; }
+.po-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.po-tool { min-height: 44px; }
+.po-note { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; padding: 8px 12px; border: 1px solid var(--card-border); border-radius: 12px; background: var(--bg-elevated); font-size: 14px; }
+.po-note .btn { min-height: 44px; flex: none; }
+.po-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 701px) { .po-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.po-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 64px; padding: 10px 12px; text-align: left; color: var(--text); background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; }
+.po-stat:hover { background: var(--card-hover); }
+.po-stat-n { font-size: 24px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.po-stat-of { font-size: 15px; font-weight: 600; color: var(--text-dim); }
+.po-stat-l { font-size: 12px; color: var(--text-dim); }
+.po-next { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 4px 0; text-align: left; color: var(--text); background: none; border: 0; cursor: pointer; }
+.po-when { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--accent-hover); }
+.po-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.po-acts .btn { min-height: 44px; flex: 1 1 auto; }
+.po-top { list-style: none; margin: 0; padding: 0; }
+.po-top-row { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 2px 0; }
+.po-top-row + .po-top-row { border-top: 1px solid var(--card-border); }
+.po-top-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; min-height: 44px; justify-content: center; padding: 0 4px; text-align: left; font-size: 15px; font-weight: 600; color: var(--text); background: none; border: 0; cursor: pointer; overflow-wrap: anywhere; }
+.po-top-text.is-done { color: var(--text-dim); text-decoration: line-through; }
+.po-top-add { flex: 1 1 auto; min-height: 44px; padding: 0 8px; text-align: left; font-size: 14px; color: var(--accent-hover); background: none; border: 1px dashed var(--card-border); border-radius: 10px; cursor: pointer; }
+.po-tick { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; background: none; border: 0; cursor: pointer; color: var(--text); }
+.po-tick > span { width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid var(--text-faint); border-radius: 50%; font-size: 14px; font-weight: 700; line-height: 1; }
+.po-tick.is-done > span { background: var(--green); border-color: var(--green); color: #04210f; }
+.po-tick:disabled { opacity: 0.5; cursor: default; }
+.po-tick-off { cursor: default; }
+.po-more { flex: none; min-width: 44px; min-height: 44px; padding: 0 8px; font-size: 18px; color: var(--text-dim); background: none; border: 0; border-radius: 10px; cursor: pointer; }
+.po-more:disabled { opacity: 0.35; cursor: default; }
+.po-rem, .po-hlist { list-style: none; margin: 0; padding: 0; }
+.po-rem-row { display: flex; align-items: center; gap: 4px; min-height: 48px; }
+.po-rem-row + .po-rem-row, .po-h + .po-h { border-top: 1px solid var(--card-border); }
+.po-rem-row.is-done .po-rem-title { color: var(--text-dim); text-decoration: line-through; }
+.po-rem-main { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 44px; align-content: center; padding: 0 4px; text-align: left; color: var(--text); background: none; border: 0; cursor: pointer; }
+.po-rem-time { flex: none; min-width: 64px; font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.po-rem-title { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.po-tag { flex: none; padding: 1px 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; color: var(--accent-hover); border: 1px solid var(--card-border); border-radius: 999px; }
+.po-tag.is-warn { color: var(--red); }
+.po-sub { margin: 12px 0 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+.po-h { display: flex; align-items: center; gap: 4px; min-height: 48px; }
+.po-h-name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 0 4px; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.po-h.is-done .po-h-name { color: var(--text-dim); text-decoration: line-through; }
+.po-count { flex: none; font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.po-step { display: flex; align-items: center; gap: 2px; flex: none; }
+.po-stepbtn { min-width: 44px; min-height: 44px; font-size: 20px; color: var(--text); background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 10px; cursor: pointer; }
+.po-stepbtn:disabled { opacity: 0.35; cursor: default; }
+.po-stratlist { list-style: none; margin: 0; padding: 0; }
+.po-stratlist li + li { border-top: 1px solid var(--card-border); }
+.po-strat { display: flex; flex-direction: column; gap: 2px; width: 100%; min-height: 56px; padding: 8px 2px; text-align: left; color: var(--text); background: none; border: 0; cursor: pointer; }
+.po-strat-k { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+.po-dim { color: var(--text-dim); font-weight: 500; }
+.po-seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.po-seg-btn { min-height: 44px; padding: 0 14px; font-size: 14px; font-weight: 600; color: var(--text); background: var(--bg-elevated); border: 1px solid var(--card-border); border-radius: 999px; cursor: pointer; }
+.po-seg-btn[aria-pressed="true"] { color: #fff; background: #2f6fe0; border-color: #2f6fe0; }
+.po-secs { list-style: none; margin: 8px 0 0; padding: 0; }
+.po-sec { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 48px; }
+.po-sec + .po-sec { border-top: 1px solid var(--card-border); }
+.po-sec-l { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; cursor: pointer; }
+.po-sec-l input { width: 22px; height: 22px; }
+.po-done-toggle { min-height: 44px; }
+.po-card button:focus-visible, .po-bar button:focus-visible, .po-note button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .po-stat, .po-seg-btn { transition: background 0.15s; } }

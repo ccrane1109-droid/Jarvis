@@ -676,6 +676,6 @@
   }
 
   window.JarvisCalPlanner = {
-    attach: attach, dayHtml: dayHtml, weekHtml: weekHtml, weekPrioHtml: weekPrioHtml, openAdd: openAdd, openTask: openTaskSheet, openHabit: openHabitSheet, habitsShown: habitsShown, setHabitsShown: setHabitsShown, openCategories: openCategories, openHours: openHours, flush: flush
+    attach: attach, dayHtml: dayHtml, weekHtml: weekHtml, weekPrioHtml: weekPrioHtml, openAdd: openAdd, saveDay: saveDay, pickTop: pickTop, openTopTask: openTopTask, openTask: openTaskSheet, openHabit: openHabitSheet, habitsShown: habitsShown, setHabitsShown: setHabitsShown, openCategories: openCategories, openHours: openHours, flush: flush
   };
 })();
