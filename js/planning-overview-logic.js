@@ -19,6 +19,7 @@
   const SECTIONS = [
     { id: "stats", label: "Today in numbers" },
     { id: "next", label: "Up next" },
+    { id: "heads", label: "Heads up" },
     { id: "top", label: "Today’s top three" },
     { id: "remaining", label: "Remaining schedule" },
     { id: "habits", label: "Habits" },
@@ -28,7 +29,7 @@
   const IDS = SECTIONS.map(function (s) { return s.id; });
   const LAYOUTS = {
     simple: ["next", "top", "remaining"],
-    balanced: ["stats", "next", "top", "habits", "remaining", "strategy"],
+    balanced: ["stats", "next", "heads", "top", "habits", "remaining", "strategy"],
     advanced: IDS.slice()
   };
   const LAYOUT_LABEL = { simple: "Simple", balanced: "Balanced", advanced: "Advanced", custom: "My own" };
@@ -165,7 +166,31 @@
     return out.concat(Object.keys(groups).map(function (k) { return groups[k]; })).sort(function (a, b) { return rank[a.kind] - rank[b.kind] || byDate(a, b); }).slice(0, limit);
   }
 
+  /* ---------------- heads up: things worth a look, never changed for you ---------------- */
+
+  // What deserves a look today, one line each, with where to go to deal with it. This only reads: nothing is moved, ticked or deleted.
+  // input { items (today's items), soon (items for the next two days), today, nowMin, overbooked (a message from the workload rule, or "") }
+  // -> [{ kind: "overlap" | "overload" | "notime" | "deadline" | "earlier", text, count, key }]
+  function headsUp(input) {
+    const i = input || {}, today = i.today, now = typeof i.nowMin === "number" ? i.nowMin : 0, out = [];
+    const items = Array.isArray(i.items) ? i.items : [], soon = Array.isArray(i.soon) ? i.soon : [];
+    const open = function (it) { return it && !it.completed; };
+    const overlaps = items.filter(function (it) { return open(it) && it.conflict; });
+    if (overlaps.length) out.push({ kind: "overlap", count: overlaps.length, key: overlaps[0].key, text: overlaps.length === 1 ? "1 thing overlaps another today" : overlaps.length + " things overlap each other today" });
+    if (i.overbooked) out.push({ kind: "overload", count: 1, key: "", text: String(i.overbooked) });
+    const notime = items.filter(function (it) { return open(it) && it.source === "task" && it.allDay && it.scheduled !== false && !it.habitId; });
+    if (notime.length) out.push({ kind: "notime", count: notime.length, key: notime[0].key, text: notime.length === 1 ? "1 task has no time yet" : notime.length + " tasks have no time yet" });
+    const due = soon.filter(function (it) { return open(it) && it.date >= today && (it.source === "goal" || (it.source === "task" && it.scheduled === false)); }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    if (due.length) {
+      const d = due[0], when = d.date === today ? "today" : "tomorrow";
+      out.push({ kind: "deadline", count: due.length, key: d.key, text: due.length === 1 ? "“" + d.title + "” is due " + when : due.length + " deadlines in the next two days, the first is “" + d.title + "”" });
+    }
+    const earlier = items.filter(function (it) { return open(it) && actionable(it) && timed(it) && !it.point && endOf(it) <= now || (open(it) && actionable(it) && timed(it) && it.point && it.startMin < now); });
+    if (earlier.length) out.push({ kind: "earlier", count: earlier.length, key: earlier[0].key, text: earlier.length === 1 ? "1 thing from earlier today is still open" : earlier.length + " things from earlier today are still open" });
+    return out;
+  }
+
   function hm(min) { const m = Math.max(0, Math.round(min)), h = Math.floor(m / 60); return h ? h + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min"; }
 
-  return { SECTIONS: SECTIONS, LAYOUTS: LAYOUTS, LAYOUT_LABEL: LAYOUT_LABEL, cleanPrefs: cleanPrefs, sectionsFor: sectionsFor, toCustom: toCustom, setLayout: setLayout, toggle: toggle, move: move, stats: stats, upNext: upNext, remaining: remaining, deadlines: deadlines, hm: hm, isHabitTask: isHabitTask };
+  return { SECTIONS: SECTIONS, LAYOUTS: LAYOUTS, LAYOUT_LABEL: LAYOUT_LABEL, cleanPrefs: cleanPrefs, sectionsFor: sectionsFor, toCustom: toCustom, setLayout: setLayout, toggle: toggle, move: move, stats: stats, upNext: upNext, remaining: remaining, deadlines: deadlines, headsUp: headsUp, hm: hm, isHabitTask: isHabitTask };
 });

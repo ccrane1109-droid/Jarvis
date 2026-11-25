@@ -76,6 +76,22 @@
     return { c: c, all: all, todayItems: todayItems, tasks: tasks, taskById: taskById, habitIds: habitIds, links: links, PL: PL, freeMin: freeMin, weekDates: weekDates, detail: detail, top: top };
   }
 
+  // Today's open tasks in the order the Strategy engine ranks them (plan-insights-logic.js), each with its short reason. Worked out once per draw.
+  function rankOf(g) {
+    if (g._rank) return g._rank;
+    const A = window.JarvisPlanApp, I = window.JarvisPlanInsights, out = { list: [], byId: {} };
+    try {
+      if (A && I) {
+        A.bump();
+        I.rankTasks(A.ictx()).forEach(function (r) {
+          if (r.task && r.task.date === g.c.today && !r.task.completed) { out.list.push(r); out.byId[r.task.id] = r; }
+        });
+      }
+    } catch (e) { out.list = []; out.byId = {}; }
+    g._rank = out;
+    return out;
+  }
+
   function estimateOf(task, g) {
     try { const l = task && g.PL && g.PL.linkOf ? g.PL.linkOf(g.links, task.id) : null; return l && l.estMin ? Number(l.estMin) : 0; } catch (e) { return 0; }
   }
@@ -136,14 +152,35 @@
       else if (nx.state === "next") label = "In " + hm(nx.minutes);
       else { kicker = "Still open"; label = "From earlier today"; }
     } else {
-      const any = rem.anytime.slice().sort(function (a, b) { return (topIds[a.id] ? 0 : 1) - (topIds[b.id] ? 0 : 1); })[0];
-      if (any) { it = any; kicker = "Next task"; label = "No time set"; }
+      const rk = rankOf(g);
+      const pos = function (x) { const r = rk.byId[x.id]; return r ? rk.list.indexOf(r) : 1e6; };
+      const any = rem.anytime.slice().sort(function (a, b) { return (topIds[a.id] ? 0 : 1) - (topIds[b.id] ? 0 : 1) || pos(a) - pos(b); })[0];
+      if (any) {
+        it = any; kicker = "Next task";
+        const r = rk.byId[any.id];
+        label = r && r.enough ? "No time set · " + r.short : "No time set";
+      }
     }
     if (!it) {
       return card("next", "Up next", '<p class="ov-meta">Nothing else is scheduled for today.</p><div class="ov-chips"><button type="button" class="ov-chip" data-ov="add">Add something</button></div>');
     }
     const actions = '<div class="po-acts"><button type="button" class="btn btn-primary" data-ov="start" data-key="' + esc(it.key) + '">Start</button><button type="button" class="btn btn-secondary" data-ov="complete" data-key="' + esc(it.key) + '">Complete</button><button type="button" class="btn btn-secondary" data-ov="reschedule" data-key="' + esc(it.key) + '">Reschedule</button></div>';
     return card("next", kicker, '<button type="button" class="po-next" data-ov="open" data-key="' + esc(it.key) + '"><span class="ov-main">' + esc(it.title) + '</span><span class="ov-meta">' + esc(metaOf(it, g).join(" · ")) + '</span></button><p class="po-when">' + esc(label) + '</p>' + actions);
+  }
+
+  // Only shown when there is something to look at. Each line goes to where it can be dealt with; nothing here changes anything by itself.
+  function headsSection(g) {
+    let list = [];
+    try {
+      const P = planner(), soonTo = C.addDays(g.c.today, 1);
+      list = OL.headsUp({ items: g.todayItems, soon: g.all.filter(function (it) { return it.date >= g.c.today && it.date <= soonTo; }), today: g.c.today, nowMin: g.c.nowMin, overbooked: P && P.overbooked ? P.overbooked(g.c.today) : "" });
+    } catch (e) { list = []; }
+    if (!list.length) return "";
+    const asst = !!window.JarvisAssistant;
+    return card("heads", "Heads up", '<ul class="ov-list">' + list.map(function (x, i) {
+      const toAssistant = (x.kind === "overlap" || x.kind === "overload") && asst;
+      return '<li><button type="button" class="ov-row" data-ov="heads-go" data-kind="' + x.kind + '" data-key="' + esc(x.key) + '" data-i="' + i + '"><span class="ov-rmain"><span class="ov-rtitle">' + esc(x.text) + '</span><span class="ov-rsub">' + (toAssistant ? "Review with the planning assistant" : "Open it") + '</span></span></button></li>';
+    }).join("") + '</ul>');
   }
 
   function topSection(g) {
@@ -304,6 +341,7 @@
       const make = {
         stats: function () { return statsSection(g, st); },
         next: function () { return nextSection(g, rem, nx, topIds); },
+        heads: function () { return headsSection(g); },
         top: function () { return topSection(g); },
         remaining: function () { return remainingSection(g, rem, nx ? nx.item : null, topIds, habitIdsOnHabits); },
         habits: function () { return habitsSection(g); },
@@ -405,19 +443,25 @@
     P.pickTop(index, opener, g.c.today);
   }
   function suggest(opener) {
-    const g = last.g, A = window.JarvisPlanApp, I = window.JarvisPlanInsights, P = planner();
-    if (!g || !A || !I || !P) return;
+    const g = last.g, A = window.JarvisPlanApp, P = planner();
+    if (!g || !A || !A.openSheet || !P) return;
     const used = {}; g.top.forEach(function (s) { if (s.taskId) used[s.taskId] = true; });
-    let ranked = [];
-    try { A.bump(); ranked = I.rankTasks(A.ictx()).filter(function (r) { return r.task && r.task.date === g.c.today && !r.task.completed && !used[r.task.id] && !(r.task.habitId && g.habitIds[r.task.habitId]); }).slice(0, MAX_TOP_PICKS); } catch (e) { ranked = []; }
+    const ranked = rankOf(g).list.filter(function (r) { return !used[r.task.id]; }).slice(0, MAX_TOP_PICKS);
     if (!ranked.length) { setNote("Nothing to suggest yet. Add tasks for today first."); return; }
-    const why = function (r) { const parts = (r.parts || []).slice().sort(function (a, b) { return b.points - a.points; }).filter(function (p) { return p.points > 0; }).slice(0, 2).map(function (p) { return p.label; }); return parts.length ? parts.join(", ") : "Not enough information to rank it"; };
-    window.JarvisMenu.open({
-      title: "Suggested for today", opener: opener,
-      rows: ranked.map(function (r) { return { key: r.task.id, label: r.task.text, sub: why(r) }; }),
-      onPick: function (id) {
-        const slot = g.top.filter(function (s) { return s.empty; })[0]; if (!slot) { setNote("The top three are full."); return; }
-        const t = g.taskById[id]; if (!t) return;
+    const body = '<p class="sp-dim">Ranked by written rules from your goals, deadlines, priorities and estimates. It is not an AI. You can always choose any task yourself.</p><ul class="po-sgs">' + ranked.map(function (r) {
+      return '<li class="po-sg"><div class="po-sg-row"><div class="po-sg-main"><span class="sp-kid-t">' + esc(r.task.text) + '</span><span class="sp-dim">' + esc(r.short) + '</span></div>' +
+        '<button type="button" class="btn btn-secondary" data-sheet-act="use" data-id="' + esc(r.task.id) + '" aria-label="' + esc("Use " + r.task.text) + '">Use</button></div>' +
+        '<details class="po-why"><summary>Why?</summary><ul>' + window.JarvisPlanInsights.whyLines(r).map(function (l) { return '<li>' + esc(l) + '</li>'; }).join("") + '</ul></details></li>';
+    }).join("") + '</ul>';
+    A.openSheet({
+      title: "Suggested for today", body: body,
+      onAct: function (act, el) {
+        if (act !== "use") return;
+        const slot = g.top.filter(function (x) { return x.empty; })[0];
+        const t = g.taskById[el.getAttribute("data-id")];
+        A.closeSheet(true);
+        if (!slot) { setNote("The top three are full."); return; }
+        if (!t) return;
         const r = P.saveDay(g.c.today, { type: "top", index: slot.index, taskId: t.id, text: t.text });
         if (!r.ok) core().showToast(r.error || "That couldn't be saved."); else setNote("Added “" + t.text + "” to your top three.");
       }
@@ -446,6 +490,11 @@
     else if (act === "top-tick") toggleTaskById(id);
     else if (act === "top-open") { const s = g ? g.top[Number(el.getAttribute("data-i"))] : null; if (s && s.taskId && planner()) planner().openTask({ id: s.taskId }); }
     else if (act === "suggest") suggest(el);
+    else if (act === "heads-go") {
+      const kind = el.getAttribute("data-kind"), it = key ? itemByKey(key) : null;
+      if ((kind === "overlap" || kind === "overload") && window.JarvisAssistant) { go("navBtnCalendar"); window.JarvisAssistant.open(el); }
+      else if (it && cal()) cal().openItem(it);
+    }
     else if (act === "more-remaining") { ui.showAllRemaining = !ui.showAllRemaining; render(); }
     else if (act === "more-anytime") { ui.showAllAnytime = !ui.showAllAnytime; render(); }
     else if (act === "done-toggle") { ui.showDone = !ui.showDone; render(); }

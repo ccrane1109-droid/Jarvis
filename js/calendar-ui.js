@@ -970,6 +970,7 @@
         { key: "dups", label: "Review possible duplicates", sub: dupSub() },
         { key: "style", label: view === "week" ? (weekStyle === "list" ? (isPhone() ? "Show the week one day at a time" : "Show the week as a grid") : "Show the week as an agenda") : (dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list") },
         { key: "habits", label: habitsShown() ? "Hide habits" : "Show habits", sub: habitsShown() ? "Take planned habits off the calendar and planner" : "Planned habits are hidden" },
+        { key: "routines", label: "Routines", sub: "Reusable sequences you put on days" },
         { key: "cats", label: "Time block categories", sub: "What your time blocks are for" },
         { key: "hours", label: "Planner hours", sub: "When your day starts and ends, and the daily limit" },
         { key: "agenda", label: "Next 30 days", sub: "Everything coming up, as a list" },
@@ -982,6 +983,7 @@
         else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
         else if (key === "style") toggleStyle();
         else if (key === "habits") { if (planner() && planner().setHabitsShown) { const on = !habitsShown(); planner().setHabitsShown(on); render(); announce(on ? "Habits are shown." : "Habits are hidden."); } }
+        else if (key === "routines") { if (window.JarvisPlanRoutines) window.JarvisPlanRoutines.openList($("calMenuBtn")); }
         else if (key === "cats") { if (planner()) planner().openCategories(); }
         else if (key === "hours") { if (planner()) planner().openHours(); }
         else if (key === "agenda") setView("agenda");

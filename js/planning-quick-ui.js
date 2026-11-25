@@ -30,10 +30,11 @@
     block: { label: "Time block", sub: "Set time aside for a kind of work" },
     habit: { label: "Habit", sub: "A new habit to keep up" },
     goal: { label: "Goal", sub: "A big goal for the year" },
-    milestone: { label: "Milestone", sub: "A checkpoint for the month" }
+    milestone: { label: "Milestone", sub: "A checkpoint for the month" },
+    routine: { label: "Routine", sub: "Put a reusable sequence on days" }
   };
   const FIRST = { overview: "task", calendar: "event", habits: "habit", strategy: "goal" };
-  const ORDER = ["task", "event", "block", "habit", "goal", "milestone"];
+  const ORDER = ["task", "event", "block", "habit", "goal", "milestone", "routine"];
 
   function newHabit() {
     core().openScreen("navBtnHabits", "habitsSubNavRoutines");
@@ -56,6 +57,9 @@
       newHabit();
     } else if (kind === "goal") {
       if (A && A.openNodeSheet) A.openNodeSheet({ type: "objective", year: y }); else say("Goals aren't available right now.");
+    } else if (kind === "routine") {
+      core().openScreen("navBtnCalendar");
+      if (window.JarvisPlanRoutines) window.JarvisPlanRoutines.openList(); else say("Routines aren't available right now.");
     } else if (kind === "milestone") {
       if (A && A.openNodeSheet && PL) A.openNodeSheet({ type: "milestone", year: y, month: PL.monthOfDate(date) }); else say("Milestones aren't available right now.");
     }

@@ -6080,3 +6080,39 @@ body.fc-on { padding-bottom: 76px; }
 .cdg-note { margin: 0; padding: 8px 12px 12px; font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--card-border); }
 
 .cdw-day.is-today b { background: #2f6fe0; }
+
+/* ---------- Overview: suggestions with Why? ---------- */
+.po-sgs { list-style: none; margin: 0; padding: 0; }
+.po-sg { padding: 8px 0; }
+.po-sg + .po-sg { border-top: 1px solid var(--card-border); }
+.po-sg-row { display: flex; align-items: center; gap: 10px; }
+.po-sg-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.po-sg-row .btn { min-height: 44px; flex: none; }
+.po-why { margin-top: 2px; }
+.po-why summary { min-height: 44px; display: flex; align-items: center; font-size: 14px; color: var(--accent-hover); cursor: pointer; }
+.po-why ul { margin: 0 0 4px; padding-left: 18px; font-size: 13px; color: var(--text-dim); }
+
+/* ---------- Routines ---------- */
+.rt-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.rt-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 0; }
+.rt-item + .rt-item { border-top: 1px solid var(--card-border); }
+.rt-main { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rt-name { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.rt-btns { display: flex; gap: 6px; flex: none; }
+.rt-btns .btn { min-height: 44px; min-width: 44px; }
+.rt-add { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.rt-add .btn { min-height: 44px; }
+.rt-steps { border: 0; padding: 0; margin: 12px 0 0; min-width: 0; }
+.rt-steps legend { font-size: 14px; font-weight: 700; padding: 0; margin-bottom: 4px; }
+.rt-step { padding: 8px 0; border-top: 1px solid var(--card-border); }
+.rt-step-top { display: flex; align-items: center; gap: 4px; }
+.rt-step-top input { flex: 1 1 auto; min-width: 0; min-height: 44px; }
+.rt-step-n { flex: none; width: 22px; text-align: center; font-size: 13px; color: var(--text-dim); }
+.rt-step-opts { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 4px 0 0 26px; }
+.rt-step-opts label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-dim); }
+.rt-step-opts input, .rt-step-opts select { min-height: 44px; font-size: 15px; }
+.rt-step-opts input[type="number"] { width: 92px; }
+.rt-days { border: 0; padding: 0; margin: 8px 0; min-width: 0; }
+.rt-days legend { font-size: 14px; font-weight: 700; padding: 0; margin-bottom: 4px; }
+.rt-daychips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rt-preview { margin: 8px 0; padding: 8px 12px; font-size: 14px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg-elevated); }

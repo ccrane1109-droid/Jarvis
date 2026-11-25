@@ -9,7 +9,7 @@ const item = (key, source, title, start, o) => Object.assign({ key, source, titl
 const at = (h, m) => h * 60 + (m || 0);
 
 test("layouts: balanced by default; the three layouts show what they promise; unknown names fall back", () => {
-  assert.deepEqual(O.sectionsFor(null), ["stats", "next", "top", "habits", "remaining", "strategy"]);
+  assert.deepEqual(O.sectionsFor(null), ["stats", "next", "heads", "top", "habits", "remaining", "strategy"]);
   assert.deepEqual(O.sectionsFor({ layout: "simple" }), ["next", "top", "remaining"]);
   assert.equal(O.sectionsFor({ layout: "advanced" }).length, O.SECTIONS.length);
   assert.ok(O.sectionsFor({ layout: "advanced" }).includes("deadlines"));
@@ -104,4 +104,28 @@ test("hm words", () => {
   assert.equal(O.hm(60), "1 h");
   assert.equal(O.hm(25), "25 min");
   assert.equal(O.hm(-4), "0 min");
+});
+
+/* ---------------- heads up ---------------- */
+
+test("heads up: overlaps, an overloaded day, tasks with no time, a deadline in the next two days, things still open from earlier; it only reads", () => {
+  const items = [
+    { key: "a", source: "event", title: "A", date: TODAY, startMin: 600, endMin: 660, completed: false, conflict: true },
+    { key: "b", source: "event", title: "B", date: TODAY, startMin: 630, endMin: 690, completed: false, conflict: true },
+    { key: "t1", source: "task", title: "T1", date: TODAY, allDay: true, scheduled: true, completed: false },
+    { key: "t2", source: "task", title: "T2", date: TODAY, allDay: true, scheduled: true, completed: false },
+    { key: "tdone", source: "task", title: "Done", date: TODAY, allDay: true, scheduled: true, completed: true },
+    { key: "th", source: "task", title: "Habit task", date: TODAY, allDay: true, scheduled: true, habitId: "h1", completed: false },
+    { key: "p", source: "plan", title: "Block", date: TODAY, startMin: 420, endMin: 480, completed: false }
+  ];
+  const before = JSON.stringify(items);
+  const soon = [{ key: "d", source: "task", title: "Report", date: "2026-11-19", allDay: true, scheduled: false, completed: false }];
+  const out = O.headsUp({ items, soon, today: TODAY, nowMin: 620, overbooked: "Over your daily limit by 1 h" });
+  assert.deepEqual(out.map((x) => x.kind), ["overlap", "overload", "notime", "deadline", "earlier"]);
+  assert.equal(out[0].text, "2 things overlap each other today");
+  assert.equal(out[2].count, 2, "a done task and a habit's task are not counted");
+  assert.match(out[3].text, /“Report” is due tomorrow/);
+  assert.equal(out[4].text, "1 thing from earlier today is still open");
+  assert.equal(JSON.stringify(items), before, "reading changes nothing");
+  assert.deepEqual(O.headsUp({ items: [], soon: [], today: TODAY, nowMin: 600 }), [], "nothing to say when there is nothing");
 });

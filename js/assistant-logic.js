@@ -247,6 +247,53 @@
     return { proposals: proposals.slice(0, MAX_PROPOSALS), unplaced: unplaced, older: older, total: late.length };
   }
 
+  /* ---------------- plan my day / simplify my day ---------------- */
+
+  // Today's open tasks that have no time, each given the earliest free stretch long enough for it, most important first. It proposes a time for a
+  // task; it never moves it to another day. o: { date, tasks, items, plan, now, order: [taskId best first], minutes: { taskId: estimate }, why: { taskId: text }, protect: { taskId: true } }
+  function planDay(o) {
+    const p = cleanPlan(o.plan), n = nowOf(o.now), id = makeIds((o && o.idPrefix) || "pd"), date = C.isDate(o.date) ? o.date : n.date;
+    const tasks = Array.isArray(o.tasks) ? o.tasks : [], order = Array.isArray(o.order) ? o.order : [], minutes = o.minutes || {}, why = o.why || {}, protect = o.protect || {};
+    const open = tasks.filter(function (t) { return t && !t.completed && typeof t.id === "string" && t.date === date && str(t.text) && !(t.time && /^\d\d:\d\d$/.test(t.time)) && t.kind !== "deadline" && !t.habitId && !protect[t.id]; });
+    const rank = function (t) { const i = order.indexOf(t.id); return i === -1 ? 1e6 : i; };
+    open.sort(function (a, b) { return rank(a) - rank(b) || prioRank(b.priority) - prioRank(a.priority) || (a.order || 0) - (b.order || 0) || (str(a.text) < str(b.text) ? -1 : 1); });
+    const b = board(o.items || [], p, n), proposals = []; let unplaced = 0;
+    open.forEach(function (t) {
+      const len = Math.max(STEP, ceilStep(Number(minutes[t.id]) || 30)), slot = b.free(date, len, { anyDay: true })[0];
+      if (!slot) { unplaced++; return; }
+      b.take(date, slot.start, slot.start + len);
+      proposals.push(moveProposal(id(), "planday", "task", { id: t.id, title: str(t.text), occDate: date }, { date: date }, { date: date, time: C.timeOf(slot.start) },
+        clock(slot.start) + " – " + clock(slot.start + len) + (minutes[t.id] ? " (" + minutes[t.id] + " min estimate)" : " (30 min, no estimate)"),
+        (why[t.id] ? why[t.id] + ". " : "") + "Free from " + clock(slot.start) + " to " + clock(slot.end) + "."));
+    });
+    return { proposals: proposals.slice(0, MAX_PROPOSALS), unplaced: unplaced, total: open.length };
+  }
+
+  // A day with more open tasks than your daily limit (Planning hours > tasks a day): the least important movable ones are offered a later day that has room.
+  // Deadlines, a habit's task, protected ones and anything with a time you set are left where they are. -> { proposals, over, limit, unplaced, count }
+  function simplifyDay(o) {
+    const p = cleanPlan(o.plan), n = nowOf(o.now), id = makeIds((o && o.idPrefix) || "sd"), date = C.isDate(o.date) ? o.date : n.date;
+    const tasks = Array.isArray(o.tasks) ? o.tasks : [], order = Array.isArray(o.order) ? o.order : [], protect = o.protect || {}, limit = p.perDay;
+    const openOn = function (d) { return tasks.filter(function (t) { return t && !t.completed && typeof t.id === "string" && t.date === d && str(t.text); }); };
+    const here = openOn(date), count = here.length;
+    if (count <= limit) return { proposals: [], over: 0, limit: limit, unplaced: 0, count: count };
+    const movable = here.filter(function (t) { return t.kind !== "deadline" && !t.habitId && !protect[t.id] && !(t.time && /^\d\d:\d\d$/.test(t.time)); });
+    const rank = function (t) { const i = order.indexOf(t.id); return i === -1 ? 1e6 : i; };
+    movable.sort(function (a, b) { return prioRank(a.priority) - prioRank(b.priority) || rank(b) - rank(a) || (str(a.text) < str(b.text) ? -1 : 1); });   // least important first
+    const need = count - limit, room = [];
+    for (let d = C.addDays(date, 1), k = 0; k <= HORIZON_DAYS; d = C.addDays(d, 1), k++) if (p.days.indexOf(C.weekday(d)) !== -1) room.push({ date: d, left: limit - openOn(d).length });
+    const proposals = []; let unplaced = 0;
+    movable.slice(0, need).forEach(function (t) {
+      const slot = room.filter(function (r) { return r.left > 0; })[0];
+      if (!slot) { unplaced++; return; }
+      slot.left--;
+      proposals.push(moveProposal(id(), "simplify", "task", { id: t.id, title: str(t.text), occDate: date }, { date: date }, { date: slot.date }, dayLabel(date) + " → " + dayLabel(slot.date),
+        count + " open tasks on " + dayLabel(date) + " is over your limit of " + limit + ". " + (t.priority === "low" ? "Low priority, so it goes first." : prioRank(t.priority) === 2 ? "Medium priority." : "") + " " + dayLabel(slot.date) + " has room."));
+    });
+    const stuck = need - movable.length;
+    return { proposals: proposals.slice(0, MAX_PROPOSALS), over: need, limit: limit, unplaced: unplaced + Math.max(0, stuck), count: count };
+  }
+
   /* ---------------- splitting a big project ---------------- */
 
   // A project of `minutes` total, finished by `deadline`, cut into even work sessions on days that have room.
@@ -396,14 +443,16 @@
       if (!t) { skipped.push({ id: p.id, error: "That task isn't there any more." }); return; }
       if (t.completed) { skipped.push({ id: p.id, error: "That task is done now." }); return; }
       if (t.date !== p.move.from.date) { skipped.push({ id: p.id, error: "That task was moved since I looked." }); return; }
-      cur = cur.map(function (x) { return x.id === p.move.id ? Object.assign({}, x, { date: p.move.to.date }) : x; }); applied.push(p.id);
+      const patch = { date: p.move.to.date };
+      if (typeof p.move.to.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(p.move.to.time)) patch.time = p.move.to.time;     // "plan my day": a time on the same day
+      cur = cur.map(function (x) { return x.id === p.move.id ? Object.assign({}, x, patch) : x; }); applied.push(p.id);
     });
     return { tasks: cur, applied: applied, skipped: skipped, changed: cur !== tasks };
   }
 
   return {
     STEP: STEP, MIN_BLOCK: MIN_BLOCK, HORIZON_DAYS: HORIZON_DAYS, LOOKBACK_DAYS: LOOKBACK_DAYS, FOCUS_AREAS: FOCUS,
-    board: board, suggestTimes: suggestTimes, fixClashes: fixClashes, focusBlocks: focusBlocks, catchUp: catchUp, splitProject: splitProject, clearPlanned: clearPlanned, overview: overview,
+    board: board, suggestTimes: suggestTimes, fixClashes: fixClashes, focusBlocks: focusBlocks, catchUp: catchUp, planDay: planDay, simplifyDay: simplifyDay, splitProject: splitProject, clearPlanned: clearPlanned, overview: overview,
     preview: preview, select: select, apply: apply, applyTasks: applyTasks, hoursLabel: hoursLabel, dayLabel: dayLabel, whenLabel: whenLabel
   };
 });

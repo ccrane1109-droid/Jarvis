@@ -585,3 +585,62 @@ test("overdue in Strategy means a deadline task: planned-activity tasks from ear
   assert.ok(d.parts.some((p) => /Overdue by 2 days/.test(p.label || p.text || p.why || JSON.stringify(p))), "and a deadline task still earns its overdue points");
   assert.ok(!I.rankTasks(ctx).some((r) => r.task.id === "t" && r.parts.some((p) => /Overdue/.test(JSON.stringify(p)))), "a task planned for today is not overdue");
 });
+
+/* ---------------- Planning overhaul: kinds, protected time, "not enough information", steady ties, Why? ---------------- */
+
+test("a task's kind comes from the words in its category; a habit's task is a routine; a plan-linked one with no category is strategic", () => {
+  const pl = plan();
+  const lk = links([["s", pl.ms.id]], pl.get());
+  const kind = (t, chain) => I.categoryOf(t, chain || []);
+  assert.equal(kind(task("a", { category: "Homework" })), "school");
+  assert.equal(kind(task("a", { category: "Gratiel orders" })), "business");
+  assert.equal(kind(task("a", { category: "Nap" })), "rest");
+  assert.equal(kind(task("a", { category: "Movie night" })), "leisure");
+  assert.equal(kind(task("a", { category: "Errands" })), "personal");
+  assert.equal(kind(task("a", { category: "" })), "", "no category set is not guessed");
+  assert.equal(kind(task("a", { habitId: "h1", category: "Homework" })), "routine");
+  const model = P.model({ nodes: pl.get(), links: lk, tasks: [task("s")], periods: [], settings: {}, goals: [], today: TODAY });
+  assert.equal(kind(task("s"), model.chainOfTask("s")), "strategic");
+  assert.equal(kind(task("s", { category: "School" }), model.chainOfTask("s")), "school", "a stated kind wins over the link");
+});
+
+test("rest and leisure tasks are not ranked unless asked for, and a habit's own task is never ranked as a task", () => {
+  const tasks = [task("work", { priority: "high" }), task("nap", { category: "Rest", priority: "high" }), task("game", { category: "Leisure", priority: "high" }), task("shower", { habitId: "h1", priority: "high" })];
+  const ids = (c) => I.rankTasks(c).map((r) => r.task.id);
+  assert.deepEqual(ids(context({ tasks })), ["work"]);
+  assert.deepEqual(ids(context({ tasks, includeProtected: true })).sort(), ["game", "nap", "work"], "asked for, rest and leisure are ranked (the habit's task still is not)");
+});
+
+test("a task with nothing to rank it by says so instead of guessing", () => {
+  const r = I.rankTasks(context({ tasks: [task("plain"), task("hi", { priority: "high" }), task("est", { priority: "medium" })], links: P.setEstimate([], "est", 45, { now: NOW }).links }));
+  const by = (id) => r.find((x) => x.task.id === id);
+  assert.equal(by("plain").enough, false);
+  assert.equal(by("plain").short, "Not enough information to rank it");
+  assert.equal(by("hi").enough, true);
+  assert.equal(by("est").enough, true, "an estimate is something to go on");
+  assert.match(by("hi").short, /High priority/);
+});
+
+test("equal scores are settled the same way every time: earlier day, higher priority, shorter estimate, own order, age, id", () => {
+  const a = task("a", { date: "2026-11-05", createdAt: 5 }), b = task("b", { date: "2026-11-04", createdAt: 9 });
+  assert.deepEqual(I.rankTasks(context({ tasks: [a, b] })).map((r) => r.task.id), ["b", "a"], "the earlier day first");
+  const c = task("c", { order: 2, createdAt: 1 }), d = task("d", { order: 1, createdAt: 9 });
+  assert.deepEqual(I.rankTasks(context({ tasks: [c, d] })).map((r) => r.task.id), ["d", "c"], "then your own order");
+  const x = task("x", { createdAt: 1 }), y = task("y", { createdAt: 1 });
+  assert.deepEqual(I.rankTasks(context({ tasks: [y, x] })).map((r) => r.task.id), ["x", "y"], "and finally the id, so the order never wobbles");
+  const e = task("e", { createdAt: 1 }), f = task("f", { createdAt: 1 });
+  const lk = P.setEstimate(P.setEstimate([], "e", 90, { now: NOW }).links, "f", 20, { now: NOW }).links;
+  const out = I.rankTasks(context({ tasks: [e, f], links: lk })).map((r) => r.task.id);
+  assert.equal(out.length, 2);
+});
+
+test("Why? lists the kind, every reason with its points, the total and how ties are settled", () => {
+  const r = I.rankTasks(context({ tasks: [task("t", { priority: "high", category: "School" })] }))[0];
+  const lines = I.whyLines(r);
+  assert.equal(lines[0], "Kind: School");
+  assert.ok(lines.some((l) => /^High priority \(\+14\)$/.test(l)));
+  assert.match(lines[lines.length - 1], /^Total: 14 points\. Equal scores go to the earlier day/);
+  const none = I.whyLines(I.rankTasks(context({ tasks: [task("p")] }))[0]);
+  assert.match(none[0], /^Kind: not set/);
+  assert.ok(none.some((l) => /^Not enough information to rank it/.test(l)));
+});
