@@ -328,7 +328,7 @@
     return {
       fields: fields, uncertain: uncertain, warnings: warnings,
       dvs: dvs, missing: parser.MAIN.filter(function (k) { return fields[k] === undefined; }),
-      servingSize: main.servingSize || other.servingSize, matchedCount: Object.keys(fields).length,
+      servingSize: main.servingSize || other.servingSize, servingsPerContainer: main.servingsPerContainer || other.servingsPerContainer || null, matchedCount: Object.keys(fields).length,
       confidence: Math.max(a.confidence || 0, b.confidence || 0),
       rawText: a.rawText.trim() + "\n\n--- another reading ---\n" + b.rawText.trim()
     };

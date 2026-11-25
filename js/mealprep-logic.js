@@ -24,9 +24,9 @@
    ========================================================================== */
 
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("./mealprep-foods.js"));
-  else root.JarvisMealPrepLogic = factory(root.JarvisMealPrepFoods);
-})(typeof self !== "undefined" ? self : this, function (F) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./mealprep-foods.js"), require("./food-amount-logic.js"));
+  else root.JarvisMealPrepLogic = factory(root.JarvisMealPrepFoods, root.JarvisFoodAmount);
+})(typeof self !== "undefined" ? self : this, function (F, FA) {
   "use strict";
 
   const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
@@ -129,6 +129,13 @@
     MACROS.concat(["fiber"]).forEach(function (m) { o[m] = num(i && i[m]); });
     if (i && (i.state === "raw" || i.state === "cooked" || i.state === "packaged")) o.state = i.state;
     if (i && i.est === true) o.est = true;
+    // An ingredient made from a food keeps the label it was worked out from and the amount used, so its numbers follow the amount
+    // exactly and a recipe can say how much of it each portion needs. Both are kept or neither (the amount means nothing without the label).
+    const lab = FA && i ? FA.cleanLabel(i.label) : null, amt = FA && i ? FA.cleanEntry(i.amount) : null;
+    if (lab && amt) {
+      o.label = lab; o.amount = amt;
+      if (typeof i.foodId === "string" && i.foodId) o.foodId = i.foodId.slice(0, 60);
+    }
     return o;
   }
   function recipeTotals(recipe) {

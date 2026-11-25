@@ -72,11 +72,16 @@
 
   /* ---------------- the recipe form ---------------- */
 
+  const FLOW = function () { return window.JarvisFoodFlow; }, FAM = function () { return window.JarvisFoodAmount; };
+  // A row made from a food keeps the label and amount it was worked out from, in data-link; its numbers follow them exactly.
+  function linkOf(row) { try { const j = JSON.parse(row.getAttribute("data-link") || "null"); return j && j.label && j.amount ? j : null; } catch (e) { return null; } }
   function ingRowHtml(i, n) {
     const A = k.A(), v = function (x) { return x ? esc(x) : ""; };
-    return '<div class="mp-ing" data-est="' + (i.est ? 1 : 0) + '" data-fiber="' + (Number(i.fiber) || 0) + '">' +
+    const linked = !!(i.label && i.amount && FLOW() && FLOW().linkNote(i));
+    return '<div class="mp-ing" data-est="' + (i.est ? 1 : 0) + '" data-fiber="' + (Number(i.fiber) || 0) + '"' + (linked ? ' data-link="' + esc(JSON.stringify({ foodId: i.foodId || "", label: i.label, amount: i.amount })) + '"' : '') + '>' +
       '<div class="mp-ing-h"><span class="mp-ing-n">Ingredient ' + n + (i.est ? ' <em class="mp-est">estimated</em>' : '') + '</span><button type="button" class="btn-icon danger" data-sheet-act="rm-ing" aria-label="Remove ingredient ' + n + '">&times;</button></div>' +
       '<div class="form-row"><label>Name<input type="text" class="mp-i-name" maxlength="80" value="' + v(i.name) + '" list="mpFoodNames" autocomplete="off" placeholder="e.g. Ground turkey"></label></div>' +
+      (linked ? '<p class="ff-link"><span>' + esc(FLOW().linkNote(i)) + '</span><button type="button" class="btn-icon" data-sheet-act="ing-amount">Change amount</button></p>' : '') +
       '<div class="form-row two-col"><div><label>Amount<input type="text" class="mp-i-qty" maxlength="40" value="' + v(i.quantity) + '" placeholder="e.g. 500 g"></label></div>' +
       '<div><label>Weighed<select class="mp-i-state"><option value="">Usual</option><option value="raw"' + (i.state === "raw" ? " selected" : "") + '>Raw</option><option value="cooked"' + (i.state === "cooked" ? " selected" : "") + '>Cooked</option><option value="packaged"' + (i.state === "packaged" ? " selected" : "") + '>As packaged</option></select></label></div></div>' +
       '<div class="mp-macro-grid"><label>Cal<input type="number" class="mp-i-cal" min="0" step="any" inputmode="decimal" value="' + (i.calories ? esc(Math.round(i.calories * 10) / 10) : "") + '"></label>' +
@@ -88,12 +93,41 @@
     return Array.prototype.map.call(root.querySelectorAll(".mp-ing"), function (r) {
       const q = function (c) { return r.querySelector(c); };
       const o = { name: q(".mp-i-name").value, quantity: q(".mp-i-qty").value, state: q(".mp-i-state").value, calories: q(".mp-i-cal").value, protein: q(".mp-i-pro").value, carbs: q(".mp-i-carb").value, fat: q(".mp-i-fat").value, fiber: r.getAttribute("data-fiber"), est: r.getAttribute("data-est") === "1" };
+      // A linked row's numbers are worked out from its label and amount (exact), not read back from the rounded boxes.
+      const link = linkOf(r);
+      if (link && FAM()) {
+        const x = FAM().ingredientExact({ label: link.label, amount: link.amount }), r3 = function (n) { return Math.round((n || 0) * 1000) / 1000; };
+        Object.assign(o, { calories: r3(x.calories), protein: r3(x.protein), carbs: r3(x.carbs), fat: r3(x.fat), fiber: r3(x.fiber), est: false, label: link.label, amount: link.amount });
+        if (link.foodId) o.foodId = link.foodId;
+      }
       return o;
     });
   }
   function drawRows(root, list) {
     const box = root.querySelector("#mpIngRows");
     box.innerHTML = list.map(function (i, n) { return ingRowHtml(i, n + 1); }).join("");
+    refreshSummary(root);
+  }
+  // Whole recipe, one portion, and what one portion needs of each ingredient: worked out from the rows as they are now.
+  function refreshSummary(root) {
+    const box = root.querySelector("#mpRecipeSummary");
+    if (!box || !FLOW()) return;
+    const sv = root.querySelector('[name="servings"]'), dg = root.querySelector('[name="dishGrams"]');
+    const wasOpen = !!box.querySelector(".ff-rs-more[open]");
+    box.innerHTML = FLOW().recipeSummaryHtml({ ingredients: readRows(root).filter(function (i) { return String(i.name).trim(); }), servings: sv && sv.value, dishGrams: dg && dg.value });
+    const more = box.querySelector(".ff-rs-more");
+    if (more && wasOpen) more.open = true;
+  }
+  // Puts a food-made ingredient into the list: into the empty last row if there is one, else as a new row.
+  function putIngredient(root, ing, at) {
+    const rows = readRows(root);
+    const blank = function (r) { return !String(r.name).trim() && !String(r.quantity).trim() && !r.calories && !r.protein && !r.carbs && !r.fat; };
+    if (typeof at === "number") rows[at] = Object.assign({}, rows[at], ing);
+    else if (rows.length && blank(rows[rows.length - 1])) rows[rows.length - 1] = ing; else rows.push(ing);
+    drawRows(root, rows);
+    const names = root.querySelectorAll(".mp-i-name");
+    const target = names[typeof at === "number" ? at : names.length - 1];
+    if (target) target.focus();
   }
 
   // o: { id } to edit, { draft } to start from a recipe made elsewhere (the calculator), nothing for a new one
@@ -110,7 +144,9 @@
     body += A.row("cookMin", "Cooking time (min)", '<input type="number" id="spf_cookMin" name="cookMin" min="0" max="1440" step="1" value="' + esc(d.cookMin || "") + '">', {});
     body += '<h3 class="mp-h3">Ingredients</h3><p class="field-hint">Each ingredient’s numbers are for the whole amount you use. Leave them empty and use “Estimate” for a rough value from a typical-values list (weights work best).</p><div id="mpIngRows"></div>' +
       '<datalist id="mpFoodNames">' + F.suggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join("") + '</datalist>' +
-      '<div class="mp-actions"><button type="button" class="btn btn-secondary" data-sheet-act="add-ing">+ Add ingredient</button><button type="button" class="btn btn-secondary" data-sheet-act="estimate">Estimate missing numbers</button></div><p class="field-hint" id="mpEstMsg" role="status"></p>';
+      '<div class="mp-actions"><button type="button" class="btn btn-primary" data-sheet-act="from-food">From my foods or a label</button><button type="button" class="btn btn-secondary" data-sheet-act="add-ing">+ Add ingredient</button><button type="button" class="btn btn-secondary" data-sheet-act="estimate">Estimate missing numbers</button></div><p class="field-hint" id="mpEstMsg" role="status"></p>' +
+      '<h3 class="mp-h3">Totals and portions</h3><div id="mpRecipeSummary" aria-live="polite"></div>' +
+      A.row("dishGrams", "Weight of the finished dish (g)", '<input type="number" id="spf_dishGrams" name="dishGrams" min="0" max="100000" step="any" inputmode="decimal" aria-describedby="sph_dishGrams" value="' + esc(d.dishGrams || "") + '">', { hint: "Optional. Weigh the whole cooked dish. Then each portion's weight is known, and you can log the recipe by grams." });
     body += A.fArea("instructions", "Steps (one per line)", d.instructions || "", { rows: 5, max: 4000 });
     body += A.fSelect("place", "Storage", [["", "Not set"], ["fridge", "Refrigerator"], ["freezer", "Freezer"], ["both", "Refrigerator or freezer"]], d.storage && d.storage.place || "");
     body += A.fText("snotes", "Storage notes", d.storage && d.storage.notes || "", { max: 300, placeholder: "e.g. Airtight containers, sauce on the side" });
@@ -125,11 +161,19 @@
         root.querySelector("#mpIngRows").addEventListener("input", function (e) {
           const row = e.target.closest(".mp-ing"); if (!row) return;
           if (/mp-i-(cal|pro|carb|fat)/.test(e.target.className) && row.getAttribute("data-est") === "1") { row.setAttribute("data-est", "0"); const b = row.querySelector(".mp-est"); if (b) b.remove(); }   // typing a number makes it yours
+          // typing a number or an amount over a food-made row makes it your own: the link to the label is let go
+          if (/mp-i-(qty|cal|pro|carb|fat)/.test(e.target.className) && row.hasAttribute("data-link")) { row.removeAttribute("data-link"); const n = row.querySelector(".ff-link"); if (n) n.remove(); }
         });
+        root.addEventListener("input", function (e) { if (e.target.closest && (e.target.closest("#mpIngRows") || e.target.name === "servings" || e.target.name === "dishGrams")) refreshSummary(root); });
         root.querySelector("#mpImage").addEventListener("change", function (e) { readImage(e.target.files && e.target.files[0], root); });
       },
       onAct: function (act, el, root) {
-        if (act === "add-ing") { const rows = readRows(root); rows.push({ name: "", quantity: "" }); drawRows(root, rows); const last = root.querySelectorAll(".mp-i-name"); if (last.length) last[last.length - 1].focus(); }
+        if (act === "from-food") { if (FLOW()) FLOW().addIngredient({ onDone: function (ing) { putIngredient(root, ing); } }); else k.toast("The food sheet isn't ready. Reload the app."); }
+        else if (act === "ing-amount") {
+          const rowEl = el.closest(".mp-ing"), at = Array.prototype.indexOf.call(root.querySelectorAll(".mp-ing"), rowEl), ing = readRows(root)[at];
+          if (ing && ing.label && FLOW()) FLOW().changeIngredient(ing, { onDone: function (n) { putIngredient(root, n, at); } });
+        }
+        else if (act === "add-ing") { const rows = readRows(root); rows.push({ name: "", quantity: "" }); drawRows(root, rows); const last = root.querySelectorAll(".mp-i-name"); if (last.length) last[last.length - 1].focus(); }
         else if (act === "rm-ing") { const rows = readRows(root), i = Array.prototype.indexOf.call(root.querySelectorAll(".mp-ing"), el.closest(".mp-ing")); if (rows.length > 1) { rows.splice(i, 1); drawRows(root, rows); } else k.toast("A recipe needs at least one ingredient."); }
         else if (act === "estimate") estimateRows(root);
         else if (act === "rm-img") { pendingImage = ""; root.querySelector("#mpImgBox").innerHTML = '<p class="field-hint">The picture will be removed when you save.</p>'; }
@@ -141,7 +185,7 @@
     const rows = readRows(root), missing = [], failed = [];
     let filled = 0;
     rows.forEach(function (row, i) {
-      if (!row.name.trim() || row.calories || row.protein || row.carbs || row.fat) return;
+      if (!row.name.trim() || row.calories || row.protein || row.carbs || row.fat || row.label) return;
       const e = L.estimate(row.name, row.quantity, row.state);
       if (e.error) { failed.push(row.name.trim() + " (" + e.error.replace(/\.$/, "") + ")"); return; }
       rows[i] = Object.assign(row, { calories: e.calories, protein: e.protein, carbs: e.carbs, fat: e.fat, est: true });
@@ -181,13 +225,15 @@
     const servings = Math.round(Number(v.servings));
     if (!(servings >= 1)) errors.servings = "Servings must be 1 or more.";
     const ings = readRows(form).filter(function (i) { return i.name.trim(); }).map(function (i) {
-      const c = L.cleanIngredient({ name: i.name, quantity: i.quantity, calories: i.calories, protein: i.protein, carbs: i.carbs, fat: i.fat, fiber: i.fiber, state: i.state, est: i.est });
+      const c = L.cleanIngredient({ name: i.name, quantity: i.quantity, calories: i.calories, protein: i.protein, carbs: i.carbs, fat: i.fat, fiber: i.fiber, state: i.state, est: i.est, foodId: i.foodId, label: i.label, amount: i.amount });
       return c;
     });
     if (!ings.length) errors.name = errors.name || "Add at least one ingredient.";
     if (Object.keys(errors).length) return { ok: false, errors: errors };
     const ex = L.recipeExtras({ cats: v.cats || [], favorite: !!v.favorite, prepMin: v.prepMin, cookMin: v.cookMin, storage: { place: v.place, notes: v.snotes, reheat: v.reheat }, image: pendingImage === undefined ? (existing && existing.image) : pendingImage });
     const rec = Object.assign({}, existing || {}, { name: name, instructions: String(v.instructions || "").trim(), servings: servings, ingredients: ings });
+    const dish = Number(v.dishGrams);
+    if (dish > 0 && dish <= 100000) rec.dishGrams = Math.round(dish * 10) / 10; else delete rec.dishGrams;
     ["cats", "favorite", "prepMin", "cookMin", "storage", "image"].forEach(function (f) { delete rec[f]; });
     Object.assign(rec, ex);
     const N = k.N(), before = existing ? JSON.parse(JSON.stringify(existing)) : null;

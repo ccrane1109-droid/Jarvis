@@ -10,7 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=93">
+<link rel="stylesheet" href="style.css?v=94">
 </head>
 <body>
 
@@ -1313,12 +1313,14 @@ npx firebase-tools deploy --only firestore:rules</pre>
         <select id="savedFoodSortSelect">
           <option value="name">Name (A&ndash;Z)</option>
           <option value="recent">Recently added</option>
+          <option value="used">Recently used</option>
           <option value="calories">Calories (low to high)</option>
         </select>
       </div>
       <div class="sm-pills" role="group" aria-label="Show">
         <button type="button" class="sm-pill is-on" data-foodsfilter="all" aria-pressed="true">All</button>
         <button type="button" class="sm-pill" data-foodsfilter="foods" aria-pressed="false">Foods</button>
+        <button type="button" class="sm-pill" data-foodsfilter="favorites" aria-pressed="false">Favorites</button>
         <button type="button" class="sm-pill" data-foodsfilter="recipes" aria-pressed="false">Recipes</button>
       </div>
 
@@ -1327,24 +1329,24 @@ npx firebase-tools deploy --only firestore:rules</pre>
         <h2 class="card-title" id="savedFoodFormTitle">Add Saved Food</h2>
         <p class="field-hint">For foods you eat often — save them once, then log them in one tap from Food Log's "+ Add Food".</p>
         <form id="savedFoodForm" class="stacked-form" novalidate>
+          <div class="form-row">
+            <label for="savedFoodName">Food name</label>
+            <input type="text" id="savedFoodName" maxlength="80">
+          </div>
           <div class="form-row two-col">
             <div>
-              <label for="savedFoodName">Food name</label>
-              <input type="text" id="savedFoodName" maxlength="80">
+              <label for="savedFoodServing">Serving size (as on the label)</label>
+              <input type="text" id="savedFoodServing" maxlength="60" placeholder="e.g. 2/3 cup (55g)">
             </div>
             <div>
-              <label for="savedFoodServing">Serving amount</label>
-              <input type="text" id="savedFoodServing" placeholder="e.g. 1 scoop">
+              <label for="savedFoodSize">Its weight or volume</label>
+              <div class="ff-inline">
+                <input type="number" id="savedFoodSize" min="0" step="any" inputmode="decimal" placeholder="e.g. 55">
+                <select id="savedFoodSizeUnit" aria-label="Unit of the serving size"><option value="g">g</option><option value="ml">mL</option></select>
+              </div>
             </div>
           </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-primary" id="savedFoodScanLabelBtn">📷 Scan Nutrition Label</button>
-            <input type="file" id="savedFoodScanLabelInput" accept="image/*" capture="environment" class="hidden">
-          </div>
-          <p class="field-hint">Snap a photo of the Nutrition Facts panel — reads it right on your device, no account or setup needed. Fill the photo with the label and hold steady for the best result.</p>
-          <p class="field-hint" id="savedFoodScanStatus"></p>
-          <div class="form-actions hidden" id="savedFoodScanRescaleRow"><button type="button" class="btn btn-secondary" id="savedFoodScanRescaleBtn"></button></div>
-          <details class="scan-raw hidden" id="savedFoodScanRawWrap"><summary>What the scanner read</summary><pre id="savedFoodScanRaw"></pre></details>
+          <p class="field-hint">The numbers below are for <strong>one serving</strong>, as printed on the label. Every amount you log (grams, ounces, servings) is worked out from them, so changing them here changes the food everywhere it is used next. Leave the weight empty if the label has none; the food can then only be logged in servings.</p>
           <div class="form-row two-col">
             <div>
               <label for="savedFoodCalories">Calories</label>
@@ -1405,6 +1407,18 @@ npx firebase-tools deploy --only firestore:rules</pre>
               </div>
             </div>
           </details>
+          <div class="form-row" id="savedFoodPortionsWrap" hidden>
+            <h3 class="checklist-title" id="savedFoodPortionsH">Portions you use</h3>
+            <p class="field-hint">Name an amount you often have, like "my bowl". It shows up as a one-tap choice when you log this food, and the one marked default is offered first.</p>
+            <div id="savedFoodPortions" class="ff-portion-list"></div>
+            <div class="ff-portion-add" role="group" aria-labelledby="savedFoodPortionsH">
+              <input type="text" id="savedFoodPortionName" maxlength="30" placeholder="Name, e.g. my bowl" aria-label="Portion name" autocomplete="off">
+              <input type="number" id="savedFoodPortionValue" min="0" step="any" inputmode="decimal" placeholder="Amount" aria-label="Portion amount">
+              <select id="savedFoodPortionUnit" aria-label="Portion unit"></select>
+              <button type="button" class="btn btn-secondary" id="savedFoodPortionAddBtn">Add portion</button>
+            </div>
+            <p class="field-hint" id="savedFoodPortionMsg" role="status"></p>
+          </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="savedFoodSubmitBtn">Save Food</button>
             <button type="button" class="btn btn-secondary hidden" id="savedFoodCancelBtn">Cancel</button>
@@ -1440,10 +1454,13 @@ npx firebase-tools deploy --only firestore:rules</pre>
           </p>
           <div id="recipeIngredientRows"></div>
           <div class="form-actions">
+            <button type="button" class="btn btn-primary ff-primary" id="recipeFromFoodBtn">From my foods or a label</button>
             <button type="button" class="btn-icon" id="recipeAddIngredientBtn">+ Add Ingredient</button>
             <button type="button" class="btn btn-secondary" id="recipeAiCalculateBtn">Calculate Nutrition with AI</button>
           </div>
           <p class="field-hint" id="recipeAiStatus"></p>
+          <h4 class="sm-sub" id="recipeSummaryH">Totals and portions</h4>
+          <div id="recipeSummary" aria-live="polite" aria-labelledby="recipeSummaryH"></div>
           <p class="field-hint">
             AI estimates are not verified nutrition facts — always spot-check anything that matters.
             <button type="button" class="btn-icon" id="recipeGoToAiConnectionsBtn" style="margin-left:4px;">Set Up / Manage AI Connection</button>
@@ -2862,11 +2879,15 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <h2 id="addFoodModalTitle">Add Food</h2>
       <button type="button" class="btn-icon" id="addFoodModalCloseBtn" aria-label="Close">&times;</button>
     </div>
+    <button type="button" class="btn btn-primary ff-scanbtn" id="addFoodScanBtn">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 8.5A1.5 1.5 0 015.5 7h2l1.2-2h6.6l1.2 2h2A1.5 1.5 0 0120 8.5v9a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 17.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      <span>Scan a label</span>
+    </button>
     <div class="segmented-control sheet-tabs" id="addFoodTabs" role="tablist">
-      <button type="button" class="segmented-btn" data-tab="recent" id="addFoodTabRecent">Recent</button>
-      <button type="button" class="segmented-btn" data-tab="saved" id="addFoodTabSaved">Saved</button>
-      <button type="button" class="segmented-btn" data-tab="create" id="addFoodTabCreate">Create</button>
-      <button type="button" class="segmented-btn" data-tab="recipe" id="addFoodTabRecipe">Recipe</button>
+      <button type="button" class="segmented-btn" role="tab" aria-selected="false" data-tab="recent" id="addFoodTabRecent">Recent</button>
+      <button type="button" class="segmented-btn" role="tab" aria-selected="false" data-tab="saved" id="addFoodTabSaved">Saved</button>
+      <button type="button" class="segmented-btn" role="tab" aria-selected="false" data-tab="create" id="addFoodTabCreate">Create</button>
+      <button type="button" class="segmented-btn" role="tab" aria-selected="false" data-tab="recipe" id="addFoodTabRecipe">Recipe</button>
     </div>
 
     <div class="sheet-panel" id="addFoodPanelRecent">
@@ -2906,18 +2927,6 @@ npx firebase-tools deploy --only firestore:rules</pre>
           <span id="foodNameMatchText"></span>
           <button type="button" class="btn-icon" id="foodNameMatchUseBtn">Use Saved Nutrients</button>
         </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary" id="foodScanLabelBtn">📷 Scan Nutrition Label</button>
-          <input type="file" id="foodScanLabelInput" accept="image/*" capture="environment" class="hidden">
-        </div>
-        <p class="field-hint">Snap a photo of the Nutrition Facts panel — reads it right on your device, no account or setup needed. Fill the photo with the label and hold steady for the best result.</p>
-        <p class="field-hint" id="foodScanStatus"></p>
-        <div class="form-actions hidden" id="foodScanRescaleRow"><button type="button" class="btn btn-secondary" id="foodScanRescaleBtn"></button></div>
-        <details class="scan-raw hidden" id="foodScanRawWrap"><summary>What the scanner read</summary><pre id="foodScanRaw"></pre></details>
-        <div class="form-actions hidden" id="foodRememberRow">
-          <button type="button" class="btn btn-secondary" id="foodRememberBtn">💾 Remember This Food</button>
-        </div>
-        <p class="field-hint" id="foodRememberStatus"></p>
         <div class="form-row two-col">
           <div>
             <label for="foodCalories">Calories</label>
@@ -2993,34 +3002,23 @@ npx firebase-tools deploy --only firestore:rules</pre>
       <div id="modalRecipesList" class="picker-list"></div>
     </div>
 
-    <div class="picker-confirm hidden" id="pickerConfirm">
-      <button type="button" class="btn-icon" id="pickerBackBtn">&larr; Back</button>
-      <h3 class="checklist-title" id="pickerConfirmName"></h3>
-      <div class="form-row two-col">
-        <div>
-          <label for="pickerMealSelect">Meal</label>
-          <select id="pickerMealSelect">
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-            <option value="snacks">Snacks</option>
-          </select>
-        </div>
-        <div>
-          <label for="pickerServingsInput">Servings</label>
-          <input type="number" id="pickerServingsInput" min="0.25" step="0.25" value="1">
-        </div>
-      </div>
-      <div class="form-row hidden" id="pickerAmountRow">
-        <label for="pickerAmountInput">Or the amount you had</label>
-        <input type="text" id="pickerAmountInput" placeholder="e.g. 200g" autocomplete="off" autocapitalize="none" spellcheck="false">
-        <p class="field-hint" id="pickerAmountHint"></p>
-      </div>
-      <p class="field-hint" id="pickerPreview"></p>
-      <div class="form-actions sheet-sticky-actions">
-        <button type="button" class="btn btn-primary" id="pickerConfirmAddBtn">Add to Log</button>
-      </div>
+  </div>
+</div>
+
+<!-- The food sheet: scan a label (or pick a saved food), review it, say how much, add it. Drawn by js/food-flow-ui.js. -->
+<div class="modal-overlay hidden sheet-overlay" id="foodFlowModal" role="dialog" aria-modal="true" aria-labelledby="ffTitle">
+  <div class="modal-box sheet-box ff-box">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="ff-head">
+      <button type="button" class="btn-icon ff-back" id="ffBack" aria-label="Back" hidden>&larr;</button>
+      <h2 id="ffTitle" class="ff-title">Scan a food</h2>
+      <button type="button" class="btn-icon" id="ffClose" aria-label="Close">&times;</button>
     </div>
+    <ol class="ff-steps" id="ffSteps" aria-label="Steps"></ol>
+    <div id="ffBody" class="ff-body"></div>
+    <input type="file" id="ffCamera" accept="image/*" capture="environment" class="hidden" tabindex="-1" aria-hidden="true">
+    <input type="file" id="ffUpload" accept="image/*" class="hidden" tabindex="-1" aria-hidden="true">
+    <p class="visually-hidden" id="ffLive" aria-live="polite"></p>
   </div>
 </div>
 
@@ -3107,118 +3105,120 @@ npx firebase-tools deploy --only firestore:rules</pre>
 
 <script src="js/vendor/qrcode/qrcode.js"></script>
 <script src="js/vendor/qrcode/qrcode_UTF8.js"></script>
-<script src="js/firebase-config.js?v=93"></script>
-<script src="js/backup-logic.js?v=93"></script>
-<script src="js/live-refresh.js?v=93"></script>
-<script src="js/cloud-backup.js?v=93"></script>
-<script type="module" src="js/auth.js?v=93"></script>
-<script src="js/app.js?v=93"></script>
-<script src="js/menu-ui.js?v=93"></script>
-<script src="js/exercises.js?v=93"></script>
-<script src="js/workout-logic.js?v=93"></script>
-<script src="js/exercise-logic.js?v=93"></script>
-<script src="js/exercise-guides.js?v=93"></script>
-<script src="js/routine-logic.js?v=93"></script>
-<script src="js/musclemap-art.js?v=93"></script>
-<script src="js/workout.js?v=93"></script>
-<script src="js/workout-ui.js?v=93"></script>
-<script src="js/routines-ui.js?v=93"></script>
-<script src="js/progress-logic.js?v=93"></script>
-<script src="js/insights-logic.js?v=93"></script>
-<script src="js/charts.js?v=93"></script>
-<script src="js/history-ui.js?v=93"></script>
-<script src="js/insights-ui.js?v=93"></script>
-<script src="js/library-ui.js?v=93"></script>
-<script src="js/progress-ui.js?v=93"></script>
-<script src="js/nutrition.js?v=93"></script>
-<script src="js/nutrition-label-parse.js?v=93"></script>
-<script src="js/nutrition-label-scan.js?v=93"></script>
-<script src="js/groceries.js?v=93"></script>
-<script src="js/mealprep-foods.js?v=93"></script>
-<script src="js/mealprep-logic.js?v=93"></script>
-<script src="js/habit-logic.js?v=93"></script>
-<script src="js/task-kind-logic.js?v=93"></script>
-<script src="js/habit-plan-logic.js?v=93"></script>
-<script src="js/goals-logic.js?v=93"></script>
-<script src="js/dayplan-logic.js?v=93"></script>
-<script src="js/habits.js?v=93"></script>
-<script src="js/dayplan-ui.js?v=93"></script>
-<script src="js/calendar-logic.js?v=93"></script>
-<script src="js/schedule-logic.js?v=93"></script>
-<script src="js/ics-logic.js?v=93"></script>
-<script src="js/assistant-logic.js?v=93"></script>
-<script src="js/calendar-ui.js?v=93"></script>
-<script src="js/assistant-ui.js?v=93"></script>
-<script src="js/calendar-reminders-logic.js?v=93"></script>
-<script src="js/calendar-reminders-ui.js?v=93"></script>
-<script src="js/ics-ui.js?v=93"></script>
-<script src="js/home-ui.js?v=93"></script>
-<script src="js/discipline-logic.js?v=93"></script>
-<script src="js/discipline-program.js?v=93"></script>
-<script src="js/discipline-habits.js?v=93"></script>
-<script src="js/discipline-insights.js?v=93"></script>
-<script src="js/discipline-charts.js?v=93"></script>
-<script src="js/discipline-delivery.js?v=93"></script>
-<script src="js/discipline.js?v=93"></script>
-<script src="js/wakecheck-logic.js?v=93"></script>
-<script src="js/wakecheck.js?v=93"></script>
-<script src="functions/lib/reminder-spec.js?v=93"></script>
-<script src="functions/lib/reminder-events.js?v=93"></script>
-<script src="js/reminders.js?v=93"></script>
-<script src="js/video-api-client.js?v=93"></script>
-<script src="js/video-connections.js?v=93"></script>
-<script src="js/formcheck-logic.js?v=93"></script>
-<script src="js/form-check.js?v=93"></script>
-<script src="js/retired-data.js?v=93"></script>
-<script src="js/retired-ui.js?v=93"></script>
-<script src="js/shopify-ui.js?v=93"></script>
-<script src="js/learning-srs.js?v=93"></script>
-<script src="js/learning-logic.js?v=93"></script>
-<script src="js/learning-cards-logic.js?v=93"></script>
-<script src="js/learning-goals-logic.js?v=93"></script>
-<script src="js/learning-links-logic.js?v=93"></script>
-<script src="js/learning-reading-logic.js?v=93"></script>
-<script src="js/learning-notebook-logic.js?v=93"></script>
-<script src="js/learning-weekly-logic.js?v=93"></script>
-<script src="js/learning-overview-logic.js?v=93"></script>
-<script src="js/learning-store.js?v=93"></script>
-<script src="js/learning-ui.js?v=93"></script>
-<script src="js/learning-books-ui.js?v=93"></script>
-<script src="js/learning-research-ui.js?v=93"></script>
-<script src="js/learning-library-ui.js?v=93"></script>
-<script src="js/learning-actions-ui.js?v=93"></script>
-<script src="js/learning-review-ui.js?v=93"></script>
-<script src="js/learning-study-ui.js?v=93"></script>
-<script src="js/learning-topics-ui.js?v=93"></script>
-<script src="js/learning-goals-ui.js?v=93"></script>
-<script src="js/learning-reading-ui.js?v=93"></script>
-<script src="js/learning-notebook-ui.js?v=93"></script>
-<script src="js/learning-capture-ui.js?v=93"></script>
-<script src="js/learning-overview-ui.js?v=93"></script>
-<script src="js/plan-logic.js?v=93"></script>
-<script src="js/plan-store.js?v=93"></script>
-<script src="js/plan-week-logic.js?v=93"></script>
-<script src="js/intentions-logic.js?v=93"></script>
-<script src="js/day-planner-logic.js?v=93"></script>
-<script src="js/plan-insights-logic.js?v=93"></script>
-<script src="js/plan-charts.js?v=93"></script>
-<script src="js/plan-ui.js?v=93"></script>
-<script src="js/plan-yearly-ui.js?v=93"></script>
-<script src="js/plan-quarterly-ui.js?v=93"></script>
-<script src="js/plan-dash-ui.js?v=93"></script>
-<script src="js/plan-breakdown-ui.js?v=93"></script>
-<script src="js/plan-week-ui.js?v=93"></script>
-<script src="js/plan-intentions-ui.js?v=93"></script>
-<script src="js/calendar-planner-ui.js?v=93"></script>
-<script src="js/goals-ui.js?v=93"></script>
-<script src="js/plan-insights-ui.js?v=93"></script>
-<script src="js/plan-home-ui.js?v=93"></script>
-<script src="js/mealprep-ui.js?v=93"></script>
-<script src="js/mealprep-plan-ui.js?v=93"></script>
-<script src="js/mealprep-recipes-ui.js?v=93"></script>
-<script src="js/mealprep-grocery-ui.js?v=93"></script>
-<script src="js/mealprep-tracker-ui.js?v=93"></script>
-<script src="js/health-overview-ui.js?v=93"></script>
-<script src="js/planning-overview-ui.js?v=93"></script>
+<script src="js/firebase-config.js?v=94"></script>
+<script src="js/backup-logic.js?v=94"></script>
+<script src="js/live-refresh.js?v=94"></script>
+<script src="js/cloud-backup.js?v=94"></script>
+<script type="module" src="js/auth.js?v=94"></script>
+<script src="js/app.js?v=94"></script>
+<script src="js/menu-ui.js?v=94"></script>
+<script src="js/exercises.js?v=94"></script>
+<script src="js/workout-logic.js?v=94"></script>
+<script src="js/exercise-logic.js?v=94"></script>
+<script src="js/exercise-guides.js?v=94"></script>
+<script src="js/routine-logic.js?v=94"></script>
+<script src="js/musclemap-art.js?v=94"></script>
+<script src="js/workout.js?v=94"></script>
+<script src="js/workout-ui.js?v=94"></script>
+<script src="js/routines-ui.js?v=94"></script>
+<script src="js/progress-logic.js?v=94"></script>
+<script src="js/insights-logic.js?v=94"></script>
+<script src="js/charts.js?v=94"></script>
+<script src="js/history-ui.js?v=94"></script>
+<script src="js/insights-ui.js?v=94"></script>
+<script src="js/library-ui.js?v=94"></script>
+<script src="js/progress-ui.js?v=94"></script>
+<script src="js/nutrition.js?v=94"></script>
+<script src="js/nutrition-label-parse.js?v=94"></script>
+<script src="js/food-amount-logic.js?v=94"></script>
+<script src="js/nutrition-label-scan.js?v=94"></script>
+<script src="js/food-flow-ui.js?v=94"></script>
+<script src="js/groceries.js?v=94"></script>
+<script src="js/mealprep-foods.js?v=94"></script>
+<script src="js/mealprep-logic.js?v=94"></script>
+<script src="js/habit-logic.js?v=94"></script>
+<script src="js/task-kind-logic.js?v=94"></script>
+<script src="js/habit-plan-logic.js?v=94"></script>
+<script src="js/goals-logic.js?v=94"></script>
+<script src="js/dayplan-logic.js?v=94"></script>
+<script src="js/habits.js?v=94"></script>
+<script src="js/dayplan-ui.js?v=94"></script>
+<script src="js/calendar-logic.js?v=94"></script>
+<script src="js/schedule-logic.js?v=94"></script>
+<script src="js/ics-logic.js?v=94"></script>
+<script src="js/assistant-logic.js?v=94"></script>
+<script src="js/calendar-ui.js?v=94"></script>
+<script src="js/assistant-ui.js?v=94"></script>
+<script src="js/calendar-reminders-logic.js?v=94"></script>
+<script src="js/calendar-reminders-ui.js?v=94"></script>
+<script src="js/ics-ui.js?v=94"></script>
+<script src="js/home-ui.js?v=94"></script>
+<script src="js/discipline-logic.js?v=94"></script>
+<script src="js/discipline-program.js?v=94"></script>
+<script src="js/discipline-habits.js?v=94"></script>
+<script src="js/discipline-insights.js?v=94"></script>
+<script src="js/discipline-charts.js?v=94"></script>
+<script src="js/discipline-delivery.js?v=94"></script>
+<script src="js/discipline.js?v=94"></script>
+<script src="js/wakecheck-logic.js?v=94"></script>
+<script src="js/wakecheck.js?v=94"></script>
+<script src="functions/lib/reminder-spec.js?v=94"></script>
+<script src="functions/lib/reminder-events.js?v=94"></script>
+<script src="js/reminders.js?v=94"></script>
+<script src="js/video-api-client.js?v=94"></script>
+<script src="js/video-connections.js?v=94"></script>
+<script src="js/formcheck-logic.js?v=94"></script>
+<script src="js/form-check.js?v=94"></script>
+<script src="js/retired-data.js?v=94"></script>
+<script src="js/retired-ui.js?v=94"></script>
+<script src="js/shopify-ui.js?v=94"></script>
+<script src="js/learning-srs.js?v=94"></script>
+<script src="js/learning-logic.js?v=94"></script>
+<script src="js/learning-cards-logic.js?v=94"></script>
+<script src="js/learning-goals-logic.js?v=94"></script>
+<script src="js/learning-links-logic.js?v=94"></script>
+<script src="js/learning-reading-logic.js?v=94"></script>
+<script src="js/learning-notebook-logic.js?v=94"></script>
+<script src="js/learning-weekly-logic.js?v=94"></script>
+<script src="js/learning-overview-logic.js?v=94"></script>
+<script src="js/learning-store.js?v=94"></script>
+<script src="js/learning-ui.js?v=94"></script>
+<script src="js/learning-books-ui.js?v=94"></script>
+<script src="js/learning-research-ui.js?v=94"></script>
+<script src="js/learning-library-ui.js?v=94"></script>
+<script src="js/learning-actions-ui.js?v=94"></script>
+<script src="js/learning-review-ui.js?v=94"></script>
+<script src="js/learning-study-ui.js?v=94"></script>
+<script src="js/learning-topics-ui.js?v=94"></script>
+<script src="js/learning-goals-ui.js?v=94"></script>
+<script src="js/learning-reading-ui.js?v=94"></script>
+<script src="js/learning-notebook-ui.js?v=94"></script>
+<script src="js/learning-capture-ui.js?v=94"></script>
+<script src="js/learning-overview-ui.js?v=94"></script>
+<script src="js/plan-logic.js?v=94"></script>
+<script src="js/plan-store.js?v=94"></script>
+<script src="js/plan-week-logic.js?v=94"></script>
+<script src="js/intentions-logic.js?v=94"></script>
+<script src="js/day-planner-logic.js?v=94"></script>
+<script src="js/plan-insights-logic.js?v=94"></script>
+<script src="js/plan-charts.js?v=94"></script>
+<script src="js/plan-ui.js?v=94"></script>
+<script src="js/plan-yearly-ui.js?v=94"></script>
+<script src="js/plan-quarterly-ui.js?v=94"></script>
+<script src="js/plan-dash-ui.js?v=94"></script>
+<script src="js/plan-breakdown-ui.js?v=94"></script>
+<script src="js/plan-week-ui.js?v=94"></script>
+<script src="js/plan-intentions-ui.js?v=94"></script>
+<script src="js/calendar-planner-ui.js?v=94"></script>
+<script src="js/goals-ui.js?v=94"></script>
+<script src="js/plan-insights-ui.js?v=94"></script>
+<script src="js/plan-home-ui.js?v=94"></script>
+<script src="js/mealprep-ui.js?v=94"></script>
+<script src="js/mealprep-plan-ui.js?v=94"></script>
+<script src="js/mealprep-recipes-ui.js?v=94"></script>
+<script src="js/mealprep-grocery-ui.js?v=94"></script>
+<script src="js/mealprep-tracker-ui.js?v=94"></script>
+<script src="js/health-overview-ui.js?v=94"></script>
+<script src="js/planning-overview-ui.js?v=94"></script>
 </body>
 </html>

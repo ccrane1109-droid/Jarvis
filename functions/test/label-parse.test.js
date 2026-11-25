@@ -533,3 +533,26 @@ test("how much of the basis serving a food's own serving is, including multiples
   assert.equal(P.servingFactor("1 container (250g)", "200 mL"), null, "volume against weight");
   assert.equal(P.servingFactor("1 cup", "125g"), null, "no weight on the basis side");
 });
+
+test("servings per container: a plain count, in the usual wordings, and nothing when the label doesn't say", () => {
+  const P2 = require("../../js/nutrition-label-parse");
+  assert.equal(P2.servingsPerContainer("Servings per container 8\nServing size 2/3 cup (55g)"), 8);
+  assert.equal(P2.servingsPerContainer("Servings Per Container: 12"), 12);
+  assert.equal(P2.servingsPerContainer("about 4 servings per container"), 4);
+  assert.equal(P2.servingsPerContainer("8 servings per package"), 8);
+  assert.equal(P2.servingsPerContainer("Servings per container: about 2.5"), 2.5);
+  assert.equal(P2.servingsPerContainer("Servings per container varied"), null, "not a number: not guessed");
+  assert.equal(P2.servingsPerContainer("Serving size 1 cup"), null);
+  assert.equal(P2.servingsPerContainer("Servings per container 9999"), null, "an absurd count is a misread");
+  assert.equal(P2.servingsPerContainer(""), null);
+  assert.equal(P2.parseNutritionLabelText("Nutrition Facts\n8 servings per container\nServing size 2/3 cup (55g)\nCalories 230\nTotal Fat 8g\nTotal Carbohydrate 37g\nProtein 3g").servingsPerContainer, 8, "the reading carries it");
+});
+
+test("ounces are converted with the exact factors", () => {
+  const P2 = require("../../js/nutrition-label-parse");
+  assert.equal(P2.parseAmount("3 oz").unit, "g");
+  assert.ok(Math.abs(P2.parseAmount("3 oz").value - 3 * 28.349523125) < 1e-9);
+  assert.equal(P2.parseAmount("8 fl oz").unit, "ml");
+  assert.ok(Math.abs(P2.parseAmount("8 fl oz").value - 8 * 29.5735295625) < 1e-9);
+  assert.deepEqual(P2.parseAmount("1 cup (240 mL)"), { value: 240, unit: "ml" }, "the printed metric amount wins over the household measure");
+});

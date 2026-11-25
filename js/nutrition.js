@@ -88,7 +88,6 @@
   // Recent Food, use the manual Create form, or log a Recipe, instead of
   // always typing every number by hand.
   let addFoodModalTab = "recent";
-  let pickerSelection = null; // { source: "recent"|"saved"|"recipe", food, meal, multiplier }
   let modalSavedFoodSearch = "";
 
   // AI Nutrition Goal Calculator: nutritionProfile is the last SAVED profile
@@ -119,14 +118,40 @@
 
   // The label numbers kept with a food ({ serving, values }: a serving and the numbers for it), so the food can be
   // worked out again for another amount later. Anything that isn't a serving with numbers is dropped.
-  function sanitizeLabel(raw) {
-    if (!raw || typeof raw !== "object" || typeof raw.serving !== "string" || !raw.values || typeof raw.values !== "object") return null;
-    const values = {};
-    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
-      const v = raw.values[f];
-      if (typeof v === "number" && isFinite(v) && v >= 0) values[f] = v;
-    });
-    return Object.keys(values).length ? { serving: raw.serving.slice(0, 60), values: values } : null;
+  //   size         the weight or volume of that serving, { value, unit: "g" | "ml" }, when the label gave one (or you confirmed it)
+  //   perContainer how many servings the package holds, when the label said
+  // The label is the baseline every amount is worked out from, so these are kept exactly as read.
+  function sanitizeLabel(raw) { return window.JarvisFoodAmount.cleanLabel(raw); }
+
+  // What a saved food (or a logged entry) remembers beyond its numbers. All optional, so foods saved before this are unchanged.
+  //   favorite, lastUsedAt, useCount      for the library (favorites, recently used)
+  //   lastPortion, portions, defaultPortionId   the amounts you use: the last one, named ones, and which is offered first
+  //   source ("scan" | "manual"), needsCheck [fields]   where it came from, and numbers that were flagged and not confirmed
+  //   foodId, amount   on a logged entry: the saved food it came from and the amount you had ({ value, unit })
+  function sanitizeFoodExtras(raw, item) {
+    const FA = window.JarvisFoodAmount;
+    if (raw.favorite === true) item.favorite = true;
+    if (typeof raw.lastUsedAt === "number" && isFinite(raw.lastUsedAt) && raw.lastUsedAt > 0) item.lastUsedAt = raw.lastUsedAt;
+    if (typeof raw.useCount === "number" && isFinite(raw.useCount) && raw.useCount > 0) item.useCount = Math.floor(raw.useCount);
+    if (typeof raw.updatedAt === "number" && isFinite(raw.updatedAt) && raw.updatedAt > 0) item.updatedAt = raw.updatedAt;
+    if (raw.source === "scan" || raw.source === "manual") item.source = raw.source;
+    if (typeof raw.foodId === "string" && raw.foodId) item.foodId = raw.foodId.slice(0, 60);
+    if (Array.isArray(raw.needsCheck)) {
+      const known = MACRO_FIELDS.concat(MICRO_FIELDS);
+      const list = raw.needsCheck.filter(function (k, i, all) { return known.indexOf(k) !== -1 && all.indexOf(k) === i; });
+      if (list.length) item.needsCheck = list;
+    }
+    if (FA) {
+      const last = FA.cleanEntry(raw.lastPortion);
+      if (last) item.lastPortion = last;
+      const amount = FA.cleanEntry(raw.amount);
+      if (amount) item.amount = amount;
+      const portions = FA.cleanPortions(raw.portions);
+      if (portions.length) {
+        item.portions = portions;
+        if (typeof raw.defaultPortionId === "string" && portions.some(function (p) { return p.id === raw.defaultPortionId; })) item.defaultPortionId = raw.defaultPortionId;
+      }
+    }
   }
 
   function sanitizeFoodItem(raw) {
@@ -151,6 +176,7 @@
     });
     const label = sanitizeLabel(raw.label);
     if (label) item.label = label;
+    sanitizeFoodExtras(raw, item);
     return item;
   }
 
@@ -1019,10 +1045,6 @@
       const el = $(id); if (el) el.value = "";
     });
     $("foodIsFruitVeg").checked = false;
-    clearScanMarks("food"); // a finished or abandoned form's scan must never attach to the next food
-    setAiStatus("foodScanStatus", "");
-    setAiStatus("foodRememberStatus", "");
-    $("foodRememberRow").classList.add("hidden");
     $("foodNameMatchHint").classList.add("hidden");
     renderFoodForm();
   }
@@ -1042,8 +1064,7 @@
       fat: $("foodFat").value, fiber: $("foodFiber").value,
       sodium: $("foodSodium").value, calcium: $("foodCalcium").value, iron: $("foodIron").value,
       potassium: $("foodPotassium").value, vitaminC: $("foodVitaminC").value, vitaminD: $("foodVitaminD").value,
-      isFruitVeg: $("foodIsFruitVeg").checked,
-      label: labelToKeep("food")
+      isFruitVeg: $("foodIsFruitVeg").checked
     };
 
     const today = core.todayISODate();
@@ -1057,7 +1078,7 @@
         raw.id = foodFormEditId.id;
         raw.createdAt = day.meals[oldMeal][idx].createdAt;
         const old = day.meals[oldMeal][idx];
-        if (!raw.label && old.label && sameFood(old, raw)) raw.label = old.label; // untouched: keep what it had
+        keepSourceIfUntouched(old, raw);
         const item = sanitizeFoodItem(raw);
         day.meals[oldMeal].splice(idx, 1);
         day.meals[meal].push(item);
@@ -1099,6 +1120,7 @@
     }
     return (
       '<div class="food-item-menu">' +
+        (item.label ? '<button type="button" class="food-item-menu-item food-amount-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Change amount</button>' : '') +
         '<button type="button" class="food-item-menu-item food-edit-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Edit</button>' +
         '<button type="button" class="food-item-menu-item food-duplicate-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Duplicate</button>' +
         '<button type="button" class="food-item-menu-item food-move-btn" data-meal="' + meal + '" data-id="' + core.escapeHtml(item.id) + '">Move to another meal</button>' +
@@ -1212,13 +1234,25 @@
       const id = saveBtn.getAttribute("data-id");
       const item = getDay(window.JarvisCore.todayISODate()).meals[meal].find(function (it) { return it.id === id; });
       if (item) {
-        savedFoods.push(sanitizeFoodItem(Object.assign({}, item, { id: undefined, createdAt: undefined })));
-        saveSavedFoods();
-        renderSavedFoods();
-        window.JarvisCore.showToast('Saved "' + item.name + '" to Saved Foods.');
+        const r = saveLogItemAsFood(item);
+        window.JarvisCore.showToast(!r.ok ? r.error : r.existed ? '"' + item.name + '" is already in Saved Foods.' : 'Saved "' + item.name + '" to Saved Foods.');
       }
       foodItemMenuOpenKey = null;
       renderFoodLog();
+      return;
+    }
+    const amountBtn = e.target.closest(".food-amount-btn");
+    if (amountBtn) {
+      const meal = amountBtn.getAttribute("data-meal");
+      const id = amountBtn.getAttribute("data-id");
+      const item = getDay(window.JarvisCore.todayISODate()).meals[meal].find(function (it) { return it.id === id; });
+      foodItemMenuOpenKey = null;
+      renderFoodLog();
+      if (!item || !item.label) return;
+      startFlow({
+        mode: "edit", start: "amount", meal: meal, itemId: id, entry: entryOfItem(item),
+        food: { source: "edit", name: item.name, serving: item.label.serving, label: item.label, isFruitVeg: !!item.isFruitVeg }
+      });
       return;
     }
     const editBtn = e.target.closest(".food-edit-btn");
@@ -1239,7 +1273,6 @@
         if (el) el.value = item[f] !== undefined ? item[f] : "";
       });
       $("foodIsFruitVeg").checked = !!item.isFruitVeg;
-      adoptBasis("food", item);
       renderFoodForm();
       renderFoodLog();
       return;
@@ -1267,87 +1300,209 @@
     $("savedFoodFormTitle").textContent = window._savedFoodEditId ? "Edit Saved Food" : "Add Saved Food";
     $("savedFoodSubmitBtn").textContent = window._savedFoodEditId ? "Save Changes" : "Save Food";
     $("savedFoodCancelBtn").classList.remove("hidden");   // Cancel closes the form: always offered
+    renderSavedFoodPortions();
   }
 
   function resetSavedFoodForm() {
     window._savedFoodEditId = null;
-    ["savedFoodName", "savedFoodServing", "savedFoodCalories", "savedFoodProtein", "savedFoodCarbs", "savedFoodFat", "savedFoodFiber",
+    ["savedFoodName", "savedFoodServing", "savedFoodSize", "savedFoodCalories", "savedFoodProtein", "savedFoodCarbs", "savedFoodFat", "savedFoodFiber",
       "savedFoodSodium", "savedFoodCalcium", "savedFoodIron", "savedFoodPotassium", "savedFoodVitaminC", "savedFoodVitaminD"].forEach(function (id) {
       const el = $(id); if (el) el.value = "";
     });
-    clearScanMarks("savedFood");
-    setAiStatus("savedFoodScanStatus", "");
+    $("savedFoodSizeUnit").value = "g";
+    $("savedFoodPortionName").value = ""; $("savedFoodPortionValue").value = ""; $("savedFoodPortionMsg").textContent = "";
     renderSavedFoodForm();
     const sw = $("savedFoodFormWrap"); if (sw) sw.hidden = true;
   }
 
+  // The form edits the food as its LABEL has it: the label's serving, its weight or volume, and the numbers for that one serving.
+  function fillSavedFoodForm(food) {
+    const FA = window.JarvisFoodAmount, base = FA ? FA.baseOf(food) : null, vals = FA ? FA.valuesOf(food) : food;
+    $("savedFoodName").value = food.name;
+    $("savedFoodServing").value = (food.label && food.label.serving) || food.serving || "";
+    $("savedFoodSize").value = base ? base.value : "";
+    $("savedFoodSizeUnit").value = base ? base.unit : "g";
+    MACRO_FIELDS.forEach(function (f2) { $("savedFood" + capitalize(f2)).value = vals[f2] !== undefined ? vals[f2] : (food[f2] !== undefined ? food[f2] : ""); });
+    MICRO_FIELDS.forEach(function (f2) {
+      const el = $("savedFood" + capitalize(f2));
+      if (el) el.value = vals[f2] !== undefined ? vals[f2] : "";
+    });
+  }
+
+  // The portions you have named for the food being edited, with a way to make one the default or take it away. Saved at once.
+  function renderSavedFoodPortions() {
+    const wrap = $("savedFoodPortionsWrap"), list = $("savedFoodPortions");
+    if (!wrap || !list) return;
+    const food = window._savedFoodEditId ? savedFoods.find(function (f) { return f.id === window._savedFoodEditId; }) : null;
+    wrap.hidden = !food;
+    if (!food) return;
+    const FA = window.JarvisFoodAmount, core = window.JarvisCore, base = FA ? FA.baseOf(food) : null;
+    const units = FA ? FA.unitsFor(base) : ["serving"];
+    $("savedFoodPortionUnit").innerHTML = units.map(function (u) { return '<option value="' + u + '">' + FA.unitLabel(u, 2) + '</option>'; }).join("");
+    const portions = FA ? FA.cleanPortions(food.portions) : [];
+    list.innerHTML = portions.length ? portions.map(function (p) {
+      const isDef = food.defaultPortionId === p.id;
+      return '<div class="ff-portion-row" data-id="' + core.escapeHtml(p.id) + '"><span class="ff-portion-name">' + core.escapeHtml(p.name) + ' <span class="ff-portion-amt">' + core.escapeHtml(FA.describeEntry(p)) + '</span></span>' +
+        '<button type="button" class="btn-icon ff-portion-default" aria-pressed="' + isDef + '" aria-label="' + (isDef ? "Default portion: " : "Make default: ") + core.escapeHtml(p.name) + '">' + (isDef ? "Default" : "Make default") + '</button>' +
+        '<button type="button" class="btn-icon danger ff-portion-remove" aria-label="Remove portion ' + core.escapeHtml(p.name) + '">&times;</button></div>';
+    }).join("") : '<p class="field-hint">No portions yet.</p>';
+  }
+
+  function handleSavedFoodPortionsClick(e) {
+    const FA = window.JarvisFoodAmount, id = window._savedFoodEditId;
+    const food = id ? savedFoods.find(function (f) { return f.id === id; }) : null;
+    if (!FA || !food) return;
+    const row = e.target.closest(".ff-portion-row");
+    if (!row) return;
+    const pid = row.getAttribute("data-id");
+    if (e.target.closest(".ff-portion-default")) {
+      const on = food.defaultPortionId === pid;
+      if (updateSavedFood(id, { defaultPortionId: on ? "" : pid }).ok) renderSavedFoodPortions();
+    } else if (e.target.closest(".ff-portion-remove")) {
+      const r = FA.removePortion(food, pid);
+      if (updateSavedFood(id, { portions: r.portions, defaultPortionId: r.defaultPortionId }).ok) { renderSavedFoodPortions(); $("savedFoodPortionMsg").textContent = "Portion removed."; }
+    }
+  }
+
+  function handleSavedFoodPortionAdd() {
+    const FA = window.JarvisFoodAmount, id = window._savedFoodEditId, msg = $("savedFoodPortionMsg");
+    const food = id ? savedFoods.find(function (f) { return f.id === id; }) : null;
+    if (!FA || !food) return;
+    const r = FA.addPortion(food, { name: $("savedFoodPortionName").value, value: Number($("savedFoodPortionValue").value), unit: $("savedFoodPortionUnit").value }, function () { return window.JarvisCore.uid("por"); });
+    if (!r.ok) { msg.textContent = r.error; return; }
+    if (!updateSavedFood(id, { portions: r.portions }).ok) { msg.textContent = REFUSED; return; }
+    msg.textContent = (r.replaced ? "Updated " : "Added ") + "“" + $("savedFoodPortionName").value.trim() + "”.";
+    $("savedFoodPortionName").value = ""; $("savedFoodPortionValue").value = "";
+    renderSavedFoodPortions();
+  }
+
   function handleSavedFoodFormSubmit(e) {
     e.preventDefault();
-    const core = window.JarvisCore;
+    const core = window.JarvisCore, FA = window.JarvisFoodAmount, parse = window.JarvisLabelParse;
     const name = $("savedFoodName").value.trim();
     if (!name) { core.showToast("Give the saved food a name."); return; }
     if (!isNonNegativeNumber($("savedFoodCalories").value)) { core.showToast("Calories must be zero or a positive number."); return; }
-    const raw = {
-      name: name, serving: $("savedFoodServing").value.trim(),
-      calories: $("savedFoodCalories").value, protein: $("savedFoodProtein").value,
-      carbs: $("savedFoodCarbs").value, fat: $("savedFoodFat").value, fiber: $("savedFoodFiber").value,
-      sodium: $("savedFoodSodium").value, calcium: $("savedFoodCalcium").value, iron: $("savedFoodIron").value,
-      potassium: $("savedFoodPotassium").value, vitaminC: $("savedFoodVitaminC").value, vitaminD: $("savedFoodVitaminD").value,
-      label: labelToKeep("savedFood")
-    };
-    if (window._savedFoodEditId) {
-      const idx = savedFoods.findIndex(function (f) { return f.id === window._savedFoodEditId; });
-      if (idx !== -1) {
-        raw.id = window._savedFoodEditId;
-        raw.createdAt = savedFoods[idx].createdAt;
-        if (!raw.label && savedFoods[idx].label && sameFood(savedFoods[idx], raw)) raw.label = savedFoods[idx].label;
-        savedFoods[idx] = sanitizeFoodItem(raw);
-      }
-    } else {
-      savedFoods.push(sanitizeFoodItem(raw));
-    }
-    saveSavedFoods();
+    const serving = $("savedFoodServing").value.trim();
+    // The label's weight or volume: what is typed, else what the serving text says ("2/3 cup (55g)").
+    const typed = { value: Number($("savedFoodSize").value), unit: $("savedFoodSizeUnit").value };
+    let size = FA && FA.validSize(typed) ? typed : null;
+    if (!size && parse && serving) { const a = parse.parseAmount(serving); if (a) size = { value: a.value, unit: a.unit }; }
+    const values = {};
+    MACRO_FIELDS.forEach(function (f) {
+      const v = $("savedFood" + capitalize(f)).value;
+      if (f === "fiber" && v === "") return;       // fiber left empty is "not on the label", not 0
+      values[f] = isNonNegativeNumber(v) && v !== "" ? Number(v) : 0;
+    });
+    MICRO_FIELDS.forEach(function (f) { const v = $("savedFood" + capitalize(f)).value; if (v !== "" && isNonNegativeNumber(v)) values[f] = Number(v); });
+    const idx = window._savedFoodEditId ? savedFoods.findIndex(function (f) { return f.id === window._savedFoodEditId; }) : -1;
+    const old = idx !== -1 ? savedFoods[idx] : null;
+    const raw = Object.assign({}, old || {}, values, { name: name, serving: serving, isFruitVeg: old ? !!old.isFruitVeg : false, updatedAt: Date.now() });
+    MICRO_FIELDS.forEach(function (f) { if (values[f] === undefined) delete raw[f]; });
+    // A food with a measurable serving keeps its label; one without keeps it only if it already had one (the label's own serving text).
+    if (size || (old && old.label)) {
+      raw.label = { serving: serving || (size ? size.value + (size.unit === "ml" ? " mL" : " g") : "1 serving"), values: Object.assign({}, values), perContainer: old && old.label ? old.label.perContainer : undefined };
+      if (size) raw.label.size = size;
+    } else delete raw.label;
+    raw.source = old && old.source ? old.source : "manual";
+    if (raw.fiber !== undefined && values.fiber === undefined) delete raw.fiber;
+    // Portions in a unit the food no longer allows (its label went from grams to millilitres) can't be used, so they are dropped.
+    if (FA && raw.portions) { const base = FA.baseOf(raw); raw.portions = FA.cleanPortions(raw.portions).filter(function (p) { return FA.unitAllowed(base, p.unit); }); }
+    // Numbers that were flagged by a scan and then changed by hand are confirmed; the ones left alone stay flagged.
+    if (old && old.needsCheck) raw.needsCheck = old.needsCheck.filter(function (k) { const was = FA ? FA.valuesOf(old)[k] : old[k]; return was === values[k]; });
+    if (old) { raw.id = old.id; raw.createdAt = old.createdAt; }
+    const prev = savedFoods;
+    const item = sanitizeFoodItem(raw);
+    savedFoods = old ? savedFoods.map(function (f, i) { return i === idx ? item : f; }) : savedFoods.concat([item]);
+    if (!saveSavedFoods()) { savedFoods = prev; core.showToast(REFUSED); return; }
     resetSavedFoodForm();
     renderSavedFoods();
-    core.showToast("Saved food updated.");
+    core.showToast(old ? "Saved food updated." : "Food saved.");
+  }
+
+  const ICON_STAR = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6l-5.1 2.7 1-5.7-4.1-4 5.7-.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+
+  // A saved food as the library lists it: its label's serving and numbers (the baseline), and what you last had of it.
+  function savedFoodLine(f) {
+    const FA = window.JarvisFoodAmount, v = FA ? FA.valuesOf(f) : f;
+    const num = function (k) { return Math.round((v[k] || 0) * 10) / 10; };
+    return { per: (f.label && f.label.serving) || f.serving || "1 serving", macros: Math.round(v.calories || 0) + " cal · P " + num("protein") + "g · C " + num("carbs") + "g · F " + num("fat") + "g" };
+  }
+
+  function savedFoodMatches(f, q) {
+    return !q || f.name.toLowerCase().indexOf(q) !== -1 || ((f.label && f.label.serving) || f.serving || "").toLowerCase().indexOf(q) !== -1;
   }
 
   function renderSavedFoods() {
-    const core = window.JarvisCore;
+    const core = window.JarvisCore, FA = window.JarvisFoodAmount;
     const container = $("savedFoodsList");
-    let list = savedFoods.slice();
+    let list = savedFoods.filter(function (f) { return f && typeof f.name === "string"; });
     const q = savedFoodSearch.trim().toLowerCase();
-    if (q) list = list.filter(function (f) { return f.name.toLowerCase().indexOf(q) !== -1; });
-    if (savedFoodSort === "calories") list.sort(function (a, b) { return a.calories - b.calories; });
+    list = list.filter(function (f) { return savedFoodMatches(f, q) && (foodsFilter !== "favorites" || f.favorite); });
+    if (savedFoodSort === "calories") list.sort(function (a, b) { return (FA ? FA.valuesOf(a).calories || 0 : a.calories) - (FA ? FA.valuesOf(b).calories || 0 : b.calories); });
     else if (savedFoodSort === "recent") list.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
-    else list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    else if (savedFoodSort === "used") list.sort(function (a, b) { return (b.lastUsedAt || 0) - (a.lastUsedAt || 0) || (b.createdAt || 0) - (a.createdAt || 0); });
+    else list.sort(function (a, b) { return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || a.name.localeCompare(b.name); });
 
     if (list.length === 0) {
-      container.innerHTML = '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet. Tap + Add." : "No saved foods match your search.") + '</div>';
+      container.innerHTML = '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet. Scan a label and it is saved here for you." : foodsFilter === "favorites" && !q ? "No favorite foods yet. Tap the star on a food." : "No saved foods match your search.") + '</div>';
       return;
     }
     container.innerHTML = list.map(function (f) {
+      const line = savedFoodLine(f), last = f.lastPortion && FA ? FA.describeEntry(f.lastPortion) : "";
+      const esc = core.escapeHtml;
+      const tags = (f.source === "scan" ? ' <span class="badge badge-neutral">Scanned</span>' : "") + (f.needsCheck && f.needsCheck.length ? ' <span class="badge badge-yellow">Check numbers</span>' : "");
       return (
-        '<div class="saved-food-card" data-id="' + core.escapeHtml(f.id) + '">' +
-          '<div class="saved-food-card-title">' + core.escapeHtml(f.name) + '</div>' +
-          '<div class="saved-food-card-meta">' + core.escapeHtml(f.serving || "1 serving") + '</div>' +
-          '<div class="saved-food-card-macros">' + Math.round(f.calories) + ' cal &middot; P ' + f.protein + 'g &middot; C ' + f.carbs + 'g &middot; F ' + f.fat + 'g</div>' +
+        '<div class="saved-food-card" data-id="' + esc(f.id) + '">' +
+          '<div class="saved-food-card-top">' +
+            '<div class="saved-food-card-main"><div class="saved-food-card-title">' + esc(f.name) + tags + '</div>' +
+            '<div class="saved-food-card-meta">Per ' + esc(line.per) + (last ? ' &middot; last had ' + esc(last) : '') + '</div></div>' +
+            '<button type="button" class="ff-star saved-food-star' + (f.favorite ? " is-on" : "") + '" data-id="' + esc(f.id) + '" aria-pressed="' + (f.favorite ? "true" : "false") + '" aria-label="' + (f.favorite ? "Remove " : "Add ") + esc(f.name) + (f.favorite ? " from favorites" : " to favorites") + '">' + ICON_STAR + '</button>' +
+          '</div>' +
+          '<div class="saved-food-card-macros">' + line.macros + '</div>' +
+          (f.needsCheck && f.needsCheck.length ? '<div class="saved-food-card-meta">Not confirmed from the label: ' + esc(f.needsCheck.map(function (k) { return (FA && FA.NAMES[k]) || k; }).join(", ")) + '.</div>' : '') +
           '<div class="saved-food-card-actions">' +
-            '<button type="button" class="btn btn-secondary saved-food-log-btn" data-id="' + core.escapeHtml(f.id) + '">+ Log</button>' +
-            '<button type="button" class="btn-icon saved-food-edit-btn" data-id="' + core.escapeHtml(f.id) + '">Edit</button>' +
-            '<button type="button" class="btn-icon danger saved-food-delete-btn" data-id="' + core.escapeHtml(f.id) + '">Delete</button>' +
+            '<button type="button" class="btn btn-secondary saved-food-log-btn" data-id="' + esc(f.id) + '" aria-label="Log ' + esc(f.name) + '">+ Log</button>' +
+            (f.needsCheck && f.needsCheck.length ? '<button type="button" class="btn-icon saved-food-checked-btn" data-id="' + esc(f.id) + '" aria-label="Mark checked: ' + esc(f.name) + '">Mark checked</button>' : '') +
+            '<button type="button" class="btn-icon saved-food-edit-btn" data-id="' + esc(f.id) + '" aria-label="Edit ' + esc(f.name) + '">Edit</button>' +
+            '<button type="button" class="btn-icon danger saved-food-delete-btn" data-id="' + esc(f.id) + '" aria-label="Delete ' + esc(f.name) + '">Delete</button>' +
           '</div>' +
         '</div>'
       );
     }).join("");
   }
 
+  // Changes some of a saved food's fields (favorite, portions, last amount ...) and saves, taking the change back if the browser refuses.
+  function updateSavedFood(id, patch) {
+    const idx = savedFoods.findIndex(function (f) { return f.id === id; });
+    if (idx === -1) return { ok: false, error: "That food isn't saved any more." };
+    const prev = savedFoods;
+    const next = sanitizeFoodItem(Object.assign({}, copyOf(savedFoods[idx]), patch, { id: id, createdAt: savedFoods[idx].createdAt }));
+    // sanitize drops what it can't keep; a field set to "" or null in the patch is taken away
+    Object.keys(patch).forEach(function (k) { if (patch[k] === "" || patch[k] === null) delete next[k]; });
+    savedFoods = savedFoods.map(function (f, i) { return i === idx ? next : f; });
+    if (!saveSavedFoods()) { savedFoods = prev; return { ok: false, error: REFUSED }; }
+    return { ok: true, food: copyOf(next) };
+  }
+
   function handleSavedFoodsClick(e) {
     const logBtn = e.target.closest(".saved-food-log-btn");
-    if (logBtn) {
-      const id = logBtn.getAttribute("data-id");
-      openAddFoodModal("saved");
-      selectFoodForLogging("saved", id);
+    if (logBtn) { openFlowFor("saved", logBtn.getAttribute("data-id"), "saved"); return; }
+    const star = e.target.closest(".saved-food-star");
+    if (star) {
+      const id = star.getAttribute("data-id");
+      const food = savedFoods.find(function (f) { return f.id === id; });
+      if (!food) return;
+      const r = updateSavedFood(id, { favorite: !food.favorite, updatedAt: Date.now() });
+      if (!r.ok) { window.JarvisCore.showToast(r.error); return; }
+      renderSavedFoods();
+      const again = document.querySelector('.saved-food-star[data-id="' + id + '"]'); if (again) again.focus();
+      return;
+    }
+    const checkedBtn = e.target.closest(".saved-food-checked-btn");
+    if (checkedBtn) {
+      const r = updateSavedFood(checkedBtn.getAttribute("data-id"), { needsCheck: [] });
+      window.JarvisCore.showToast(r.ok ? "Marked as checked." : r.error);
+      renderSavedFoods();
       return;
     }
     const editBtn = e.target.closest(".saved-food-edit-btn");
@@ -1356,14 +1511,7 @@
       const food = savedFoods.find(function (f) { return f.id === id; });
       if (!food) return;
       window._savedFoodEditId = id;
-      $("savedFoodName").value = food.name;
-      $("savedFoodServing").value = food.serving;
-      MACRO_FIELDS.forEach(function (f2) { $("savedFood" + capitalize(f2)).value = food[f2]; });
-      MICRO_FIELDS.forEach(function (f2) {
-        const el = $("savedFood" + capitalize(f2));
-        if (el) el.value = food[f2] !== undefined ? food[f2] : "";
-      });
-      adoptBasis("savedFood", food);
+      fillSavedFoodForm(food);
       renderSavedFoodForm();
       showFoodForm("saved");
       $("savedFoodName").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1375,8 +1523,9 @@
       const food = savedFoods.find(function (f) { return f.id === id; });
       if (!food) return;
       if (!window.confirm('Delete saved food "' + food.name + '"? This can\'t be undone.')) return;
+      const prev = savedFoods;
       savedFoods = savedFoods.filter(function (f) { return f.id !== id; });
-      saveSavedFoods();
+      if (!saveSavedFoods()) { savedFoods = prev; window.JarvisCore.showToast(REFUSED); return; }
       renderSavedFoods();
       window.JarvisCore.showToast("Saved food deleted.");
     }
@@ -1385,6 +1534,8 @@
   /* ---------------- Recipes ---------------- */
 
   function computeRecipeTotals(ingredients) {
+    // An ingredient made from a food is worked out from its label (exact); the others are their own numbers. Added up exact, rounded by whoever shows it.
+    if (window.JarvisFoodAmount) { const ex = window.JarvisFoodAmount.recipeExact(ingredients); return { totals: ex.totals, anyData: ex.counted > 0 }; }
     const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
     let anyData = false;
     ingredients.forEach(function (ing) {
@@ -1394,6 +1545,19 @@
       });
     });
     return { totals: totals, anyData: anyData };
+  }
+
+  // An ingredient made from a food keeps its label and amount; its numbers follow them exactly until they are typed over.
+  function linkedIng(ing) { return !!(ing && ing.label && ing.amount && window.JarvisFoodFlow && window.JarvisFoodFlow.linkNote(ing)); }
+  function unlinkIng(ing) { delete ing.label; delete ing.amount; delete ing.foodId; }
+  function renderRecipeSummary() {
+    const box = $("recipeSummary"), FA = window.JarvisFoodAmount;
+    if (!box || !window.JarvisFoodFlow) return;
+    const wasOpen = !!box.querySelector(".ff-rs-more[open]");
+    const dish = recipeBuilder.editId ? (recipes.find(function (r) { return r.id === recipeBuilder.editId; }) || {}).dishGrams : undefined;
+    box.innerHTML = window.JarvisFoodFlow.recipeSummaryHtml({ ingredients: recipeBuilder.ingredients.filter(function (i) { return String(i.name || "").trim(); }), servings: $("recipeServings").value, dishGrams: dish });
+    const more = box.querySelector(".ff-rs-more");
+    if (more && wasOpen) more.open = true;
   }
 
   function renderIngredientRows() {
@@ -1412,20 +1576,22 @@
               '<button type="button" class="btn-icon danger ri-remove-btn" data-index="' + i + '" aria-label="Remove ingredient">&times;</button>' +
             '</div>' +
           '</div>' +
+          (linkedIng(ing) ? '<p class="ff-link"><span>' + core.escapeHtml(window.JarvisFoodFlow.linkNote(ing)) + '</span><button type="button" class="btn-icon ri-amount-btn" data-index="' + i + '">Change amount</button></p>' : '') +
           '<div class="form-row two-col">' +
-            '<div><label>Name</label><input type="text" class="ri-name" data-index="' + i + '" value="' + core.escapeHtml(ing.name) + '" placeholder="e.g. Chicken breast"></div>' +
-            '<div><label>Quantity</label><input type="text" class="ri-quantity" data-index="' + i + '" value="' + core.escapeHtml(ing.quantity) + '" placeholder="e.g. 6 oz"></div>' +
+            '<div><label>Name</label><input type="text" class="ri-name" aria-label="Ingredient ' + (i + 1) + ' name" data-index="' + i + '" value="' + core.escapeHtml(ing.name) + '" placeholder="e.g. Chicken breast"></div>' +
+            '<div><label>Quantity</label><input type="text" class="ri-quantity" aria-label="Ingredient ' + (i + 1) + ' quantity" data-index="' + i + '" value="' + core.escapeHtml(ing.quantity) + '" placeholder="e.g. 6 oz"></div>' +
           '</div>' +
           '<div class="recipe-ingredient-macro-grid">' +
-            '<div><label>Cal</label><input type="number" min="0" class="ri-calories" data-index="' + i + '" value="' + core.escapeHtml(ing.calories) + '"></div>' +
-            '<div><label>Protein</label><input type="number" min="0" class="ri-protein" data-index="' + i + '" value="' + core.escapeHtml(ing.protein) + '"></div>' +
-            '<div><label>Carbs</label><input type="number" min="0" class="ri-carbs" data-index="' + i + '" value="' + core.escapeHtml(ing.carbs) + '"></div>' +
-            '<div><label>Fat</label><input type="number" min="0" class="ri-fat" data-index="' + i + '" value="' + core.escapeHtml(ing.fat) + '"></div>' +
-            '<div><label>Fiber</label><input type="number" min="0" class="ri-fiber" data-index="' + i + '" value="' + core.escapeHtml(ing.fiber) + '"></div>' +
+            '<div><label>Cal</label><input type="number" min="0" class="ri-calories" aria-label="Ingredient ' + (i + 1) + ' calories" data-index="' + i + '" value="' + core.escapeHtml(ing.calories) + '"></div>' +
+            '<div><label>Protein</label><input type="number" min="0" class="ri-protein" aria-label="Ingredient ' + (i + 1) + ' protein" data-index="' + i + '" value="' + core.escapeHtml(ing.protein) + '"></div>' +
+            '<div><label>Carbs</label><input type="number" min="0" class="ri-carbs" aria-label="Ingredient ' + (i + 1) + ' carbs" data-index="' + i + '" value="' + core.escapeHtml(ing.carbs) + '"></div>' +
+            '<div><label>Fat</label><input type="number" min="0" class="ri-fat" aria-label="Ingredient ' + (i + 1) + ' fat" data-index="' + i + '" value="' + core.escapeHtml(ing.fat) + '"></div>' +
+            '<div><label>Fiber</label><input type="number" min="0" class="ri-fiber" aria-label="Ingredient ' + (i + 1) + ' fiber" data-index="' + i + '" value="' + core.escapeHtml(ing.fiber) + '"></div>' +
           '</div>' +
         '</div>'
       );
     }).join("");
+    renderRecipeSummary();
   }
 
   function handleAddIngredientRow() {
@@ -1441,6 +1607,8 @@
     // Any manual edit means the value is no longer purely an AI guess.
     recipeBuilder.ingredients[i].aiEstimated = false;
     if (!input.classList.contains("ri-name") && !input.classList.contains("ri-quantity")) recipeBuilder.ingredients[i].est = false;   // typing a number makes it yours
+    const wasLinked = linkedIng(recipeBuilder.ingredients[i]);
+    if (!input.classList.contains("ri-name") && wasLinked) { unlinkIng(recipeBuilder.ingredients[i]); const note = input.closest(".recipe-ingredient-card").querySelector(".ff-link"); if (note) note.remove(); }
     if (input.classList.contains("ri-name")) recipeBuilder.ingredients[i].name = input.value;
     else if (input.classList.contains("ri-quantity")) recipeBuilder.ingredients[i].quantity = input.value;
     else if (input.classList.contains("ri-calories")) recipeBuilder.ingredients[i].calories = input.value;
@@ -1448,9 +1616,36 @@
     else if (input.classList.contains("ri-carbs")) recipeBuilder.ingredients[i].carbs = input.value;
     else if (input.classList.contains("ri-fat")) recipeBuilder.ingredients[i].fat = input.value;
     else if (input.classList.contains("ri-fiber")) recipeBuilder.ingredients[i].fiber = input.value;
+    renderRecipeSummary();
+  }
+
+  // An ingredient from a scanned label or a saved food, added through the food sheet.
+  function handleRecipeFromFood() {
+    if (!window.JarvisFoodFlow) { window.JarvisCore.showToast("The food sheet isn't ready. Reload the app."); return; }
+    window.JarvisFoodFlow.addIngredient({ onDone: function (ing) { putIngredientRow(ing); } });
+  }
+  function ingredientRow(ing) {
+    const row = { name: ing.name, quantity: ing.quantity, calories: ing.calories, protein: ing.protein, carbs: ing.carbs, fat: ing.fat, fiber: ing.fiber, est: false, aiEstimated: false };
+    if (ing.label && ing.amount) { row.label = ing.label; row.amount = ing.amount; if (ing.foodId) row.foodId = ing.foodId; }
+    return row;
+  }
+  function putIngredientRow(ing, at) {
+    const list = recipeBuilder.ingredients, row = ingredientRow(ing);
+    const blank = function (r) { return !String(r.name || "").trim() && !String(r.quantity || "").trim() && !Number(r.calories) && !Number(r.protein) && !Number(r.carbs) && !Number(r.fat); };
+    if (typeof at === "number") list[at] = Object.assign({}, list[at], row);
+    else if (list.length && blank(list[list.length - 1])) list[list.length - 1] = row; else list.push(row);
+    renderIngredientRows();
+    const names = document.querySelectorAll("#recipeIngredientRows .ri-name"), target = names[typeof at === "number" ? at : names.length - 1];
+    if (target) target.focus();
   }
 
   function handleIngredientRowsClick(e) {
+    const amountBtn = e.target.closest(".ri-amount-btn");
+    if (amountBtn) {
+      const at = Number(amountBtn.getAttribute("data-index")), ing = recipeBuilder.ingredients[at];
+      if (ing && ing.label && ing.amount && window.JarvisFoodFlow) window.JarvisFoodFlow.changeIngredient(ing, { onDone: function (n) { putIngredientRow(n, at); } });
+      return;
+    }
     const upBtn = e.target.closest(".ri-move-up-btn");
     if (upBtn) {
       const i = Number(upBtn.getAttribute("data-index"));
@@ -1561,9 +1756,10 @@
 
   function handleCalculateNutritionWithAI() {
     const core = window.JarvisCore;
-    const named = recipeBuilder.ingredients.filter(function (ing) { return ing.name.trim(); });
+    // Ingredients made from a label are never sent: an estimate must not replace numbers read from a package.
+    const named = recipeBuilder.ingredients.filter(function (ing) { return ing.name.trim() && !linkedIng(ing); });
     if (named.length === 0) {
-      core.showToast("Add at least one ingredient name first.");
+      core.showToast(recipeBuilder.ingredients.some(linkedIng) ? "Every ingredient already has its numbers from a label." : "Add at least one ingredient name first.");
       return;
     }
     setRecipeAiStatus("Asking AI to estimate nutrition for " + named.length + " ingredient" + (named.length === 1 ? "" : "s") + "…");
@@ -1604,92 +1800,6 @@
     if (window.JarvisVideoConnections && typeof window.JarvisVideoConnections.openManager === "function") window.JarvisVideoConnections.openManager();
   }
 
-  // What the last scan read off the label, per form: the label's own numbers and serving, kept so they can be
-  // scaled to a different amount later without compounding rounding. { fields, servingSize, factor, uncertain }
-  const scanBase = {};
-
-  function fmtAmount(a) {
-    const v = Math.round(a.value * 10) / 10;
-    return v + (a.unit === "ml" ? " mL" : " g");
-  }
-  function fmtFactor(f) { return String(Math.round(f * 100) / 100); }
-
-  function setScannedValues(namePrefix, values) {
-    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
-      if (isNonNegativeNumber(values[f])) $(namePrefix + capitalize(f)).value = values[f];
-    });
-  }
-
-  // The numbers as printed on the label, for the "What the scanner read" panel (useful once they've been scaled).
-  function labelSummary(base) {
-    const names = scanNames();
-    const list = Object.keys(base.fields).map(function (k) { return (names[k] || k) + " " + base.fields[k]; });
-    return "As printed on the label (for " + (base.servingSize || "the label's serving") + "): " + list.join(", ") + ".\n\n";
-  }
-
-  // The sentence explaining what happened to the numbers, and whether it needs attention.
-  function scalingMessage(plan, mineText, labelText) {
-    if (plan.ok) {
-      return plan.factor === 1
-        ? "Your " + mineText + " is the label's serving, so the numbers are as printed."
-        : { text: "Scaled to your " + mineText + ": the label's serving is " + fmtAmount(plan.label) + ", so every number is ×" + fmtFactor(plan.factor) + ". The numbers as printed are under \u201cWhat the scanner read\u201d.", scaled: true };
-    }
-    if (plan.reason === "no-label") return { text: "Couldn't read the label's serving size, so these numbers are for the label's own serving, not your " + mineText + ". Check them against the label.", problem: true };
-    if (plan.reason === "units") return { text: "The label's serving is " + fmtAmount(plan.label) + " but yours is " + mineText + " (a volume against a weight), so the numbers weren't scaled. They're for the label's serving.", problem: true };
-    if (plan.reason === "range") return { text: "The label's serving (" + fmtAmount(plan.label) + ") and yours (" + mineText + ") are too far apart to be right, so the numbers weren't scaled. One of them may be misread.", problem: true };
-    return { text: "\u201c" + mineText + "\u201d isn't a weight or volume with a unit, so the numbers are for the label's serving" + (labelText ? " (" + labelText + ")" : "") + ". Type it like 250g to have them scaled.", problem: false };
-  }
-
-  // After a scan, typing a new amount offers to scale the scanned numbers to it (never silently: you may have
-  // edited some numbers by hand).
-  function updateRescaleButton(namePrefix) {
-    const row = $(namePrefix + "ScanRescaleRow");
-    const btn = $(namePrefix + "ScanRescaleBtn");
-    if (!row || !btn) return;
-    const base = scanBase[namePrefix];
-    const input = $(namePrefix + "Serving");
-    let show = false;
-    if (base && input) {
-      const plan = window.JarvisLabelParse.scalingPlan(base.servingSize, input.value);
-      if (plan.ok && Math.abs(plan.factor - base.factor) > 1e-9) {
-        show = true;
-        btn.textContent = "Scale the scanned numbers to " + input.value.trim();
-      }
-    }
-    row.classList.toggle("hidden", !show);
-  }
-
-  function handleRescaleClick(namePrefix) {
-    const base = scanBase[namePrefix];
-    const input = $(namePrefix + "Serving");
-    if (!base || !input) return;
-    const plan = window.JarvisLabelParse.scalingPlan(base.servingSize, input.value);
-    if (!plan.ok) return;
-    setScannedValues(namePrefix, window.JarvisLabelParse.scaleFields(base.fields, plan.factor));
-    base.factor = plan.factor;
-    $(namePrefix + "ScanRescaleRow").classList.add("hidden");
-    const m = scalingMessage(plan, input.value.trim(), base.servingSize);
-    setAiStatus(namePrefix + "ScanStatus", (typeof m === "string" ? m : m.text) + " Double-check anything outlined before saving.");
-    setScanRaw(namePrefix, labelSummary(base) + (base.rawText || ""));
-  }
-
-  // Scan helpers: friendly names, the amber "check this" outline, and the raw text the scanner read.
-  function scanNames() { return (window.JarvisLabelParse && window.JarvisLabelParse.NAMES) || {}; }
-  function markScanCheck(namePrefix, field) {
-    const input = $(namePrefix + capitalize(field));
-    if (!input) return;
-    input.classList.add("scan-check");
-    input.addEventListener("input", function () { input.classList.remove("scan-check"); }, { once: true });
-  }
-  function clearScanMarks(namePrefix) {
-    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) {
-      const input = $(namePrefix + capitalize(f));
-      if (input) input.classList.remove("scan-check");
-    });
-    setScanRaw(namePrefix, "");
-    delete scanBase[namePrefix];
-    updateRescaleButton(namePrefix);
-  }
   // Is the form's content (raw, as strings) the same food as this stored item: same serving, same numbers?
   function sameFood(item, raw) {
     if ((item.serving || "") !== (raw.serving || "")) return false;
@@ -1700,169 +1810,13 @@
     });
   }
 
-  // The label numbers to store with the food in this form (see labelBasisFromScan), or undefined.
-  function labelToKeep(namePrefix) {
-    const parse = window.JarvisLabelParse;
-    const base = scanBase[namePrefix];
-    if (!parse || !base) return undefined;
-    const form = {};
-    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) { const el = $(namePrefix + capitalize(f)); if (el) form[f] = el.value; });
-    return parse.labelBasisFromScan(base, form) || undefined;
-  }
-
-  // Gives a form the label numbers behind a food it was just filled from (an entry being edited, a saved food, a
-  // matched saved food), so typing a new amount offers "Scale the numbers to…" and saving keeps the label numbers.
-  // Nothing is adopted when the food has none, or when how its numbers relate to them can't be told.
-  function adoptBasis(namePrefix, food) {
-    clearScanMarks(namePrefix);
-    const parse = window.JarvisLabelParse;
-    const basis = parse && parse.basisOfFood(food);
-    if (!basis) return;
-    let factor = parse.servingFactor(basis.serving, food.serving);
-    if (factor === null) {
-      // The serving text has no weight to compare; the numbers are the label's own only if they match it exactly.
-      const same = Object.keys(basis.values).every(function (k) { return food[k] === basis.values[k]; });
-      if (!same) return;
-      factor = 1;
-    }
-    scanBase[namePrefix] = { fields: Object.assign({}, basis.values), servingSize: basis.serving, factor: factor, rawText: "" };
-    updateRescaleButton(namePrefix);
-  }
-
-  function setScanRaw(namePrefix, text) {
-    const wrap = $(namePrefix + "ScanRawWrap");
-    const pre = $(namePrefix + "ScanRaw");
-    if (!wrap || !pre) return;
-    pre.textContent = text || "";
-    wrap.classList.toggle("hidden", !text);
-    wrap.open = false;
-  }
-
-  // Shared by the Food Log and Saved Foods "Scan Label" buttons: runs the
-  // on-device OCR scan (js/nutrition-label-scan.js — no AI connection or
-  // API key needed) and fills in whichever of the same editable macro/micro
-  // fields the AI estimate path fills got confidently read off the label.
-  // namePrefix is "food" or "savedFood", matching each field's id prefix.
-  function handleScanLabel(namePrefix, file) {
-    const core = window.JarvisCore;
-    const statusId = namePrefix + "ScanStatus";
-    const btnId = namePrefix + "ScanLabelBtn";
-    if (!window.JarvisLabelScan) {
-      setAiStatus(statusId, "Label scanning isn't available right now.", true);
-      return;
-    }
-    const btn = $(btnId);
-    if (btn) btn.disabled = true;
-    setAiStatus(statusId, "Reading the label…");
-    clearScanMarks(namePrefix);
-    // A fresh scan attempt invalidates whatever "Remember This Food" state
-    // was left over from a previous photo on the Food Log form.
-    if (namePrefix === "food") {
-      $("foodRememberRow").classList.add("hidden");
-      setAiStatus("foodRememberStatus", "");
-    }
-    window.JarvisLabelScan.scanNutritionLabel(file, function (statusText) {
-      setAiStatus(statusId, statusText);
-    }).then(function (result) {
-      if (btn) btn.disabled = false;
-      setScanRaw(namePrefix, result.rawText);
-      if (!result.ok) {
-        setAiStatus(statusId, result.error, true);
-        return;
-      }
-      const parse = window.JarvisLabelParse;
-      const servingInput = $(namePrefix + "Serving");
-      // The label's numbers are for the label's serving. If you've already typed the amount you're having
-      // ("250g"), every number is scaled to it; with no amount typed, the label's own serving is filled in.
-      const mineText = servingInput ? servingInput.value.trim() : "";
-      let plan = null;
-      let values = result.fields;
-      let scaling = null;
-      if (mineText) {
-        plan = parse.scalingPlan(result.servingSize, mineText);
-        if (plan.ok) values = parse.scaleFields(result.fields, plan.factor);
-        scaling = scalingMessage(plan, mineText, result.servingSize);
-      } else if (result.servingSize && servingInput) {
-        servingInput.value = result.servingSize.slice(0, 40);
-      }
-      setScannedValues(namePrefix, values);
-      scanBase[namePrefix] = { fields: Object.assign({}, result.fields), servingSize: result.servingSize, factor: plan && plan.ok ? plan.factor : 1, rawText: result.rawText };
-      // Values the scan wasn't sure of get an amber outline until you touch them.
-      // The same outline marks the blank spots: the main values the scan couldn't read.
-      (result.uncertain || []).concat(result.missing || []).forEach(function (f) { markScanCheck(namePrefix, f); });
-      if (plan && plan.ok && plan.factor !== 1) setScanRaw(namePrefix, labelSummary(scanBase[namePrefix]) + result.rawText);
-      updateRescaleButton(namePrefix);
-      const names = scanNames();
-      const foundList = Object.keys(result.fields).map(function (k) { return names[k] || k; });
-      const parts = ["Found " + foundList.length + " value" + (foundList.length === 1 ? "" : "s") + " on the label (" + foundList.join(", ") + ")."];
-      const missing = (result.missing || []).map(function (k) { return names[k] || k; });
-      if (missing.length) parts.push("Couldn't read " + missing.join(", ") + ". Enter " + (missing.length === 1 ? "it" : "them") + " from the label yourself, or try another photo.");
-      const check = (result.uncertain || []).map(function (k) { return names[k] || k; });
-      if (check.length) parts.push("Double-check " + check.join(", ") + " (outlined).");
-      (result.warnings || []).forEach(function (w) { parts.push(w); });
-      let scaleProblem = false;
-      if (scaling) {
-        parts.push(typeof scaling === "string" ? scaling : scaling.text);
-        scaleProblem = typeof scaling !== "string" && !!scaling.problem;
-      }
-      parts.push("This is OCR, not guaranteed accurate, so check the numbers against the photo before saving.");
-      setAiStatus(statusId, parts.join(" "), missing.length > 0 || (result.warnings || []).length > 0 || scaleProblem);
-      // The Saved Foods form's own "Save Food" button already remembers
-      // whatever it scans — but the Food Log form only logs today's meal,
-      // so offer a one-tap way to also remember this food for next time.
-      if (namePrefix === "food") $("foodRememberRow").classList.remove("hidden");
-    });
-  }
-
-  // Upserts the Food Log Create form's current name + macro/micro fields
-  // into Saved Foods, by exact (case-insensitive) name match — so scanning
-  // the same product again later re-recognizes it (handleFoodNameInputForMatch)
-  // instead of needing a rescan. Matches "Save as Saved Food" on a logged
-  // item: an explicit tap, never automatic, and never silently overwritten.
-  function handleRememberFoodClick() {
-    const core = window.JarvisCore;
-    const name = $("foodName").value.trim();
-    if (!name) {
-      core.showToast("Give the food a name first.");
-      $("foodName").focus();
-      return;
-    }
-    if (!isNonNegativeNumber($("foodCalories").value)) {
-      core.showToast("Calories must be zero or a positive number.");
-      return;
-    }
-    const raw = {
-      name: name, serving: $("foodServing").value.trim(),
-      calories: $("foodCalories").value, protein: $("foodProtein").value,
-      carbs: $("foodCarbs").value, fat: $("foodFat").value, fiber: $("foodFiber").value,
-      sodium: $("foodSodium").value, calcium: $("foodCalcium").value, iron: $("foodIron").value,
-      potassium: $("foodPotassium").value, vitaminC: $("foodVitaminC").value, vitaminD: $("foodVitaminD").value,
-      label: labelToKeep("food")
-    };
-    const existingIdx = savedFoods.findIndex(function (f) { return f.name.trim().toLowerCase() === name.toLowerCase(); });
-    if (existingIdx !== -1) {
-      raw.id = savedFoods[existingIdx].id;
-      raw.createdAt = savedFoods[existingIdx].createdAt;
-      savedFoods[existingIdx] = sanitizeFoodItem(raw);
-    } else {
-      savedFoods.push(sanitizeFoodItem(raw));
-    }
-    saveSavedFoods();
-    renderSavedFoods();
-    setAiStatus("foodRememberStatus", "Remembered “" + name + "” — typing this name again will offer to fill these nutrients automatically." + (raw.label ? " The label's numbers are kept too, so you can log it at any amount (like 200g) from Add Food → Saved." : ""));
-    core.showToast('Remembered "' + name + '".');
-  }
-
-  function handleScanFoodLabelInput(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = ""; // allow re-selecting the same file next time
-    if (file) handleScanLabel("food", file);
-  }
-
-  function handleScanSavedFoodLabelInput(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (file) handleScanLabel("savedFood", file);
+  // Editing a logged entry by hand: the entry keeps the label it was worked out from, and the saved food and amount behind it, only
+  // while its numbers and serving are untouched. Change them and it is a different amount of a different thing, so the link is let go.
+  function keepSourceIfUntouched(old, raw) {
+    if (!old || !sameFood(old, raw)) return;
+    if (old.label) raw.label = old.label;
+    if (old.amount) raw.amount = old.amount;
+    if (old.foodId) raw.foodId = old.foodId;
   }
 
   // "Recognizes it": as the user types a food name into the Food Log's
@@ -1892,7 +1846,6 @@
     });
     const servingInput = $("foodServing");
     if (match.serving && servingInput && !servingInput.value.trim()) servingInput.value = match.serving;
-    adoptBasis("food", match);
     $("foodNameMatchHint").classList.add("hidden");
     window.JarvisCore.showToast('Filled in nutrients saved for "' + match.name + '".');
   }
@@ -1926,6 +1879,14 @@
           carbs: Number(ing.carbs) || 0, fat: Number(ing.fat) || 0, fiber: Number(ing.fiber) || 0
         };
         if (ing.state === "raw" || ing.state === "cooked" || ing.state === "packaged") clean.state = ing.state;
+        // made from a food: the label and amount stay with it, and its numbers are worked out from them (exact), not read back from the boxes
+        if (linkedIng(ing)) {
+          const FA = window.JarvisFoodAmount, x = FA.ingredientExact({ label: ing.label, amount: ing.amount }), r3 = function (n) { return Math.round((n || 0) * 1000) / 1000; };
+          clean.calories = r3(x.calories); clean.protein = r3(x.protein); clean.carbs = r3(x.carbs); clean.fat = r3(x.fat); clean.fiber = r3(x.fiber);
+          clean.label = ing.label; clean.amount = FA.cleanEntry(ing.amount);
+          if (ing.foodId) clean.foodId = ing.foodId;
+          return clean;
+        }
         if (ing.aiEstimated || ing.est) clean.est = true;      // numbers that were not typed by you stay marked as estimates
         return clean;
       });
@@ -1975,7 +1936,7 @@
               '<span class="list-item-meta">Ingredients: ' + r.ingredients.map(function (i) { return core.escapeHtml(i.name); }).join(", ") + '</span>' +
             '</div>' +
             '<div class="list-item-actions">' +
-              '<select class="recipe-meal-select" data-id="' + core.escapeHtml(r.id) + '">' +
+              '<select class="recipe-meal-select" aria-label="Meal for ' + core.escapeHtml(r.name) + '" data-id="' + core.escapeHtml(r.id) + '">' +
                 MEALS.map(function (m) { return '<option value="' + m + '">' + MEAL_LABELS[m] + '</option>'; }).join("") +
               '</select>' +
               '<button type="button" class="btn-icon recipe-add-serving-btn" data-id="' + core.escapeHtml(r.id) + '">+ Add 1 Serving</button>' +
@@ -2296,18 +2257,24 @@
     foodsFilter = f;
     const a = $("foodsSavedSec"), b = $("foodsRecipesSec");
     if (a) a.hidden = f === "recipes";
-    if (b) b.hidden = f === "foods";
+    if (b) b.hidden = f === "foods" || f === "favorites";
     Array.prototype.forEach.call(document.querySelectorAll("[data-foodsfilter]"), function (btn) {
       const on = btn.getAttribute("data-foodsfilter") === f;
       btn.classList.toggle("is-on", on);
       btn.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    renderSavedFoods();
   }
   function openFoodsAddMenu() {
     window.JarvisMenu.open({
       title: "Add to your library", opener: $("foodsAddBtn"),
-      rows: [{ key: "saved", label: "Saved food", sub: "A food you eat often, with its numbers" }, { key: "recipe", label: "Recipe", sub: "Ingredients that make servings" }],
+      rows: [
+        { key: "scan", label: "Scan a label", sub: "Read a nutrition label and save the food" },
+        { key: "saved", label: "Saved food", sub: "Type in a food you eat often, with its numbers" },
+        { key: "recipe", label: "Recipe", sub: "Ingredients that make servings" }
+      ],
       onPick: function (key) {
+        if (key === "scan") { startFlow({ mode: "save", start: "scan" }); return; }
         if (key === "saved") { window._savedFoodEditId = null; renderSavedFoodForm(); }
         showFoodForm(key);
         const el = $(key === "saved" ? "savedFoodName" : "recipeName");
@@ -2325,7 +2292,7 @@
         { key: "nutrients", label: "Nutrient detail", sub: "Macros and micronutrients for today" }
       ],
       onPick: function (key) {
-        if (key === "scan") openAddFoodModal("create");
+        if (key === "scan") startFlow({ mode: "log", start: "scan" });
         else if (key === "recipe") openAddFoodModal("recipe");
         else { const b = document.querySelector('.nutrition-sub-nav-btn[data-subtarget="' + (key === "targets" ? "nutrition-goals" : "nutrition-nutrients") + '"]'); if (b) b.click(); }
       }
@@ -2372,12 +2339,12 @@
     renderFoodLog();
     renderDashboard();
     if (window.JarvisGroceries && typeof window.JarvisGroceries.onSimpleFoodLogged === "function") window.JarvisGroceries.onSimpleFoodLogged(item.name, item.serving || "1 serving");
+    if (item.foodId && item.amount) recordFlowUse("saved", item.foodId, item.amount);
     window.JarvisCore.showToast('Added "' + item.name + '" to ' + MEAL_LABELS[meal] + ".");
   }
 
   function openAddFoodModal(tab) {
     addFoodModalTab = tab || (getRecentFoods(1).length ? "recent" : "saved");
-    pickerSelection = null;
     modalSavedFoodSearch = "";
     const searchInput = $("modalSavedFoodSearchInput");
     if (searchInput) searchInput.value = "";
@@ -2387,7 +2354,6 @@
 
   function closeAddFoodModal() {
     window.JarvisCore.closeModal("addFoodModal");
-    pickerSelection = null;
     resetFoodForm();
   }
 
@@ -2402,20 +2368,34 @@
   }
 
   function renderRecentFoodsList() {
-    const core = window.JarvisCore;
+    const core = window.JarvisCore, FA = window.JarvisFoodAmount;
     const items = getRecentFoods(15);
     $("recentFoodsList").innerHTML = items.length
-      ? items.map(function (it) { return pickerListItemHtml("recent", it.id, it.name, Math.round(it.calories) + " cal &middot; " + core.escapeHtml(it.serving || "1 serving")); }).join("")
+      ? items.map(function (it) {
+          const had = it.amount && FA ? FA.describeEntry(it.amount) : "";
+          return pickerListItemHtml("recent", it.id, it.name, Math.round(it.calories) + " cal &middot; " + core.escapeHtml(had || it.serving || "1 serving"));
+        }).join("")
       : '<div class="empty-state">No recently logged foods yet — log something and it\'ll show up here.</div>';
   }
 
+  // The Saved tab of the sheet: favorites first, then what you used lately, then everything else. A search shows one plain list.
   function renderModalSavedFoodsList() {
     const core = window.JarvisCore;
     const q = modalSavedFoodSearch.trim().toLowerCase();
-    const items = savedFoods.filter(function (f) { return !q || f.name.toLowerCase().indexOf(q) !== -1; });
-    $("modalSavedFoodsList").innerHTML = items.length
-      ? items.map(function (f) { return pickerListItemHtml("saved", f.id, f.name, Math.round(f.calories) + " cal &middot; " + core.escapeHtml(f.serving || "1 serving")); }).join("")
-      : '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet." : "No matches.") + '</div>';
+    const all = savedFoods.filter(function (f) { return f && typeof f.name === "string" && savedFoodMatches(f, q); });
+    const box = $("modalSavedFoodsList");
+    if (!all.length) { box.innerHTML = '<div class="empty-state">' + (savedFoods.length === 0 ? "No saved foods yet. Scan a label and it is saved for you." : "No matches.") + '</div>'; return; }
+    const row = function (f) { const line = savedFoodLine(f); return pickerListItemHtml("saved", f.id, f.name, line.macros.split(" · ")[0] + " &middot; per " + core.escapeHtml(line.per)); };
+    const byName = function (a, b) { return a.name.localeCompare(b.name); };
+    if (q) { box.innerHTML = all.slice().sort(byName).map(row).join(""); return; }
+    const favs = all.filter(function (f) { return f.favorite; }).sort(byName);
+    const used = all.filter(function (f) { return !f.favorite && f.lastUsedAt; }).sort(function (a, b) { return b.lastUsedAt - a.lastUsedAt; }).slice(0, 5);
+    const shown = {};
+    favs.concat(used).forEach(function (f) { shown[f.id] = true; });
+    const rest = all.filter(function (f) { return !shown[f.id]; }).sort(byName);
+    if (!favs.length && !used.length) { box.innerHTML = rest.map(row).join(""); return; }
+    const section = function (title, list) { return list.length ? '<h3 class="ff-list-h">' + title + '</h3>' + list.map(row).join("") : ""; };
+    box.innerHTML = section("Favorites", favs) + section("Recently used", used) + section("All foods", rest);
   }
 
   function renderModalRecipesList() {
@@ -2432,160 +2412,246 @@
     ["recent", "saved", "create", "recipe"].forEach(function (t) {
       const btn = $("addFoodTab" + capitalize(t));
       const panel = $("addFoodPanel" + capitalize(t));
-      if (btn) btn.classList.toggle("active", t === addFoodModalTab);
-      if (panel) panel.classList.toggle("hidden", t !== addFoodModalTab || !!pickerSelection);
+      if (btn) { btn.classList.toggle("active", t === addFoodModalTab); btn.setAttribute("aria-selected", t === addFoodModalTab ? "true" : "false"); }
+      if (panel) panel.classList.toggle("hidden", t !== addFoodModalTab);
     });
-    $("pickerConfirm").classList.toggle("hidden", !pickerSelection);
-    if (pickerSelection) { renderPickerConfirm(); return; }
     if (addFoodModalTab === "recent") renderRecentFoodsList();
     else if (addFoodModalTab === "saved") renderModalSavedFoodsList();
     else if (addFoodModalTab === "recipe") renderModalRecipesList();
   }
 
-  // Recipe picks are converted to a food-shaped object (per-serving macros)
-  // up front, so the confirm step and the final log-write don't need to
-  // know the difference between a recipe, a saved food, or a recent food.
-  function findFoodForPicker(source, id) {
-    if (source === "recent") return getRecentFoods(50).find(function (it) { return it.id === id; });
-    if (source === "saved") return savedFoods.find(function (f) { return f.id === id; });
+  /* ---- the food sheet (js/food-flow-ui.js): what it gets from here ----
+     Every number it shows or logs is worked out by JarvisFoodAmount from the food's label baseline; this file only stores the result. */
+
+  // A recipe seen as a food: one serving is its per-serving numbers (exact), and when the finished weight of a serving is known,
+  // that many grams, so it can also be logged by weight.
+  function recipeAsFood(r) {
+    const FA = window.JarvisFoodAmount;
+    const per = FA.perPortion(FA.recipeExact(r.ingredients).totals, r.servings);
+    const grams = FA.portionWeight(r.dishGrams, r.servings);
+    const label = { serving: grams ? "1 serving (" + grams + " g)" : "1 serving", values: per };
+    if (grams) label.size = { value: grams, unit: "g" };
+    const food = { source: "recipe", id: r.id, name: r.name, serving: "1 serving", isFruitVeg: false, label: label, recipeServings: r.servings };
+    if (r.lastPortion) food.lastPortion = r.lastPortion;
+    if (r.portions) food.portions = r.portions;
+    if (r.defaultPortionId) food.defaultPortionId = r.defaultPortionId;
+    return food;
+  }
+
+  // Foods saved before this update with a label ("Remember This Food") have their own serving and numbers (what you had, "125g") next to the
+  // label's (the whole "1 container (250g)"). Logging one serving used to mean your serving, so it still does: that amount becomes the
+  // food's first portion, "Saved serving", once, the first time the food is used. Nothing else about the food changes.
+  function savedServingPatch(f) {
+    const FA = window.JarvisFoodAmount;
+    if (!f || !f.label || !f.serving || f.serving === f.label.serving || (f.portions && f.portions.length) || f.lastPortion) return null;
+    if (/^\s*[\d.]+\s*[x\u00d7]\s/i.test(f.serving)) return null;
+    const e = FA.parseEntry(f.serving, null), base = FA.baseOf(f);
+    if (!e || e.error || !base || !FA.unitAllowed(base, e.unit) || !FA.factorFor(base, e).ok) return null;
+    return { portions: [{ id: "p_saved", name: "Saved serving", unit: e.unit, value: e.value }], defaultPortionId: "p_saved" };
+  }
+
+  // A food for the sheet, from the chooser or the library: { source, id, savedId?, name, serving, label?, numbers, portions ... } or null.
+  function resolveFlowFood(source, id) {
+    if (source === "saved") {
+      let f = savedFoods.find(function (x) { return x.id === id; });
+      if (!f) return null;
+      const patch = savedServingPatch(f);
+      if (patch) { const r = updateSavedFood(id, patch); if (r.ok) f = savedFoods.find(function (x) { return x.id === id; }) || f; }
+      return Object.assign(copyOf(f), { source: "saved", savedId: f.id });
+    }
     if (source === "recipe") {
-      const r = recipes.find(function (rr) { return rr.id === id; });
-      if (!r) return null;
-      const result = computeRecipeTotals(r.ingredients);
-      const per = {};
-      MACRO_FIELDS.forEach(function (f) { per[f] = result.totals[f] / r.servings; });
-      return Object.assign({ name: r.name, serving: "1 serving" }, per);
+      const r = recipes.find(function (x) { return x.id === id; });
+      return r ? recipeAsFood(r) : null;
+    }
+    if (source === "recent") {
+      const it = getRecentFoods(50).find(function (x) { return x.id === id; });
+      if (!it) return null;
+      const saved = it.foodId ? savedFoods.find(function (x) { return x.id === it.foodId; }) : null;
+      if (saved) return Object.assign(copyOf(saved), { source: "saved", savedId: saved.id });
+      const food = copyOf(it);
+      delete food.id; delete food.createdAt; delete food.foodId; delete food.amount;
+      food.source = "recent";
+      if (it.amount) food.lastPortion = it.amount;
+      return food;
     }
     return null;
   }
 
-  function selectFoodForLogging(source, id) {
-    const food = findFoodForPicker(source, id);
-    if (!food) return;
-    const parse = window.JarvisLabelParse;
-    pickerSelection = { source: source, sourceId: id, food: food, meal: guessCurrentMeal(), multiplier: 1, basis: parse ? parse.basisOfFood(food) : null, amountText: "" };
-    $("pickerMealSelect").value = pickerSelection.meal;
-    $("pickerServingsInput").value = "1";
-    $("pickerAmountInput").value = "";
-    renderAddFoodModal();
-  }
-
-  // What the picked food comes to: for the amount typed (worked out from its basis, never changing the food itself),
-  // else for the servings. { amount, values, problem }: amount is the typed text when it's being used; problem says
-  // why a typed amount can't be used.
-  function pickerResult() {
-    const sel = pickerSelection;
-    const food = sel.food;
-    const text = sel.amountText.trim();
-    if (sel.basis && text) {
-      const parse = window.JarvisLabelParse;
-      const plan = parse.scalingPlan(sel.basis.serving, text);
-      if (plan.ok) return { amount: text, factor: plan.factor, values: parse.scaleFields(sel.basis.values, plan.factor), problem: null };
-      const per = sel.basis.serving;
-      const problem = plan.reason === "units"
-        ? "These numbers are for " + per + ", so the amount needs to be in the same kind of unit (a weight against a volume can't be worked out)."
-        : plan.reason === "range"
-          ? "That amount is too far from " + per + " to be right. Check it."
-          : "Type it with a unit, like 200g.";
-      return { amount: null, values: null, problem: problem };
-    }
-    const values = {};
-    MACRO_FIELDS.forEach(function (f) { values[f] = (food[f] || 0) * sel.multiplier; });
-    MICRO_FIELDS.forEach(function (f) { if (food[f] !== undefined) values[f] = food[f] * sel.multiplier; });
-    return { amount: null, values: values, problem: null };
-  }
-
-  function renderPickerConfirm() {
-    if (!pickerSelection) return;
-    const food = pickerSelection.food;
-    $("pickerConfirmName").textContent = food.name;
-    const res = pickerResult();
-    // The amount box is there for foods whose numbers are for a known weight or volume.
-    $("pickerAmountRow").classList.toggle("hidden", !pickerSelection.basis);
-    $("pickerAmountHint").textContent = !pickerSelection.basis ? "" : res.problem
-      ? res.problem
-      : res.amount
-        ? "Worked out from " + pickerSelection.basis.serving + " (×" + Math.round(res.factor * 100) / 100 + "). The saved food itself isn't changed."
-        : "Numbers are for " + pickerSelection.basis.serving + ". Type the amount you had, like 200g, to have them worked out.";
-    $("pickerServingsInput").disabled = !!res.amount;
-    $("pickerConfirmAddBtn").disabled = !!res.problem;
-    if (res.problem) { $("pickerPreview").textContent = ""; return; }
-    const v = res.values;
-    const cal = Math.round(v.calories || 0);
-    const p = Math.round((v.protein || 0) * 10) / 10;
-    const c = Math.round((v.carbs || 0) * 10) / 10;
-    const f = Math.round((v.fat || 0) * 10) / 10;
-    $("pickerPreview").textContent = "≈ " + cal + " cal · P " + p + "g · C " + c + "g · F " + f + "g";
-  }
-
-  function handlePickerAmountInput(e) {
-    if (!pickerSelection) return;
-    pickerSelection.amountText = e.target.value;
-    renderPickerConfirm();
-  }
-
-  function handlePickerMealChange(e) {
-    if (!pickerSelection) return;
-    pickerSelection.meal = e.target.value;
-  }
-
-  function handlePickerServingsInput(e) {
-    if (!pickerSelection) return;
-    const n = Number(e.target.value);
-    pickerSelection.multiplier = (isFinite(n) && n > 0) ? n : 1;
-    renderPickerConfirm();
-  }
-
-  function handlePickerBack() {
-    pickerSelection = null;
-    renderAddFoodModal();
-  }
-
-  function handlePickerConfirmAdd() {
+  function startFlow(opts) {
     const core = window.JarvisCore;
-    if (!pickerSelection) return;
-    const food = pickerSelection.food;
-    const m = pickerSelection.multiplier;
-    const res = pickerResult();
-    if (res.problem) { core.showToast(res.problem); return; }
-    // An amount typed here is worked out from the food's basis; otherwise it's the servings multiplier, as before.
-    const raw = res.amount
-      ? Object.assign({ name: food.name, serving: res.amount.slice(0, 40), isFruitVeg: !!food.isFruitVeg }, res.values)
-      : {
-        name: food.name,
-        serving: m !== 1 ? (m + "x " + (food.serving || "1 serving")) : (food.serving || "1 serving"),
-        calories: res.values.calories, protein: res.values.protein, carbs: res.values.carbs,
-        fat: res.values.fat, fiber: res.values.fiber, isFruitVeg: !!food.isFruitVeg
-      };
-    if (!res.amount) MICRO_FIELDS.forEach(function (f) { if (res.values[f] !== undefined) raw[f] = res.values[f]; });
-    // The logged entry keeps the numbers it was worked out from, so it can be worked out again for another amount.
-    if (pickerSelection.basis) raw.label = { serving: pickerSelection.basis.serving, values: pickerSelection.basis.values };
-    const day = getDay(core.todayISODate());
-    day.meals[pickerSelection.meal].push(sanitizeFoodItem(raw));
-    saveLog();
-    renderFoodLog();
-    renderDashboard();
-    if (window.JarvisGroceries) {
-      if (pickerSelection.source === "recipe" && typeof window.JarvisGroceries.onRecipeLogged === "function") {
-        const sourceRecipe = recipes.find(function (r) { return r.id === pickerSelection.sourceId; });
-        if (sourceRecipe) {
-          window.JarvisGroceries.onRecipeLogged({
-            recipeId: sourceRecipe.id, recipeName: sourceRecipe.name,
-            ingredients: sourceRecipe.ingredients, recipeServings: sourceRecipe.servings, servingsLogged: m
-          });
-        }
-      } else if (typeof window.JarvisGroceries.onSimpleFoodLogged === "function") {
-        window.JarvisGroceries.onSimpleFoodLogged(food.name, raw.serving);
-      }
-    }
-    core.showToast('Added "' + food.name + '" to ' + MEAL_LABELS[pickerSelection.meal] + ".");
-    closeAddFoodModal();
+    if (!window.JarvisFoodFlow) { core.showToast("The food sheet didn't load. Reload the app and try again."); return; }
+    const chooser = $("addFoodModal"), fromChooser = !!chooser && !chooser.classList.contains("hidden");
+    if (fromChooser) core.closeModal("addFoodModal");
+    window.JarvisFoodFlow.open(Object.assign({ meal: guessCurrentMeal() }, opts, {
+      onBack: fromChooser ? function () { openAddFoodModal(addFoodModalTab); } : null
+    }));
+  }
+
+  function openFlowFor(source, id) {
+    const food = resolveFlowFood(source, id);
+    if (!food) { window.JarvisCore.showToast("That food isn't there any more."); return; }
+    startFlow({ mode: "log", start: "amount", food: food });
   }
 
   function handlePickerListClick(e) {
     const btn = e.target.closest(".picker-list-item");
     if (!btn) return;
-    selectFoodForLogging(btn.getAttribute("data-source"), btn.getAttribute("data-id"));
+    openFlowFor(btn.getAttribute("data-source"), btn.getAttribute("data-id"));
+  }
+
+  // What a logged line was made at, as an amount: the one it stored, else read from its serving text.
+  function entryOfItem(item) {
+    const FA = window.JarvisFoodAmount;
+    const stored = FA.cleanEntry(item.amount);
+    if (stored) return stored;
+    const text = String(item.serving || "");
+    const times = /^\s*(\d*\.?\d+)\s*[x×]\s/i.exec(text);
+    if (times && Number(times[1]) > 0) return { value: Number(times[1]), unit: "serving" };
+    const e = FA.parseEntry(text, null);
+    if (e && !e.error && FA.factorFor(FA.baseOf({ label: item.label }), e).ok) return e;
+    return { value: 1, unit: "serving" };
+  }
+
+  // The library: a food scanned (or checked by you) in the sheet. The same food again (same name) updates what is saved, and keeps its
+  // favorite, portions and history; it never saves twice.  rec { id?, name, label {serving, size?, perContainer?, values}, isFruitVeg?, source, needsCheck? }
+  function saveScannedFood(rec) {
+    const FA = window.JarvisFoodAmount;
+    const name = String(rec && rec.name || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!name) return { ok: false, error: "Give the food a name." };
+    const label = sanitizeLabel(rec.label);
+    if (!label) return { ok: false, error: "There are no numbers to save." };
+    let at = rec.id ? savedFoods.findIndex(function (f) { return f.id === rec.id; }) : -1;
+    if (at === -1) at = savedFoods.findIndex(function (f) { return String(f.name).trim().toLowerCase() === name.toLowerCase(); });
+    const prior = at === -1 ? null : savedFoods[at];
+    const raw = Object.assign({}, prior ? copyOf(prior) : {}, { name: name, serving: label.serving, label: label, updatedAt: Date.now(), source: rec.source === "manual" ? "manual" : "scan" });
+    if (rec.isFruitVeg !== undefined) raw.isFruitVeg = !!rec.isFruitVeg;
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) { delete raw[f]; if (label.values[f] !== undefined) raw[f] = label.values[f]; });
+    raw.needsCheck = Array.isArray(rec.needsCheck) ? rec.needsCheck : [];
+    const base = FA.baseOf({ label: label });
+    if (prior && prior.portions) raw.portions = FA.cleanPortions(prior.portions).filter(function (p) { return FA.unitAllowed(base, p.unit); });
+    const item = sanitizeFoodItem(raw);
+    const changed = !prior || JSON.stringify(prior.label || null) !== JSON.stringify(item.label) || prior.name !== item.name;
+    const prev = savedFoods;
+    savedFoods = prior ? savedFoods.map(function (f, i) { return i === at ? item : f; }) : savedFoods.concat([item]);
+    if (!saveSavedFoods()) { savedFoods = prev; return { ok: false, error: REFUSED }; }
+    renderSavedFoods();
+    return { ok: true, food: copyOf(item), created: !prior, changed: changed };
+  }
+
+  // Remembers what you used: last amount, when, and how often (saved foods and recipes). Not an error if the food is gone.
+  function recordFlowUse(source, id, entry) {
+    const FA = window.JarvisFoodAmount;
+    if (source === "saved") {
+      const f = savedFoods.find(function (x) { return x.id === id; });
+      if (f) { updateSavedFood(id, FA.afterUse(f, entry, Date.now())); renderSavedFoods(); }
+    } else if (source === "recipe") {
+      const r = recipes.find(function (x) { return x.id === id; });
+      if (r) updateRecipeFields(id, FA.afterUse(r, entry, Date.now()));
+    }
+  }
+
+  // Portions, default and favorite of a saved food or a recipe, from the sheet. Only these keys are taken.
+  function updateFlowSource(source, id, patch) {
+    const FA = window.JarvisFoodAmount, p = {};
+    if (patch.portions) p.portions = FA.cleanPortions(patch.portions);
+    if (patch.defaultPortionId !== undefined) p.defaultPortionId = patch.defaultPortionId;
+    if (patch.lastPortion) p.lastPortion = FA.cleanEntry(patch.lastPortion);
+    if (source === "saved") {
+      if (patch.favorite !== undefined) p.favorite = !!patch.favorite;
+      const r = updateSavedFood(id, p);
+      if (r.ok) renderSavedFoods();
+      return r;
+    }
+    if (source === "recipe") return updateRecipeFields(id, p);
+    return { ok: false, error: "That can only be saved for a saved food or a recipe." };
+  }
+
+  // Changes fields of a recipe without counting it as edited (its "updated" time stays).
+  function updateRecipeFields(id, patch) {
+    const idx = recipes.findIndex(function (r) { return r.id === id; });
+    if (idx === -1) return { ok: false, error: "That recipe isn't there any more." };
+    const prev = recipes, next = Object.assign({}, recipes[idx]);
+    Object.keys(patch).forEach(function (k) {
+      if (patch[k] === "" || patch[k] === null || patch[k] === undefined || (Array.isArray(patch[k]) && !patch[k].length)) delete next[k]; else next[k] = patch[k];
+    });
+    if (next.defaultPortionId && !(next.portions || []).some(function (x) { return x.id === next.defaultPortionId; })) delete next.defaultPortionId;
+    recipes = recipes.map(function (r, i) { return i === idx ? next : r; });
+    if (!saveRecipes()) { recipes = prev; return { ok: false, error: REFUSED }; }
+    return { ok: true };
+  }
+
+  // Puts an amount of a food in today's log. spec { meal, food, entry, source?, date? }. The numbers are worked out here, once, from the
+  // food's label baseline, so the sheet can't hand over a figure that was already rounded.  -> { ok, item, message } | { ok: false, error }
+  function addToLog(spec) {
+    const core = window.JarvisCore, FA = window.JarvisFoodAmount;
+    const food = spec && spec.food, entry = FA.cleanEntry(spec && spec.entry);
+    if (MEALS.indexOf(spec && spec.meal) === -1) return { ok: false, error: "Pick a meal." };
+    if (!food || !entry) return { ok: false, error: "Enter an amount above 0." };
+    const c = FA.compute(food, entry);
+    if (!c.ok) return { ok: false, error: c.message };
+    const isRecipe = food.source === "recipe";
+    const serving = isRecipe ? FA.describeEntry(entry) : c.serving;
+    const raw = Object.assign({ name: isRecipe ? food.name + " (" + serving + ")" : food.name, serving: serving, isFruitVeg: !!food.isFruitVeg }, c.values);
+    if (!isRecipe) {
+      // The logged line keeps the label it was worked out from and the amount, so its amount can be changed later without a rescan.
+      raw.label = food.label || { serving: food.serving || "1 serving", values: FA.valuesOf(food) };
+      raw.amount = entry;
+      if (food.savedId) raw.foodId = food.savedId;
+    }
+    const day = getDay(spec.date || core.todayISODate());
+    const item = sanitizeFoodItem(raw);
+    day.meals[spec.meal].push(item);
+    if (!saveLog()) { day.meals[spec.meal].pop(); return { ok: false, error: REFUSED }; }
+    renderFoodLog();
+    renderDashboard();
+    if (food.source === "saved" || isRecipe) recordFlowUse(food.source === "saved" ? "saved" : "recipe", food.savedId || food.id, entry);
+    if (window.JarvisGroceries) {
+      if (isRecipe && typeof window.JarvisGroceries.onRecipeLogged === "function") {
+        const rec = recipes.find(function (r) { return r.id === food.id; });
+        if (rec) window.JarvisGroceries.onRecipeLogged({ recipeId: rec.id, recipeName: rec.name, ingredients: rec.ingredients, recipeServings: rec.servings, servingsLogged: c.factor });
+      } else if (!isRecipe && typeof window.JarvisGroceries.onSimpleFoodLogged === "function") {
+        window.JarvisGroceries.onSimpleFoodLogged(food.name, serving);
+      }
+    }
+    return { ok: true, item: copyOf(item), message: 'Added "' + food.name + '" to ' + MEAL_LABELS[spec.meal] + "." };
+  }
+
+  // Changes the amount of a line already in today's log, from the label it keeps. spec { meal, id, entry, date? }
+  function replaceLogItem(spec) {
+    const core = window.JarvisCore, FA = window.JarvisFoodAmount;
+    const day = getDay(spec.date || core.todayISODate());
+    const list = day.meals[spec.meal] || [];
+    const at = list.findIndex(function (x) { return x.id === spec.id; });
+    if (at === -1) return { ok: false, error: "That line isn't in the log any more." };
+    const old = list[at], entry = FA.cleanEntry(spec.entry);
+    if (!old.label || !entry) return { ok: false, error: "Enter an amount above 0." };
+    const c = FA.compute({ name: old.name, serving: old.serving, label: old.label }, entry);
+    if (!c.ok) return { ok: false, error: c.message };
+    const raw = Object.assign({}, old, { serving: c.serving, amount: entry });
+    MACRO_FIELDS.concat(MICRO_FIELDS).forEach(function (f) { delete raw[f]; });
+    Object.assign(raw, c.values);
+    const next = sanitizeFoodItem(raw);
+    list[at] = next;
+    if (!saveLog()) { list[at] = old; return { ok: false, error: REFUSED }; }
+    renderFoodLog();
+    renderDashboard();
+    return { ok: true, item: copyOf(next), message: 'Changed "' + old.name + '" to ' + c.serving + "." };
+  }
+
+  // Saves a logged line to Saved Foods. A line made from a label saves that label (the baseline), not the amount you had.
+  function saveLogItemAsFood(item) {
+    if (item.foodId && savedFoods.some(function (f) { return f.id === item.foodId; })) return { ok: true, existed: true };
+    const raw = item.label
+      ? Object.assign({ name: item.name, serving: item.label.serving, isFruitVeg: item.isFruitVeg, label: item.label }, item.label.values)
+      : Object.assign({}, item, { id: undefined, createdAt: undefined, amount: undefined, foodId: undefined });
+    const food = sanitizeFoodItem(Object.assign(raw, { id: undefined, createdAt: undefined }));
+    const same = savedFoods.some(function (f) { return String(f.name).toLowerCase() === food.name.toLowerCase() && String(f.serving || "").toLowerCase() === food.serving.toLowerCase(); });
+    if (same) return { ok: true, existed: true };
+    const prev = savedFoods;
+    savedFoods = savedFoods.concat([food]);
+    if (!saveSavedFoods()) { savedFoods = prev; return { ok: false, error: REFUSED }; }
+    renderSavedFoods();
+    return { ok: true, existed: false };
   }
 
   /* ---------------- boot ---------------- */
@@ -2676,7 +2742,6 @@
     $("addFoodTabs").addEventListener("click", function (e) {
       const btn = e.target.closest(".segmented-btn");
       if (!btn) return;
-      pickerSelection = null;
       addFoodModalTab = btn.getAttribute("data-tab");
       renderAddFoodModal();
     });
@@ -2687,19 +2752,10 @@
       modalSavedFoodSearch = e.target.value;
       renderModalSavedFoodsList();
     });
-    $("pickerBackBtn").addEventListener("click", handlePickerBack);
-    $("pickerMealSelect").addEventListener("change", handlePickerMealChange);
-    $("pickerServingsInput").addEventListener("input", handlePickerServingsInput);
-    $("pickerAmountInput").addEventListener("input", handlePickerAmountInput);
-    $("pickerConfirmAddBtn").addEventListener("click", handlePickerConfirmAdd);
+    $("addFoodScanBtn").addEventListener("click", function () { startFlow({ mode: "log", start: "scan" }); });
 
     $("foodForm").addEventListener("submit", handleFoodFormSubmit);
     $("foodFormCancelBtn").addEventListener("click", handleFoodFormCancel);
-    $("foodScanLabelBtn").addEventListener("click", function () { $("foodScanLabelInput").click(); });
-    $("foodServing").addEventListener("input", function () { updateRescaleButton("food"); });
-    $("foodScanRescaleBtn").addEventListener("click", function () { handleRescaleClick("food"); });
-    $("foodScanLabelInput").addEventListener("change", handleScanFoodLabelInput);
-    $("foodRememberBtn").addEventListener("click", handleRememberFoodClick);
     $("foodName").addEventListener("input", handleFoodNameInputForMatch);
     $("foodNameMatchUseBtn").addEventListener("click", handleFoodNameMatchUse);
     MEALS.forEach(function (meal) {
@@ -2717,16 +2773,16 @@
 
     $("savedFoodForm").addEventListener("submit", handleSavedFoodFormSubmit);
     $("savedFoodCancelBtn").addEventListener("click", resetSavedFoodForm);
-    $("savedFoodScanLabelBtn").addEventListener("click", function () { $("savedFoodScanLabelInput").click(); });
-    $("savedFoodServing").addEventListener("input", function () { updateRescaleButton("savedFood"); });
-    $("savedFoodScanRescaleBtn").addEventListener("click", function () { handleRescaleClick("savedFood"); });
-    $("savedFoodScanLabelInput").addEventListener("change", handleScanSavedFoodLabelInput);
     $("savedFoodsList").addEventListener("click", handleSavedFoodsClick);
+    $("savedFoodPortions").addEventListener("click", handleSavedFoodPortionsClick);
+    $("savedFoodPortionAddBtn").addEventListener("click", handleSavedFoodPortionAdd);
     $("savedFoodSearchInput").addEventListener("input", function (e) { savedFoodSearch = e.target.value; renderSavedFoods(); renderRecipes(); });
     $("savedFoodSortSelect").addEventListener("change", function (e) { savedFoodSort = e.target.value; renderSavedFoods(); });
 
     $("recipeForm").addEventListener("submit", handleRecipeFormSubmit);
     $("recipeAddIngredientBtn").addEventListener("click", handleAddIngredientRow);
+    $("recipeFromFoodBtn").addEventListener("click", handleRecipeFromFood);
+    $("recipeServings").addEventListener("input", renderRecipeSummary);
     $("recipeIngredientRows").addEventListener("input", handleIngredientRowsInput);
     $("recipeIngredientRows").addEventListener("click", handleIngredientRowsClick);
     $("recipeAiCalculateBtn").addEventListener("click", handleCalculateNutritionWithAI);
@@ -2799,7 +2855,9 @@
   // One line in the food log (a snapshot of the numbers, so a recipe edited later does not change it). o: { date, meal, name, serving, calories, protein, carbs, fat }
   function logMealItem(o) {
     if (MEALS.indexOf(o.meal) === -1 || !/^\d{4}-\d{2}-\d{2}$/.test(o.date || "")) return { ok: false, error: "That isn't a meal or a day." };
-    const day = getDay(o.date), item = sanitizeFoodItem({ name: o.name, serving: o.serving || "1 serving", calories: o.calories, protein: o.protein, carbs: o.carbs, fat: o.fat });
+    const day = getDay(o.date), raw = { name: o.name, serving: o.serving || "1 serving", calories: o.calories, protein: o.protein, carbs: o.carbs, fat: o.fat };
+    ["fiber", "isFruitVeg", "label", "amount", "foodId"].concat(MICRO_FIELDS).forEach(function (k) { if (o[k] !== undefined) raw[k] = o[k]; });
+    const item = sanitizeFoodItem(raw);
     day.meals[o.meal].push(item);
     if (!saveLog()) { day.meals[o.meal].pop(); return { ok: false, error: REFUSED }; }
     renderFoodLog(); renderDashboard();
@@ -2836,6 +2894,20 @@
     init: init, getSummary: getSummary, getToday: getToday, onSubTabChange: onSubTabChange,
     recipes: { all: getRecipesCopy, save: saveRecipeRecord, remove: deleteRecipeRecord },
     savedFoods: { all: getSavedFoodsCopy, save: saveFoodRecord },
+    // The library, for the food sheet and Meal Prep: a saved food by id, favorites.
+    foods: {
+      all: getSavedFoodsCopy,
+      get: function (id) { const f = savedFoods.find(function (x) { return x.id === id; }); return f ? copyOf(f) : null; },
+      setFavorite: function (id, on) { return updateFlowSource("saved", id, { favorite: !!on }); }
+    },
+    // What the food sheet (js/food-flow-ui.js) uses. It never writes the storage keys itself.
+    flow: {
+      mealLabels: MEAL_LABELS, guessMeal: guessCurrentMeal, resolve: resolveFlowFood, recipeAsFood: recipeAsFood,
+      saveScanned: saveScannedFood, addToLog: addToLog, replaceLogItem: replaceLogItem, recordUse: recordFlowUse, update: updateFlowSource,
+      findSavedByName: function (name) { const n = String(name || "").trim().toLowerCase(); const f = n ? savedFoods.find(function (x) { return String(x.name).trim().toLowerCase() === n; }) : null; return f ? copyOf(f) : null; },
+      searchSaved: function (q) { const x = String(q || "").trim().toLowerCase(); return savedFoods.filter(function (f) { return f && typeof f.name === "string" && savedFoodMatches(f, x); }).map(copyOf); }
+    },
+    openAddFood: openAddFoodModal,
     log: { totals: dayTotalsFor, targets: getTargets, add: logMealItem, remove: removeMealItem, has: hasMealItem }
   };
 })();

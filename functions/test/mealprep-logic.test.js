@@ -428,3 +428,22 @@ test("saved meals: copied as they are, and put on any day as their own foods", (
   assert.equal(new Set(made.map((e) => e.id)).size, 2);
   assert.deepEqual(M.entriesFromSavedMeal(null, "lunch", "2026-11-20", idGen(), 1), []);
 });
+
+test("an ingredient made from a food keeps its label, amount and food; a half-made link is dropped", () => {
+  const label = { serving: "4 oz (112g)", size: { value: 112, unit: "g" }, values: { calories: 130, protein: 26, carbs: 0, fat: 3, fiber: 0 } };
+  const c = M.cleanIngredient({ name: "Chicken", quantity: "600 g", calories: 696.429, protein: 139.286, carbs: 0, fat: 16.071, fiber: 0, foodId: "f1", label: label, amount: { value: 600, unit: "g" }, junk: 1 });
+  assert.deepEqual(c.label, label);
+  assert.deepEqual(c.amount, { unit: "g", value: 600 });
+  assert.equal(c.foodId, "f1");
+  assert.equal(c.calories, 696.429, "the numbers are kept to the thousandth, not rounded to a whole");
+  assert.equal(c.junk, undefined);
+  assert.equal(M.cleanIngredient({ name: "x", quantity: "1", amount: { value: 1, unit: "g" } }).amount, undefined, "an amount with no label means nothing");
+  assert.equal(M.cleanIngredient({ name: "x", quantity: "1", label: label }).label, undefined, "a label with no amount is not a link");
+  assert.equal(M.cleanIngredient({ name: "x", label: label, amount: { value: -2, unit: "g" } }).label, undefined);
+  assert.equal(M.cleanIngredient({ name: "x", label: { serving: "a", values: {} }, amount: { value: 1, unit: "g" } }).label, undefined);
+  const plain = M.cleanIngredient({ name: "Salt", quantity: "1 tsp", calories: 0 });
+  assert.equal(plain.label, undefined); assert.equal(plain.foodId, undefined);
+  // the totals of a recipe use the stored numbers as they are
+  const r = { servings: 4, ingredients: [c, M.cleanIngredient({ name: "Oats", quantity: "100 g", calories: 275, protein: 7.5, carbs: 50, fat: 5 })] };
+  assert.equal(Math.round(M.recipeTotals(r).calories), 971);
+});
