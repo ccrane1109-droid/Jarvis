@@ -5795,3 +5795,134 @@ details[open] > .mp-card-sum::after, details[open] > .mp-day-sum::after, details
 h3.mp-h5, h4.mp-h5 { font-size: 13px; }
 .mp-group-h h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
 .mp-result-k, .mp-result-d dt, .mp-result .mp-dim { color: #d5dbea; }
+
+/* ---------------- Food sheet: scan, review, amount, add (js/food-flow-ui.js) ---------------- */
+
+.ff-scanbtn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin: 0 0 12px; font-size: 16px; }
+.ff-box { display: flex; flex-direction: column; overflow: hidden; max-height: 92vh; padding-bottom: 0; }
+.ff-head { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.ff-head .btn-icon { min-width: 44px; min-height: 44px; font-size: 22px; line-height: 1; }
+.ff-head .btn-icon[hidden] { display: none; }
+.ff-title { flex: 1 1 auto; margin: 0; font-size: 18px; min-width: 0; overflow-wrap: anywhere; }
+.ff-steps { display: flex; gap: 6px; list-style: none; margin: 0 0 10px; padding: 0; }
+.ff-steps[hidden] { display: none; }
+.ff-step { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 999px; font-size: 13px; color: var(--text-dim); border: 1px solid var(--card-border); }
+.ff-step-n { flex: 0 0 auto; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--card-hover); font-size: 12px; font-weight: 700; }
+.ff-step-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-step.is-current { color: #fff; border-color: rgba(79, 140, 255, 0.6); background: rgba(79, 140, 255, 0.2); }
+.ff-step.is-current .ff-step-n { background: var(--accent); color: #fff; }
+.ff-step.is-done { color: var(--text); }
+.ff-step.is-done .ff-step-n { background: var(--green-dim); color: var(--green); }
+.ff-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 2px 2px calc(12px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
+.ff-body .field-hint, .ff-box .field-hint { color: var(--text-dim); }
+.ff-h { margin: 4px 0 6px; font-size: 18px; overflow-wrap: anywhere; }
+.ff-h:focus { outline: none; }
+.ff-lead { margin: 0 0 12px; font-size: 14px; color: var(--text-dim); }
+.ff-sub { margin: 0 0 8px; font-size: 14px; color: var(--text-dim); overflow-wrap: anywhere; }
+.ff-note, .ff-flag { margin: 4px 0 8px; font-size: 13px; color: var(--text-dim); }
+.ff-flag { color: var(--yellow); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ff-flag[hidden] { display: none; }
+.ff-ok { min-height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--card-border); background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.ff-problem { margin: 6px 0; font-size: 14px; color: var(--yellow); }
+.ff-problem:empty { display: none; }
+.ff-saved { margin: 0 0 8px; }
+.ff-warnings { margin: 0 0 10px; padding: 8px 12px 8px 28px; font-size: 13px; color: var(--text-dim); background: var(--yellow-dim); border-radius: var(--radius-sm); }
+.ff-actions { display: flex; gap: 8px; margin: 8px 0; }
+.ff-actions .btn { flex: 1 1 0; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; }
+.ff-actions-single .btn { flex: 1 1 auto; }
+.ff-box .sheet-sticky-actions { position: sticky; bottom: 0; margin: 10px -2px 0; padding: 8px 2px calc(8px + env(safe-area-inset-bottom)); background: var(--card); border-top: 1px solid var(--card-border); }
+.ff-status { min-height: 20px; margin: 6px 0; font-size: 14px; color: var(--text-dim); }
+.ff-or { display: flex; align-items: center; gap: 10px; margin: 10px 0; color: var(--text-dim); font-size: 13px; }
+.ff-or::before, .ff-or::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--card-border); }
+.ff-search { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
+.ff-saved-list { max-height: 30vh; }
+.ff-list-h { margin: 12px 0 4px; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+.ff-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin: 10px 0; }
+.ff-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ff-field label { font-size: 13px; color: var(--text-dim); }
+.ff-field.is-flagged input { border-color: var(--yellow); }
+.ff-inline { display: flex; gap: 6px; }
+.ff-inline input { flex: 1 1 auto; min-width: 0; }
+.ff-inline select { flex: 0 0 auto; width: 74px; }
+.ff-more { margin: 8px 0; }
+.ff-amount-row { display: flex; flex-direction: column; gap: 8px; }
+.ff-amount-row input { font-size: 22px; font-weight: 600; min-height: 52px; }
+.ff-units, .ff-quick, .ff-meals { display: flex; flex-wrap: wrap; gap: 6px; }
+.ff-chip { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--card-border); background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
+.ff-chip:hover { background: var(--card-hover); }
+.ff-chip.is-on, .ff-chip[aria-pressed="true"] { color: #fff; background: rgba(79, 140, 255, 0.2); border-color: rgba(79, 140, 255, 0.6); }
+.ff-unit { min-width: 64px; }
+.ff-eq { margin: 6px 0; min-height: 18px; font-size: 13px; color: var(--text-dim); }
+.ff-quick { margin: 0 0 10px; }
+.ff-label { font-size: 14px; color: var(--text-dim); }
+.ff-preview, .ff-summary { margin: 8px 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--bg-elevated); border: 1px solid var(--card-border); }
+.ff-preview:empty { display: none; }
+.ff-pv-cal { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; }
+.ff-pv-big { font-size: 34px; font-weight: 800; line-height: 1; }
+.ff-pv-unit { font-size: 14px; color: var(--text-dim); }
+.ff-pv-row { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.ff-pv-cell { display: flex; flex-direction: column; min-width: 56px; }
+.ff-pv-n { font-size: 16px; font-weight: 600; }
+.ff-pv-l { font-size: 12px; color: var(--text-dim); }
+.ff-sum-amt { margin: 0 0 8px; font-size: 14px; color: var(--text-dim); }
+.ff-portions { margin: 10px 0; }
+.ff-portion-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.ff-portion-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 0; border-top: 1px solid var(--card-border); }
+.ff-portion-row:first-child { border-top: 0; }
+.ff-portion-name { font-weight: 600; flex: 1 1 100px; min-width: 0; overflow-wrap: anywhere; }
+.ff-portion-amt { color: var(--text-dim); font-size: 14px; }
+.ff-portion-row .btn-icon { min-height: 44px; }
+.ff-portion-default.is-on { color: #fff; background: rgba(79, 140, 255, 0.2); border-color: rgba(79, 140, 255, 0.6); }
+.ff-portion-add { display: flex; flex-direction: column; gap: 8px; }
+.ff-portion-add .btn { min-height: 44px; align-self: flex-start; }
+
+/* The library: a card per food, with its favorite star */
+.saved-food-card-top { display: flex; align-items: flex-start; gap: 8px; }
+.saved-food-card-main { flex: 1 1 auto; min-width: 0; }
+.saved-food-card-title { overflow-wrap: anywhere; }
+.saved-food-card-meta { color: var(--text-dim); }
+.saved-food-card-macros { color: var(--text-dim); }
+.saved-food-card-actions .btn, .saved-food-card-actions .btn-icon { min-height: 44px; }
+.ff-star { flex: 0 0 auto; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -6px 0 0 0; border: 0; background: none; color: var(--text-dim); cursor: pointer; border-radius: 50%; }
+.ff-star:hover { background: var(--card-hover); color: var(--text); }
+.ff-star.is-on { color: var(--yellow); }
+.ff-star.is-on svg path { fill: currentColor; }
+
+@media (max-width: 460px) {
+  .ff-steps { gap: 4px; }
+  .ff-step { padding: 5px 6px; gap: 4px; font-size: 12px; }
+  .ff-step-n { width: 18px; height: 18px; font-size: 11px; }
+}
+@media (max-width: 380px) {
+  .ff-grid { gap: 8px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ff-chip, .ff-step { transition: background 0.12s, border-color 0.12s; }
+}
+
+/* Recipe totals and portions (shared by Meal Prep and Nutrition recipe editors) */
+.ff-rs { margin: 8px 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-elevated); border: 1px solid var(--card-border); }
+.ff-rs-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 4px 0; }
+.ff-rs-k { font-size: 13px; color: var(--text-dim); }
+.ff-rs-v { font-size: 14px; font-weight: 600; text-align: right; flex: 1 1 auto; overflow-wrap: anywhere; }
+.ff-rs-more { margin: 6px 0 0; }
+.ff-rs-more > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 14px; color: var(--text); }
+.ff-rs-list { list-style: none; margin: 0; padding: 0; }
+.ff-rs-list li { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 6px 0; border-top: 1px solid var(--card-border); font-size: 14px; }
+.ff-rs-n { flex: 1 1 100%; font-weight: 600; overflow-wrap: anywhere; }
+.ff-rs-a { color: var(--text-dim); }
+.ff-link { margin: 4px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; color: var(--text-dim); }
+.ff-link .btn-icon { min-height: 44px; }
+#foodFlowModal { z-index: 1300; }
+.ff-rs-more > summary::before { content: "\25B8"; margin-right: 8px; color: var(--text-dim); }
+.ff-rs-more[open] > summary::before { content: "\25BE"; }
+
+/* Contrast: the primary button inside the food sheet (and its entry button) is the same darker blue the other sheets use */
+.ff-box .btn-primary, .ff-scanbtn, .ff-primary { background: #2f6fe0; border-color: #2f6fe0; color: #fff; }
+.ff-box .btn-primary:hover:not(:disabled), .ff-scanbtn:hover:not(:disabled), .ff-primary:hover:not(:disabled), .ff-box .btn-primary:focus-visible, .ff-scanbtn:focus-visible { background: #2a63c9; border-color: #2a63c9; color: #fff; }
+.ff-box :focus-visible, .ff-scanbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ff-box input[type="text"], .ff-box input[type="search"], .ff-box select { min-height: 44px; font-size: 16px; }
+.picker-list-item-meta { color: var(--text-dim); }
+#savedFoodFormWrap .field-hint, #recipeFormWrap .field-hint { color: var(--text-dim); }
+.nut-lib-sec .list-item-row { flex-wrap: wrap; }
+.nut-lib-sec .list-item-actions { flex-shrink: 1; }

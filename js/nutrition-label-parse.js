@@ -303,6 +303,17 @@
     return { warnings: warnings, uncertain: uncertain };
   }
 
+  // "Servings per container: 8", "about 4 servings per container", "8 servings per package". A count only: null when the
+  // label doesn't say, or says something that isn't a plain number of servings ("varied").
+  function servingsPerContainer(text) {
+    const t = String(text || "");
+    let m = t.match(/(?:servings?|serv\.?)\s*per\s*(?:container|package|pack)\s*[:.\-]?\s*(?:about|approx\.?|approximately)?\s*(\d{1,3}(?:[.,]\d{1,2})?)(?![\d%])/i);
+    if (!m) m = t.match(/(?:about|approx\.?|approximately)?\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*servings?\s*per\s*(?:container|package|pack)/i);
+    if (!m) return null;
+    const n = Number(m[1].replace(",", "."));
+    return n > 0 && n <= 200 ? n : null;
+  }
+
   // Parses raw OCR text into whichever tracked fields it can find.
   //   -> { fields, uncertain[], warnings[], missing[], servingSize, matchedCount, rawText }
   function parseNutritionLabelText(rawText) {
@@ -379,13 +390,13 @@
     // A serving written "(45g)" can come out "(459)": a bare number in brackets is a weight whose g was misread.
     const servingSize = servingMatch ? servingMatch[1].trim().replace(/[.\s]+$/, "").replace(/\((\d{1,4}(?:\.\d)?)9\)/, "($1g)") : null;
     const missing = MAIN.filter(function (k) { return fields[k] === undefined; });
-    return { fields: fields, uncertain: uncertain, warnings: warnings, dvs: dvs, missing: missing, servingSize: servingSize, matchedCount: Object.keys(fields).length, rawText: text };
+    return { fields: fields, uncertain: uncertain, warnings: warnings, dvs: dvs, missing: missing, servingSize: servingSize, servingsPerContainer: servingsPerContainer(text), matchedCount: Object.keys(fields).length, rawText: text };
   }
 
   /* ---------------- scaling to the amount you actually eat ---------------- */
 
-  const OZ_TO_G = 28.3495;
-  const FL_OZ_TO_ML = 29.5735;
+  const OZ_TO_G = 28.349523125;       // the international avoirdupois ounce, exactly
+  const FL_OZ_TO_ML = 29.5735295625;  // the US fluid ounce, exactly
   const MIN_FACTOR = 0.01;
   const MAX_FACTOR = 100;
   // Decimal places kept after scaling (whole numbers for calories and the larger minerals).
@@ -501,5 +512,5 @@
     return plan.ok ? plan.factor * times : null;
   }
 
-  return { parseAmount: parseAmount, scalingPlan: scalingPlan, scaleFields: scaleFields, servingFactor: servingFactor, labelBasisFromScan: labelBasisFromScan, basisOfFood: basisOfFood, parseNutritionLabelText: parseNutritionLabelText, checkFields: checkFields, FIELDS: FIELDS, NAMES: NAMES, MAIN: MAIN, LIMITS: LIMITS };
+  return { parseAmount: parseAmount, scalingPlan: scalingPlan, scaleFields: scaleFields, servingFactor: servingFactor, labelBasisFromScan: labelBasisFromScan, basisOfFood: basisOfFood, parseNutritionLabelText: parseNutritionLabelText, servingsPerContainer: servingsPerContainer, checkFields: checkFields, FIELDS: FIELDS, NAMES: NAMES, MAIN: MAIN, LIMITS: LIMITS };
 });

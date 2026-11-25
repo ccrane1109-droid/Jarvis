@@ -87,6 +87,10 @@ Your library, with search (names and ingredients), the categories **Breakfast, L
 
 Per serving is always worked out (sum of the ingredients ÷ servings), never stored. **Editing a recipe changes meals you plan from now on. Meals you already marked eaten, your food log, and batches you recorded keep the numbers they had.**
 
+### Ingredients from foods and labels
+
+**From my foods or a label** (in the recipe form here and in Nutrition's) adds an ingredient through the scanner's sheet: scan a label or pick a saved food, say how much, and it is added with its numbers worked out from the label. The recipe form then shows the whole recipe, one portion, and how much of each ingredient one portion needs, and takes the weight of the finished dish (so the recipe can be logged by weight). See [nutrition-scanner.md](nutrition-scanner.md).
+
 ### Estimated values
 
 A number that you did not type is marked **est.** It comes from a small built-in list of typical values for about 50 common foods (`js/mealprep-foods.js`), or from the AI estimate Nutrition already offered. The list is **approximate**: typical USDA-style figures, rounded; brands, cuts and cooking methods differ, and a package label always wins. Typing over an estimate makes it yours. A food that is not in the list is left blank, not guessed. Amounts the list can't turn into grams (for example "2 cups of rice") are not guessed either.
