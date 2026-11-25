@@ -257,7 +257,7 @@
         goalStepsHtml(date) +
         refHtml(date) +
         '<div class="cdp-sec"><label class="cdp-h" for="cdpNotes">Notes for the day</label><textarea id="cdpNotes" class="cdp-area" data-note="notes" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="Anything to remember today">' + esc(view.notes) + '</textarea></div>' +
-        '<div class="cdp-sec"><label class="cdp-h" for="cdpRefl">End-of-day reflection</label><textarea id="cdpRefl" class="cdp-area" data-note="reflection" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="What went well? What will you change tomorrow?">' + esc(view.reflection) + '</textarea></div>' +
+        '<div class="cdp-sec"><label class="cdp-h" for="cdpRefl">End-of-day reflection</label><div class="cdp-prompts" role="group" aria-label="Quick questions, about two minutes">' + ["Went well: ", "Got in the way: ", "One change for tomorrow: "].map(function (q) { return '<button type="button" class="cal-chip-btn" data-cdp="prompt" data-q="' + esc(q) + '">' + esc(q.replace(/: $/, "")) + '</button>'; }).join("") + '</div><textarea id="cdpRefl" class="cdp-area" data-note="reflection" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="What went well? What will you change tomorrow?">' + esc(view.reflection) + '</textarea></div>' +
         '</div>';
     }
     return html + '</section>';
@@ -412,6 +412,7 @@
     body += '<div data-for-time>' + A.fSelect("len", "Length", lengthChoices(len), String(len), { hint: "A length puts it on the timeline as a block, so you can see the free time around it." }) +
       '<div data-for-len>' + A.fSelect("ingredientId", "Category", cats, blk ? blk.ingredientId : "") + '</div></div>';
     body += A.fSelect("priority", "Priority", [["low", "Low"], ["medium", "Medium"], ["high", "High"]], t ? (t.priority || "medium") : "medium");
+    if (t && !t.completed && window.JarvisFocus) body += '<div class="form-row"><button type="button" class="btn btn-secondary" data-sheet-act="focus">Start a focus session</button></div>';
     if (t) body += '<div class="form-row"><button type="button" class="btn btn-danger" data-sheet-act="delete">Delete this task</button></div>';
     function sync(root) {
       const s = root.querySelector('[name="start"]').value, l = root.querySelector('[name="len"]').value;
@@ -425,7 +426,10 @@
         if (el.name === "start" && el.value && Number(root.querySelector('[name="len"]').value) === 0 && !t) root.querySelector('[name="len"]').value = "30";
         sync(root);
       },
-      onAct: function (act) { if (act === "delete") { A.closeSheet(true); deleteTask(t.id); } },
+      onAct: function (act, el) {
+        if (act === "delete") { A.closeSheet(true); deleteTask(t.id); }
+        else if (act === "focus") { A.closeSheet(true); window.setTimeout(function () { window.JarvisFocus.start({ title: t.text, taskId: t.id, habitId: t.habitId || "", itemKey: "task:" + t.id }); }, 0); }
+      },
       onSubmit: function (v) { return saveTask(v, t, blk); }
     });
   }
@@ -667,6 +671,11 @@
     const act = el.getAttribute("data-cdp"), date = dateOf(el);
     if (act === "plan-toggle") { ui.plan = planOpen() ? "closed" : "open"; saveUi(); host.render(); const b = document.querySelector('[data-cdp="plan-toggle"]'); if (b) b.focus(); return; }
     if (act === "habits-toggle") { ui.habits = !ui.habits; saveUi(); host.render(); const b = document.querySelector('[data-cdp="habits-toggle"]'); if (b) b.focus(); return; }
+    if (act === "prompt") {          // a quick question: its words are put into the reflection for you to finish; nothing is decided for you
+      const ta = document.getElementById("cdpRefl"), q = el.getAttribute("data-q") || "";
+      if (ta) { const cur = ta.value; ta.value = (cur && !/\n$/.test(cur) ? cur + "\n" : cur) + q; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.dispatchEvent(new Event("input", { bubbles: true })); }
+      return;
+    }
     if (act === "done-toggle") { ui.done = !ui.done; host.render(); const b = document.querySelector('[data-cdp="done-toggle"]'); if (b) b.focus(); return; }
     if (act === "glance-toggle") { ui.glance = !ui.glance; host.render(); const b = document.querySelector('[data-cdp="glance-toggle"]'); if (b) b.focus(); return; }
     if (act === "ref-toggle") { ui.ref = !ui.ref; saveUi(); host.render(); const b = document.querySelector('[data-cdp="ref-toggle"]'); if (b) b.focus(); return; }

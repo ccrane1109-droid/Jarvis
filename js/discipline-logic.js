@@ -104,6 +104,8 @@
   // Why something is being avoided, what to do right now about it, and a rule that would prevent it next time.
   const REASONS = [
     { key: "big", label: "It feels too big or unclear", first: "Write the first three steps. Do only step 1 for two minutes.", rule: "Write the first step of every priority before I start the day." },
+    { key: "where", label: "I don't know where to start", first: "Write the very first small action (open the file, find the page, send the one message). Do only that for two minutes.", rule: "End every work block by writing the first action for the next one." },
+    { key: "info", label: "I need information first", first: "Write the one question you need answered, and who or where to ask. Then spend two minutes on any part that does not need the answer.", rule: "Ask for what I need the day before, not the day of." },
     { key: "boring", label: "It's boring or I'm dreading it", first: "Phone in another room and a 10-minute timer. You only owe the 10 minutes.", rule: "Do the task I'm dreading first, before anything fun." },
     { key: "afraid", label: "I'm afraid it won't be good", first: "Make the worst possible version for five minutes. Fix it later, not while making it.", rule: "Make a rough version first and improve it in a second block." },
     { key: "tired", label: "I'm tired or low on energy", first: "Do two minutes. If you're still wiped after that, do the minimum version, not nothing.", rule: "Do the hard task right after school, before the energy dip." },

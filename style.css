@@ -6116,3 +6116,8 @@ body.fc-on { padding-bottom: 76px; }
 .rt-days legend { font-size: 14px; font-weight: 700; padding: 0; margin-bottom: 4px; }
 .rt-daychips { display: flex; flex-wrap: wrap; gap: 6px; }
 .rt-preview { margin: 8px 0; padding: 8px 12px; font-size: 14px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg-elevated); }
+
+.po-focus-note { margin: 8px 2px 0; font-size: 13px; color: var(--text-dim); }
+
+.cdp-prompts { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.cdp-prompts .cal-chip-btn { min-height: 44px; }

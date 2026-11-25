@@ -174,8 +174,21 @@
     document.addEventListener("visibilitychange", function () { if (!document.hidden) { tick(); draw(); } });
   }
 
+  // A session that was timed somewhere else (the Discipline two-minute start): one record in the same log. o { title, startedAt, focusMs, plannedMin, taskId }
+  function record(o) {
+    const x = o || {}, focusMs = Math.round(Number(x.focusMs)), started = Number(x.startedAt);
+    if (!(focusMs >= 1000) || !(started > 0)) return false;
+    const rec = F.cleanRecord({ id: core().uid("fs"), kind: "focus", date: F.localDay(started), startedAt: started, endedAt: started + focusMs, focusMs: focusMs, plannedMin: Number(x.plannedMin) || 0, title: String(x.title || "Focus").slice(0, 140), itemKey: "", taskId: String(x.taskId || ""), habitId: "", updatedAt: Date.now() });
+    if (!rec) return false;
+    const prev = log;
+    log = F.add(log, rec);
+    if (!saveLog()) { log = prev; return false; }
+    notify();
+    return true;
+  }
+
   window.JarvisFocus = {
-    init: init, start: start, isActive: function () { return !!active; },
+    init: init, start: start, record: record, isActive: function () { return !!active; },
     active: function () { return active ? Object.assign({}, active) : null; },
     // worked minutes for a day (default today) and for one task on that day
     minutesOn: function (date) { return F.totals(log, date || today(), date || today()).minutes; },

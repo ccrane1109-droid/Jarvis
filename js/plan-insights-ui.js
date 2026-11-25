@@ -60,6 +60,13 @@
     h += Ch.bars({ title: "Hours planned and worked, by week", summary: "Hours planned in blocks and hours logged, for each of the last 8 weeks.", labels: labels, format: function (v) { return hFmt(v); }, height: 190,
       emptyText: "No blocks were planned in the last 8 weeks.", series: [{ name: "Planned", color: "var(--viz-1)", values: series.map(function (s) { return s.plannedMin ? hNum(s.plannedMin) : null; }) }, { name: "Worked", color: "var(--viz-2)", values: series.map(function (s) { return hNum(s.loggedMin); }) }] });
     h += '<p class="sp-dim sp-ins-note">A week with no tasks has no rate (a gap in the line, not 0%). “Worked” is only the time you logged on blocks, plus workout sessions you logged in Workouts, counted once.</p>';
+    try {
+      const F = window.JarvisFocus, PLg = window.JarvisPlanLogic;
+      if (F && F.totals && PLg && cur.weekStart) {
+        const wk = F.totals(cur.weekStart, PLg.addDays(cur.weekStart, 6)), all = F.totals(PLg.addDays(cur.weekStart, -49), PLg.addDays(cur.weekStart, 6));
+        if (all.sessions) h += '<p class="sp-ins-note">Focus timer: ' + (wk.sessions ? esc(hText(wk.minutes)) + " in " + A.plural(wk.sessions, "session") + " this week" : "no sessions this week") + " · " + esc(hText(all.minutes)) + " in " + A.plural(all.sessions, "session") + " over the last 8 weeks. Kept apart from “Worked”, so time you also logged on a block is not counted twice.</p>";
+      }
+    } catch (e) { /* the focus log is optional here */ }
     return A.section("in-exec", "Execution", h, { open: true, summary: cur.rate === null ? "no tasks this week" : cur.rate + "% done this week" + (late ? " · " + late + " overdue" : "") });
   }
 

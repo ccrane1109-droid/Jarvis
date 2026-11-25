@@ -441,7 +441,8 @@ test("rule suggestions aim at the weakest areas once there is data, and never re
 });
 
 test("the advice text is complete: every reason and excuse has words for it", () => {
-  assert.equal(D.REASONS.length, 6);
+  assert.equal(D.REASONS.length, 8, "the six original reasons plus \"I don't know where to start\" and \"I need information first\"");
+  assert.deepEqual(D.REASONS.map((r) => r.key).filter((k) => k === "where" || k === "info"), ["where", "info"]);
   D.REASONS.forEach((r) => assert.ok(r.key && r.label && r.first.length > 20 && r.rule.length > 20, r.key));
   D.EXCUSES.forEach((e) => assert.ok(e.key && e.label && e.challenge.length > 20, e.key));
   assert.equal(new Set(D.REASONS.map((r) => r.key)).size, D.REASONS.length);

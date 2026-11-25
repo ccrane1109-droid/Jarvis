@@ -136,12 +136,17 @@
     const dash = '<span aria-hidden="true">&ndash;</span><span class="visually-hidden">None</span>';
     const t = st.tasks, h = st.habits;
     const tasksN = t.total ? t.done : dash, habitsN = h.total ? h.done : dash;
+    let focus = "";
+    try {
+      const F = window.JarvisFocus, tt = F && F.totals ? F.totals(g.c.today, g.c.today) : null;
+      if (tt && tt.minutes > 0) focus = '<p class="po-focus-note">Focused today: ' + esc(hm(tt.minutes)) + ' in ' + tt.sessions + (tt.sessions === 1 ? ' session' : ' sessions') + '</p>';
+    } catch (e) { focus = ""; }
     return '<section class="card ov-card po-card po-wide" aria-label="Today in numbers"><ul class="po-stats">' +
       tile("go-calendar", tasksN, t.total ? "/" + t.total : "", "Tasks done") +
       tile("go-habits", habitsN, h.total ? "/" + h.total : "", "Habits done") +
       tile("go-calendar", st.freeMin === null ? dash : esc(hm(st.freeMin)), "", "Free time left") +
       tile("go-week", st.week.pct === null ? dash : st.week.pct + "%", "", "This week’s tasks") +
-      '</ul></section>';
+      '</ul>' + focus + '</section>';
   }
 
   // The thing to do now or next.

@@ -75,6 +75,46 @@ Everything here is a set of written rules: nothing is sent anywhere, the same da
 
 **Not done in Phase 3**: *deferral* and *dependencies* are not ranking factors, because JARVIS does not record how often a task was pushed back or what blocks what, and inventing either would be a guess; the "suggest the next task" action is the Overview's Up next / Suggest tasks rather than an assistant button; a routine is applied to dates (it does not repeat by itself); overlap/overload detection for events and time blocks is the Calendar's existing rule (the daily limit in Planning hours) and the new Heads up line. Business-metric and school-schedule awareness in the ranking comes only from the category words described above.
 
+## Phases 4 and 5 — what was added, and what was only checked
+
+**Added**
+
+* **"I'm avoiding it"** (Habits › Today, the Discipline flow) now offers eight obstacle choices: the six that were there plus **"I don't know where to start"** and **"I need information first"**, each with its own fixed-wording next step and a rule you can adopt. It still only advises and logs: it creates no task. The 30-day program and its content are unchanged.
+* **The two-minute start is a focus session.** When a Discipline timer run ends (Stop, "Enough for now", "I finished it", or "10 more minutes") the time actually worked (never more than the run's length) is added to the focus log, so it counts in the same totals as sessions started from the planner.
+* **Start a focus session from a task**: the Overview's *Up next*, and *Start a focus session* inside a task's own form (Calendar). A running session is kept on the device and is still running after a refresh; paused time is not counted.
+* **Focus time in numbers**: the Overview shows "Focused today: 35 min in 2 sessions" only when there is some, and Strategy › Insights › Execution shows focus-timer time for this week and the last 8 weeks. It is **kept apart from "Worked"** (hours logged on blocks and workouts), so the same time is never counted twice.
+* **Quick reflection questions** in the Day plan: *Went well*, *Got in the way* and *One change for tomorrow* put their words into the day's reflection box for you to finish (about two minutes). They are saved in the day's own record; nothing is decided for you.
+
+**Checked, not rebuilt.** These were already in Strategy and the Day plan before this overhaul, and their existing tests still pass. They were not re-audited line by line against every sub-point of the request: the yearly › quarterly › monthly › weekly › daily structure and the review, the guided goal breakdown and templates, the multi-year roadmap with a chosen start year, weekly intentions (things to do, things to stop, with notes) and the weekly review. See `strategic-planning.md` and `weekly-intentions.md`.
+
+**Not done** (so nothing here should be assumed):
+
+* Analytics that need data JARVIS does not record: *estimated vs actual duration per task*, *frequently rescheduled tasks* and *deferral* (nothing stores how often a task was moved), and any *productivity score*.
+* *Suggestions from history* in reflections; a weekly summary that goes beyond the existing weekly review.
+* Moving a task between days by dragging on a phone (the existing drag is unchanged); the alternatives are the task's form and the Overview's Reschedule.
+* The "Hours" and "worked time" figures of habits (a habit has no stored length).
+* Visual polish beyond what is listed above: typography, button and checkbox styles were not unified across all of JARVIS; only the new and touched Planning screens follow one style. The Calendar keeps its floating "+" on a phone; the page reserves space under the last row so it does not cover content.
+
+## Data safety and migration
+
+* No existing record was rewritten. New fields are optional and ignored by older code: `task.habitId` and `task.separate[]` (links), a habit's `skips`, `pauses` and `archivedAt`, and the new stores `jarvisPlanOverview` (layout; synced, newest wins), `jarvisPlanRoutines` (synced, merged by id) and `jarvisFocusLog` (synced, merged by id). `jarvisFocusActive` and the safety snapshot `jarvisPlanSnapshot` stay on the device.
+* A snapshot of tasks, habits and the planner's records is taken before the first link change, so the earlier state can be put back.
+* Backup and restore cover every new synced key (`backup-logic.js`, with a test that fails if a new key is left out).
+* Duplicates are only ever *offered* for review; nothing is merged or deleted without a button press, and applying or updating a routine can be undone.
+
+## Verified (final)
+
+* **Unit tests: 1136 pass** (`cd functions && npm test`).
+* **Browser tests** (headless Chromium, 390 px, touch, New York time, fixed clock): links and duplicates 47; Habits 39; Overview 73; Calendar 48; Routines 43; assistant 25; focus, Discipline and reflection 27; plus the earlier Calendar flows (106), overdue tasks (21), Meal Prep (72, 60, 89, 123, 10), Scanner (135, 49) and a 20-screen smoke test at 390 and 1200 px.
+* **axe** (WCAG 2.0/2.1 A and AA plus best practice) is clean on the Overview in every layout, the Calendar Day, Week (glance, agenda, grid) and Month, the routine sheets and menus, the suggestion sheet and the assistant, at 320, 390, 768 and 1200 px, with no horizontal overflow.
+
+## Not verified
+
+* **Nothing was tried on a real iPhone or in Safari.** Everything above is Chromium with touch emulation. Safe-area spacing, the bottom focus bar above the tab bar, scrolling and the on-screen keyboard still need a look on the device.
+* Haptics use `navigator.vibrate`, which iOS Safari does not provide.
+* The focus timer is drawn from timestamps when the app is open; it sends no notification when time is up while the app is closed.
+* Time-zone and daylight-saving behaviour is covered by the existing calendar rules and fixed-clock tests in New York time; a change of time zone mid-session was not tested.
+
 ## Verified (Phases 1 to 2b)
 
 * Unit tests (`cd functions && npm test`): 1118 pass, including the link/duplicate rules, habit schedule rules, focus arithmetic and Overview rules.
