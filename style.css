@@ -3551,7 +3551,7 @@ button.hs-day:hover { background: var(--card-hover); }
 .cal-cell.is-selected { background: var(--card-hover); }
 .cal-cell.is-drop { outline: 2px dashed var(--accent); outline-offset: -3px; }
 .cal-num { align-self: flex-start; min-width: 28px; min-height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0 4px; }
-.cal-cell.is-today .cal-num { background: var(--accent); color: #fff; }
+.cal-cell.is-today .cal-num { background: #2f6fe0; color: #fff; }
 .cal-chip { display: block; width: 100%; min-height: 24px; padding: 1px 6px; border: 0; border-left: 3px solid var(--cc, var(--accent)); border-radius: 5px; background: rgba(255, 255, 255, 0.06); background: color-mix(in srgb, var(--cc, var(--accent)) 20%, var(--bg-elevated)); color: var(--text); font: inherit; font-size: 12px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; touch-action: manipulation; }
 .cal-more { align-self: flex-start; min-height: 24px; border: 0; background: transparent; color: var(--accent-hover); font: inherit; font-size: 12px; cursor: pointer; padding: 0 4px; }
 .cal-dots { display: none; flex-wrap: wrap; gap: 3px; padding: 0 2px; }
@@ -3571,7 +3571,7 @@ button.hs-day:hover { background: var(--card-hover); }
 .cal-wk-days, .cal-wk-allday, .cal-wk-body { display: grid; grid-template-columns: var(--gutter) repeat(var(--cols, 7), minmax(0, 1fr)); }
 .cal-wk-daybtn { min-height: 52px; border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 0; }
 .cal-wk-daybtn b { font-size: 16px; color: var(--text); font-weight: 700; min-width: 30px; min-height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
-.cal-wk-daybtn.is-today b { background: var(--accent); color: #fff; }
+.cal-wk-daybtn.is-today b { background: #2f6fe0; color: #fff; }
 .cal-wk-allday { border-top: 1px solid var(--card-border); }
 .cal-wk-allday > div { padding: 3px 2px; display: flex; flex-direction: column; gap: 3px; min-width: 0; border-left: 1px solid var(--card-border); }
 .cal-wk-allday > .cal-gutter-label { border-left: 0; font-size: 12px; color: var(--text-faint); padding: 6px 4px; }
@@ -6055,3 +6055,28 @@ body.fc-on { padding-bottom: 76px; }
 .po-done-toggle { min-height: 44px; }
 .po-card button:focus-visible, .po-bar button:focus-visible, .po-note button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: no-preference) { .po-stat, .po-seg-btn { transition: background 0.15s; } }
+
+/* ---------- Calendar Day/Week: parts of the day, the next thing, done folded, the week at a glance ---------- */
+.cdp-part { margin: 12px 2px 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+.cdp-part:first-child { margin-top: 6px; }
+.cdp-next { position: relative; margin: 2px 0; padding-top: 18px; border-left: 3px solid var(--accent); border-radius: 4px; }
+.cdp-next .cal-ag-row { border-top: 0; }
+.cdp-next-tag { position: absolute; top: 2px; left: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #9ec1ff; }
+.cdp-done { border-top: 1px solid var(--card-border); margin-top: 6px; }
+.cdp-done-btn { width: 100%; min-height: 44px; padding: 0 4px; text-align: left; font: inherit; font-size: 14px; color: var(--accent-hover); background: none; border: 0; cursor: pointer; }
+.cdp-done-btn:focus-visible, .cdg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cal-glance { margin: 0 0 8px; }
+.cdg { border: 1px solid var(--card-border); border-radius: 12px; background: var(--card); }
+.cdg-btn { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; text-align: left; font: inherit; color: var(--text); background: none; border: 0; cursor: pointer; }
+.cdg-name { flex: none; font-size: 14px; font-weight: 700; }
+.cdg-sum { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--text-dim); overflow-wrap: anywhere; }
+.cdg-days { list-style: none; margin: 0; padding: 0 12px; border-top: 1px solid var(--card-border); }
+.cdg-day { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 8px 0; font-size: 14px; }
+.cdg-day + .cdg-day { border-top: 1px solid var(--card-border); }
+.cdg-day.is-today .cdg-dn { color: var(--accent-hover); }
+.cdg-dn { flex: none; min-width: 96px; font-weight: 600; }
+.cdg-nums { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.cdg-flags { color: var(--text-dim); font-size: 13px; }
+.cdg-note { margin: 0; padding: 8px 12px 12px; font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--card-border); }
+
+.cdw-day.is-today b { background: #2f6fe0; }

@@ -45,7 +45,21 @@ This file is the working record of the Planning overhaul: what each phase change
 * **Time comes from timestamps**, so a refresh or a closed page loses nothing, paused time is not work, and a break is never counted as work. A session under one second is not recorded; finishing twice cannot record twice.
 * The running session is device-only (`jarvisFocusActive`); each finished session is one record in `jarvisFocusLog` (synced, merged by id) with its task and habit ids, for the planned-vs-actual figures planned for Phase 5.
 
-## Verified
+
+## Phase 2c — Calendar Day, Week and Month
+
+* **Day (list) and the day panel in Week** now read in parts of the day (Morning before 12:00, Afternoon to 16:59, Evening from 17:00). The next open thing is marked **Now** or **Up next**. **Done things fold away** behind "Show done (N)" (one tap to open; a past day shows what happened, done ones folded). Free stretches between things and the line for "now" are unchanged. Ticking a row that moves into the done list leaves focus on that list's button, so focus is never lost.
+* **Rows show their length** ("1 h", "15 min") for timed events and time blocks. A task or habit has no stored length, so none is shown.
+* **Week at a glance** (above the week): one line (busiest day, the day with most free time, overlaps, deadlines, tasks that still have no time), and a day-by-day breakdown behind a button. Every figure is counted from what is on the Calendar. *Planned* is time taken inside your planner hours by events, time blocks and timed tasks; habits take no time. A deadline, or a task that stands for a habit, is not counted as "no time yet".
+* **Week agenda**: the Hours/List button also works in Week. *Agenda* lists the seven days one under the other (any width); *Grid* (wide) or *Days* (phone) goes back.
+* **Month** already shows event names, the "+N more", a dot per item and, on tap, a preview of that day below the grid; this was checked, not rebuilt.
+* **Accessibility fixes in the Calendar** (found by axe with the stricter WCAG 2.1 label-in-name rule; the stricter rule had not been run on the Calendar before): a control's accessible name now begins with the words it shows (rows, chips, event blocks, week day buttons, free-time rows, Pick, Schedule, Add to day, the Agenda/Hours button), spans in a row are separated by spaces so they are read as words, and today's date mark uses a darker blue for contrast.
+
+**Verified** (Chromium, 390 px unless noted): Calendar test (48 checks: parts, up next, done fold, focus after a tick, durations, glance, agenda toggle at 390 and 1200 px, Month); the earlier Calendar flows (106), Phase 1 (47), Habits (39), Overview (63), Meal Prep (72 + 10) and the overdue suite (21); 1118 unit tests; axe clean on Day, Week (glance closed and open, agenda, grid) and Month at 320, 390, 768 and 1200 px.
+
+**Not done in 2c** (left for the phases named): drag-and-drop between days was not changed (it is the existing drag on the grid); a task's day and time are changed in its form or, from the Overview, with Reschedule (later today, tomorrow). Overlap, overload and scheduling-opportunity suggestions that need approval belong to the Phase 3 assistant. The Calendar still has its floating "+" button on a phone.
+
+## Verified (Phases 1 to 2b)
 
 * Unit tests (`cd functions && npm test`): 1118 pass, including the link/duplicate rules, habit schedule rules, focus arithmetic and Overview rules.
 * Browser tests in headless Chromium at 390 px (touch, New York time, a fixed clock): Phase 1 (47 checks), Habits (39), Overview (63), plus the earlier Calendar/Day-planner suite (106) and the overdue-task suite (21).
