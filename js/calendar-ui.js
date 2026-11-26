@@ -147,16 +147,28 @@
     let items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to, forceHabits));
     // a task that stands for a habit on its day is the same occurrence as that habit: drawn once (planning-core-logic.js)
     if (window.JarvisPlanningCore && h && !keepLinked) { const byId = {}; h.getTasks().forEach(function (t) { if (t && t.habitId) byId[t.id] = t; }); items = window.JarvisPlanningCore.unifyItems(items, byId); }
+    // What overlaps what, for every kind of thing on the day. mark[key] lists the titles it overlaps (so a row can say "Overlaps Team call").
+    //  * events with a length overlapping each other (the Calendar's own rule), and time blocks overlapping each other or an event;
+    //  * NEW: a task or a habit with a time that starts inside an event or time block, and two of them starting at the same minute.
+    //    A task or habit has no length of its own, so only its start is tested: nothing is guessed about how long it takes.
     const mark = {};
-    C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
+    const flag = function (x, y) { (mark[x.key] = mark[x.key] || []); if (mark[x.key].indexOf(y.title) === -1) mark[x.key].push(y.title); };
+    const both = function (x, y) { flag(x, y); flag(y, x); };
+    C.findConflicts(items).forEach(function (c) { both(c.a, c.b); });
     // time blocks overlapping each other, or a timed event on the same day (the event rules above only know events)
     const bl = blocks.filter(function (b) { return !b.completed; }), evs = items.filter(function (e) { return e.source === "event" && !e.allDay && !e.point && e.date === e.endDate && !e.completed && typeof e.startMin === "number"; });
     const clash = function (x, y) { return x.date === y.date && x.startMin < y.endMin && y.startMin < x.endMin; };
     bl.forEach(function (b) {
-      bl.forEach(function (o) { if (o !== b && clash(b, o)) mark[b.key] = true; });
-      evs.forEach(function (e) { if (clash(b, e)) { mark[b.key] = true; mark[e.key] = true; } });
+      bl.forEach(function (o) { if (o !== b && clash(b, o)) flag(b, o); });
+      evs.forEach(function (e) { if (clash(b, e)) both(b, e); });
     });
-    items.forEach(function (it) { it.conflict = !!mark[it.key]; });
+    const ranged = bl.concat(evs).filter(function (r) { return r.endMin > r.startMin; });
+    const points = items.filter(function (p) { return !p.allDay && !p.completed && typeof p.startMin === "number" && (p.source === "task" || p.source === "habit"); });
+    points.forEach(function (p, i) {
+      ranged.forEach(function (r) { if (r.date === p.date && p.startMin >= r.startMin && p.startMin < r.endMin) both(p, r); });
+      for (let j = i + 1; j < points.length; j++) { const q = points[j]; if (q.date === p.date && q.startMin === p.startMin) both(p, q); }
+    });
+    items.forEach(function (it) { it.conflict = !!mark[it.key]; it.conflictWith = mark[it.key] ? mark[it.key].slice(0, 3) : []; });
     return items;
   }
   function planner() { return window.JarvisCalPlanner || null; }
@@ -251,6 +263,7 @@
     return html;
   }
 
+  function conflictText(it) { return "Overlaps" + (it.conflictWith && it.conflictWith.length ? " " + it.conflictWith.join(", ") : ""); }
   function durText(m) { const h = Math.floor(m / 60); return h ? h + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min"; }
   function rowHtml(it) {
     const sub = [];
@@ -269,10 +282,10 @@
     const tickable = (it.source === "habit" && it.editable) || it.source === "task" || it.source === "plan" || (it.source === "goal" && !it.readOnly) || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
-      '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(time + (!it.allDay && !it.point && it.endTime ? " " + C.timeLabel(it.endTime) : "") + " " + it.title + " " + sub.join(" \u00b7 ") + (it.conflict ? " Overlaps" : "") + ", " + dayName(it.date, { weekday: "short", month: "short", day: "numeric" }) + (it.completed ? ", done" : "")) + '">' +
+      '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(time + (!it.allDay && !it.point && it.endTime ? " " + C.timeLabel(it.endTime) : "") + " " + it.title + " " + sub.join(" \u00b7 ") + (it.conflict ? " " + conflictText(it) : "") + ", " + dayName(it.date, { weekday: "short", month: "short", day: "numeric" }) + (it.completed ? ", done" : "")) + '">' +
         '<span class="cal-ag-time">' + esc(time) + (!it.allDay && !it.point && it.endTime ? ' <small>' + esc(C.timeLabel(it.endTime)) + '</small>' : "") + '</span> <span class="cal-ag-bar"></span> ' +
         '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span> <span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
-        (it.conflict ? ' <span class="cal-ag-flag">Overlaps</span>' : "") +
+        (it.conflict ? ' <span class="cal-ag-flag">' + esc(conflictText(it)) + '</span>' : "") +
       '</button>' +
       (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
     '</div>';

@@ -37,10 +37,10 @@
   function label(t) { return CL.timeLabel(t); }
   function toTime(min) { return W.toTime(Math.max(0, Math.min(1439, min))); }
   function readUi() {
-    try { const v = JSON.parse(window.localStorage.getItem(UI_KEY) || "null"); if (v && typeof v === "object") return { plan: v.plan === "open" || v.plan === "closed" ? v.plan : "", habits: !!v.habits, ref: !!v.ref, allTasks: false, showHabits: v.showHabits !== false }; } catch (e) { /* no saved choice */ }
-    return { plan: "", habits: false, ref: false, allTasks: false, showHabits: true };
+    try { const v = JSON.parse(window.localStorage.getItem(UI_KEY) || "null"); if (v && typeof v === "object") return { plan: v.plan === "open" || v.plan === "closed" ? v.plan : "", habits: !!v.habits, habitsList: v.habitsList !== false, ref: !!v.ref, allTasks: false, showHabits: v.showHabits !== false }; } catch (e) { /* no saved choice */ }
+    return { plan: "", habits: false, habitsList: true, ref: false, allTasks: false, showHabits: true };
   }
-  function saveUi() { try { window.localStorage.setItem(UI_KEY, JSON.stringify({ plan: ui.plan, habits: ui.habits, ref: ui.ref, showHabits: ui.showHabits })); } catch (e) { /* the choice is only for this visit */ } }
+  function saveUi() { try { window.localStorage.setItem(UI_KEY, JSON.stringify({ plan: ui.plan, habits: ui.habits, habitsList: ui.habitsList, ref: ui.ref, showHabits: ui.showHabits })); } catch (e) { /* the choice is only for this visit */ } }
   // The Daily plan is open by default on a wide screen and folded on a phone, so the schedule is the first thing there.
   function planOpen() { return ui.plan ? ui.plan === "open" : !isPhone(); }
 
@@ -160,7 +160,7 @@
         if (x.noTime) flags.push(x.noTime + " with no time");
         return '<li class="cdg-day' + (x.date === t ? " is-today" : "") + '"><span class="cdg-dn">' + esc(host.dayName(x.date, { weekday: "short", month: "short", day: "numeric" })) + '</span><span class="cdg-nums">' +
           (x.planned ? esc(D.hm(x.planned)) + " planned" : "Nothing planned") + (x.free !== null ? " · " + esc(D.hm(x.free)) + " free" : "") + '</span>' + (flags.length ? '<span class="cdg-flags">' + esc(flags.join(" · ")) + '</span>' : "") + '</li>';
-      }).join("") + '</ul><p class="cdg-note">Planned time counts events, time blocks and tasks with a time inside your planner hours. Habits take no time here.</p>';
+      }).join("") + '</ul><p class="cdg-note">Planned time counts events, time blocks and tasks or habits with a time inside your planner hours. A task or habit has no length of its own, so it counts as a short placeholder slot (30 minutes).</p>';
     }
     return html + '</section>';
   }
@@ -265,17 +265,23 @@
 
   /* ---------------- the Day screen ---------------- */
 
+  // The habits for the day that are NOT on the schedule above because they have no time (every day, not only today), plus the "a few days a week"
+  // ones, so nothing planned for the day is out of sight. Habits with a time are in the schedule itself, in time order. A habit can be ticked on
+  // today and on days that have passed; a future day only lists them. Counting habits show their count and are stepped on the Habits screen.
   function habitsHtml(date) {
     const h = habits();
-    if (!h || !h.getToday || date !== host.today()) return "";
-    let g; try { g = h.getToday(); } catch (e) { return ""; }
-    if (!g || !g.habits || !g.habits.length) return "";
-    const done = g.habits.filter(function (x) { return x.done; }).length;
-    return '<section class="cdp-habits"><button type="button" class="cdp-habits-h" data-cdp="habits-toggle" aria-expanded="' + ui.habits + '"><span>Habits</span><span class="cdp-plan-sum">' + done + ' of ' + g.habits.length + ' done</span><span class="cdp-chev" aria-hidden="true"></span></button>' +
-      (ui.habits ? '<div class="cdp-habit-list">' + g.habits.map(function (x) {
-        const tickable = !(x.target > 1);
-        return '<span class="cdp-habit' + (x.done ? " is-done" : "") + '">' + (tickable ? '<button type="button" class="cdp-habit-btn" data-cdp="habit" data-id="' + esc(x.id) + '" aria-pressed="' + !!x.done + '">' + (x.done ? "&#10003; " : "") + esc(x.name) + '</button>' :
-          '<span class="cdp-habit-count">' + esc(x.name) + ' ' + x.count + '/' + x.target + '</span>') + '</span>';
+    if (!h || !h.getTodayDetail || !habitsShown()) return "";
+    let d; try { d = h.getTodayDetail(date); } catch (e) { return ""; }
+    if (!d) return "";
+    const rows = d.groups.anytime.filter(function (x) { return !x.skipped; }).concat(d.flexible.filter(function (x) { return !x.skipped; }));
+    if (!rows.length) return "";
+    const done = rows.filter(function (x) { return x.done; }).length, open = ui.habitsList;
+    return '<section class="cdp-habits"><button type="button" class="cdp-habits-h" data-cdp="habits-toggle" aria-expanded="' + open + '"><span>Habits with no set time</span><span class="cdp-plan-sum">' + done + ' of ' + rows.length + ' done</span><span class="cdp-chev" aria-hidden="true"></span></button>' +
+      (open ? '<div class="cdp-habit-list">' + rows.map(function (x) {
+        const weekly = x.week && x.week.mode === "flexible" ? " · " + x.week.done + " of " + x.week.target + " this week" : "";
+        if (x.target > 1) return '<span class="cdp-habit' + (x.done ? " is-done" : "") + '"><span class="cdp-habit-count">' + esc(x.name) + ' ' + x.count + '/' + x.target + esc(weekly) + '</span></span>';
+        if (!x.editable) return '<span class="cdp-habit"><span class="cdp-habit-count">' + esc(x.name) + esc(weekly) + '</span></span>';
+        return '<span class="cdp-habit' + (x.done ? " is-done" : "") + '"><button type="button" class="cdp-habit-btn" data-cdp="habit" data-id="' + esc(x.id) + '" data-date="' + date + '" data-done="' + (x.done ? "1" : "0") + '" aria-pressed="' + !!x.done + '">' + (x.done ? "&#10003; " : "") + esc(x.name) + (weekly ? '<small>' + esc(weekly) + '</small>' : "") + '</button></span>';
       }).join("") + '</div>' : "") + '</section>';
   }
   // The weekly plan's own workload rule: blocks and events in one day over your daily limit (Rest blocks don't count). -> the message, or "".
@@ -295,8 +301,17 @@
     bits.push(timed + (timed === 1 ? " thing scheduled" : " things scheduled"));
     if (!past) bits.push(D.hm(tl.freeMin) === "0 min" ? "no free time" : D.hm(tl.freeMin) + " free");
     const over = overbooked(date);
-    const warn = over ? ' <span class="cdp-warn">' + esc(over) + '</span>' : "";
+    const clash = (items || []).filter(function (x) { return x.conflict && !x.completed; }).length;
+    const warn = (clash ? ' <span class="cdp-warn">' + clash + (clash === 1 ? " thing overlaps another" : " things overlap each other") + '</span>' : "") + (over ? ' <span class="cdp-warn">' + esc(over) + '</span>' : "");
     return '<p class="cdp-sum" role="status">' + esc(bits.join(" · ")) + warn + '</p>';
+  }
+
+  // Tasks planned for the day with no time yet, in sight even when the Daily plan is folded (a phone): up to three by name, the rest counted.
+  function untimedLineHtml(date, tasks) {
+    const list = D.unscheduled(tasks, date).filter(function (t) { return !t.completed && !t.habitId; });
+    if (!list.length) return "";
+    return '<p class="cdp-untimed"><span class="cdp-untimed-k">No time yet</span> ' + list.slice(0, 3).map(function (t) { return '<button type="button" class="cal-more" data-cdp="task-open" data-id="' + esc(t.id) + '">' + esc(t.text) + '</button>'; }).join("") +
+      (list.length > 3 ? ' <button type="button" class="cal-more" data-cdp="plan-toggle">+' + (list.length - 3) + ' more</button>' : "") + '</p>';
   }
 
   function dayHtml(date, items) {
@@ -310,6 +325,7 @@
     html += '<div class="cdp-main">';
     html += summaryHtml(date, tl, items);
     if (allDay.length) html += '<div class="cdp-allday" role="group" aria-label="All day">' + allDay.map(host.chipHtml).join("") + '</div>';
+    if (!planOpen()) html += untimedLineHtml(date, tasks);
     html += habitsNoteHtml(date);
     html += habitsHtml(date);
     const rows = timelineHtml(date, tl);
@@ -347,7 +363,7 @@
     const allDay = tl.allDay.concat(tl.untimed).filter(function (it) { return it.source !== "task"; });
     const rows = timelineHtml(sel, tl);
     let html = '<div class="cdw">' + strip + '<section class="cdw-panel" data-date="' + sel + '" aria-label="' + esc(host.dayName(sel)) + '"><div class="cdw-head"><h3>' + esc((sel === t ? "Today \u00b7 " : "") + host.dayName(sel, { weekday: "long", month: "short", day: "numeric" })) + '</h3>' +
-      '<button type="button" class="cal-more" data-cal="goto-day" data-date="' + sel + '">Open day</button></div>' + topMiniHtml(sel) + summaryHtml(sel, tl, dayItems) + habitsNoteHtml(sel) + weekUnschedHtml(sel) + refHtml(sel);
+      '<button type="button" class="cal-more" data-cal="goto-day" data-date="' + sel + '">Open day</button></div>' + topMiniHtml(sel) + summaryHtml(sel, tl, dayItems) + habitsNoteHtml(sel) + habitsHtml(sel) + weekUnschedHtml(sel) + refHtml(sel);
     if (allDay.length) html += '<div class="cdp-allday" role="group" aria-label="All day">' + allDay.map(host.chipHtml).join("") + '</div>';
     html += rows ? '<div class="cdp-timeline" role="group" aria-label="Schedule">' + rows + '</div>' : '<div class="cal-empty"><p>Nothing scheduled.</p><button type="button" class="btn btn-primary" data-cdp="add" data-date="' + sel + '">+ Add</button></div>';
     return html + '</section></div>';
@@ -670,7 +686,7 @@
     flush();
     const act = el.getAttribute("data-cdp"), date = dateOf(el);
     if (act === "plan-toggle") { ui.plan = planOpen() ? "closed" : "open"; saveUi(); host.render(); const b = document.querySelector('[data-cdp="plan-toggle"]'); if (b) b.focus(); return; }
-    if (act === "habits-toggle") { ui.habits = !ui.habits; saveUi(); host.render(); const b = document.querySelector('[data-cdp="habits-toggle"]'); if (b) b.focus(); return; }
+    if (act === "habits-toggle") { ui.habitsList = !ui.habitsList; saveUi(); host.render(); const b = document.querySelector('[data-cdp="habits-toggle"]'); if (b) b.focus(); return; }
     if (act === "prompt") {          // a quick question: its words are put into the reflection for you to finish; nothing is decided for you
       const ta = document.getElementById("cdpRefl"), q = el.getAttribute("data-q") || "";
       if (ta) { const cur = ta.value; ta.value = (cur && !/\n$/.test(cur) ? cur + "\n" : cur) + q; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.dispatchEvent(new Event("input", { bubbles: true })); }
@@ -708,7 +724,14 @@
       return;
     }
     if (act === "schedule") { const A = app(); if (A && A.scheduleTask) A.scheduleTask(el.getAttribute("data-id"), date); return; }
-    if (act === "habit") { const h = habits(); if (h && h.toggleToday && h.toggleToday(el.getAttribute("data-id"))) { if (host.changed) host.changed(); } return; }
+    if (act === "habit") {
+      const h = habits(), d = el.getAttribute("data-date") || host.date();
+      if (!h || !h.setHabitDay) return;
+      const r = h.setHabitDay(el.getAttribute("data-id"), d, el.getAttribute("data-done") !== "1");
+      if (!r.ok) { tell(r.error || "That couldn't be saved.", ""); return; }
+      if (host.changed) host.changed();
+      return;
+    }
   }
   function onInput(e) {
     const a = e.target.closest ? e.target.closest("[data-note]") : null;

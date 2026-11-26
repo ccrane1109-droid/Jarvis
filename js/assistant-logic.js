@@ -61,7 +61,7 @@
       if (skip && skip[it.key]) return;
       if (it.date > date || (it.endDate || it.date) < date) return;
       let s, e;
-      if (it.source === "task") { s = it.startMin; e = it.endMin > s ? it.endMin : s + 30; }
+      if (it.source === "task" || it.source === "habit") { s = it.startMin; e = it.endMin > s ? it.endMin : s + 30; }      // a habit with a time is time already spoken for (like a timed task, a short slot)
       else if (it.source === "event" && !it.point) { s = it.date < date ? 0 : it.startMin; e = (it.endDate || it.date) > date ? 1440 : it.endMin; }
       else if (it.source === "plan") { s = it.startMin; e = it.endMin; }           // a time block from the weekly plan is time already spoken for
       else return;

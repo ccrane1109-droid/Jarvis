@@ -129,3 +129,16 @@ test("where a task fits: the first free stretches that are long enough", () => {
   assert.equal(D.hm(45), "45 min");
   assert.equal(D.hm(120), "2 h");
 });
+
+/* ---------------- a habit with a time takes a short slot, like a timed task ---------------- */
+
+test("a habit with a time keeps a free stretch from starting on top of it; a done habit takes no time", () => {
+  const habit = (key, min, o) => Object.assign({ key, source: "habit", title: key, date: DAY, endDate: DAY, allDay: false, point: true, startMin: min, endMin: min + 30, completed: false }, o || {});
+  const tl = D.timeline({ date: DAY, items: [habit("h1", 420)], window: W, nowMin: 0, today: "2026-11-05" });
+  const frees = tl.rows.filter((r) => r.type === "free").map((r) => [r.start, r.end]);
+  assert.deepEqual(frees, [[360, 420], [450, 1320]], "free until 7:00, then from 7:30 (the habit's own slot is not free)");
+  assert.equal(tl.busyMin, D.TASK_MIN);
+  const done = D.timeline({ date: DAY, items: [habit("h1", 420, { completed: true })], window: W, nowMin: 0, today: "2026-11-05" });
+  assert.equal(done.busyMin, 0, "a done habit takes no time");
+  assert.deepEqual(done.rows.filter((r) => r.type === "free").map((r) => [r.start, r.end]), [[360, 420], [420, 1320]]);
+});

@@ -68,7 +68,7 @@ days cannot make copies.
 * Changing a habit's usual days or time also changes how its **past** days look on the planner and Calendar (the days in the
   past are drawn from the current schedule). Its ticks and streaks in Habits do not change. A tick made on a day the habit was
   not planned for still counts in Habits but is not drawn on that day of the planner.
-* Habits are shown in Calendar › Day, Week, Month and Agenda, not on Home or in the planning assistant's free-time search.
+* Habits are shown in Calendar › Day, Week, Month and Agenda, not on Home. The planning assistant now sees a habit with a time as time already spoken for (a short 30-minute slot, like a timed task), so it does not propose something on top of it. A habit has no length of its own: that slot is a placeholder, not a measured time.
 * Tested in Chromium (desktop and phone sizes); not on a real iPhone.
 
 ## Where the code is
