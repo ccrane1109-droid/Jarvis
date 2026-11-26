@@ -38,7 +38,8 @@
   function gather(toDate) {
     const c = cal(), today = c.today(), settings = c.getSettings();
     const to = toDate && toDate > C.addDays(today, 45) ? toDate : C.addDays(today, 45);
-    const items = c.itemsBetween(C.addDays(today, -A.LOOKBACK_DAYS), C.addDays(to, 1));
+    // planItems = everything on the Calendar, habits with a time included, so nothing is suggested on top of a habit
+    const items = (c.planItems || c.itemsBetween)(C.addDays(today, -A.LOOKBACK_DAYS), C.addDays(to, 1));
     const h = habits();
     return {
       c: c, today: today, settings: settings, plan: settings.plan, now: { date: today, min: c.nowMin() }, items: items,

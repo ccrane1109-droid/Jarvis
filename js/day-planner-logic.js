@@ -106,11 +106,12 @@
       const end = point ? start : ((it.endDate || it.date) === date ? it.endMin : 1440);
       return { item: it, start: start, end: end, point: point };
     }).sort(function (a, b) { return a.start - b.start || a.end - b.end || String(a.item.title).localeCompare(String(b.item.title)); });
-    // what takes time: ranges as they are; a task with a time but no block takes taskMin; done tasks and reminders take none
+    // what takes time: ranges as they are; a task or a habit with a time but no block takes taskMin (neither has a length of its own, so this is a short
+    // placeholder slot, not a measured time, and it keeps a free stretch from starting on top of it); done ones and reminders take none
     const busy = timed.map(function (r) {
       if (!r.point) return [r.start, r.end];
       const it = r.item;
-      return it.source === "task" && !it.completed ? [r.start, Math.min(1440, r.start + taskMin)] : null;
+      return (it.source === "task" || it.source === "habit") && !it.completed ? [r.start, Math.min(1440, r.start + taskMin)] : null;
     }).filter(Boolean).sort(function (a, b) { return a[0] - b[0]; });
     let busyMin = 0, cur = null;
     busy.forEach(function (x) {
@@ -128,7 +129,7 @@
     timed.forEach(function (r) {
       if (r.start > cursor) free(cursor, Math.min(r.start, w.end));
       rows.push({ type: "item", item: r.item, start: r.start, end: r.end, point: r.point });
-      const takes = r.point ? (r.item.source === "task" && !r.item.completed ? r.start + taskMin : r.start) : r.end;
+      const takes = r.point ? ((r.item.source === "task" || r.item.source === "habit") && !r.item.completed ? r.start + taskMin : r.start) : r.end;
       cursor = Math.max(cursor, takes);
     });
     if (cursor < w.end) free(cursor, w.end);

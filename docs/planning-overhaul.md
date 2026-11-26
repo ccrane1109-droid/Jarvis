@@ -32,7 +32,7 @@ This file is the working record of the Planning overhaul: what each phase change
 * **Up next** has *Start* (a focus session), *Complete* and *Reschedule*. Complete goes through the same code as ticking on the Calendar. Reschedule offers *Later today* (the next quarter hour an hour on), *Tomorrow* (tasks only) and *Pick a day and time…* (opens the real editor). A habit moves for that day only. Complete and Reschedule show an **Undo** note.
 * **Layouts**: Simple (next action, top three, rest of today), Balanced (adds the numbers, habits, strategic progress), Advanced (everything, incl. deadlines), or *My own* (show/hide and reorder). The choice is saved in `jarvisPlanOverview` (synced, newest wins).
 * **Nothing is invented**: a number with nothing behind it shows a dash; Up next says "Nothing else is scheduled" when that is so.
-* Free time is the Day planner's number (the free stretches of at least 15 minutes left in your day window, minus planned items). Habits take no time in it because a habit has no stored length.
+* Free time is the Day planner's number (the free stretches of at least 15 minutes left in your day window, minus planned items). A task or habit with a time counts as a short placeholder slot (30 minutes) because neither has a length of its own.
 
 ### Add and Search (`planning-quick-ui.js`)
 
@@ -58,6 +58,14 @@ This file is the working record of the Planning overhaul: what each phase change
 **Verified** (Chromium, 390 px unless noted): Calendar test (48 checks: parts, up next, done fold, focus after a tick, durations, glance, agenda toggle at 390 and 1200 px, Month); the earlier Calendar flows (106), Phase 1 (47), Habits (39), Overview (63), Meal Prep (72 + 10) and the overdue suite (21); 1118 unit tests; axe clean on Day, Week (glance closed and open, agenda, grid) and Month at 320, 390, 768 and 1200 px.
 
 **Not done in 2c** (left for the phases named): drag-and-drop between days was not changed (it is the existing drag on the grid); a task's day and time are changed in its form or, from the Overview, with Reschedule (later today, tomorrow). Overlap, overload and scheduling-opportunity suggestions that need approval belong to the Phase 3 assistant. The Calendar still has its floating "+" button on a phone.
+
+## Day planner: everything in sight, overlaps flagged (follow-up)
+
+* **Habits are always in view.** A habit with a time is a row in the schedule, in time order. The habits with **no set time** (and the "a few days a week" ones, with their week count) are listed under *Habits with no set time*, open by default, on **every** day (before, only today, folded). Today and past days can be ticked there; a future day only lists them. The phone Week view's day panel shows the same list.
+* **Tasks with no time** are listed by name ("No time yet: …, +N more") above the schedule when the Daily plan is folded (a phone); on a wide screen they are already in the open Daily plan, so they are not repeated.
+* **Overlaps are flagged for everything**, with what they overlap ("Overlaps Team call"), in the Day list, the Week views, the Hours grid, the day summary ("3 things overlap each other") and the Overview's Heads up. New: a task or habit with a time that **starts inside** an event or time block, and two tasks or habits **starting at the same minute**. Only the start of a task or habit is tested, because neither has a length of its own; nothing is guessed about how long it takes. Done things never overlap.
+* **Free stretches no longer start on top of a habit.** A habit with a time takes the same short placeholder slot a timed task already did (30 minutes), so "Free" does not begin at the habit's own minute. The planning assistant (Plan my day, Find a time, ...) uses the same rule, so it does not propose something on top of a habit.
+* Verified (Chromium, 390 and 1200 px): 34 browser checks for this (overlap flags and wording, habits with and without a time on today, a past day and a future day, ticking, free stretches, the untimed list on a phone and not on a wide screen, same-minute overlaps, Heads up, Plan my day avoiding habit and event times), unit tests for the free-time slot and the assistant, axe clean at 320 to 1200 px. Not tried on a real iPhone.
 
 ## Phase 3 — Intelligent planning (written rules, never an AI)
 
@@ -126,6 +134,6 @@ Everything here is a set of written rules: nothing is sent anywhere, the same da
 * Not tried on a real iPhone or in Safari. Layout, the touch targets (44 px minimum in the CSS) and the bottom focus bar were checked only in Chromium's emulation.
 * Haptics on time's up use `navigator.vibrate`, which iOS Safari does not provide; nothing else signals it there except the bar and a screen-reader announcement.
 * The focus timer does not run in the background: the bar is drawn from timestamps when the page is open, but no notification is sent when time is up while the app is closed.
-* A habit has no stored length, so habits show no duration and take no time in "free time left".
+* A habit has no stored length, so habits show no duration; one with a time counts as a 30-minute placeholder slot in free time.
 * Habit rows on the Overview move *for one day only*; changing a habit's usual time stays in Habits.
 * Phases 2c (Calendar views), 3 (priority engine, assistant, routines), 4 (Strategy) and 5 (analytics, reflections) are not done yet; see the status at the bottom of this file once they are.

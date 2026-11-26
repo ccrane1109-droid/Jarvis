@@ -6121,3 +6121,8 @@ body.fc-on { padding-bottom: 76px; }
 
 .cdp-prompts { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
 .cdp-prompts .cal-chip-btn { min-height: 44px; }
+
+.cdp-untimed { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin: 0 2px 8px; font-size: 14px; }
+.cdp-untimed-k { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.cdp-habit-btn small { display: block; font-size: 12px; font-weight: 400; color: var(--text-dim); }
+.cdw-day.is-sel .cdw-n { color: #cfe0ff; }

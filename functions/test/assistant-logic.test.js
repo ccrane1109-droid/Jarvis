@@ -476,3 +476,12 @@ test("simplify my day: a day within the limit has nothing to suggest, and a day 
   assert.equal(r.over, 3);
   assert.ok(r.unplaced >= 1, "deadlines cannot be moved, so some of the excess has nowhere to go: " + r.unplaced);
 });
+
+test("a habit with a time is time already spoken for: nothing is proposed on top of it", () => {
+  const habit = { key: "habit:h1@" + TODAY, source: "habit", title: "Lift", date: TODAY, endDate: TODAY, allDay: false, point: true, startMin: 11 * 60, endMin: 11 * 60 + 30, completed: false };
+  const r = A.planDay({ date: TODAY, tasks: [tk("a", "Write", { priority: "high" })], items: [habit], plan: plan({ start: "09:00", end: "17:00", days: [3] }), now: { date: TODAY, min: 10 * 60 + 40 }, minutes: { a: 60 } });
+  assert.equal(r.proposals[0].move.to.time, "11:30", "10:45 is only 15 minutes before the 11:00 habit, so the hour starts after it");
+  const found = A.suggestTimes([habit], { minutes: 30, from: TODAY, to: TODAY, plan: plan({ start: "10:00", end: "13:00", days: [3] }), now: { date: TODAY, min: 0 } });
+  assert.ok(found.slots.length > 0);
+  assert.ok(found.slots.every((s) => s.end <= 11 * 60 || s.start >= 11 * 60 + 30), "no opening overlaps the habit: " + found.slots.map((s) => s.label).join(" | "));
+});
