@@ -18,6 +18,8 @@ const DEVICE_ONLY = ["jarvisNutritionMigrated", "jarvisCalReminderLog", "jarvisP
   "jarvisVideoConnections", "jarvisInsightSocialKey", "jarvisVideoBlobs", "jarvisGroceryChangelog",
   "jarvisBackupMeta", "jarvisBackupSafety", "jarvisBackupDevice",
   "jarvisDisciplineDrafts", // unsaved typing in the Discipline forms; stays on the phone
+  "jarvisFocusActive",      // the focus session running right now: this phone only (the same session on two devices would count its time twice)
+  "jarvisPlanSnapshot",    // one copy of the tasks and habits as they were before the first task and habit were linked: a safety net kept on this phone
   "jarvisPlanUi", // which Strategy sections are open or closed on this phone; a screen preference, not plan data
   "jarvisWorkoutDraft",     // the workout in progress: on the phone only, so an old cloud copy can never replace a newer one
   "jarvisWorkoutMeta", "jarvisWorkoutSnapshot", "jarvisRoutineDraft", // the new logger's bookkeeping and its one-time safety copy

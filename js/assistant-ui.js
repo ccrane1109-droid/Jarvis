@@ -48,6 +48,31 @@
     };
   }
 
+  // How the Strategy engine ranks today's tasks, for the rules to use: best first, their estimates and short reasons, and the tasks to leave alone
+  // (rest and leisure). The assistant only proposes; this just tells it which task matters more.
+  function rankInfo(g) {
+    const out = { order: [], minutes: {}, why: {}, protect: {} }, P = window.JarvisPlanApp, I = window.JarvisPlanInsights;
+    try {
+      P.bump();
+      I.rankTasks(P.ictx()).forEach(function (r) { out.order.push(r.task.id); if (r.estMin) out.minutes[r.task.id] = r.estMin; if (r.enough) out.why[r.task.id] = r.short; });
+      const m = P.model();
+      g.tasks.forEach(function (t) { if (t && I.isProtected(I.categoryOf(t, m.chainOfTask(t.id)))) out.protect[t.id] = true; });
+    } catch (e) { /* ranked by priority alone */ }
+    return out;
+  }
+  function groupPlanDay(g) {
+    const k = rankInfo(g), r = A.planDay({ date: g.today, tasks: g.tasks, items: g.future, plan: g.plan, now: g.now, order: k.order, minutes: k.minutes, why: k.why, protect: k.protect });
+    return { key: "planday", title: "Today’s tasks without a time", proposals: r.proposals,
+      empty: r.total === 0 ? "Every open task for today already has a time, or is a deadline, a habit or something I leave alone." : "",
+      notes: r.unplaced ? [plural(r.unplaced, "task didn't", "tasks didn't") + " fit in the rest of your planning hours today. Try Simplify my day, or move " + (r.unplaced === 1 ? "it" : "them") + " yourself."] : [] };
+  }
+  function groupSimplify(g) {
+    const k = rankInfo(g), r = A.simplifyDay({ date: g.today, tasks: g.tasks, plan: g.plan, now: g.now, order: k.order, protect: k.protect });
+    return { key: "simplify", title: "A lighter day", proposals: r.proposals,
+      empty: r.count <= r.limit ? "Today has " + plural(r.count, "open task", "open tasks") + ", within your limit of " + r.limit + " a day (Planning hours)." : "",
+      notes: r.unplaced ? [plural(r.unplaced, "more task", "more tasks") + " could not be moved: deadlines, tasks with a time you set and tasks with nowhere to go in the next " + A.HORIZON_DAYS + " days stay where they are."] : [] };
+  }
+
   /* ---------------- building a list of proposals ---------------- */
 
   function groupFix(g, items) {
@@ -121,6 +146,8 @@
       ['This week', 'Next week'].map(function (t, i) { return '<button type="button" class="cal-chip-btn" data-as="week" data-v="' + i + '" aria-pressed="' + (st.week === i) + '">' + t + '</button>'; }).join("") + '</div>';
     h += '<button type="button" class="btn btn-primary as-main" data-as="plan-week">Plan my week</button><p class="field-hint">Fixes clashes, catches up unfinished tasks and adds your focus time, all in one list for you to review.</p>';
     h += '<ul class="as-opts">' + [
+      ["planday", "Plan my day", "Give today’s tasks a time in your free stretches, most important first"],
+      ["simplify", "Simplify my day", "Offer a later day for the least important tasks when today is over your limit"],
       ["find", "Find a time", "The earliest openings for something that takes a set time"],
       ["fix", "Fix clashes", plural(over.clashes, "overlap", "overlaps") + " in the next 45 days"],
       ["catch", "Catch up on unfinished tasks", plural(over.late, "task", "tasks") + " from the last " + A.LOOKBACK_DAYS + " days"],
@@ -290,13 +317,13 @@
     const tk = h ? A.applyTasks(prevTasks, r.all, ids) : { tasks: prevTasks, applied: [], skipped: [], changed: false };
     if (ev.changed && !c.commitEvents(ev.events)) { st.error = "The browser would not save the calendar, so nothing was changed."; draw(); return; }
     if (tk.changed) h.commitTasks(tk.tasks);
-    const movedTasks = A.select(r.all, tk.applied).map(function (p) { return { id: p.move.id, from: p.move.from.date, to: p.move.to.date }; });
+    const movedTasks = A.select(r.all, tk.applied).map(function (p) { const was = prevTasks.filter(function (x) { return x.id === p.move.id; })[0]; return { id: p.move.id, from: p.move.from.date, to: p.move.to.date, time: was ? was.time : undefined }; });
     const applied = ev.applied.length + tk.applied.length, skipped = ev.skipped.concat(tk.skipped);
     close(false);
     const label = applied ? "Applied " + plural(applied, "change", "changes") + (skipped.length ? "; skipped " + skipped.length : "") + "." : "Nothing was changed.";
     if (applied) {
       c.undoable(label, prev, ev.events, function () {
-        if (movedTasks.length && h) h.commitTasks(h.getTasks().map(function (t) { const m = movedTasks.filter(function (x) { return x.id === t.id && x.to === t.date; })[0]; return m ? Object.assign({}, t, { date: m.from }) : t; }));
+        if (movedTasks.length && h) h.commitTasks(h.getTasks().map(function (t) { const m = movedTasks.filter(function (x) { return x.id === t.id && x.to === t.date; })[0]; return m ? Object.assign({}, t, m.time !== undefined ? { date: m.from, time: m.time } : { date: m.from }) : t; }));
       });
     }
     c.refresh();
@@ -315,6 +342,8 @@
     else if (a === "home") show("home");
     else if (a === "week") { st.week = Number(el.getAttribute("data-v")); draw(); focusSoon('#asBody [data-as="week"][data-v="' + st.week + '"]'); }
     else if (a === "plan-week") planWeek();
+    else if (a === "planday") onlyGroup("Plan my day", groupPlanDay);
+    else if (a === "simplify") onlyGroup("Simplify my day", groupSimplify);
     else if (a === "fix") onlyGroup("Clashes", function (g) { return groupFix(g); });
     else if (a === "catch") onlyGroup("Unfinished tasks", groupCatch);
     else if (a === "focus") onlyGroup("Focus time", function (g) { return groupFocus(g); });

@@ -378,7 +378,8 @@
         recurring: false, linked: null, status: "", reminders: [], completed: !!t.completed, point: true, tz: "",
         allDay: !timed, date: t.date, endDate: t.date, time: timed ? t.time : "", endTime: timed ? timeOf(Math.min(1439, startMin + 30)) : "",
         startMin: startMin, endMin: timed ? Math.min(1439, startMin + 30) : null, startMs: null, endMs: null, readOnly: false,
-        scheduled: !(TK && TK.isDeadline(t, opts))
+        scheduled: !(TK && TK.isDeadline(t, opts)),
+        habitId: typeof t.habitId === "string" ? t.habitId : ""         // the habit this task stands for on its day (planning-core-logic.js)
       };
     });
   }

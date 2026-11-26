@@ -33,6 +33,7 @@
   let view = "week", anchor = "", selected = "";
   let filters = { q: "", categories: [], hideDone: false }, filtersOpen = false;
   let toolsOpen = false;          // the search and filter row, opened from the menu
+  let weekStyle = "default";      // Week as the grid (a strip of days on a phone) or as an agenda list of the seven days
   let dayStyle = "list";          // Today as a list ("list") or hour by hour ("hours")
   let modal = null;          // the open popup: { kind: "event" | "task" | "settings", ... }
   let undo = null;           // { timer, fn }
@@ -128,8 +129,8 @@
     return S ? S.goalItems(goals, from, to) : [];
   }
   // Habits that have a time on the planner, drawn from the habit records themselves (nothing is copied): one per habit per planned day.
-  function habitItems(h, from, to) {
-    if (!h || !h.getHabits || !HPl || !habitsShown()) return [];
+  function habitItems(h, from, to, force) {
+    if (!h || !h.getHabits || !HPl || (!force && !habitsShown())) return [];
     try { return HPl.items(h.getHabits(), from, to, { today: today() }); } catch (e) { return []; }
   }
   // A Meal Prep session is ONE Calendar event. If you also put it on your to-do list for the day, that task (it carries mealPrepId) is not drawn
@@ -139,11 +140,13 @@
     events.forEach(function (e) { if (e && !e.deletedAt && e.linked && e.linked.type === "mealprep") live[e.linked.id] = true; });
     return h.getTasks().filter(function (t) { return !(t && t.mealPrepId && live[t.mealPrepId]); });
   }
-  function allItems(from, to) {
+  function allItems(from, to, keepLinked, forceHabits) {
     const h = habits(), blocks = planItems(from, to), inBlock = {};
     blocks.forEach(function (it) { if (it.taskId) inBlock[it.taskId + "@" + it.date] = true; });
     const tasks = h ? C.taskItems(visibleTasks(h), from, to, { linked: planLinked() }).filter(function (it) { return !inBlock[it.id + "@" + it.date]; }) : [];
-    const items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to));
+    let items = C.expand(events, from, to, zone()).concat(tasks, goalItems(h, from, to), blocks, habitItems(h, from, to, forceHabits));
+    // a task that stands for a habit on its day is the same occurrence as that habit: drawn once (planning-core-logic.js)
+    if (window.JarvisPlanningCore && h && !keepLinked) { const byId = {}; h.getTasks().forEach(function (t) { if (t && t.habitId) byId[t.id] = t; }); items = window.JarvisPlanningCore.unifyItems(items, byId); }
     const mark = {};
     C.findConflicts(items).forEach(function (c) { mark[c.a.key] = true; mark[c.b.key] = true; });
     // time blocks overlapping each other, or a timed event on the same day (the event rules above only know events)
@@ -183,7 +186,11 @@
   function renderToolbar() {
     $("calTitle").textContent = view === "day" && dayStyle === "list" ? (anchor === today() ? "Today \u00b7 " : "") + dayName(anchor, { weekday: "short", month: "short", day: "numeric" }) : C.viewTitle(view, anchor, settings.weekStart);
     const sb = $("calStyle");
-    if (sb) { sb.hidden = view !== "day"; sb.textContent = dayStyle === "list" ? "Hours" : "List"; sb.setAttribute("aria-label", dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list"); }
+    if (sb) {
+      sb.hidden = !(view === "day" || view === "week");
+      if (view === "week") { const l = weekStyle === "list"; sb.textContent = l ? (isPhone() ? "Days" : "Grid") : "Agenda"; sb.setAttribute("aria-label", l ? (isPhone() ? "Days, show the week one day at a time" : "Grid, show the week as a grid") : "Agenda, show the week as an agenda"); }
+      else { sb.textContent = dayStyle === "list" ? "Hours" : "List"; sb.setAttribute("aria-label", dayStyle === "list" ? "Hours, show the day hour by hour" : "List, show the day as a list"); }
+    }
     const tb = $("calToday"); if (tb) tb.hidden = !(view === "day" && anchor !== today());
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.classList.toggle("hidden", false); });
     const tools = $("calTools"); if (tools) tools.classList.toggle("hidden", !(toolsOpen || filters.q || filters.categories.length || filters.hideDone));
@@ -213,7 +220,7 @@
 
   function chipHtml(it) {
     const draggable = it.source === "task" || (!it.readOnly && it.source !== "goal");   // a goal date is changed in Goals, not by dragging
-    return '<button type="button" class="cal-chip' + (it.source === "habit" ? " cal-chip-habit" : "") + (it.completed ? " cal-item-done" : "") + '" style="--cc:' + colorOf(it) + '" data-cal="open" data-key="' + esc(it.key) + '"' + (draggable ? ' data-drag="1"' : "") + ' aria-label="' + esc(itemLabel(it)) + '">' +
+    return '<button type="button" class="cal-chip' + (it.source === "habit" ? " cal-chip-habit" : "") + (it.completed ? " cal-item-done" : "") + '" style="--cc:' + colorOf(it) + '" data-cal="open" data-key="' + esc(it.key) + '"' + (draggable ? ' data-drag="1"' : "") + ' aria-label="' + esc((it.allDay ? "" : shortTime(it.time) + " ") + it.title + ", " + itemLabel(it)) + '">' +
       (it.source === "habit" ? HABIT_ICON : "") + (it.allDay ? "" : esc(shortTime(it.time)) + " ") + esc(it.title) + '</button>';
   }
   // Month: a day's habits are one small chip (done of planned), so a few habits do not crowd out the events. Tapping it opens the day.
@@ -240,10 +247,11 @@
     });
     html += '</div>';
     html += '<div class="cal-daylist"><div class="cal-daylist-head"><h3>' + esc(dayName(selected)) + '</h3>' +
-      '<button type="button" class="btn btn-secondary cal-addday" data-cal="new-on" data-date="' + selected + '" aria-label="Add to this day">+ Add here</button></div>' + agendaRows(dayItems(items, selected), selected, true) + '</div>';
+      '<button type="button" class="btn btn-secondary cal-addday" data-cal="new-on" data-date="' + selected + '">+ Add here</button></div>' + agendaRows(dayItems(items, selected), selected, true) + '</div>';
     return html;
   }
 
+  function durText(m) { const h = Math.floor(m / 60); return h ? h + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : m + " min"; }
   function rowHtml(it) {
     const sub = [];
     if (it.source === "task") sub.push("Task");
@@ -256,13 +264,15 @@
     }
     if (it.source === "habit") { sub.length = 0; sub.push("Habit"); if (habitCountWord(it)) sub.push(habitCountWord(it)); if (it.moved) sub.push("Moved for this day"); }
     if (it.recurring) sub.push("Repeats");
+    const len = !it.allDay && !it.point && typeof it.startMin === "number" && typeof it.endMin === "number" && it.endDate === it.date ? it.endMin - it.startMin : 0;
+    if (len > 0) sub.push(durText(len));
     const tickable = (it.source === "habit" && it.editable) || it.source === "task" || it.source === "plan" || (it.source === "goal" && !it.readOnly) || (it.source === "event" && C.isPoint(it.kind));
     const time = it.allDay ? "All day" : C.timeLabel(it.time);
     return '<div class="cal-ag-row" style="--cc:' + colorOf(it) + '" data-key="' + esc(it.key) + '">' +
-      '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
-        '<span class="cal-ag-time">' + esc(time) + (!it.allDay && !it.point && it.endTime ? '<small>' + esc(C.timeLabel(it.endTime)) + '</small>' : "") + '</span><span class="cal-ag-bar"></span>' +
-        '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span><span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
-        (it.conflict ? '<span class="cal-ag-flag">Overlaps</span>' : "") +
+      '<button type="button" class="cal-ag-open" data-cal="open" data-key="' + esc(it.key) + '" aria-label="' + esc(time + (!it.allDay && !it.point && it.endTime ? " " + C.timeLabel(it.endTime) : "") + " " + it.title + " " + sub.join(" \u00b7 ") + (it.conflict ? " Overlaps" : "") + ", " + dayName(it.date, { weekday: "short", month: "short", day: "numeric" }) + (it.completed ? ", done" : "")) + '">' +
+        '<span class="cal-ag-time">' + esc(time) + (!it.allDay && !it.point && it.endTime ? ' <small>' + esc(C.timeLabel(it.endTime)) + '</small>' : "") + '</span> <span class="cal-ag-bar"></span> ' +
+        '<span class="cal-ag-main"><span class="cal-ag-title' + (it.completed ? " cal-item-done" : "") + '">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span> <span class="cal-ag-sub">' + esc(sub.join(" · ")) + '</span></span>' +
+        (it.conflict ? ' <span class="cal-ag-flag">Overlaps</span>' : "") +
       '</button>' +
       (tickable ? '<button type="button" class="cal-tick' + (it.completed ? " done" : "") + '" data-cal="tick" data-key="' + esc(it.key) + '" aria-pressed="' + !!it.completed + '" aria-label="' + (it.completed ? "Done: " : "Mark done: ") + esc(it.title) + '">' + (it.completed ? "&#10003;" : "") + '</button>' : "") +
     '</div>';
@@ -308,14 +318,14 @@
     const it = seg.item, top = seg.startMin / 14.4, height = (seg.endMin - seg.startMin) / 14.4;
     const resizable = (it.source === "event" && !it.point && !it.recurring && it.date === it.endDate) || it.source === "plan";
     const when = it.allDay ? "" : C.timeLabel(it.time) + (it.point ? "" : " – " + C.timeLabel(it.endTime));
-    return '<button type="button" class="cal-ev' + (it.source === "habit" ? " cal-ev-habit" : "") + (it.completed ? " cal-item-done" : "") + (it.conflict ? " is-conflict" : "") + (seg.endMin - seg.startMin < 50 ? " is-short" : "") + '" style="--cc:' + colorOf(it) + ';--col:' + seg.col + ';--cols:' + seg.cols + ';top:' + top.toFixed(3) + '%;height:' + height.toFixed(3) + '%" data-cal="open" data-drag="1" data-key="' + esc(it.key) + '" aria-label="' + esc(itemLabel(it)) + '">' +
-      '<span class="t">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span><span class="m">' + esc(when) + '</span>' + (resizable ? '<span class="cal-resize" data-resize="1" data-key="' + esc(it.key) + '"></span>' : "") + '</button>';
+    return '<button type="button" class="cal-ev' + (it.source === "habit" ? " cal-ev-habit" : "") + (it.completed ? " cal-item-done" : "") + (it.conflict ? " is-conflict" : "") + (seg.endMin - seg.startMin < 50 ? " is-short" : "") + '" style="--cc:' + colorOf(it) + ';--col:' + seg.col + ';--cols:' + seg.cols + ';top:' + top.toFixed(3) + '%;height:' + height.toFixed(3) + '%" data-cal="open" data-drag="1" data-key="' + esc(it.key) + '" aria-label="' + esc(it.title + " " + when + ", " + itemLabel(it)) + '">' +
+      '<span class="t">' + (it.source === "habit" ? HABIT_ICON : "") + esc(it.title) + '</span> <span class="m">' + esc(when) + '</span>' + (resizable ? '<span class="cal-resize" data-resize="1" data-key="' + esc(it.key) + '"></span>' : "") + '</button>';
   }
 
   function gridHtml(dates, items) {
     const t = today(), cols = dates.length;
     let head = '<div class="cal-wk-days" style="--cols:' + cols + '"><div></div>' + dates.map(function (d) {
-      return '<button type="button" class="cal-wk-daybtn' + (d === t ? " is-today" : "") + '" data-cal="goto-day" data-date="' + d + '" aria-label="' + esc(dayName(d)) + '">' + (cols > 1 ? esc(dayName(d, { weekday: "short" })) : esc(dayName(d, { weekday: "long" }))) + '<b>' + Number(d.slice(8)) + '</b></button>';
+      return '<button type="button" class="cal-wk-daybtn' + (d === t ? " is-today" : "") + '" data-cal="goto-day" data-date="' + d + '" aria-label="' + esc((cols > 1 ? dayName(d, { weekday: "short" }) : dayName(d, { weekday: "long" })) + " " + Number(d.slice(8)) + ", " + dayName(d)) + '">' + (cols > 1 ? esc(dayName(d, { weekday: "short" })) : esc(dayName(d, { weekday: "long" }))) + ' <b>' + Number(d.slice(8)) + '</b></button>';
     }).join("") + '</div>';
     const strips = dates.map(function (d) { return C.allDayFor(items, d).sort(sortItems); });
     if (strips.some(function (s) { return s.length; })) {
@@ -339,7 +349,11 @@
     if (loadError) { stage.innerHTML = '<div class="cal-empty"><p>' + esc(loadError) + '</p></div>'; return; }
     const r = C.rangeFor(view, anchor, settings.weekStart), items = visibleItems(r.from, r.to).shown;
     if (view === "week" && !(selected >= r.from && selected <= r.to)) selected = today() >= r.from && today() <= r.to ? today() : r.from;   // the day a new thing goes on
+    let glance = "";
+    if (view === "week" && planner() && planner().glanceHtml) { const wd0 = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) wd0.push(d); glance = planner().glanceHtml(wd0, items); }
+    const gl = $("calGlance"); if (gl) { gl.innerHTML = glance; gl.classList.toggle("hidden", !glance); }
     if (view === "month") stage.innerHTML = monthHtml(items);
+    else if (view === "week" && weekStyle === "list") { const wl = []; for (let d = r.from; d <= r.to; d = C.addDays(d, 1)) wl.push(d); stage.innerHTML = weekListHtml(items, wl); }
     else if (view === "agenda") stage.innerHTML = agendaHtml(items);
     else if (view === "day" && dayStyle === "list") stage.innerHTML = planner() ? planner().dayHtml(anchor, dayItems(items, anchor)) : dayListHtml(items);
     else if (view === "week" && isPhone()) {
@@ -663,7 +677,17 @@
     withUndo("Duplicated “" + res.event.title + "”.", prev, res.events);
     openEdit({ id: res.event.id, occDate: res.event.date });
   }
-  function tick(key) {
+  // After a tick the row may move into the folded-away done list; focus then goes to that list's button so it is never lost.
+  function focusTick(key) {
+    window.setTimeout(function () {
+      const vis = function (e) { return e.offsetParent !== null; };
+      const t = Array.prototype.slice.call(document.querySelectorAll('[data-cal="tick"][data-key="' + key + '"]')).filter(vis)[0];
+      const f = t || Array.prototype.slice.call(document.querySelectorAll('#calStage [data-cdp="done-toggle"]')).filter(vis)[0];
+      if (f) f.focus();
+    }, 0);
+  }
+  function tick(key) { tickCore(key); focusTick(key); }
+  function tickCore(key) {
     const it = itemMap[key];
     if (!it) return;
     if (it.source === "task") {
@@ -691,7 +715,6 @@
     const r = h.setHabitDay(it.id, it.occDate, !it.completed);
     if (!r.ok) { core().showToast(r.error); render(); return; }
     render(); announce((it.completed ? "Not done: " : "Done: ") + it.title + ".");
-    focusSoon('[data-cal="tick"][data-key="' + it.key + '"]', true);
   }
   // A different time for one day only. The habit's usual time and days stay as they are.
   function setHabitTime(it, time, note) {
@@ -944,8 +967,10 @@
       rows: [
         { key: "search", label: "Search and filters", sub: "Find an event or task, or show only some kinds" },
         { key: "assist", label: "Planning assistant", sub: "Find time, plan a week, catch up" },
-        { key: "style", label: dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list" },
+        { key: "dups", label: "Review possible duplicates", sub: dupSub() },
+        { key: "style", label: view === "week" ? (weekStyle === "list" ? (isPhone() ? "Show the week one day at a time" : "Show the week as a grid") : "Show the week as an agenda") : (dayStyle === "list" ? "Show the day hour by hour" : "Show the day as a list") },
         { key: "habits", label: habitsShown() ? "Hide habits" : "Show habits", sub: habitsShown() ? "Take planned habits off the calendar and planner" : "Planned habits are hidden" },
+        { key: "routines", label: "Routines", sub: "Reusable sequences you put on days" },
         { key: "cats", label: "Time block categories", sub: "What your time blocks are for" },
         { key: "hours", label: "Planner hours", sub: "When your day starts and ends, and the daily limit" },
         { key: "agenda", label: "Next 30 days", sub: "Everything coming up, as a list" },
@@ -954,9 +979,11 @@
       ],
       onPick: function (key) {
         if (key === "search") { toolsOpen = true; render(); focusSoon("#calSearch"); }
+        else if (key === "dups") { if (window.JarvisPlanSync) window.JarvisPlanSync.openReview($("calMenuBtn")); }
         else if (key === "assist") { if (window.JarvisAssistant) window.JarvisAssistant.open($("calMenuBtn")); }
-        else if (key === "style") { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour."); }
+        else if (key === "style") toggleStyle();
         else if (key === "habits") { if (planner() && planner().setHabitsShown) { const on = !habitsShown(); planner().setHabitsShown(on); render(); announce(on ? "Habits are shown." : "Habits are hidden."); } }
+        else if (key === "routines") { if (window.JarvisPlanRoutines) window.JarvisPlanRoutines.openList($("calMenuBtn")); }
         else if (key === "cats") { if (planner()) planner().openCategories(); }
         else if (key === "hours") { if (planner()) planner().openHours(); }
         else if (key === "agenda") setView("agenda");
@@ -965,6 +992,7 @@
       }
     });
   }
+  function dupSub() { const n = window.JarvisPlanSync ? window.JarvisPlanSync.count() : 0; return n ? n + " possible " + (n === 1 ? "pair" : "pairs") + " to look at" : "Nothing looks duplicated"; }
   function openSettings() { modal = { kind: "settings", opener: document.activeElement }; showModal(); focusSoon("#calS_zone"); }
 
   function onModalClick(e) {
@@ -1059,6 +1087,16 @@
     else return;
   }
 
+  // The Hours/List button: for Day, the day hour by hour or as a list; for Week, the grid (a strip of days on a phone) or the agenda.
+  function toggleStyle() {
+    if (view === "week") {
+      weekStyle = weekStyle === "list" ? "default" : "list"; wantScroll = true; render();
+      announce(weekStyle === "list" ? "The week as an agenda." : (isPhone() ? "The week one day at a time." : "The week as a grid."));
+      return;
+    }
+    dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour.");
+  }
+
   function tickNow() {
     if (!ready || !panelActive() || modal || drag) return;
     if (today() !== lastDay) { render(); return; }
@@ -1088,7 +1126,7 @@
     $("calToday").addEventListener("click", goToday);
     $("calNew").addEventListener("click", function (e) { openAdd({ opener: e.currentTarget }); });
     const fab = $("calFab"); if (fab) fab.addEventListener("click", function (e) { openAdd({ opener: e.currentTarget }); });
-    const sbtn = $("calStyle"); if (sbtn) sbtn.addEventListener("click", function () { dayStyle = dayStyle === "list" ? "hours" : "list"; view = "day"; wantScroll = true; render(); announce(dayStyle === "list" ? "The day as a list." : "The day hour by hour."); });
+    const sbtn = $("calStyle"); if (sbtn) sbtn.addEventListener("click", toggleStyle);
     $("calMenuBtn").addEventListener("click", openCalMenu);
     Array.prototype.forEach.call(document.querySelectorAll(".cal-view-btn"), function (b) { b.addEventListener("click", function () { setView(b.getAttribute("data-view")); }); });
     $("calFilterBtn").addEventListener("click", function () { filtersOpen = !filtersOpen; renderToolbar(); });
@@ -1134,7 +1172,10 @@
     getEvents: function () { return events.slice(); }, getSettings: function () { return Object.assign({}, settings); }, zone: zone,
     // Every item from..to (dates in the view zone): events, your tasks and your personal goals, with no filters applied.
     // (Planned habits are not in this list: Home and the planning assistant read it, and habits are drawn from their own records on the Calendar and Day planner.)
-    itemsBetween: function (from, to) { return allItems(from, to).filter(function (it) { return it.source !== "habit"; }); },
+    itemsBetween: function (from, to) { return allItems(from, to, true).filter(function (it) { return it.source !== "habit"; }); },
+    // What the Overview shows: the same items, one row for one occurrence (a task that stands for a habit is the habit's row), habits included
+    // whether or not they are drawn on the Calendar. Dates in the view zone.
+    planItems: function (from, to) { return allItems(from, to, false, true); },
     // Open an event's popup from another screen (Home).
     openEvent: function (id, occDate) { if (C.byId(events, id)) { openEdit({ id: id, occDate: occDate }); focusSoon("#calF_title"); } },
     // Tick something shown on the schedule, from any screen.

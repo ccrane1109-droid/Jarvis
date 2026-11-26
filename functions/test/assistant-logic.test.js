@@ -428,3 +428,51 @@ test("free time: a time block from the weekly plan is time already spoken for, s
   const without = A.board(itemsOf(events), plan(), NOW).free(TODAY, 30).map((g) => [g.start, g.end]);
   assert.deepEqual(without, [[10 * 60 + 30, 11 * 60], [12 * 60, 17 * 60]], "without the block the afternoon is open");
 });
+
+/* ---------------- Planning overhaul: plan my day, simplify my day ---------------- */
+
+const tk = (id, text, o) => Object.assign({ id, text, date: TODAY, priority: "medium", time: "", completed: false, order: 0, createdAt: 1 }, o || {});
+
+test("plan my day: untimed tasks get the earliest free stretch long enough, most important first; nothing already planned is moved", () => {
+  const events = build([ev("Standup", TODAY, "11:00", "12:00")]);
+  const tasks = [tk("a", "Low thing", { priority: "low" }), tk("b", "Big one", { priority: "high" }), tk("c", "Has a time", { time: "15:00" }), tk("d", "Done", { completed: true }), tk("e", "Habit task", { habitId: "h1" }), tk("f", "Deadline", { kind: "deadline" })];
+  const r = frozen(A.planDay({ date: TODAY, tasks, items: itemsOf(events), plan: plan({ start: "09:00", end: "17:00", days: [3] }), now: NOW, order: ["b", "a"], minutes: { b: 90 }, why: { b: "High priority" } }));
+  assert.equal(r.total, 2, "only open, untimed, non-deadline, non-habit tasks");
+  assert.deepEqual(r.proposals.map((p) => p.title), ["Big one", "Low thing"], "the ranked order is kept");
+  assert.equal(r.proposals[0].move.to.time, "12:00", "before 11:00 there is only 30 minutes (10:30 on), so 90 minutes fits after the standup");
+  assert.equal(r.proposals[0].move.to.date, TODAY, "same day: it only gives the task a time");
+  assert.match(r.proposals[0].reason, /^High priority\. Free from/);
+  assert.equal(r.proposals[1].move.to.time, "10:30", "the 30-minute task takes the short gap before the standup; the big one's slot is not reused");
+  assert.equal(A.select(r.proposals, []).length, 0, "no ids approved, nothing chosen");
+});
+
+test("applying a plan-my-day proposal gives the task a time and keeps its day; an unchanged-since check still holds", () => {
+  const tasks = [tk("b", "Big one")];
+  const r = A.planDay({ date: TODAY, tasks, items: [], plan: plan({ start: "09:00", end: "17:00", days: [3] }), now: { date: TODAY, min: 8 * 60 } });
+  const out = A.applyTasks(tasks, r.proposals, [r.proposals[0].id]);
+  assert.equal(out.tasks[0].time, "09:00");
+  assert.equal(out.tasks[0].date, TODAY);
+  assert.equal(tasks[0].time, "", "the original list is untouched");
+  const stale = A.applyTasks([tk("b", "Big one", { date: "2026-11-05" })], r.proposals, [r.proposals[0].id]);
+  assert.equal(stale.applied.length, 0, "a task moved since I looked is skipped");
+});
+
+test("simplify my day: over the daily limit, the least important movable tasks are offered a later day with room; deadlines and timed ones stay", () => {
+  const tasks = [tk("1", "A", { priority: "high" }), tk("2", "B", { priority: "high" }), tk("3", "C", { priority: "medium" }), tk("4", "D", { priority: "low" }), tk("5", "E", { priority: "low" }), tk("6", "Dl", { priority: "low", kind: "deadline" }), tk("7", "Timed", { priority: "low", time: "14:00" })];
+  const r = frozen(A.simplifyDay({ date: TODAY, tasks, plan: plan({ start: "09:00", end: "17:00", days: [1, 2, 3, 4, 5], perDay: 4 }), now: NOW, order: ["1", "2", "3", "4", "5"] }));
+  assert.equal(r.count, 7);
+  assert.equal(r.over, 3, "7 open on a limit of 4");
+  assert.deepEqual(r.proposals.map((p) => p.title).sort(), ["C", "D", "E"].sort().filter((x) => ["D", "E", "C"].includes(x)), "the low ones first, then the medium one (the deadline and the timed task stay)");
+  assert.ok(r.proposals.every((p) => p.move.to.date === "2026-11-05" || p.move.to.date > TODAY));
+  assert.ok(r.proposals.every((p) => !p.move.to.time), "it moves the day only");
+  assert.ok(r.proposals.every((p) => /over your limit of 4/.test(p.reason)));
+});
+
+test("simplify my day: a day within the limit has nothing to suggest, and a day with nowhere to put things says so", () => {
+  const few = [tk("1", "A"), tk("2", "B")];
+  assert.deepEqual(A.simplifyDay({ date: TODAY, tasks: few, plan: plan({ perDay: 4 }), now: NOW }).proposals, []);
+  const many = [1, 2, 3, 4, 5].map((i) => tk(String(i), "T" + i, { kind: i > 2 ? "deadline" : undefined }));
+  const r = A.simplifyDay({ date: TODAY, tasks: many, plan: plan({ perDay: 2, days: [3] }), now: NOW });
+  assert.equal(r.over, 3);
+  assert.ok(r.unplaced >= 1, "deadlines cannot be moved, so some of the excess has nowhere to go: " + r.unplaced);
+});

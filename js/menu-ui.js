@@ -1,15 +1,15 @@
 /* ==========================================================================
    JARVIS — a small menu sheet shared by the simplified sections (Workout, Nutrition, Habits, Calendar, Strategy).
 
-   JarvisMenu.open({ title, rows, onPick, opener })
+   JarvisMenu.open({ title, rows, onPick, opener, onDismiss })
      rows: [{ key, label, sub?, minor?, danger?, current? }]  one tap picks a row: the sheet closes, then onPick(key) runs.
-   Escape, a tap outside, or the Close button dismiss it and put focus back where it was. Nothing is stored.
+   Escape, a tap outside, or the Close button dismiss it (onDismiss runs, if given) and put focus back where it was. Nothing is stored.
    ========================================================================== */
 
 (function () {
   "use strict";
 
-  let overlay = null, returnFocus = null, handler = null;
+  let overlay = null, returnFocus = null, handler = null, onDismiss = null, picked = false;
 
   function esc(v) {
     return String(v === undefined || v === null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
@@ -19,9 +19,11 @@
     if (!overlay) return;
     document.removeEventListener("keydown", onKey, true);
     overlay.parentNode && overlay.parentNode.removeChild(overlay);
-    overlay = null; handler = null;
+    const dismiss = !picked && onDismiss ? onDismiss : null;
+    overlay = null; handler = null; onDismiss = null; picked = false;
     if (restore !== false && returnFocus && returnFocus.focus && document.contains(returnFocus)) returnFocus.focus();
     returnFocus = null;
+    if (dismiss) window.setTimeout(dismiss, 0);      // closed without choosing a row
   }
 
   function onKey(e) {
@@ -40,6 +42,7 @@
     const rows = (o && o.rows) || [];
     returnFocus = (o && o.opener) || document.activeElement;
     handler = o && o.onPick;
+    onDismiss = o && typeof o.onDismiss === "function" ? o.onDismiss : null; picked = false;
     overlay = document.createElement("div");
     overlay.className = "modal-overlay sheet-overlay sm-overlay";
     overlay.setAttribute("role", "dialog");
@@ -57,6 +60,7 @@
       const b = e.target.closest("[data-sm-key]");
       if (!b) return;
       const key = b.getAttribute("data-sm-key"), fn = handler, back = returnFocus;
+      picked = true;
       close(false);
       // Put focus back on the button that opened the menu before the chosen action runs, so a dialog it opens
       // remembers that button and gives focus back to it when it closes (not to the page behind it).

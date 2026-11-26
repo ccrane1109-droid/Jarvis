@@ -163,20 +163,60 @@
     if (est >= 60) add("Substantial work (about " + (Math.round(est / 6) / 10) + " h)", 4);
     if (!linked && task.priority !== "high" && (!est || est <= 30)) add("A small routine task that isn't tied to a goal", -8);
     if (est && free !== null && est > free) add("Needs about " + (Math.round(est / 6) / 10) + " h but only " + (Math.round(free / 6) / 10) + " h is free this week", -10);
-    return { parts: parts, score: parts.reduce(function (s, p) { return s + p.points; }, 0), linked: linked, chain: chain, estMin: est };
+    // Is there anything real to rank it by? A task with only the default priority and nothing else (no goal, deadline, lateness or estimate) is
+    // not ranked by guesswork: it says so.
+    const enough = linked || task.priority === "high" || task.priority === "low" || lateTask(task, ctx) || est > 0;
+    return { parts: parts, score: parts.reduce(function (s, p) { return s + p.points; }, 0), linked: linked, chain: chain, estMin: est, category: categoryOf(task, chain), enough: enough };
   }
+
+  /* ---------------- what kind of thing a task is ---------------- */
+  // From the words in the category you gave it (a task has no category until you give one). A task that stands for a habit is a routine; a task
+  // tied to your plan and with no other category is strategic; anything else with a category is personal. "" means no category is set.
+  const CATEGORIES = { strategic: "Strategic", school: "School", business: "Business", personal: "Personal", routine: "Routine", leisure: "Leisure", rest: "Rest" };
+  const CATEGORY_WORDS = [
+    ["rest", /\b(rest|sleep|nap|relax|recover)/],
+    ["leisure", /\b(leisure|fun|game|gaming|friends|movie|party|hang ?out|hobby)/],
+    ["school", /\b(school|homework|study|class|exam|test|quiz|essay|assignment|lab)/],
+    ["business", /\b(business|gratiel|client|order|invoice|shipping|customer|sales|marketing|inventory|supplier)/]
+  ];
+  function categoryOf(task, chain) {
+    if (task && task.habitId) return "routine";
+    const text = String((task && task.category) || "").toLowerCase();
+    for (let i = 0; i < CATEGORY_WORDS.length; i++) if (CATEGORY_WORDS[i][1].test(text)) return CATEGORY_WORDS[i][0];
+    if (chain && chain.length) return "strategic";
+    return text.trim() ? "personal" : "";
+  }
+  // Rest and leisure are protected: they are not something to push to the top of a to-do list, so they are not ranked unless asked for.
+  function isProtected(cat) { return cat === "rest" || cat === "leisure"; }
 
   function candidates(ctx) {
     const dates = W.weekDates(ctx.weekStart), end = dates[6];
-    return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date <= end && (t.date >= ctx.today || lateTask(t, ctx)) && t.text && !PL.isArchived(ctx.links, t.id) && !(ctx.model && ctx.model.nodeOfTask(t.id) && ctx.model.nodeOfTask(t.id).status === "dropped"); });
+    return arr(ctx.tasks).filter(function (t) { return t && !t.completed && PL.isDate(t.date) && t.date <= end && (t.date >= ctx.today || lateTask(t, ctx)) && t.text && !PL.isArchived(ctx.links, t.id) && !(ctx.model && ctx.model.nodeOfTask(t.id) && ctx.model.nodeOfTask(t.id).status === "dropped") && !t.habitId && (ctx.includeProtected || !isProtected(categoryOf(t, ctx.model ? ctx.model.chainOfTask(t.id) : []))); });
   }
-  // Every candidate, best first, each with its reasons.
+  // Every candidate, best first, each with its reasons. Ties are settled the same way every time: the earlier day, then the higher priority, then the
+  // shorter estimate (an unknown one last), then your own order, then when it was made, then its id.
+  function shortReason(e) {
+    if (!e.enough) return "Not enough information to rank it";
+    const top = e.parts.filter(function (p) { return p.points > 0; }).sort(function (a, b) { return b.points - a.points; }).slice(0, 2).map(function (p) { return p.label; });
+    return top.length ? top.join(", ") : "Medium priority";
+  }
   function rankTasks(ctx) {
     if (ctx._rank) return ctx._rank;                       // worked out once per context (a screen asks several times)
     const free = ctx.freeMin !== undefined ? ctx.freeMin : freeMinutes(ctx);
-    ctx._rank = candidates(ctx).map(function (t) { const e = explain(t, ctx, free); return { task: t, score: e.score, parts: e.parts, linked: e.linked, chain: e.chain, estMin: e.estMin }; })
-      .sort(function (a, b) { return b.score - a.score || (a.task.date < b.task.date ? -1 : a.task.date > b.task.date ? 1 : 0) || (a.task.createdAt || 0) - (b.task.createdAt || 0); });
+    ctx._rank = candidates(ctx).map(function (t) { const e = explain(t, ctx, free); return { task: t, score: e.score, parts: e.parts, linked: e.linked, chain: e.chain, estMin: e.estMin, category: e.category, enough: e.enough, short: shortReason(e) }; })
+      .sort(function (a, b) {
+        return b.score - a.score || (a.task.date < b.task.date ? -1 : a.task.date > b.task.date ? 1 : 0) || (PRIO[b.task.priority] || 2) - (PRIO[a.task.priority] || 2) ||
+          (a.estMin || 1e9) - (b.estMin || 1e9) || (a.task.order || 0) - (b.task.order || 0) || (a.task.createdAt || 0) - (b.task.createdAt || 0) || (a.task.id < b.task.id ? -1 : a.task.id > b.task.id ? 1 : 0);
+      });
     return ctx._rank;
+  }
+  // The full "Why?" for one ranked task, as lines of text: its kind, each reason with its points, the total, and how ties are settled.
+  function whyLines(r) {
+    const lines = [r.category ? "Kind: " + CATEGORIES[r.category] : "Kind: not set (give it a category to say what it is for)"];
+    if (!r.enough) lines.push("Not enough information to rank it: it has no goal, no deadline, no estimate and only the usual priority.");
+    r.parts.forEach(function (p) { lines.push(p.label + " (" + (p.points > 0 ? "+" : "") + p.points + ")"); });
+    lines.push("Total: " + r.score + " points. Equal scores go to the earlier day, then the higher priority, then the shorter estimate.");
+    return lines;
   }
   // Three picks. They are spread out (a second pick from the same milestone loses 6 points), and at most one is a task that isn't tied to
   // the plan unless there aren't enough that are.
@@ -566,7 +606,7 @@
 
   return {
     categoryKind: categoryKind, workoutMinutesByDate: workoutMinutesByDate, timeByCategory: timeByCategory, gratielMinutes: gratielMinutes, freeMinutes: freeMinutes,
-    rankTasks: rankTasks, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
+    rankTasks: rankTasks, whyLines: whyLines, categoryOf: categoryOf, isProtected: isProtected, CATEGORIES: CATEGORIES, topThreePicks: topThreePicks, upcoming: upcoming, dashboard: dashboard, weekTotals: weekTotals, weeklySeries: weeklySeries,
     financeSeries: financeSeries, lastMonths: lastMonths, timeAllocation: timeAllocation, allocationSeries: allocationSeries, KIND_GROUPS: KIND_GROUPS, goalProgress: goalProgress, overdueCount: overdueCount, weekReview: weekReview, monthReview: monthReview, quarterOverview: quarterOverview, monthOverview: monthOverview, monthOutcomes: monthOutcomes, monthTaskLists: monthTaskLists, applyProposal: applyProposal, proposals: proposals, hours: hours
   };
 });

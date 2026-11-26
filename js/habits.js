@@ -35,6 +35,8 @@
 
   const TK = window.JarvisTaskKind;
   const HL = window.JarvisHabitLogic;   // counting, streaks and checking a habit off on any day (habit-logic.js)
+  const HS = window.JarvisHabitSchedule; // which days a habit is for, and what each day of it means: done, skipped, missed, unscheduled (habit-schedule-logic.js)
+  const PC = window.JarvisPlanningCore; // a task that stands for a habit on one day shares that habit's completion (planning-core-logic.js)
   const HP = window.JarvisHabitPlan;    // a habit's place on the Day planner and Calendar: time, days, one-day moves (habit-plan-logic.js)
 
   const LS_TASKS = "jarvisTasks";
@@ -120,6 +122,7 @@
       createdAt: raw.createdAt || Date.now()
     };
     if (HP) Object.assign(h, HP.fields(raw));   // where it sits on the planner (optional; a habit made before this has none of it)
+    if (HS) Object.assign(h, HS.fields(raw));   // days skipped on purpose, pauses and archiving (optional; a habit made before this has none of it)
     if (raw.completions && typeof raw.completions === "object" && !Array.isArray(raw.completions)) {
       Object.keys(raw.completions).forEach(function (d) {
         const n = Number(raw.completions[d]);
@@ -202,6 +205,8 @@
     $("taskTime").value = "";
     $("taskCategory").value = "";
     $("taskGoalSelect").value = "";
+    taskDupFound = [];
+    if ($("taskDupRow")) { $("taskDupRow").classList.add("hidden"); $("taskDupSelect").innerHTML = ""; }
     if ($("taskDeadline")) $("taskDeadline").checked = true;
     renderTaskPlanSelect("");
     $("taskFormTitle").textContent = "Add Task";
@@ -227,6 +232,23 @@
       return '<option value="' + core.escapeHtml(g.id) + '">' + core.escapeHtml(g.name) + '</option>';
     }).join("");
     if (goals.some(function (g) { return g.id === current; })) sel.value = current;
+  }
+
+  // "Looks like something you already have" under the Task field and the Habit name: shown while typing, and a choice is needed before saving.
+  let taskDupFound = [], habitDupFound = [];
+  function taskDupEls() { return { row: $("taskDupRow"), select: $("taskDupSelect"), note: $("taskDupNote") }; }
+  function habitDupEls() { return { row: $("habitDupRow"), select: $("habitDupSelect"), note: $("habitDupNote") }; }
+  function refreshTaskDup() {
+    const PS = window.JarvisPlanSync, els = taskDupEls();
+    if (!PS || !els.row) return;
+    if (taskFormEditId) { els.row.classList.add("hidden"); taskDupFound = []; return; }
+    taskDupFound = PS.fill(els, { type: "task", name: $("taskText").value, date: selectedDate, time: $("taskTime").value });
+  }
+  function refreshHabitDup() {
+    const PS = window.JarvisPlanSync, els = habitDupEls();
+    if (!PS || !els.row) return;
+    if (habitFormEditId) { els.row.classList.add("hidden"); habitDupFound = []; return; }
+    habitDupFound = PS.fill(els, { type: "habit", name: $("habitName").value });
   }
 
   function handleTaskAddToggle() {
@@ -267,11 +289,22 @@
       }
     } else {
       if (TK) raw.kind = wantDeadline ? "deadline" : "scheduled";
+      refreshTaskDup();
+      const decision = window.JarvisPlanSync ? window.JarvisPlanSync.decide(taskDupEls(), taskDupFound) : { action: "create" };
+      if (!decision) { core.showToast("This looks like something you already have. Choose how to add it."); if ($("taskDupSelect")) $("taskDupSelect").focus(); return; }
+      if (decision.action === "link") ensureSnapshot();
       const repeatDates = Array.prototype.slice.call($("taskRepeatDaysRow").querySelectorAll(".day-picker-btn.selected"))
         .map(function (b) { return b.getAttribute("data-date"); });
       const datesToCreate = [selectedDate].concat(repeatDates.filter(function (d) { return d !== selectedDate; }));
       datesToCreate.forEach(function (d) {
+        if (decision.action === "existing" && d === selectedDate) return;      // the one you already have is kept; nothing new is added for this day
         const made = Object.assign({}, raw, { id: core.uid("task"), date: d, completed: false, order: nextOrderForDate(d), createdAt: Date.now() });
+        if (decision.action === "link" && habitAllowsLink(decision.habitId, d)) {
+          made.habitId = decision.habitId;
+          const hb = habits.filter(function (x) { return x.id === decision.habitId; })[0];
+          if (hb && HL.isDone(hb, d)) made.completed = true;      // the habit was already done that day
+        }
+        if (decision.action === "separate" && decision.ids.length && d === selectedDate) made.separate = decision.ids.slice();
         tasks.push(made);
         madeIds.push(made.id);
       });
@@ -282,7 +315,7 @@
     renderTaskList();
     renderDaySelectorPills();
     renderTodayOverview();
-    core.showToast(taskFormEditId ? "Task updated." : "Task added.");
+    core.showToast(taskFormEditId ? "Task updated." : madeIds.length ? "Task added." : "Kept the one you already have.");
   }
 
   function taskMenuHtml(t) {
@@ -385,7 +418,7 @@
     const checkBtn = e.target.closest(".task-check-btn");
     if (checkBtn) {
       const t = tasks.find(function (tt) { return tt.id === checkBtn.getAttribute("data-id"); });
-      if (t) { t.completed = !t.completed; saveTasks(); renderTaskList(); renderTodayOverview(); }
+      if (t) setTasks(tasks.map(function (x) { return x.id === t.id ? Object.assign({}, x, { completed: !x.completed }) : x; }));
       return;
     }
     const menuBtn = e.target.closest(".task-menu-btn");
@@ -475,6 +508,8 @@
     $("habitName").value = "";
     $("habitTargetDays").value = "7";
     $("habitDailyTarget").value = "1";
+    habitDupFound = [];
+    if ($("habitDupRow")) { $("habitDupRow").classList.add("hidden"); $("habitDupSelect").innerHTML = ""; }
     setPlanForm(null);
     $("habitFormTitle").textContent = "Add a Habit";
     $("habitSubmitBtn").textContent = "Add Habit";
@@ -499,25 +534,26 @@
   function planFormDays() {
     return Array.prototype.filter.call($("habitPlanDays").querySelectorAll("input"), function (i) { return i.checked; }).map(function (i) { return Number(i.value); });
   }
-  // Shows the time and days a habit already has on the planner (null: none). The days appear once there is a time.
+  // Shows the time and days a habit already has (null: none). The days are for every habit, with or without a planner time: they say which days it is for.
   function setPlanForm(h) {
-    const p = h && HP ? HP.plan(h) : null;
+    const p = h && HP ? HP.plan(h) : null, sc = h && HS ? HS.scheduleOf(h) : null;
     $("habitPlanTime").value = p ? p.time : "";
-    $("habitPlanDays").innerHTML = dayChipsHtml(p ? p.days : []);
+    $("habitPlanDays").innerHTML = dayChipsHtml(sc && sc.mode === "days" ? sc.days : p ? p.days : []);
     syncPlanForm();
   }
   function syncPlanForm() {
-    const has = !!$("habitPlanTime").value, sevenADay = clampInt($("habitTargetDays").value, 1, 7, 7) === 7;
-    $("habitPlanDaysWrap").classList.toggle("hidden", !has);
+    const has = !!$("habitPlanTime").value, target = clampInt($("habitTargetDays").value, 1, 7, 7), sevenADay = target === 7;
     if (has && !planFormDays().length && sevenADay) Array.prototype.forEach.call($("habitPlanDays").querySelectorAll("input"), function (i) { i.checked = true; });
-    $("habitPlanDaysHint").textContent = sevenADay ? "" : "This habit's goal is " + clampInt($("habitTargetDays").value, 1, 7, 7) + " days a week. Choose the days you plan to do it.";
+    const chosen = planFormDays().length;
+    $("habitPlanDaysHint").textContent = !chosen ? (sevenADay ? "Every day." : "Leave empty for " + target + " days a week on any days, or choose the days it is for.")
+      : chosen !== target && chosen < 7 ? "You chose " + chosen + " day" + (chosen === 1 ? "" : "s") + " but the target is " + target + " a week. Change one of them so they match." : "";
+    $("habitPlanDaysHint").classList.toggle("hb-warn", chosen !== target && chosen > 0 && chosen < 7);
   }
-  // -> { ok, time, days, from } | { ok: false, error }. A habit with no time is off the planner.
+  // -> { ok, time, days, from } | { ok: false, error }. A habit with no time is off the planner (its days, if chosen, are still kept).
   function readPlanForm(existing) {
-    const time = $("habitPlanTime").value;
-    if (!time) return { ok: true, time: "" };
+    const time = $("habitPlanTime").value, days = planFormDays();
+    if (!time) return { ok: true, time: "", days: days };
     if (!HP || !HP.isTime(time)) return { ok: false, error: "Choose a time for the planner." };
-    const days = planFormDays();
     if (!days.length) return { ok: false, error: "Choose at least one day for the planner." };
     const cur = existing && HP.plan(existing);
     return { ok: true, time: time, days: days, from: cur && cur.from ? cur.from : window.JarvisCore.todayISODate() };
@@ -529,6 +565,8 @@
     if (!r.ok) return;
     ["planTime", "planDays", "planFrom", "planMoves"].forEach(function (k) { delete h[k]; });
     Object.assign(h, HP.fields(r.habits[0]));
+    // days with no time: the habit is for those days but is not on the planner
+    if (!plan.time && plan.days && plan.days.length && plan.days.length < 7) h.planDays = HP.cleanDays(plan.days);
   }
 
   function handleHabitFormSubmit(e) {
@@ -539,8 +577,16 @@
     const targetDays = clampInt($("habitTargetDays").value, 1, 7, 7);
     const dailyTarget = clampInt($("habitDailyTarget").value, 1, 50, 1);
     const existing = habitFormEditId ? habits.find(function (hh) { return hh.id === habitFormEditId; }) : null;
+    let newHabitId = "";
     const plan = readPlanForm(existing);
     if (!plan.ok) { core.showToast(plan.error); return; }
+    let habitDecision = { action: "create" };
+    if (!habitFormEditId) {
+      refreshHabitDup();
+      habitDecision = window.JarvisPlanSync ? window.JarvisPlanSync.decide(habitDupEls(), habitDupFound) : { action: "create" };
+      if (!habitDecision) { core.showToast("This looks like something you already have. Choose how to add it."); if ($("habitDupSelect")) $("habitDupSelect").focus(); return; }
+      if (habitDecision.action === "existing") { resetHabitForm(); core.showToast("Kept the habit you already have."); return; }
+    }
     if (habitFormEditId) {
       const h = existing;
       if (h) { h.name = name; h.targetDays = targetDays; h.dailyTarget = dailyTarget; applyPlanToHabit(h, plan); }
@@ -548,8 +594,18 @@
       const made = { id: core.uid("habit"), name: name, targetDays: targetDays, dailyTarget: dailyTarget, completions: {}, createdAt: Date.now() };
       applyPlanToHabit(made, plan);
       habits.push(made);
+      newHabitId = made.id;
     }
     saveHabits();
+    // what was chosen for tasks that look like this habit: link them to it, or remember they are meant to be separate
+    if (newHabitId && PC && habitDecision.ids && habitDecision.ids.length) {
+      if (habitDecision.action === "linkall") linkTasksToHabit(habitDecision.ids, newHabitId);
+      else if (habitDecision.action === "separate") {
+        let t = tasks;
+        habitDecision.ids.forEach(function (id) { const r = PC.markSeparate(t, id, newHabitId); if (r.ok) t = r.tasks; });
+        if (t !== tasks) { tasks = t; saveTasks(); renderTaskList(); }
+      }
+    }
     resetHabitForm();
     renderAllHabitViews();
     core.showToast(habitFormEditId ? "Habit updated." : "Habit added.");
@@ -602,6 +658,36 @@
     return "";
   }
 
+  const PART_LABEL = { morning: "Morning", afternoon: "Afternoon", evening: "Evening", anytime: "Anytime" };
+  const todayUi = { doneOpen: {}, flexOpen: false };
+  function timeText12(t) { if (!/^\d\d:\d\d$/.test(t || "")) return ""; const h = Number(t.slice(0, 2)); return ((h + 11) % 12 + 1) + ":" + t.slice(3) + (h < 12 ? " AM" : " PM"); }
+
+  // One compact row: the tick (or the + and - of a counting habit), its name and one short line, and a menu for skip / pause.
+  function habitRowHtml(row, date, today) {
+    const h = row.habit, e = window.JarvisCore.escapeHtml;
+    const editable = HL.canEdit(date, today) && row.state !== "skipped";
+    const dis = editable ? "" : " disabled";
+    const target = row.target, count = row.count, done = row.done;
+    const dayWord = HL.dayLabel(date, today);
+    const week = HS ? HS.weekProgress(h, HS.mondayOf(date), today) : null;
+    const bits = [];
+    if (row.time) bits.push(timeText12(row.time));
+    if (target > 1) bits.push(count + " of " + target);
+    if (row.state === "skipped") bits.push("Skipped");
+    else if (row.state === "missed") bits.push("Missed");
+    else if (week && week.mode !== "flexible" && week.target > 1) bits.push(week.done + " of " + week.target + " this week");
+    const streak = computeCurrentStreak(h);
+    if (streak >= 3 && row.state !== "skipped") bits.push(streak + "-day streak");
+    const control = target > 1
+      ? '<div class="stepper-row"><button type="button" class="stepper-btn habit-decrement-btn" data-id="' + e(h.id) + '" aria-label="Decrease ' + e(h.name) + ' for ' + e(dayWord) + '"' + dis + '>&minus;</button>' +
+        '<span class="habit-card-count-value">' + count + '</span>' +
+        '<button type="button" class="stepper-btn habit-increment-btn" data-id="' + e(h.id) + '" aria-label="Increase ' + e(h.name) + ' for ' + e(dayWord) + '"' + dis + '>+</button></div>'
+      : '<button type="button" class="habit-toggle-btn' + (done ? " done" : "") + '" data-id="' + e(h.id) + '" aria-pressed="' + done + '" aria-label="' + e(h.name) + ', ' + e(dayWord) + (done ? ", done" : ", not done") + '"' + dis + '>' + (done ? "&#10003;" : "") + '</button>';
+    return '<div class="habit-card habit-row hb-r' + (row.state === "skipped" ? " is-skipped" : "") + '" data-id="' + e(h.id) + '">' +
+      '<div class="habit-row-main"><span class="habit-card-name">' + e(h.name) + '</span><span class="habit-row-meta">' + e(bits.join(" · ")) + '</span></div>' + control +
+      '<button type="button" class="btn-icon habit-menu-btn" data-id="' + e(h.id) + '" aria-haspopup="dialog" aria-label="Options for ' + e(h.name) + '">&#8942;</button></div>';
+  }
+
   function renderTodayHabitsList() {
     const container = $("todayHabitsList");
     const note = $("habitsDayNote");
@@ -609,11 +695,51 @@
     const today = window.JarvisCore.todayISODate();
     if (title) title.textContent = selectedDate === today ? "Habits" : "Habits \u2014 " + parseISODateLocal(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
     if (note) { const html = habitsDayNoteHtml(); note.innerHTML = html; note.classList.toggle("hidden", !html); }
-    if (habits.length === 0) {
-      container.innerHTML = '<div class="empty-state">No habits yet. Add one in Routines.</div>';
+    const live = habits.filter(function (h) { return !(HS && HS.isArchived(h)); });
+    if (live.length === 0) {
+      container.innerHTML = '<div class="empty-state">' + (habits.length ? "All your habits are archived. Bring one back in Routines." : "No habits yet. Add one in Routines.") + '</div>';
       return;
     }
-    container.innerHTML = habits.map(habitCardHtml).join("");
+    if (!HS) { container.innerHTML = live.map(habitCardHtml).join(""); return; }
+    const t = HS.today(habits, selectedDate, today), e = window.JarvisCore.escapeHtml;
+    const bar = t.counts.total ? '<div class="hb-prog"><span class="hb-prog-t">' + t.counts.done + ' of ' + t.counts.total + ' done' + (t.counts.skipped ? ' · ' + t.counts.skipped + ' skipped' : '') + '</span><span class="hb-prog-bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + t.counts.total + '" aria-valuenow="' + t.counts.done + '" aria-label="Habits done"><span style="width:' + Math.round(100 * t.counts.done / t.counts.total) + '%"></span></span></div>' : "";
+    let html = bar;
+    ["morning", "afternoon", "evening", "anytime"].forEach(function (g) {
+      const rows = t.groups[g];
+      if (!rows.length) return;
+      const open = rows.filter(function (r) { return !r.done; }), doneRows = rows.filter(function (r) { return r.done; });
+      html += '<section class="hb-grp" aria-label="' + PART_LABEL[g] + '"><h3 class="hb-grp-h">' + PART_LABEL[g] + '<span class="hb-grp-n">' + doneRows.length + '/' + rows.length + '</span></h3>' +
+        open.map(function (r) { return habitRowHtml(r, selectedDate, today); }).join("") +
+        (doneRows.length ? '<details class="hb-done-fold" data-g="' + g + '"' + (todayUi.doneOpen[g] ? " open" : "") + '><summary>Done · ' + doneRows.length + '</summary>' + doneRows.map(function (r) { return habitRowHtml(r, selectedDate, today); }).join("") + '</details>' : "") + '</section>';
+    });
+    if (t.flexible.length) {
+      html += '<details class="hb-flex" id="hbFlex"' + (todayUi.flexOpen ? " open" : "") + '><summary>Flexible this week <span class="hb-grp-n">' + t.flexible.filter(function (r) { return r.week.done >= r.week.target; }).length + '/' + t.flexible.length + '</span></summary>' +
+        '<p class="field-hint">These are not tied to a day: any day this week counts, and none is missed.</p>' +
+        t.flexible.map(function (r) { return habitRowHtml(Object.assign({}, r, { state: r.done ? "done" : "pending" }), selectedDate, today).replace('</span></div><', '</span><span class="habit-row-meta hb-wk">' + r.week.done + ' of ' + r.week.target + ' this week</span></div><'); }).join("") + '</details>';
+    }
+    if (t.paused.length) html += '<p class="hb-paused">Paused: ' + t.paused.map(function (r) { return '<button type="button" class="btn-link habit-resume-btn" data-id="' + e(r.habit.id) + '">' + e(r.habit.name) + ' (resume)</button>'; }).join(" ") + '</p>';
+    container.innerHTML = html || '<div class="empty-state">Nothing is scheduled for this day. Flexible habits are in Routines.</div>';
+  }
+
+  // The menu on one habit of the Today list: skip or unskip this day, pause, edit.
+  function openHabitDayMenu(id, opener) {
+    const h = habits.filter(function (x) { return x.id === id; })[0];
+    if (!h || !HS) return;
+    const today = window.JarvisCore.todayISODate(), date = selectedDate, skipped = HS.isSkipped(h, date);
+    const rows = [];
+    if (HL.isDone(h, date)) rows.push({ key: "undo", label: "Undo today’s tick", sub: "Mark " + h.name + " not done for this day" });
+    else if (HS.scheduledOn(h, date) || skipped) rows.push({ key: skipped ? "unskip" : "skip", label: skipped ? "Stop skipping this day" : "Skip this day", sub: skipped ? "Put it back on the day" : "On purpose: it is not counted as missed" });
+    rows.push({ key: "pause", label: "Pause this habit", sub: "Its days are left out until you resume" });
+    rows.push({ key: "edit", label: "Edit habit", sub: "Days, time, target, reminders" });
+    window.JarvisMenu.open({
+      title: h.name, opener: opener, rows: rows,
+      onPick: function (key) {
+        if (key === "undo") { applyHabitChange(id, function (list, t) { return HL.setDone(list, id, date, false, t); }); }
+        else if (key === "skip" || key === "unskip") { const r = skipHabitDay(id, date, key === "skip"); window.JarvisCore.showToast(r.ok ? (key === "skip" ? "Skipped. It won't count as missed." : "Back on the day.") : r.error); }
+        else if (key === "pause") { const r = pauseHabit(id, today, ""); window.JarvisCore.showToast(r.ok ? h.name + " is paused. Resume it any time." : r.error); }
+        else if (key === "edit") editHabit(id);
+      }
+    });
   }
 
   // Checks one habit off (or a count up or down) for the picked day, if that day has happened.
@@ -629,12 +755,19 @@
       window.JarvisCore.showToast("That couldn't be saved. The browser may be full or blocking storage.");
       return false;
     }
+    followHabits(prev);
     renderAllHabitViews();
     return true;
   }
 
   function handleTodayHabitsClick(e) {
     const date = selectedDate;
+    const menuBtn = e.target.closest(".habit-menu-btn");
+    if (menuBtn) { openHabitDayMenu(menuBtn.getAttribute("data-id"), menuBtn); return; }
+    const resumeBtn = e.target.closest(".habit-resume-btn");
+    if (resumeBtn) { const r = resumeHabit(resumeBtn.getAttribute("data-id")); window.JarvisCore.showToast(r.ok ? "Resumed." : r.error); return; }
+    const fold = e.target.closest(".hb-done-fold > summary, #hbFlex > summary");
+    if (fold) { const d = fold.parentNode; window.setTimeout(function () { if (d.id === "hbFlex") todayUi.flexOpen = d.open; else todayUi.doneOpen[d.getAttribute("data-g")] = d.open; }, 0); return; }
     const incBtn = e.target.closest(".habit-increment-btn");
     if (incBtn) { const id = incBtn.getAttribute("data-id"); applyHabitChange(id, function (list, today) { return HL.adjust(list, id, date, 1, today); }); return; }
     const decBtn = e.target.closest(".habit-decrement-btn");
@@ -661,6 +794,16 @@
     else if (btn.getAttribute("data-hb") === "fill-yesterday") selectDate(addDaysISO(today, -1));
   }
 
+  function scheduleMeta(h) {
+    const sc = HS ? HS.scheduleOf(h) : null, e = window.JarvisCore.escapeHtml, bits = [];
+    if (sc && sc.mode === "days") bits.push(HP ? HP.daysLabel(sc.days) : sc.days.length + " days");
+    else if (sc && sc.mode === "flexible") bits.push(sc.perWeek + " days a week, any days");
+    else bits.push("Every day");
+    if (h.dailyTarget > 1) bits.push(h.dailyTarget + " a day");
+    const p = HP ? HP.plan(h) : null;
+    if (p) bits.push(timeText12(p.time));
+    return e(bits.join(" · "));
+  }
   function renderHabitManageList() {
     const core = window.JarvisCore;
     const container = $("habitManageList");
@@ -668,23 +811,76 @@
       container.innerHTML = '<div class="empty-state">No habits yet. Add one above to start tracking.</div>';
       return;
     }
-    container.innerHTML = habits.map(function (h) {
-      const streak = computeCurrentStreak(h);
+    const today = core.todayISODate();
+    const live = habits.filter(function (h) { return !(HS && HS.isArchived(h)); }), archived = habits.filter(function (h) { return HS && HS.isArchived(h); });
+    const row = function (h) {
+      const streak = computeCurrentStreak(h), warn = HS ? HS.mismatch(h) : null, paused = HS && HS.isPaused(h, today), e = core.escapeHtml;
       return (
-        '<div class="list-item" data-id="' + core.escapeHtml(h.id) + '">' +
+        '<div class="list-item hb-mrow" data-id="' + e(h.id) + '">' +
           '<div class="list-item-row">' +
             '<div class="list-item-main">' +
-              '<span class="list-item-title">' + core.escapeHtml(h.name) + '</span>' +
-              '<span class="list-item-meta">Target ' + h.targetDays + 'x/week' + (h.dailyTarget > 1 ? " &middot; " + h.dailyTarget + "/day" : "") + " &middot; " + streak + ' day streak' + plannerMeta(h) + '</span>' +
+              '<span class="list-item-title">' + e(h.name) + (paused ? ' <span class="badge badge-neutral">Paused</span>' : '') + (HS && HS.isArchived(h) ? ' <span class="badge badge-neutral">Archived</span>' : '') + '</span>' +
+              '<span class="list-item-meta">' + scheduleMeta(h) + (streak >= 2 ? ' &middot; ' + streak + '-day streak' : '') + '</span>' +
+              (warn ? '<span class="list-item-meta hb-warn">' + e(warn.text) + '</span>' : '') +
             '</div>' +
-            '<div class="list-item-actions">' +
-              '<button type="button" class="btn-icon habit-edit-btn" data-id="' + core.escapeHtml(h.id) + '">Edit</button>' +
-              '<button type="button" class="btn-icon danger habit-delete-btn" data-id="' + core.escapeHtml(h.id) + '">Delete</button>' +
-            '</div>' +
+            '<div class="list-item-actions"><button type="button" class="btn-icon habit-more-btn" data-id="' + e(h.id) + '" aria-haspopup="dialog" aria-label="Options for ' + e(h.name) + '">&#8942;</button></div>' +
           '</div>' +
         '</div>'
       );
-    }).join("");
+    };
+    container.innerHTML = live.map(row).join("") + (archived.length ? '<details class="hb-archived"><summary>Archived · ' + archived.length + '</summary>' + archived.map(row).join("") + '</details>' : "");
+  }
+
+  function editHabit(id) {
+    const h = habits.find(function (hh) { return hh.id === id; });
+    if (!h) return;
+    const rb = $("habitsSubNavRoutines"); if (rb && !$("habits-routines").classList.contains("active")) rb.click();
+    habitFormEditId = h.id;
+    $("habitName").value = h.name;
+    $("habitTargetDays").value = h.targetDays;
+    $("habitDailyTarget").value = h.dailyTarget;
+    setPlanForm(h);
+    $("habitFormTitle").textContent = "Edit Habit";
+    $("habitSubmitBtn").textContent = "Save Changes";
+    $("habitFormCancelBtn").classList.remove("hidden");
+    refreshHabitDup();
+    showHabitForm(true);
+    $("habitName").focus();
+    $("habitName").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function deleteHabit(id) {
+    const h = habits.find(function (hh) { return hh.id === id; });
+    if (!h) return;
+    if (!window.confirm('Delete habit "' + h.name + '"? This removes its entire history and can\'t be undone. (Archive it instead to keep the history.)')) return;
+    habits = habits.filter(function (hh) { return hh.id !== h.id; });
+    saveHabits();
+    // tasks that stood for this habit stay, as ordinary tasks (their own tick is kept)
+    if (PC) { const un = PC.dropHabitLinks(tasks, h.id); if (un !== tasks) { tasks = un; saveTasks(); renderTaskList(); } }
+    renderAllHabitViews();
+    window.JarvisCore.showToast("Habit deleted.");
+  }
+  // The compact menu on a habit in Routines: edit, pause, archive (history kept) and delete (history gone).
+  function openHabitMoreMenu(id, opener) {
+    const h = habits.find(function (hh) { return hh.id === id; });
+    if (!h) return;
+    const today = window.JarvisCore.todayISODate(), archived = HS && HS.isArchived(h), paused = HS && HS.isPaused(h, today);
+    const rows = [{ key: "edit", label: "Edit", sub: "Days, time, target, reminders" }];
+    if (!archived) rows.push(paused ? { key: "resume", label: "Resume", sub: "Back on its days from today" } : { key: "pause", label: "Pause", sub: "Leave its days out until you resume" });
+    rows.push(archived ? { key: "unarchive", label: "Bring back", sub: "Show it on Today and the Calendar again" } : { key: "archive", label: "Archive", sub: "Hide it; every tick and streak is kept" });
+    rows.push({ key: "delete", label: "Delete…", danger: true, sub: "Removes its history" });
+    window.JarvisMenu.open({
+      title: h.name, opener: opener, rows: rows,
+      onPick: function (key) {
+        let r = null;
+        if (key === "edit") editHabit(id);
+        else if (key === "delete") deleteHabit(id);
+        else if (key === "pause") { r = pauseHabit(id, today, ""); if (r.ok) window.JarvisCore.showToast(h.name + " is paused."); }
+        else if (key === "resume") { r = resumeHabit(id); if (r.ok) window.JarvisCore.showToast("Resumed."); }
+        else if (key === "archive") { r = archiveHabit(id); if (r.ok) window.JarvisCore.showToast(h.name + " is archived. Its history is kept."); }
+        else if (key === "unarchive") { r = unarchiveHabit(id); if (r.ok) window.JarvisCore.showToast(h.name + " is back."); }
+        if (r && !r.ok) window.JarvisCore.showToast(r.error);
+      }
+    });
   }
 
   function plannerMeta(h) {
@@ -696,33 +892,8 @@
   function escText(s) { return window.JarvisCore.escapeHtml(s); }
 
   function handleHabitManageListClick(e) {
-    const editBtn = e.target.closest(".habit-edit-btn");
-    if (editBtn) {
-      const h = habits.find(function (hh) { return hh.id === editBtn.getAttribute("data-id"); });
-      if (!h) return;
-      habitFormEditId = h.id;
-      $("habitName").value = h.name;
-      $("habitTargetDays").value = h.targetDays;
-      $("habitDailyTarget").value = h.dailyTarget;
-      setPlanForm(h);
-      $("habitFormTitle").textContent = "Edit Habit";
-      $("habitSubmitBtn").textContent = "Save Changes";
-      $("habitFormCancelBtn").classList.remove("hidden");
-      showHabitForm(true);
-      $("habitName").focus();
-      $("habitName").scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-    const delBtn = e.target.closest(".habit-delete-btn");
-    if (delBtn) {
-      const h = habits.find(function (hh) { return hh.id === delBtn.getAttribute("data-id"); });
-      if (!h) return;
-      if (!window.confirm('Delete habit "' + h.name + '"? This removes its entire history and can\'t be undone.')) return;
-      habits = habits.filter(function (hh) { return hh.id !== h.id; });
-      saveHabits();
-      renderAllHabitViews();
-      window.JarvisCore.showToast("Habit deleted.");
-    }
+    const more = e.target.closest(".habit-more-btn");
+    if (more) openHabitMoreMenu(more.getAttribute("data-id"), more);
   }
 
   // One block per habit with a button for each day of the week. A simple habit toggles right here; a counting habit opens that day
@@ -741,13 +912,15 @@
     const head = '<div class="hb-days hb-days-head" aria-hidden="true">' + weekDates.map(function (d) {
       return '<span class="hb-dayhead' + (d === today ? " is-today" : "") + '"><span>' + formatWeekdayShort(d).slice(0, 1) + '</span><span>' + parseISODateLocal(d).getDate() + '</span></span>';
     }).join("") + '</div>';
-    const blocks = habits.map(function (h) {
+    const blocks = habits.filter(function (h) { return !(HS && HS.isArchived(h)); }).map(function (h) {
       const target = habitDailyTarget(h);
       const buttons = weekDates.map(function (d) {
         const count = habitCountOn(h, d), done = isHabitDoneOnDate(h, d), future = !HL.canEdit(d, today);
+        const stateWord = HS ? HS.dayState(h, d, today) : "";
         const dayWord = parseISODateLocal(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-        const label = core.escapeHtml(h.name) + ", " + dayWord + (target > 1 ? ": " + count + " of " + target : (done ? ", done" : ", not done")) + (future ? ". Hasn't happened yet." : (target > 1 ? ". Opens this day." : ""));
-        return '<button type="button" class="hb-day' + (done ? " is-done" : "") + (d === today ? " is-today" : "") + (future ? " is-future" : "") + '" data-id="' + core.escapeHtml(h.id) + '" data-date="' + d + '" data-kind="' + (target > 1 ? "count" : "simple") + '"' +
+        const stateText = { skipped: "skipped", missed: "missed", paused: "paused", unscheduled: "not one of its days" }[stateWord] || "";
+        const label = core.escapeHtml(h.name) + ", " + dayWord + (target > 1 ? ": " + count + " of " + target : (done ? ", done" : ", not done")) + (stateText && !done ? ", " + stateText : "") + (future ? ". Hasn't happened yet." : (target > 1 ? ". Opens this day." : ""));
+        return '<button type="button" class="hb-day' + (done ? " is-done" : "") + (stateWord === "skipped" ? " is-skip" : stateWord === "unscheduled" || stateWord === "paused" ? " is-off" : stateWord === "missed" ? " is-miss" : "") + (d === today ? " is-today" : "") + (future ? " is-future" : "") + '" data-id="' + core.escapeHtml(h.id) + '" data-date="' + d + '" data-kind="' + (target > 1 ? "count" : "simple") + '"' +
           (target > 1 ? "" : ' aria-pressed="' + done + '"') + (future ? " disabled" : "") + ' aria-label="' + label + '">' + (target > 1 ? count : (done ? "&#10003;" : "")) + '</button>';
       }).join("");
       return '<div class="hb-habit"><div class="hb-habit-head"><span class="hb-habit-name">' + core.escapeHtml(h.name) + '</span><span class="hb-habit-week">' + habitWeeklyDone(h, weekDates) + ' / ' + habitWeeklyTarget(h) + '</span></div><div class="hb-days">' + buttons + '</div></div>';
@@ -774,7 +947,50 @@
     renderHabitHistoryGrid();
   }
 
+
+  /* ---- Progress: consistency from the days a habit was actually for ---- */
+  let consPeriod = "week";
+  function renderHabitConsistency() {
+    const body = $("hbConsBody");
+    if (!body || !HS) return;
+    const today = window.JarvisCore.todayISODate(), e = window.JarvisCore.escapeHtml, days = consPeriod === "week" ? 7 : 28;
+    const from = addDaysISO(today, -(days - 1)), pFrom = addDaysISO(from, -days), pTo = addDaysISO(from, -1);
+    const live = habits.filter(function (h) { return !HS.isArchived(h); });
+    if (!live.length) { body.innerHTML = '<p class="field-hint">No habits yet. Add one in Routines.</p>'; return; }
+    const rows = live.map(function (h) {
+      const c = HS.consistency(h, from, today, today), p = HS.consistency(h, pFrom, pTo, today), wk = HS.weekProgress(h, HS.mondayOf(today), today);
+      return { h: h, c: c, p: p, wk: wk };
+    });
+    const unit = function (r) { return r.c.mode === "flexible" ? "weekly goals" : "days it was for"; };
+    const line = function (r) {
+      const pct = r.c.rate === null ? null : Math.round(r.c.rate * 100);
+      const delta = r.c.rate !== null && r.p.rate !== null ? Math.round((r.c.rate - r.p.rate) * 100) : null;
+      return '<li class="hb-cons-row"><div class="hb-cons-main"><span class="hb-cons-name">' + e(r.h.name) + '</span><span class="hb-cons-sub">' +
+        (pct === null ? 'Not enough days yet' : r.c.done + ' of ' + r.c.chances + ' ' + unit(r) + (r.c.skipped ? ' · ' + r.c.skipped + ' skipped' : '')) +
+        (delta !== null && delta !== 0 ? ' · ' + (delta > 0 ? 'up ' : 'down ') + Math.abs(delta) + ' points from the ' + (consPeriod === "week" ? "week" : "4 weeks") + ' before' : '') + '</span>' +
+        '<span class="hb-cons-sub">This week: ' + r.wk.done + ' of ' + r.wk.target + (r.wk.mode === "flexible" ? ' (any days)' : '') + '</span></div>' +
+        (pct === null ? '' : '<span class="hb-cons-pct">' + pct + '%</span>') +
+        (pct === null ? '' : '<span class="hb-cons-bar" role="img" aria-label="' + e(r.h.name + ' ' + pct + ' percent') + '"><span style="width:' + pct + '%"></span></span>') + '</li>';
+    };
+    const measured = rows.filter(function (r) { return r.c.rate !== null; });
+    const best = measured.filter(function (r) { return r.c.chances >= 3 && r.c.rate >= 0.8; }).sort(function (a, b) { return b.c.rate - a.c.rate || b.c.chances - a.c.chances; }).slice(0, 3);
+    const adjust = measured.filter(function (r) { return r.c.chances >= 4 && r.c.rate < 0.5; }).sort(function (a, b) { return a.c.rate - b.c.rate; }).slice(0, 3);
+    let html = '<ul class="hb-cons-list">' + rows.map(line).join("") + '</ul>';
+    if (best.length) html += '<p class="hb-cons-note"><strong>Most consistent:</strong> ' + best.map(function (r) { return e(r.h.name); }).join(", ") + '.</p>';
+    if (adjust.length) html += '<p class="hb-cons-note"><strong>Worth adjusting:</strong> ' + adjust.map(function (r) { return e(r.h.name); }).join(", ") + '. If it keeps slipping, try fewer days, a smaller target or a different time. That says something about the plan, not about you.</p>';
+    html += '<details class="hb-cons-how"><summary>How this is worked out</summary><p class="field-hint">Only the days a habit was for count. Rest days, days it was paused or skipped, days before it began and days that haven&rsquo;t happened yet are left out. A habit done on a few days a week with no chosen days is measured by its finished weeks.</p></details>';
+    body.innerHTML = html;
+  }
+  function handleConsClick(e) {
+    const b = e.target.closest("[data-hbcons]");
+    if (!b) return;
+    consPeriod = b.getAttribute("data-hbcons") === "month" ? "month" : "week";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-hbcons]"), function (x) { const on = x === b; x.classList.toggle("is-on", on); x.setAttribute("aria-pressed", on ? "true" : "false"); });
+    renderHabitConsistency();
+  }
+
   function renderAllHabitViews() {
+    renderHabitConsistency();
     renderTodayHabitsList();
     renderHabitManageList();
     renderHabitHistoryGrid();
@@ -868,10 +1084,12 @@
     const todayTasksDone = todayTasks.filter(function (t) { return t.completed; }).length;
     $("todayTasksStat").textContent = todayTasksDone + " / " + todayTasks.length;
 
-    const todayHabitsDone = habits.filter(function (h) { return isHabitDoneOnDate(h, today); }).length;
-    $("todayHabitsStat").textContent = todayHabitsDone + " / " + habits.length;
+    // habits that are for today (not flexible, paused, archived or skipped ones): a habit that is not for today is not left undone
+    const sched = HS ? HS.today(habits, today, today).counts : { done: habits.filter(function (h) { return isHabitDoneOnDate(h, today); }).length, total: habits.length };
+    const todayHabitsDone = sched.done, todayHabitsTotal = sched.total;
+    $("todayHabitsStat").textContent = todayHabitsDone + " / " + todayHabitsTotal;
 
-    const totalItems = todayTasks.length + habits.length;
+    const totalItems = todayTasks.length + todayHabitsTotal;
     const doneItems = todayTasksDone + todayHabitsDone;
     const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
     $("todayProgressPct").textContent = pct + "%";
@@ -927,15 +1145,17 @@
       title: "Habits", opener: $("habitsMenuBtn"),
       rows: [
         { key: "habits-plan", label: "Day planner", sub: "Put tasks into the hours of a day" },
+        { key: "dup-review", label: "Review possible duplicates", sub: dupSub() },
         { key: "habits-goals", label: "Goals", sub: "Personal goals and their progress" },
         { key: "habits-reminders", label: "Reminders", sub: "Phone notifications and quiet hours" },
         { key: "habits-wake", label: "Wake check", sub: "Prove you are up" },
         { key: "discipline-program", label: "30-day program", sub: "Optional lessons and missions" },
         { key: "discipline-setup", label: "Discipline settings", sub: "Phone limit, rules, schedule, your data" }
       ],
-      onPick: go
+      onPick: function (key) { if (key === "dup-review") { if (window.JarvisPlanSync) window.JarvisPlanSync.openReview($("habitsMenuBtn")); } else go(key); }
     });
   }
+  function dupSub() { const n = window.JarvisPlanSync ? window.JarvisPlanSync.count() : 0; return n ? n + " possible " + (n === 1 ? "pair" : "pairs") + " to look at" : "Nothing looks duplicated"; }
 
   function handleDaySelectorClick(e) {
     const pill = e.target.closest(".day-pill");
@@ -987,22 +1207,56 @@
 
   function getSummary() {
     const today = window.JarvisCore.todayISODate();
-    const doneToday = habits.filter(function (h) { return isHabitDoneOnDate(h, today); }).length;
+    const sched = HS ? HS.today(habits, today, today).counts : null;
+    const doneToday = sched ? sched.done : habits.filter(function (h) { return isHabitDoneOnDate(h, today); }).length;
     let bestStreak = 0;
     habits.forEach(function (h) { bestStreak = Math.max(bestStreak, computeCurrentStreak(h)); });
-    return { total: habits.length, doneToday: doneToday, bestStreak: bestStreak };
+    return { total: sched ? sched.total : habits.length, doneToday: doneToday, bestStreak: bestStreak };
   }
 
   /* ---- for the Plan tab (dayplan-ui.js) ----
      The planner works on the very same tasks the To-Do list shows (a task with a time is an item in that hour), so it
      reads them from here and hands the changed list back. Nothing is copied: one list, one place it is saved. */
   function getTasks() { return tasks; }
-  function commitTasks(next) {
-    tasks = Array.isArray(next) ? next : tasks;
+  function commitTasks(next) { if (Array.isArray(next)) setTasks(next); }
+
+  // The one way a changed task list is saved when something else may need to follow it: a task that stands for a habit on a day (task.habitId)
+  // shares that habit's tick, so ticking, unticking or moving it brings the habit along, in the same save. If the habits can't be saved, nothing
+  // changes (neither the task nor the habit).
+  function setTasks(next) {
+    const prev = tasks, today = window.JarvisCore.todayISODate();
+    let list = next;
+    if (PC) {
+      // a linked task moved to another day takes that day's state from its habit (the habit is where a tick lives)
+      list = next.map(function (t) {
+        const p = t && t.habitId ? prev.filter(function (x) { return x.id === t.id; })[0] : null;
+        if (!p || p.date === t.date || !!p.completed !== !!t.completed) return t;
+        const h = habits.filter(function (x) { return x.id === t.habitId; })[0];
+        return h && HL.isDone(h, t.date) !== !!t.completed ? Object.assign({}, t, { completed: HL.isDone(h, t.date) }) : t;
+      });
+      const sync = PC.syncFromTasks(prev, list, habits, today);
+      if (sync.changed.length) {
+        const before = habits;
+        habits = sync.habits;
+        if (!saveHabits()) { habits = before; renderAllHabitViews(); renderTaskList(); window.JarvisCore.showToast("That couldn't be saved. The browser may be full or blocking storage."); return false; }
+      }
+    }
+    tasks = list;
     saveTasks();
     renderTaskList();
     renderDaySelectorPills();
     renderTodayOverview();
+    if (PC && habits) renderAllHabitViews();
+    return true;
+  }
+  // After a habit's days changed (prev -> now), the tasks that stand for it on those days follow. Called once the habits were saved.
+  function followHabits(prevHabits) {
+    if (!PC) return;
+    const s = PC.syncFromHabits(prevHabits, habits, tasks);
+    if (!s.changed.length) return;
+    tasks = s.tasks;
+    saveTasks();
+    renderTaskList(); renderDaySelectorPills(); renderTodayOverview();
   }
   function getSelectedDate() { return selectedDate; }
   // A new task made by another part of the app (the Strategy tab). It is the same record the To-Do form makes, in the same list.
@@ -1041,6 +1295,8 @@
 
     $("taskAddToggleBtn").addEventListener("click", handleTaskAddToggle);
     $("taskForm").addEventListener("submit", handleTaskFormSubmit);
+    $("taskText").addEventListener("input", refreshTaskDup);
+    $("taskTime").addEventListener("input", refreshTaskDup);
     $("taskFormCancelBtn").addEventListener("click", resetTaskForm);
     $("taskList").addEventListener("click", handleTaskListClick);
     $("taskRepeatDaysRow").addEventListener("click", function (e) {
@@ -1060,8 +1316,10 @@
     $("habitsDayNote").addEventListener("click", handleHabitsDayNoteClick);
     $("habitHistoryGrid").addEventListener("click", handleHabitGridClick);
     $("habitForm").addEventListener("submit", handleHabitFormSubmit);
+    $("habitName").addEventListener("input", refreshHabitDup);
     $("habitPlanTime").addEventListener("input", syncPlanForm);
     $("habitTargetDays").addEventListener("input", syncPlanForm);
+    $("habitPlanDays").addEventListener("change", syncPlanForm);
     $("habitFormCancelBtn").addEventListener("click", resetHabitForm);
     $("habitAddToggleBtn").addEventListener("click", function () {
       const open = !$("habitFormWrap").hidden;
@@ -1069,6 +1327,7 @@
     });
     $("habitsMenuBtn").addEventListener("click", openHabitsMenu);
     $("habitManageList").addEventListener("click", handleHabitManageListClick);
+    $("hbConsCard").addEventListener("click", handleConsClick);
     $("historyPrevWeekBtn").addEventListener("click", function () { handleHistoryWeekNav(-1); });
     $("historyNextWeekBtn").addEventListener("click", function () { handleHistoryWeekNav(1); });
 
@@ -1082,6 +1341,11 @@
   // code path, so every other habit screen and Discipline's "Next up" follow it). Nothing is copied or stored here.
   function getToday() {
     const today = window.JarvisCore.todayISODate();
+    if (HS) {
+      // only the habits that are for today (not flexible, paused, archived or skipped ones): those are the ones that can be done or left undone today
+      const t = HS.today(habits, today, today), list = [].concat(t.groups.morning, t.groups.afternoon, t.groups.evening, t.groups.anytime).filter(function (r) { return !r.skipped; });
+      return { date: today, habits: list.map(function (r) { return { id: r.habit.id, name: r.habit.name, done: r.done, count: r.count, target: r.target, time: r.time }; }) };
+    }
     return { date: today, habits: habits.map(function (h) { return { id: h.id, name: h.name, done: isHabitDoneOnDate(h, today), count: habitCountOn(h, today), target: habitDailyTarget(h) }; }) };
   }
   function toggleToday(id) {
@@ -1106,6 +1370,7 @@
     const prev = habits;
     habits = res.habits;
     if (!saveHabits()) { habits = prev; renderAllHabitViews(); return { ok: false, errors: {}, error: REFUSED }; }
+    followHabits(prev);
     renderAllHabitViews();
     return { ok: true, errors: {} };
   }
@@ -1132,5 +1397,96 @@
   // A different time on one day only; the habit's usual time and days are not touched.
   function moveHabitDay(id, date, time) { return changeHabits(function (list) { return HP.moveOn(list, id, date, time); }); }
 
-  window.JarvisHabits = { addHabit: addHabit, getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
+
+  /* ---- one occurrence, one tick: links between tasks and habits, and duplicate suggestions (planning-core-logic.js) ----
+     A task with habitId stands for that habit on the task's day and shares its tick. Nothing is merged or deleted for you: a link is made, or a pair is
+     kept separate, only when asked. The first time a link is made, the tasks and habits as they were are copied to this device (jarvisPlanSnapshot). */
+
+  const SNAP_KEY = "jarvisPlanSnapshot";
+  function ensureSnapshot() {
+    try {
+      if (window.JarvisCore.loadJSON(SNAP_KEY, null)) return;
+      const snap = { v: 1, at: Date.now(), reason: "before the first task and habit were linked", tasks: tasks, habits: habits };
+      if (JSON.stringify(snap).length > 1500000) return;
+      window.JarvisCore.saveJSON(SNAP_KEY, snap);
+    } catch (e) { /* a snapshot is a convenience; linking does not depend on it */ }
+  }
+  // A habit with a planner time is on its planner days; one without can be done any day, so it is "on" every day for duplicate suggestions.
+  function habitOnDay(h, date) { return HP && HP.onPlanner(h) ? HP.occursOn(h, date) : true; }
+  function habitAtTime(h, date) { return HP ? HP.timeOn(h, date) : ""; }
+  function calEvents(from, to) {
+    try {
+      const c = window.JarvisCalendar;
+      return c && c.itemsBetween ? c.itemsBetween(from, to).filter(function (it) { return it.source === "event"; }).map(function (it) { return { id: it.id, title: it.title, date: it.date, time: it.allDay ? "" : it.time, allDay: !!it.allDay }; }) : [];
+    } catch (e) { return []; }
+  }
+  // Possible duplicates of something being made. cand { type: "task"|"habit"|"event"|"block", name, date?, time? }. Suggestions only.
+  function duplicateCheck(cand) {
+    if (!PC || !cand) return [];
+    const today = window.JarvisCore.todayISODate(), day = /^\d{4}-\d{2}-\d{2}$/.test(cand.date || "") ? cand.date : "";
+    return PC.findDuplicates(cand, { tasks: tasks, habits: habits, events: day ? calEvents(day, day) : [] }, { today: today, from: today, habitOn: habitOnDay, habitTime: habitAtTime });
+  }
+  // Pairs among what is already saved that may be one occurrence entered twice. opts { from, to }.
+  function duplicateScan(opts) {
+    if (!PC) return [];
+    const today = window.JarvisCore.todayISODate(), o = opts || {};
+    const from = o.from || PCaddDays(today, -7), to = o.to || PCaddDays(today, 60);
+    return PC.scan({ tasks: tasks, habits: habits, events: calEvents(from, to) }, { today: today, habitOn: habitOnDay, habitTime: habitAtTime }, { from: from, to: to });
+  }
+  function PCaddDays(d, n) { return addDaysISO(d, n); }
+  // Saves a changed pair of lists together; if the browser refuses, both go back. -> { ok, error }
+  function commitLinked(nextTasks, nextHabits) {
+    const prevT = tasks, prevH = habits;
+    tasks = nextTasks; habits = nextHabits;
+    if (nextHabits !== prevH && !saveHabits()) { tasks = prevT; habits = prevH; renderAllHabitViews(); renderTaskList(); return { ok: false, error: REFUSED }; }
+    saveTasks();
+    renderTaskList(); renderDaySelectorPills(); renderTodayOverview(); renderAllHabitViews();
+    return { ok: true };
+  }
+  function linkTaskToHabit(taskId, habitId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    ensureSnapshot();
+    const r = PC.link(tasks, habits, taskId, habitId, window.JarvisCore.todayISODate());
+    return r.ok ? commitLinked(r.tasks, r.habits) : r;
+  }
+  function unlinkTask(taskId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    const r = PC.unlink(tasks, taskId);
+    return r.ok ? commitLinked(r.tasks, habits) : r;
+  }
+  function keepSeparate(taskId, otherId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    const r = PC.markSeparate(tasks, taskId, otherId);
+    return r.ok ? commitLinked(r.tasks, habits) : r;
+  }
+  // Links every one of these tasks to the habit. -> { ok, linked }
+  function linkTasksToHabit(taskIds, habitId) {
+    if (!PC) return { ok: false, error: "Linking isn't available." };
+    ensureSnapshot();
+    let t = tasks, hs = habits, linked = 0;
+    taskIds.forEach(function (id) { const r = PC.link(t, hs, id, habitId, window.JarvisCore.todayISODate()); if (r.ok) { t = r.tasks; hs = r.habits; linked++; } });
+    if (!linked) return { ok: true, linked: 0 };
+    const r = commitLinked(t, hs);
+    return r.ok ? { ok: true, linked: linked } : r;
+  }
+  function habitAllowsLink(habitId, date) { const h = habits.filter(function (x) { return x.id === habitId; })[0]; return !!h && habitOnDay(h, date); }
+  function getSnapshotInfo() { const s = window.JarvisCore.loadJSON(SNAP_KEY, null); return s && s.v ? { at: s.at, tasks: (s.tasks || []).length, habits: (s.habits || []).length, reason: s.reason } : null; }
+
+
+  /* ---- skip, pause, archive: a habit's days, kept in its own record (habit-schedule-logic.js) ---- */
+  function skipHabitDay(id, date, on) { return HS ? changeHabits(function (list) { return HS.skip(list, id, date, !!on, window.JarvisCore.todayISODate()); }) : { ok: false, error: "Not available." }; }
+  function pauseHabit(id, from, until) { return HS ? changeHabits(function (list) { return HS.pause(list, id, from, until || ""); }) : { ok: false, error: "Not available." }; }
+  function resumeHabit(id) { return HS ? changeHabits(function (list) { return HS.resume(list, id, window.JarvisCore.todayISODate()); }) : { ok: false, error: "Not available." }; }
+  function archiveHabit(id) { return HS ? changeHabits(function (list) { return HS.archive(list, id, Date.now()); }) : { ok: false, error: "Not available." }; }
+  function unarchiveHabit(id) { return HS ? changeHabits(function (list) { return HS.unarchive(list, id); }) : { ok: false, error: "Not available." }; }
+  // Today's scheduled habits as the Overview and the Calendar show them: grouped, with what is flexible, paused, done and skipped.
+  function getTodayDetail(date) {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(date || "") ? date : window.JarvisCore.todayISODate(), today = window.JarvisCore.todayISODate();
+    if (!HS) return null;
+    const t = HS.today(habits, day, today);
+    const plain = function (r) { return { id: r.habit.id, name: r.habit.name, state: r.state, done: r.done, skipped: r.skipped, count: r.count, target: r.target, time: r.time, week: r.week || null, editable: HL.canEdit(day, today) && r.state !== "skipped" }; };
+    return { date: day, groups: { morning: t.groups.morning.map(plain), afternoon: t.groups.afternoon.map(plain), evening: t.groups.evening.map(plain), anytime: t.groups.anytime.map(plain) }, flexible: t.flexible.map(plain), paused: t.paused.map(plain), counts: t.counts };
+  }
+
+  window.JarvisHabits = { skipHabitDay: skipHabitDay, pauseHabit: pauseHabit, resumeHabit: resumeHabit, archiveHabit: archiveHabit, unarchiveHabit: unarchiveHabit, getTodayDetail: getTodayDetail, editHabit: editHabit, duplicateCheck: duplicateCheck, duplicateScan: duplicateScan, linkTaskToHabit: linkTaskToHabit, linkTasksToHabit: linkTasksToHabit, unlinkTask: unlinkTask, keepSeparate: keepSeparate, habitAllowsLink: habitAllowsLink, getSnapshotInfo: getSnapshotInfo, addHabit: addHabit, getHabits: getHabits, setHabitDay: setHabitDay, stepHabitDay: stepHabitDay, planHabit: planHabit, restoreHabitPlan: restoreHabitPlan, unplanHabit: unplanHabit, moveHabitDay: moveHabitDay, init: init, getSummary: getSummary, getToday: getToday, toggleToday: toggleToday, onSubTabChange: onSubTabChange, getTasks: getTasks, commitTasks: commitTasks, getSelectedDate: getSelectedDate, addTask: addTask, selectDate: selectDate, getGoals: function () { return goals; }, commitGoals: commitGoals, releaseGoalTasks: releaseGoalTasks };
 })();

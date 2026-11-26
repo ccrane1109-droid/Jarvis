@@ -515,6 +515,11 @@
     const t = store.timer;
     if (!btn || !t) return;
     const what = btn.getAttribute("data-timer");
+    // the run that is ending is one focus session in the planner's log (time worked, never more than the run's length)
+    try {
+      const now = Date.now(), worked = Math.min(now, t.endsAt) - t.startedAt;
+      if (window.JarvisFocus && window.JarvisFocus.record) window.JarvisFocus.record({ title: t.task || "Two-minute start", startedAt: t.startedAt, focusMs: worked, plannedMin: t.minutes });
+    } catch (err) { /* the log is optional here */ }
     if (what === "stop") { setOutcome(t.entryAt, "dropped"); store.timer = null; core().showToast("Stopped. Try again when you can."); }
     else if (what === "more") {
       setOutcome(t.entryAt, "started");

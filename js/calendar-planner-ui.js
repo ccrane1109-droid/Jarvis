@@ -25,6 +25,7 @@
   let pending = null;         // a note being typed: { type, date, index, text, timer }
   let selfWrite = 0;          // set while this file saves the day's record, so its own save does not redraw the page under the cursor
   let ui = readUi();
+  ui.done = false; ui.glance = false;       // folded again each visit
 
   function esc(s) { return window.JarvisCore.escapeHtml(s); }
   function app() { return window.JarvisPlanApp || null; }
@@ -82,26 +83,86 @@
   function freeRowHtml(r, past) {
     if (past) return "";
     const t0 = toTime(r.start), t1 = toTime(r.end);
-    return '<div class="cdp-free"><button type="button" class="cdp-free-btn" data-cdp="free" data-start="' + t0 + '" data-end="' + t1 + '" aria-label="' + esc("Free " + label(t0) + " to " + label(t1) + ", " + D.hm(r.minutes) + ". Plan something here") + '">' +
-      '<span class="cdp-free-time">' + esc(label(t0)) + '<small>' + esc(label(t1)) + '</small></span><span class="cdp-free-bar" aria-hidden="true"></span>' +
-      '<span class="cdp-free-main"><span>Free · ' + esc(D.hm(r.minutes)) + '</span><em>+ Plan</em></span></button></div>';
+    return '<div class="cdp-free"><button type="button" class="cdp-free-btn" data-cdp="free" data-start="' + t0 + '" data-end="' + t1 + '" aria-label="' + esc(label(t0) + " " + label(t1) + " Free · " + D.hm(r.minutes) + " + Plan, plan something here") + '">' +
+      '<span class="cdp-free-time">' + esc(label(t0)) + ' <small>' + esc(label(t1)) + '</small></span> <span class="cdp-free-bar" aria-hidden="true"></span> ' +
+      '<span class="cdp-free-main"><span>Free · ' + esc(D.hm(r.minutes)) + '</span> <em>+ Plan</em></span></button></div>';
   }
   function nowRowHtml() { return '<div class="cdp-now" role="separator" aria-label="Now"><span>Now</span></div>'; }
 
+  // The schedule in time order under Morning / Afternoon / Evening, with the free stretches between things, a line for "now", the next open thing
+  // marked, and what is done folded away (it is one tap to show). Past days show everything that happened, done things folded.
+  const PARTS = [{ id: "morning", label: "Morning", from: 0 }, { id: "afternoon", label: "Afternoon", from: 720 }, { id: "evening", label: "Evening", from: 1020 }];
+  function partIndex(min) { return min < 720 ? 0 : min < 1020 ? 1 : 2; }
+  function isDoneRow(r) { return r.type === "item" && !!r.item.completed; }
   function timelineHtml(date, tl) {
     const t = host.today(), past = date < t, isToday = date === t, nowMin = host.nowMin();
     const rows = tl.rows.filter(function (r) { return !(r.type === "free" && past); });
-    let out = "", markedNow = !isToday;
-    rows.forEach(function (r) {
+    const live = rows.filter(function (r) { return !isDoneRow(r); }), done = rows.filter(isDoneRow);
+    // the next open thing: on now, or starting next (today only)
+    let nextRow = null;
+    if (isToday) nextRow = live.filter(function (r) { return r.type === "item" && (r.start >= nowMin || r.end > nowMin); })[0] || null;
+    let out = "", markedNow = !isToday, part = -1;
+    live.forEach(function (r) {
+      const pi = partIndex(r.start);
+      if (pi !== part) { part = pi; out += '<h4 class="cdp-part">' + PARTS[pi].label + '</h4>'; }
       if (!markedNow && r.end > nowMin && (r.type === "free" || !r.point || r.start >= nowMin)) {
         // the row that is on now (or comes next): a line above it, unless it is happening right now
         if (r.start > nowMin) out += nowRowHtml();
         markedNow = true;
       }
-      out += r.type === "free" ? freeRowHtml(r, past) : host.rowHtml(r.item);
+      if (r.type === "free") out += freeRowHtml(r, past);
+      else if (r === nextRow) out += '<div class="cdp-next"><span class="cdp-next-tag">' + (r.start <= nowMin ? "Now" : "Up next") + '</span>' + host.rowHtml(r.item) + '</div>';
+      else out += host.rowHtml(r.item);
     });
-    if (!markedNow) out += nowRowHtml();
+    if (!markedNow && live.length) out += nowRowHtml();
+    if (done.length) {
+      out += '<div class="cdp-done"><button type="button" class="cdp-done-btn" data-cdp="done-toggle" aria-expanded="' + (ui.done ? "true" : "false") + '">' + (ui.done ? "Hide" : "Show") + ' done (' + done.length + ')</button>' +
+        (ui.done ? done.map(function (r) { return host.rowHtml(r.item); }).join("") : "") + '</div>';
+    }
     return out;
+  }
+
+  /* ---------------- Week at a glance ---------------- */
+
+  // One line for the week, and a day-by-day breakdown behind a button. Every figure is counted from what is on the Calendar:
+  //   planned = time taken inside your planner hours by events, time blocks and tasks with a time (a task with a time and no block counts a
+  //   short while); habits take no time because a habit has no length; free = what is left of your hours, from now on for today.
+  function glanceHtml(dates, items) {
+    if (!D || !host) return "";
+    const t = host.today(), win = dayWindow();
+    const days = dates.map(function (d) {
+      const di = host.dayItems(items, d), tl = D.timeline({ date: d, items: di, window: win, nowMin: host.nowMin(), today: t });
+      return {
+        date: d, planned: tl.busyMin, free: d < t ? null : tl.freeMin, past: d < t,
+        overlaps: di.filter(function (x) { return x.conflict && !x.completed; }).length,
+        deadlines: di.filter(function (x) { return !x.completed && (x.source === "goal" || (x.source === "task" && x.scheduled === false)); }).length,
+        // tasks planned for the day that have no time yet (a deadline, or a task that stands for a habit, is not waiting for a time)
+        noTime: di.filter(function (x) { return x.source === "task" && x.allDay && x.scheduled !== false && !x.completed && !x.habitId; }).length
+      };
+    });
+    const withPlan = days.filter(function (x) { return x.planned > 0; });
+    const busiest = withPlan.slice().sort(function (a, b) { return b.planned - a.planned || (a.date < b.date ? -1 : 1); })[0];
+    const future = days.filter(function (x) { return x.free !== null; }).sort(function (a, b) { return b.free - a.free || (a.date < b.date ? -1 : 1); })[0];
+    const sum = function (k) { return days.reduce(function (n, x) { return n + x[k]; }, 0); };
+    const bits = [];
+    if (busiest) bits.push("Busiest: " + host.dayName(busiest.date, { weekday: "short" }) + " (" + D.hm(busiest.planned) + " planned)");
+    else bits.push("Nothing planned yet");
+    if (future && future.free > 0 && withPlan.length) bits.push("Most free time: " + host.dayName(future.date, { weekday: "short" }) + " (" + D.hm(future.free) + ")");
+    if (sum("overlaps")) bits.push(sum("overlaps") + (sum("overlaps") === 1 ? " overlap" : " overlaps"));
+    if (sum("deadlines")) bits.push(sum("deadlines") + (sum("deadlines") === 1 ? " deadline" : " deadlines"));
+    if (sum("noTime")) bits.push(sum("noTime") + (sum("noTime") === 1 ? " task has no time yet" : " tasks have no time yet"));
+    let html = '<section class="cdg" aria-label="Week at a glance"><button type="button" class="cdg-btn" data-cdp="glance-toggle" aria-expanded="' + (ui.glance ? "true" : "false") + '"><span class="cdg-name">Week at a glance</span><span class="cdg-sum">' + esc(bits.join(" · ")) + '</span><span class="cdp-chev" aria-hidden="true"></span></button>';
+    if (ui.glance) {
+      html += '<ul class="cdg-days">' + days.map(function (x) {
+        const flags = [];
+        if (x.overlaps) flags.push(x.overlaps + (x.overlaps === 1 ? " overlap" : " overlaps"));
+        if (x.deadlines) flags.push(x.deadlines + (x.deadlines === 1 ? " deadline" : " deadlines"));
+        if (x.noTime) flags.push(x.noTime + " with no time");
+        return '<li class="cdg-day' + (x.date === t ? " is-today" : "") + '"><span class="cdg-dn">' + esc(host.dayName(x.date, { weekday: "short", month: "short", day: "numeric" })) + '</span><span class="cdg-nums">' +
+          (x.planned ? esc(D.hm(x.planned)) + " planned" : "Nothing planned") + (x.free !== null ? " · " + esc(D.hm(x.free)) + " free" : "") + '</span>' + (flags.length ? '<span class="cdg-flags">' + esc(flags.join(" · ")) + '</span>' : "") + '</li>';
+      }).join("") + '</ul><p class="cdg-note">Planned time counts events, time blocks and tasks with a time inside your planner hours. Habits take no time here.</p>';
+    }
+    return html + '</section>';
   }
 
   // Taps and typing belong to the day drawn around them (the Day screen, or the selected day in Week); the Day screen's day otherwise.
@@ -152,7 +213,7 @@
       if (s.empty) {
         return '<li class="cdp-slot"><span class="cdp-n" aria-hidden="true">' + n + '</span>' +
           '<input type="text" class="cdp-slot-input" data-top="' + s.index + '" maxlength="' + D.TEXT_MAX + '" placeholder="' + (n === 1 ? "Most important thing today" : n === 2 ? "Second priority" : "Third priority") + '" aria-label="Top priority ' + n + '" autocomplete="off">' +
-          '<button type="button" class="cdp-pick" data-cdp="top-pick" data-i="' + s.index + '" aria-label="Choose one of today’s tasks for priority ' + n + '">Pick</button></li>';
+          '<button type="button" class="cdp-pick" data-cdp="top-pick" data-i="' + s.index + '" aria-label="Pick a task for priority ' + n + '">Pick</button></li>';
       }
       return '<li class="cdp-slot' + (s.done ? " is-done" : "") + '"><span class="cdp-n" aria-hidden="true">' + n + '</span>' +
         (s.linked ? tickHtml(s.done, s.text, 'data-cdp="top-tick" data-i="' + s.index + '"') : '<span class="cdp-nolink" aria-hidden="true"></span>') +
@@ -166,7 +227,7 @@
     return '<ul class="cdp-unsched">' + shown.map(function (t) {
       return '<li class="cdp-us' + (t.completed ? " is-done" : "") + '">' + tickHtml(t.completed, t.text, 'data-cdp="task-tick" data-id="' + esc(t.id) + '"') +
         '<button type="button" class="cdp-us-title" data-cdp="task-open" data-id="' + esc(t.id) + '">' + esc(t.text) + (t.priority === "high" ? ' <small>High</small>' : "") + '</button>' +
-        (t.completed ? "" : '<button type="button" class="btn btn-secondary cdp-sched" data-cdp="schedule" data-id="' + esc(t.id) + '" aria-label="' + esc("Give a time to: " + t.text) + '">Schedule</button>') + '</li>';
+        (t.completed ? "" : '<button type="button" class="btn btn-secondary cdp-sched" data-cdp="schedule" data-id="' + esc(t.id) + '" aria-label="' + esc("Schedule: " + t.text + ", give it a time") + '">Schedule</button>') + '</li>';
     }).join("") + '</ul>' + (list.length > SHOW_TASKS ? '<button type="button" class="cal-more" data-cdp="all-tasks" aria-expanded="' + ui.allTasks + '">' + (ui.allTasks ? "Show fewer" : "Show all " + list.length) + '</button>' : "");
   }
   // The next steps of your goals that are not on this day yet, each with a button that puts it on the day.
@@ -177,7 +238,7 @@
     if (!list.length) return "";
     return '<div class="cdp-sec"><h4 class="cdp-h">From your goals</h4><ul class="cdp-gsteps">' + list.map(function (s) {
       return '<li class="cdp-gs' + (s.overdue ? " is-overdue" : "") + '"><span class="cdp-gs-main"><span class="cdp-gs-t">' + esc(s.title) + '</span><span class="cdp-gs-s">' + esc(s.goalName + (s.due ? " \u00b7 " + host.dayName(s.due, { month: "short", day: "numeric" }) : "")) + '</span></span>' +
-        '<button type="button" class="btn btn-secondary cdp-sched" data-cdp="goal-step" data-key="' + esc(s.key) + '" aria-label="' + esc("Add to this day: " + s.title) + '">Add to day</button></li>';
+        '<button type="button" class="btn btn-secondary cdp-sched" data-cdp="goal-step" data-key="' + esc(s.key) + '" aria-label="' + esc("Add to day: " + s.title) + '">Add to day</button></li>';
     }).join("") + '</ul></div>';
   }
   function planSummary(top, unsched) {
@@ -196,7 +257,7 @@
         goalStepsHtml(date) +
         refHtml(date) +
         '<div class="cdp-sec"><label class="cdp-h" for="cdpNotes">Notes for the day</label><textarea id="cdpNotes" class="cdp-area" data-note="notes" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="Anything to remember today">' + esc(view.notes) + '</textarea></div>' +
-        '<div class="cdp-sec"><label class="cdp-h" for="cdpRefl">End-of-day reflection</label><textarea id="cdpRefl" class="cdp-area" data-note="reflection" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="What went well? What will you change tomorrow?">' + esc(view.reflection) + '</textarea></div>' +
+        '<div class="cdp-sec"><label class="cdp-h" for="cdpRefl">End-of-day reflection</label><div class="cdp-prompts" role="group" aria-label="Quick questions, about two minutes">' + ["Went well: ", "Got in the way: ", "One change for tomorrow: "].map(function (q) { return '<button type="button" class="cal-chip-btn" data-cdp="prompt" data-q="' + esc(q) + '">' + esc(q.replace(/: $/, "")) + '</button>'; }).join("") + '</div><textarea id="cdpRefl" class="cdp-area" data-note="reflection" rows="2" maxlength="' + D.NOTE_MAX + '" placeholder="What went well? What will you change tomorrow?">' + esc(view.reflection) + '</textarea></div>' +
         '</div>';
     }
     return html + '</section>';
@@ -279,8 +340,8 @@
     const t = host.today(), win = dayWindow();
     const strip = '<div class="cdw-strip" role="group" aria-label="Choose a day">' + dates.map(function (d) {
       const n = host.dayItems(items, d).length;
-      return '<button type="button" class="cdw-day' + (d === t ? " is-today" : "") + (d === sel ? " is-sel" : "") + '" data-cdp="wk-day" data-date="' + d + '" aria-pressed="' + (d === sel) + '" aria-label="' + esc(host.dayName(d, { weekday: "long", month: "long", day: "numeric" }) + ", " + n + (n === 1 ? " item" : " items")) + '">' +
-        '<span class="cdw-dow">' + esc(host.dayName(d, { weekday: "short" })) + '</span><b>' + Number(d.slice(8)) + '</b><span class="cdw-n' + (n ? "" : " is-zero") + '" aria-hidden="true">' + (n || "") + '</span></button>';
+      return '<button type="button" class="cdw-day' + (d === t ? " is-today" : "") + (d === sel ? " is-sel" : "") + '" data-cdp="wk-day" data-date="' + d + '" aria-pressed="' + (d === sel) + '" aria-label="' + esc(host.dayName(d, { weekday: "short" }) + " " + Number(d.slice(8)) + (n ? " " + n : "") + ", " + host.dayName(d, { weekday: "long", month: "long", day: "numeric" }) + ", " + n + (n === 1 ? " item" : " items")) + '">' +
+        '<span class="cdw-dow">' + esc(host.dayName(d, { weekday: "short" })) + '</span> <b>' + Number(d.slice(8)) + '</b> <span class="cdw-n' + (n ? "" : " is-zero") + '" aria-hidden="true">' + (n || "") + '</span></button>';
     }).join("") + '</div>';
     const dayItems = host.dayItems(items, sel), tl = D.timeline({ date: sel, items: dayItems, window: win, nowMin: host.nowMin(), today: t });
     const allDay = tl.allDay.concat(tl.untimed).filter(function (it) { return it.source !== "task"; });
@@ -351,6 +412,7 @@
     body += '<div data-for-time>' + A.fSelect("len", "Length", lengthChoices(len), String(len), { hint: "A length puts it on the timeline as a block, so you can see the free time around it." }) +
       '<div data-for-len>' + A.fSelect("ingredientId", "Category", cats, blk ? blk.ingredientId : "") + '</div></div>';
     body += A.fSelect("priority", "Priority", [["low", "Low"], ["medium", "Medium"], ["high", "High"]], t ? (t.priority || "medium") : "medium");
+    if (t && !t.completed && window.JarvisFocus) body += '<div class="form-row"><button type="button" class="btn btn-secondary" data-sheet-act="focus">Start a focus session</button></div>';
     if (t) body += '<div class="form-row"><button type="button" class="btn btn-danger" data-sheet-act="delete">Delete this task</button></div>';
     function sync(root) {
       const s = root.querySelector('[name="start"]').value, l = root.querySelector('[name="len"]').value;
@@ -364,7 +426,10 @@
         if (el.name === "start" && el.value && Number(root.querySelector('[name="len"]').value) === 0 && !t) root.querySelector('[name="len"]').value = "30";
         sync(root);
       },
-      onAct: function (act) { if (act === "delete") { A.closeSheet(true); deleteTask(t.id); } },
+      onAct: function (act, el) {
+        if (act === "delete") { A.closeSheet(true); deleteTask(t.id); }
+        else if (act === "focus") { A.closeSheet(true); window.setTimeout(function () { window.JarvisFocus.start({ title: t.text, taskId: t.id, habitId: t.habitId || "", itemKey: "task:" + t.id }); }, 0); }
+      },
       onSubmit: function (v) { return saveTask(v, t, blk); }
     });
   }
@@ -606,6 +671,13 @@
     const act = el.getAttribute("data-cdp"), date = dateOf(el);
     if (act === "plan-toggle") { ui.plan = planOpen() ? "closed" : "open"; saveUi(); host.render(); const b = document.querySelector('[data-cdp="plan-toggle"]'); if (b) b.focus(); return; }
     if (act === "habits-toggle") { ui.habits = !ui.habits; saveUi(); host.render(); const b = document.querySelector('[data-cdp="habits-toggle"]'); if (b) b.focus(); return; }
+    if (act === "prompt") {          // a quick question: its words are put into the reflection for you to finish; nothing is decided for you
+      const ta = document.getElementById("cdpRefl"), q = el.getAttribute("data-q") || "";
+      if (ta) { const cur = ta.value; ta.value = (cur && !/\n$/.test(cur) ? cur + "\n" : cur) + q; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.dispatchEvent(new Event("input", { bubbles: true })); }
+      return;
+    }
+    if (act === "done-toggle") { ui.done = !ui.done; host.render(); const b = document.querySelector('[data-cdp="done-toggle"]'); if (b) b.focus(); return; }
+    if (act === "glance-toggle") { ui.glance = !ui.glance; host.render(); const b = document.querySelector('[data-cdp="glance-toggle"]'); if (b) b.focus(); return; }
     if (act === "ref-toggle") { ui.ref = !ui.ref; saveUi(); host.render(); const b = document.querySelector('[data-cdp="ref-toggle"]'); if (b) b.focus(); return; }
     if (act === "open-strategy") { openStrategy(); return; }
     if (act === "wk-day") { host.select(date); return; }
@@ -664,6 +736,8 @@
       stage.addEventListener("change", onChange);
       stage.addEventListener("keydown", onKeydown);
     }
+    const gl = document.getElementById("calGlance");
+    if (gl) gl.addEventListener("click", onClick);
     window.addEventListener("pagehide", flush);
     document.addEventListener("visibilitychange", function () { if (document.hidden) flush(); });
     const S = store();
@@ -676,6 +750,6 @@
   }
 
   window.JarvisCalPlanner = {
-    attach: attach, dayHtml: dayHtml, weekHtml: weekHtml, weekPrioHtml: weekPrioHtml, openAdd: openAdd, openTask: openTaskSheet, openHabit: openHabitSheet, habitsShown: habitsShown, setHabitsShown: setHabitsShown, openCategories: openCategories, openHours: openHours, flush: flush
+    attach: attach, overbooked: overbooked, glanceHtml: glanceHtml, dayHtml: dayHtml, weekHtml: weekHtml, weekPrioHtml: weekPrioHtml, openAdd: openAdd, saveDay: saveDay, pickTop: pickTop, openTopTask: openTopTask, openTask: openTaskSheet, openHabit: openHabitSheet, habitsShown: habitsShown, setHabitsShown: setHabitsShown, openCategories: openCategories, openHours: openHours, flush: flush
   };
 })();

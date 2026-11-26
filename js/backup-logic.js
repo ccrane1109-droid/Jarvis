@@ -53,7 +53,7 @@
     "jarvisLearnBookNotes",
     // The Strategic Planning Center: yearly objectives / quarterly priorities / monthly milestones, money by month, task links,
     // the plan's settings, and the weekly planner's ingredients, time blocks and weekly records.
-    "jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanSettings", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks", "jarvisPlanTemplates", "jarvisPlanReviews", "jarvisPlanIntentions", "jarvisPlanDays",
+    "jarvisFocusLog", "jarvisPlanOverview", "jarvisPlanRoutines", "jarvisPlanNodes", "jarvisPlanPeriods", "jarvisPlanLinks", "jarvisPlanSettings", "jarvisPlanIngredients", "jarvisPlanBlocks", "jarvisPlanWeeks", "jarvisPlanTemplates", "jarvisPlanReviews", "jarvisPlanIntentions", "jarvisPlanDays",
     // The workout family. These lived in the original shared document (whole value per key, the cloud copy winning at
     // sign-in, failed uploads silent). They are here now so a save that never reached the cloud is not replaced by an older
     // cloud copy, and two devices' workouts are combined rather than one overwriting the other. LEGACY_KEYS below.
@@ -319,6 +319,8 @@
     // plan records carry updatedAt (the newer wins) and deletedAt tombstones for 30 days; the settings are one record
     jarvisPlanNodes: mergeById, jarvisPlanPeriods: mergeById, jarvisPlanLinks: mergeById, jarvisPlanIngredients: mergeById, jarvisPlanBlocks: mergeById, jarvisPlanWeeks: mergeById, jarvisPlanTemplates: mergeById, jarvisPlanReviews: mergeById, jarvisPlanIntentions: mergeById, jarvisPlanDays: mergeById,
     jarvisPlanSettings: mergeNewest,
+    // focus sessions and routine templates are lists of records with ids (the newer edit wins, deletions kept as tombstones); the Overview layout is one record
+    jarvisFocusLog: mergeById, jarvisPlanRoutines: mergeById, jarvisPlanOverview: mergeNewest,
     jarvisGroceryPantry: mergeMapNewest,
     jarvisNutritionProfile: mergeNewest,
     jarvisNutritionGoals: mergeObjects, jarvisGroceryPrefs: mergeObjects,
