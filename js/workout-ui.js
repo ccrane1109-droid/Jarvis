@@ -349,6 +349,29 @@
       '</div>';
   }
 
+  // The workout's plan for one exercise ([{ reps, type }]), or null when the workout is not a saved routine (an exercise added on the spot, "repeat last").
+  function planFor(exerciseId) {
+    const d = draft();
+    if (!d || !d.routineId) return null;
+    const r = (api().getRoutines() || []).filter(function (x) { return x.id === d.routineId; })[0];
+    const re = r && (r.exercises || []).filter(function (e) { return e.exerciseId === exerciseId; })[0];
+    return re ? WL.plannedSetsOf(re) : null;
+  }
+  // "Today: 3 sets × 8 reps at 150 lb", the reason behind it (Why?), and a Use button when the open sets are not at that weight yet. Nothing is changed
+  // until you tap Use, and a set only counts once it is marked done. Rules and wording: WL.todayTarget.
+  function targetHtml(se, ctx, noteHasUse) {
+    const t = WL.todayTarget(ctx.workouts, se.exerciseId, planFor(se.exerciseId), WL.dayKey(Date.now()));
+    const name = exInfo(se.exerciseId).name, text = WL.targetText(t);
+    const tag = t.kind === "increase" ? '<span class="wk-target-tag is-up">up ' + num(t.step) + ' lb</span>' : t.kind === "back" ? '<span class="wk-target-tag">back after a break</span>' : t.kind === "first" ? '<span class="wk-target-tag">first time</span>' : t.weight !== null ? '<span class="wk-target-tag">same weight</span>' : "";
+    const open = se.sets.filter(function (s) { return !s.completed && !s.warmup && !s.dropset; });
+    const needsUse = t.weight !== null && !noteHasUse && open.some(function (s) { return !(Number(s.weight) === t.weight); });
+    return '<div class="wk-target" role="group" aria-label="Target for ' + esc(name) + '">' +
+      '<p class="wk-target-main"><span class="wk-target-k">Today</span> ' + (text ? esc(text) : '<span class="wk-target-none">your own weight</span>') + (t.kind === "first" && t.weight === null ? ' <span class="wk-target-none">(choose a weight)</span>' : "") + ' ' + tag + '</p>' +
+      '<details class="wk-target-why"><summary>Why?</summary><ul>' + t.why.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join("") + '</ul></details>' +
+      (needsUse ? '<div class="wk-sugg-actions"><button type="button" class="btn btn-secondary" data-in="use" data-ex="' + esc(se.sessionExId) + '" data-w="' + esc(t.weight) + '" aria-label="Use ' + esc(num(t.weight)) + ' lb for ' + esc(name) + '">Use ' + esc(num(t.weight)) + ' lb</button></div>' : "") +
+    '</div>';
+  }
+
   function exerciseHtml(se, idx, ctx) {
     const info = exInfo(se.exerciseId);
     const open = isOpen(se, idx);
@@ -374,7 +397,7 @@
       (open
         ? '<div class="wk-ex-body" id="' + bodyId + '">' +
             '<p class="wk-last">' + (last ? 'Last time: ' + esc(last) : 'First time logging this exercise.') + (best && best.e1rm ? ' &middot; best est. 1RM ' + Math.round(best.e1rm.value) : '') + '</p>' +
-            (window.JarvisInsights ? window.JarvisInsights.loggerNote(draft(), se) : '') +
+            (function () { const note = window.JarvisInsights ? window.JarvisInsights.loggerNote(draft(), se) : ''; return targetHtml(se, ctx, note.indexOf('data-in="use"') !== -1) + note; })() +
             '<div class="wk-sets" role="group" aria-label="Sets for ' + esc(info.name) + '"><div class="wk-set wk-set-head" aria-hidden="true"><span>Set</span><span>Last</span><span>Weight</span><span>Reps</span><span></span></div>' + rows + '</div>' +
             '<button type="button" class="wk-add-set" data-wk="add-set" data-ex="' + esc(se.sessionExId) + '">+ Add set</button>' +
           '</div>'
@@ -385,8 +408,8 @@
   function loggerHtml() {
     const d = draft();
     const p = WL.pendingSets(d);
-    const ctx = { prev: {}, best: {} };
     const workouts = api().getWorkouts();
+    const ctx = { prev: {}, best: {}, workouts: workouts };
     d.exercises.forEach(function (se) { if (!(se.exerciseId in ctx.prev)) { ctx.prev[se.exerciseId] = WL.previousPerformance(workouts, se.exerciseId); ctx.best[se.exerciseId] = WL.bestSets(workouts, se.exerciseId); } });
     const finishReady = p.total > 0 && p.open === 0;
     return (restored ? '<div class="wk-notice" role="status"><span>Restored your workout. Nothing was lost.</span><button type="button" class="btn-icon" data-wk="dismiss-restored">OK</button></div>' : '') +

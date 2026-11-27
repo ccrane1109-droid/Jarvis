@@ -316,3 +316,82 @@ test("a saved workout keeps the name of its routine as it was that day, and only
   assert.equal("routineName" in W.buildSession(draft, { now: 61000 }), false, "no name given, no field");
   assert.equal("routineName" in W.buildSession(Object.assign({}, draft, { routineId: "" }), { now: 61000, routineName: "Push Day" }), false, "a freestyle workout has no routine to name");
 });
+
+/* ---------------- Today's target: sets x reps at a weight, from your last session ---------------- */
+
+const normal = (reps) => ({ reps: reps, type: "normal" });
+const target = (sessions, plan, today) => W.todayTarget(sessions, "bench", plan, today || "2026-11-27");
+const bench = (date, sets) => sess("s" + date, date, [ex("bench", sets)]);
+
+test("target: you did every planned set at the working weight and reached the reps: a small step up, with the numbers behind it", () => {
+  const t = target([bench("2026-11-24", [set(95, 10, { warmup: true }), set(145, 8), set(145, 8), set(145, 8)])], [{ reps: 10, type: "warmup" }, normal(8), normal(8), normal(8)]);
+  assert.equal(t.kind, "increase");
+  assert.deepEqual([t.sets, t.repsText, t.from, t.weight, t.step], [3, "8", 145, 150, 5]);
+  assert.equal(W.targetText(t), "3 sets × 8 reps at 150 lb");
+  assert.match(t.why[0], /8, 8, 8 reps at 145 lb/);
+  assert.match(t.why[0], /3 × 8/);
+  assert.match(t.why[1], /145 → 150 lb \(5 lb/);
+});
+
+test("target: a missed set repeats the weight and says exactly what was missing", () => {
+  const t = target([bench("2026-11-24", [set(145, 8), set(145, 7), set(145, 6)])], [normal(8), normal(8), normal(8)]);
+  assert.equal(t.kind, "repeat");
+  assert.equal(t.weight, 145);
+  assert.match(t.why[0], /8, 7, 6 reps at 145 lb/);
+  assert.match(t.why[1], /Reach that on every set at 145 lb/);
+  const few = target([bench("2026-11-24", [set(145, 8), set(135, 8), set(135, 8)])], [normal(8), normal(8), normal(8)]);
+  assert.equal(few.kind, "repeat");
+  assert.equal(few.weight, 145, "the working weight is the heaviest one");
+  assert.match(few.why[0], /only 1 of the 3 sets were at that weight/);
+});
+
+test("target: a pyramid plan with different reps per set is measured set by set", () => {
+  const plan = [normal(10), normal(8), normal(6)];
+  assert.equal(target([bench("2026-11-24", [set(100, 10), set(100, 8), set(100, 6)])], plan).kind, "increase");
+  assert.equal(target([bench("2026-11-24", [set(100, 10), set(100, 8), set(100, 5)])], plan).kind, "repeat");
+  assert.equal(target([bench("2026-11-24", [set(100, 10), set(100, 8), set(100, 6)])], plan).repsText, "6–10");
+});
+
+test("target: a very hard set (RPE 9.5+) holds the weight even when the reps were reached", () => {
+  const t = target([bench("2026-11-24", [set(145, 8), set(145, 8), set(145, 8, { rpe: 9.5 })])], [normal(8), normal(8), normal(8)]);
+  assert.equal(t.kind, "repeat");
+  assert.equal(t.weight, 145);
+  assert.match(t.why[1], /RPE 9\.5/);
+});
+
+test("target: more than 28 days away: the same weight, no increase", () => {
+  const t = target([bench("2026-10-01", [set(145, 8), set(145, 8), set(145, 8)])], [normal(8), normal(8), normal(8)], "2026-11-27");
+  assert.equal(t.kind, "back");
+  assert.equal(t.weight, 145);
+  assert.match(t.why[0], /57 days ago/);
+});
+
+test("target: light weights step by 2.5; no plan means repeat last time; no history means no weight at all", () => {
+  assert.equal(target([bench("2026-11-24", [set(20, 12), set(20, 12)])], [normal(12), normal(12)]).weight, 22.5);
+  const none = target([bench("2026-11-24", [set(145, 8), set(145, 8), set(145, 8)])], null);
+  assert.equal(none.kind, "repeat");
+  assert.deepEqual([none.sets, none.repsText, none.weight], [3, "8", 145], "sets and reps like last time");
+  assert.match(none.why[1], /no rep target/);
+  const first = target([], [normal(8), normal(8), normal(8)]);
+  assert.equal(first.kind, "first");
+  assert.equal(first.weight, null);
+  assert.equal(W.targetText(first), "3 sets × 8 reps", "sets and reps from the plan, and no made-up weight");
+  assert.match(first.why[0], /Nothing for this exercise is in your log yet/);
+  assert.match(first.why[1], /General advice, not from your log/);
+});
+
+test("target: warm-ups and drop sets are never the working weight; bodyweight work has no weight to suggest", () => {
+  const t = target([bench("2026-11-24", [set(225, 3, { warmup: true }), set(145, 8), set(145, 8), set(100, 12, { dropset: true })])], [normal(8), normal(8)]);
+  assert.equal(t.from, 145);
+  assert.equal(t.kind, "increase");
+  const bw = target([bench("2026-11-24", [set(0, 15), set(0, 12)])], [normal(15), normal(12)]);
+  assert.equal(bw.weight, null);
+  assert.match(bw.why[0], /bodyweight/);
+});
+
+test("target: it only reads your sessions", () => {
+  const sessions = [bench("2026-11-24", [set(145, 8), set(145, 8)])];
+  const before = JSON.stringify(sessions);
+  target(sessions, [normal(8), normal(8)]);
+  assert.equal(JSON.stringify(sessions), before);
+});

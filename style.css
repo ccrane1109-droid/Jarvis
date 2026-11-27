@@ -6126,3 +6126,15 @@ body.fc-on { padding-bottom: 76px; }
 .cdp-untimed-k { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
 .cdp-habit-btn small { display: block; font-size: 12px; font-weight: 400; color: var(--text-dim); }
 .cdw-day.is-sel .cdw-n { color: #cfe0ff; }
+
+/* ---------- Workout: today's target line ---------- */
+.wk-target { margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; background: var(--bg-elevated); }
+.wk-target-main { margin: 0; font-size: 16px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.wk-target-k { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); }
+.wk-target-none { font-size: 14px; font-weight: 500; color: var(--text-dim); }
+.wk-target-tag { padding: 1px 8px; font-size: 12px; font-weight: 700; color: var(--text-dim); border: 1px solid var(--card-border); border-radius: 999px; }
+.wk-target-tag.is-up { color: #7ee2a0; border-color: #2c6e48; }
+.wk-target-why summary { min-height: 44px; display: flex; align-items: center; font-size: 14px; color: var(--accent-hover); cursor: pointer; }
+.wk-target-why ul { margin: 0 0 6px; padding-left: 18px; font-size: 13px; color: var(--text-dim); }
+.wk-target .wk-sugg-actions { margin-top: 4px; }
+.wk-target .wk-sugg-actions .btn { min-height: 44px; }
