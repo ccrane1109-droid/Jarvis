@@ -120,6 +120,93 @@
     return out;
   }
 
+
+  /* ---------------- what to do today: sets, reps and weight for one exercise ---------------- */
+
+  // A short written rule, applied to YOUR last session of the exercise. It is not an AI and it does not know your body: it only compares what you
+  // did last time with what the workout asks for today. Every line of "why" says which numbers it used.
+  //   Sets    the workout's working sets for this exercise (warm-ups and drop sets are not counted); with no plan, the same number as last time.
+  //   Reps    the workout's rep target for those sets; with no plan, last time's reps.
+  //   Weight  last time's heaviest working weight W (W is "the working weight"), then:
+  //             * go UP one small step (5 lb, or 2.5 lb under 30 lb) when, last time, at W you did every planned working set and each one reached
+  //               its rep target, and no set at W was rated RPE 9.5 or more;
+  //             * REPEAT W otherwise (and it says what was missing: how many sets, or which reps), or when a set at W felt very hard;
+  //             * REPEAT W after more than 28 days away (no increase suggested);
+  //             * with no rep target to measure against (an exercise added on the spot), REPEAT W;
+  //             * with no history at all there is NO weight: nothing in your log says what to lift.
+  const TGT = { stepBig: 5, stepSmall: 2.5, smallBelow: 30, rpeHard: 9.5, goneDays: 28 };
+  function daysBetweenKeys(a, b) { return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86400000); }
+  function fmtN(n) { return String(Math.round(Number(n) * 100) / 100); }
+  function repsLine(list) { return list.map(function (x) { return fmtN(x); }).join(", "); }
+
+  // plan: [{ reps, type }] for this exercise from the workout being done, or null when there is none. -> { exerciseId, sets, reps[], repsText, weight, from, step, kind, why[] }
+  //   kind: "first" (no history), "increase", "repeat", "back" (repeat after a long gap)
+  function todayTarget(workouts, exerciseId, plan, todayKey) {
+    const today = todayKey || dayKey(Date.now());
+    const prev = previousPerformance(workouts, exerciseId);
+    const planned = Array.isArray(plan) ? plan.filter(function (p) { return p && (p.type || "normal") === "normal"; }) : [];
+    const last = prev ? prev.sets.filter(function (s) { return !s.warmup && !s.dropset && validSet(s); }) : [];
+    const hasPlan = planned.length > 0;
+    const sets = hasPlan ? planned.length : (last.length ? Math.min(last.length, 8) : null);
+    const reps = hasPlan ? planned.map(function (p) { return Number(p.reps); }) : last.map(function (s) { return Math.round(Number(s.reps)); }).slice(0, 8);
+    const lo = reps.length ? Math.min.apply(null, reps) : null, hi = reps.length ? Math.max.apply(null, reps) : null;
+    const out = { exerciseId: exerciseId, sets: sets, reps: reps, repsText: reps.length ? (lo === hi ? String(lo) : lo + "–" + hi) : "", weight: null, from: null, step: 0, kind: "first", hasPlan: hasPlan, why: [] };
+    if (!last.length) {
+      out.why.push("Nothing for this exercise is in your log yet, so there is no weight to build on.");
+      out.why.push("General advice, not from your log: start with a weight you could lift for " + (out.repsText || "your target") + " reps with a few reps to spare, log it, and the next session is worked out from it.");
+      return out;
+    }
+    const W = last.reduce(function (m, s) { return Math.max(m, Number(s.weight)); }, 0);
+    const atW = last.filter(function (s) { return Math.abs(Number(s.weight) - W) < 0.001; });
+    out.from = W; out.weight = W;
+    const when = prev.date ? prev.date : "last time";
+    const did = repsLine(atW.map(function (s) { return s.reps; })) + " reps at " + fmtN(W) + " lb";
+    const gap = prev.date ? daysBetweenKeys(prev.date, today) : 0;
+    if (!(W > 0)) { out.kind = "repeat"; out.weight = null; out.why.push("Last time was bodyweight, so there is no weight to suggest."); return out; }
+    if (gap > TGT.goneDays) {
+      out.kind = "back";
+      out.why.push("Your last session of this was " + gap + " days ago (" + when + "): " + did + ".");
+      out.why.push("No increase is suggested after more than " + TGT.goneDays + " days away. Starting from the same weight is a common way to ease back in (general advice, not from your log).");
+      return out;
+    }
+    if (!hasPlan) {
+      out.kind = "repeat";
+      out.why.push("Last time (" + when + "): " + did + ".");
+      out.why.push("This workout has no rep target for it, so there is nothing to measure last time against. Repeat last time, or set a plan in Routines to get a suggested step up.");
+      return out;
+    }
+    const need = planned.length;
+    const reached = atW.length >= need && planned.every(function (p, i) { return Number(atW[i].reps) >= Number(p.reps); });
+    if (reached) {
+      const hard = atW.filter(function (s) { return isNum(s.rpe) && Number(s.rpe) >= TGT.rpeHard; });
+      if (hard.length) {
+        out.kind = "repeat";
+        out.why.push("Last time (" + when + "): " + did + ", so you reached the target.");
+        out.why.push("A set at " + fmtN(W) + " lb was rated RPE " + fmtN(Number(hard[0].rpe)) + " (10 is all you had). No increase is suggested when a set at that weight was " + fmtN(TGT.rpeHard) + " or more, so repeat it.");
+        return out;
+      }
+      const step = W < TGT.smallBelow ? TGT.stepSmall : TGT.stepBig;
+      out.kind = "increase"; out.step = step; out.weight = round1(W + step);
+      out.why.push("Last time (" + when + "): " + did + ". The workout asks for " + need + " × " + out.repsText + ", and you reached it on every set.");
+      out.why.push("So the next step is " + fmtN(W) + " → " + fmtN(out.weight) + " lb (" + fmtN(step) + " lb; " + fmtN(TGT.stepSmall) + " lb under " + TGT.smallBelow + "). Your plates may not match: type any weight you like.");
+      return out;
+    }
+    out.kind = "repeat";
+    out.why.push("Last time (" + when + "): " + did + (atW.length < need ? ", and only " + atW.length + " of the " + need + " sets were at that weight" : "") + ".");
+    out.why.push("The workout asks for " + need + " × " + out.repsText + " at one weight. Reach that on every set at " + fmtN(W) + " lb and the next step is up.");
+    return out;
+  }
+  // "3 sets × 8 reps at 150 lb" (or without the weight when there is none).
+  function targetText(t) {
+    if (!t) return "";
+    const parts = [];
+    if (t.sets) parts.push(t.sets + (t.sets === 1 ? " set" : " sets"));
+    if (t.repsText) parts.push((parts.length ? "× " : "") + t.repsText + " reps");
+    let s = parts.join(" ");
+    if (t.weight !== null && t.weight !== undefined) s += (s ? " at " : "") + fmtN(t.weight) + " lb";
+    return s;
+  }
+
   /* ---------------- records ---------------- */
 
   function bestSets(workouts, exerciseId, beforeDateTime) {
@@ -426,7 +513,7 @@
     DEFAULT_PREFS: DEFAULT_PREFS, REST_MIN: REST_MIN, REST_MAX: REST_MAX,
     e1rm: e1rm, validSet: validSet, working: working, volumeOf: volumeOf,
     dayKey: dayKey, addDays: addDays, weekStart: weekStart, mondayIndex: mondayIndex,
-    sessionsOf: sessionsOf, previousPerformance: previousPerformance, lastTimeText: lastTimeText, suggestForPlan: suggestForPlan, plannedSetsOf: plannedSetsOf,
+    sessionsOf: sessionsOf, previousPerformance: previousPerformance, lastTimeText: lastTimeText, suggestForPlan: suggestForPlan, plannedSetsOf: plannedSetsOf, todayTarget: todayTarget, targetText: targetText,
     bestSets: bestSets, sessionPRs: sessionPRs, recentPRs: recentPRs, sessionStats: sessionStats, compareToPrevious: compareToPrevious,
     weekSummary: weekSummary, recentRoutines: recentRoutines, lastWorkoutPlan: lastWorkoutPlan,
     makeId: makeId, newSet: newSet, emptyDraft: emptyDraft, migrateDraft: migrateDraft, cloneDraft: cloneDraft,
